@@ -126,5 +126,9 @@ class AddTransactionViewModel: BaseViewModel {
         } else {
             try? dataService.save()
         }
+        
+        // Invalidate wallet balance caches
+        wallet.invalidateBalanceCache()
+        destinationWallet?.invalidateBalanceCache()
     }
 }

@@ -109,6 +109,10 @@ class WalletDetailViewModel: ObservableObject {
     }
     
     func deleteTransaction(_ transaction: Transaction) {
+        // Invalidate wallet caches before deleting
+        transaction.sourceWallet?.invalidateBalanceCache()
+        transaction.destinationWallet?.invalidateBalanceCache()
+        
         modelContext.delete(transaction)
         do {
             try modelContext.save()

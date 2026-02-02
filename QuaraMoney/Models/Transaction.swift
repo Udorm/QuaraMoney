@@ -5,7 +5,9 @@ import Foundation
 final class Transaction {
     @Attribute(.unique) var id: UUID
     var type: TransactionType
-    @Attribute(.indexed) var date: Date  // Indexed for fast date-range queries
+    // Note: SwiftData indexing via @Attribute(.indexed) is not yet available
+    // TODO: Add index when SwiftData supports it for faster date-range queries
+    var date: Date
     var note: String?
     
     // Financials

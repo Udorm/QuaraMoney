@@ -23,13 +23,13 @@ struct AppTheme {
     
     static let icons: [String: [String]] = [
         "Finance": ["banknote", "creditcard", "wallet.pass", "chart.pie", "chart.bar", "indianrupeesign.circle", "dollarsign.circle", "eurosign.circle", "yensign.circle", "sterlingsign.circle", "bitcoinsign.circle", "signature", "receipt", "building.columns"],
-        "Essentials": ["house", "cart", "bag", "basket", "gift", "shippingbox", "crown", "tshirt", "lightbulb", "faucet", "drop", "leaf", "snow", "umbrella", "key", "lock"],
-        "Food & Drink": ["fork.knife", "cup.and.saucer", "wineglass", "carrot", "birthday.cake", "takeoutbag.and.cup.and.fork.knife", "fish", "mug", "popcorn", "cookie", "birthday.cake", "flame"],
+        "Essentials": ["house", "cart", "bag", "basket", "gift", "shippingbox", "crown", "tshirt", "lightbulb", "drop.fill", "drop", "leaf", "snowflake", "umbrella", "key", "lock"],
+        "Food & Drink": ["fork.knife", "cup.and.saucer", "wineglass", "carrot", "birthday.cake", "takeoutbag.and.cup.and.straw", "fish", "mug", "popcorn", "flame", "waterbottle", "wineglass.fill"],
         "Transport": ["car", "bus", "tram", "train.side.front.car", "airplane", "fuelpump", "bicycle", "figure.walk", "sailboat", "ferry", "car.ferry", "cablecar", "scooter"],
         "Services": ["cross.case", "pills", "bandage", "stethoscope", "bolt", "drop", "flame", "wifi", "hammer", "wrench.and.screwdriver", "gear", "scissors", "comb", "paintbrush"],
         "Leisure": ["gamecontroller", "theatermasks", "ticket", "popcorn", "dumbbell", "figure.run", "tent", "camera", "music.note", "guitars", "pianokeys", "paintpalette", "party.popper", "balloon", "beach.umbrella", "binoculars"],
         "Education": ["book", "graduationcap", "pencil.and.ruler", "backpack", "studentdesk", "text.book.closed", "books.vertical", "highlighter", "paperclip", "folder"],
-        "Tech": ["desktopcomputer", "laptopcomputer", "iphone", "ipad", "headphones", "printer", "keyboard", "mouse", "applewatch", "tv", "camera.macro", "video", "mic"],
+        "Tech": ["desktopcomputer", "laptopcomputer", "iphone", "ipad", "headphones", "printer", "keyboard", "computermouse", "applewatch", "tv", "camera.macro", "video", "mic"],
         "Misc": ["list.bullet", "star", "heart", "flag", "tag", "paperclip", "briefcase", "hammer", "globe", "map", "location", "clock", "alarm", "hourglass", "calendar", "bell", "bookmark", "person", "person.2", "person.3", "pawprint", "leaf.arrow.circlepath", "trash"]
     ]
     

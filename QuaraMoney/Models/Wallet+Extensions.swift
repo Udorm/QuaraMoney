@@ -2,22 +2,35 @@ import Foundation
 import SwiftData
 
 extension Wallet {
-    /// Calculates the current balance of the wallet based on all linked transactions.
-    /// This serves as the Single Source of Truth for balance display.
+    /// Invalidates the cached balance - call when transactions change
+    func invalidateBalanceCache() {
+        _balanceCacheStale = true
+        _cachedBalance = nil
+    }
+    
+    /// Calculates the current balance of the wallet.
+    /// Uses cached value when available, otherwise computes and caches.
     var balance: Decimal {
+        // Return cached value if valid
+        if !_balanceCacheStale, let cached = _cachedBalance {
+            return cached
+        }
+        
+        // Compute balance
+        let computed = computeBalance()
+        
+        // Cache the result
+        _cachedBalance = computed
+        _balanceCacheStale = false
+        
+        return computed
+    }
+    
+    /// Core balance computation - iterates all transactions
+    private func computeBalance() -> Decimal {
         var total: Decimal = 0
         
-        // 1. Process Outgoing Transactions
-        // (Income, Expense, Transfer OUT)
-        // Income is technically "Source = This Wallet" in our current schema usage? 
-        // Wait, current schema:
-        // Income: sourceWallet = this. Amount is Added?
-        // Let's re-verify how Income is saved.
-        // In AddTransactionViewModel: 
-        //   transaction.sourceWallet = wallet
-        //   type = .income
-        // So yes, Income is in 'outgoingTransactions' relation on Wallet.
-        
+        // 1. Process Outgoing Transactions (Income, Expense, Transfer OUT)
         if let outgoing = self.outgoingTransactions {
             for txn in outgoing {
                 switch txn.type {
@@ -31,16 +44,11 @@ extension Wallet {
             }
         }
         
-        // 2. Process Incoming Transactions
-        // (Transfer IN)
+        // 2. Process Incoming Transactions (Transfer IN)
         if let incoming = self.incomingTransactions {
             for txn in incoming {
                 if txn.type == .transfer {
                     // Apply Exchange Rate if present
-                    // Rate is typically Source -> Destination
-                    // If stored rate is 4000 (1 USD -> 4000 KHR), and amount is 10 (USD), 
-                    // result is 10 * 4000 = 40,000 (KHR).
-                    // If currencies match, rate should be 1.0.
                     let rate = txn.exchangeRate > 0 ? txn.exchangeRate : 1.0
                     total += (txn.amount * rate)
                 }

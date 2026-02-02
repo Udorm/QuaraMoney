@@ -10,6 +10,12 @@ final class Wallet {
     var colorHex: String
     var isArchived: Bool = false
     
+    // MARK: - Performance: Cached Balance
+    /// Cached balance value for performance - avoids O(n) computation on every access
+    /// Note: Using internal instead of private so extension can access. Prefix indicates internal use.
+    @Transient var _cachedBalance: Decimal?
+    @Transient var _balanceCacheStale: Bool = true
+    
     // Relationships
     // Explicitly separate outgoing (source) and incoming (destination) for accurate balance
     @Relationship(deleteRule: .cascade, inverse: \Transaction.sourceWallet) 

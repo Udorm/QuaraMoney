@@ -9,17 +9,20 @@ class AnalysisViewModel: ObservableObject {
     
     // MARK: - Filters
     enum Period: String, CaseIterable, Identifiable {
-        case thisMonth = "This Month"
-        case lastMonth = "Last Month"
-        case thisYear = "This Year"
-        case allTime = "All Time"
+        case day = "Day"
+        case week = "Week"
+        case month = "Month"
+        case sixMonths = "6 Months"
+        case year = "Year"
         case custom = "Custom"
         
         var id: String { self.rawValue }
     }
     
-    @Published var selectedPeriod: Period = .thisMonth {
+    @Published var selectedPeriod: Period = .day {
         didSet {
+            // Reset reference date to now when changing period
+            currentReferenceDate = Date()
             updateDateRange()
             refreshData()
         }
@@ -37,16 +40,73 @@ class AnalysisViewModel: ObservableObject {
         didSet { refreshData() }
     }
     
+    enum TransactionTypeFilter: String, CaseIterable {
+        case expense = "Expense"
+        case income = "Income"
+    }
+    
+    @Published var selectedTransactionType: TransactionTypeFilter = .expense {
+        didSet { refreshData() }
+    }
+    
+    // Reference date for navigation (scroll to change periods)
+    @Published var currentReferenceDate: Date = Date()
+    
     // Internal Date Range derived from filters
     private var startDate: Date = Date()
     private var endDate: Date = Date()
     
     enum TimeGrouping {
-        case daily
-        case monthly
+        case hour
+        case day
+        case week
+        case month
+        case year
     }
     
-    @Published var grouping: TimeGrouping = .daily
+    @Published var grouping: TimeGrouping = .day
+    
+    // MARK: - Navigation
+    
+    func navigateBack() {
+        let calendar = Calendar.current
+        switch selectedPeriod {
+        case .day:
+            currentReferenceDate = calendar.date(byAdding: .day, value: -1, to: currentReferenceDate) ?? currentReferenceDate
+        case .week:
+            currentReferenceDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentReferenceDate) ?? currentReferenceDate
+        case .month:
+            currentReferenceDate = calendar.date(byAdding: .month, value: -1, to: currentReferenceDate) ?? currentReferenceDate
+        case .sixMonths:
+            currentReferenceDate = calendar.date(byAdding: .month, value: -3, to: currentReferenceDate) ?? currentReferenceDate
+        case .year:
+            currentReferenceDate = calendar.date(byAdding: .year, value: -1, to: currentReferenceDate) ?? currentReferenceDate
+        case .custom:
+            break // No navigation for custom
+        }
+        updateDateRange()
+        refreshData()
+    }
+    
+    func navigateForward() {
+        let calendar = Calendar.current
+        switch selectedPeriod {
+        case .day:
+            currentReferenceDate = calendar.date(byAdding: .day, value: 1, to: currentReferenceDate) ?? currentReferenceDate
+        case .week:
+            currentReferenceDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentReferenceDate) ?? currentReferenceDate
+        case .month:
+            currentReferenceDate = calendar.date(byAdding: .month, value: 1, to: currentReferenceDate) ?? currentReferenceDate
+        case .sixMonths:
+            currentReferenceDate = calendar.date(byAdding: .month, value: 3, to: currentReferenceDate) ?? currentReferenceDate
+        case .year:
+            currentReferenceDate = calendar.date(byAdding: .year, value: 1, to: currentReferenceDate) ?? currentReferenceDate
+        case .custom:
+            break // No navigation for custom
+        }
+        updateDateRange()
+        refreshData()
+    }
     
     // MARK: - Output Data
     @Published var netWorth: Decimal = 0
@@ -59,19 +119,33 @@ class AnalysisViewModel: ObservableObject {
     @Published var categoryStats: [CategoryStat] = []
     
     var isFilterActive: Bool {
-        return selectedPeriod != .thisMonth || selectedWallet != nil
+        return selectedPeriod != .day || selectedWallet != nil
     }
     
     var filterDescription: String {
-        var text = selectedPeriod.rawValue
-        if selectedPeriod == .custom {
-             text = "\(customStartDate.formatted(date: .abbreviated, time: .omitted)) - \(customEndDate.formatted(date: .abbreviated, time: .omitted))"
-        }
+        let calendar = Calendar.current
         
-        if let wallet = selectedWallet {
-            text += " • \(wallet.name)"
+        switch selectedPeriod {
+        case .day:
+            // Show full date for the day
+            return startDate.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+        case .week:
+            // Show week range: "Jan 27 - Feb 2, 2026"
+            let weekEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
+            return "\(startDate.formatted(.dateTime.month(.abbreviated).day())) - \(weekEnd.formatted(.dateTime.month(.abbreviated).day().year()))"
+        case .month:
+            // Show month and year: "February 2026"
+            return startDate.formatted(.dateTime.month(.wide).year())
+        case .sixMonths:
+            // Show range: "Sep 2025 - Feb 2026"
+            let rangeEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
+            return "\(startDate.formatted(.dateTime.month(.abbreviated).year())) - \(rangeEnd.formatted(.dateTime.month(.abbreviated).year()))"
+        case .year:
+            // Show year: "2026"
+            return startDate.formatted(.dateTime.year())
+        case .custom:
+            return "\(customStartDate.formatted(date: .abbreviated, time: .omitted)) - \(customEndDate.formatted(date: .abbreviated, time: .omitted))"
         }
-        return text
     }
     
     init() {
@@ -86,32 +160,54 @@ class AnalysisViewModel: ObservableObject {
     
     private func updateDateRange() {
         let calendar = Calendar.current
-        let now = Date()
+        let refDate = currentReferenceDate
         
         switch selectedPeriod {
-        case .thisMonth:
-            grouping = .daily
-            guard let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .lastMonth:
-            grouping = .daily
-            guard let thisMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
-                  let start = calendar.date(byAdding: .month, value: -1, to: thisMonthStart),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .thisYear:
-            grouping = .monthly
-            guard let start = calendar.date(from: calendar.dateComponents([.year], from: now)),
-                  let end = calendar.date(byAdding: .year, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .allTime:
-            grouping = .monthly
-            self.startDate = .distantPast
-            self.endDate = .distantFuture
+        case .day:
+            // Day view: Shows hourly data for the reference date
+            grouping = .hour
+            self.startDate = calendar.startOfDay(for: refDate)
+            self.endDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? refDate
+            
+        case .week:
+            // Week view: Shows daily data for the week containing reference date
+            grouping = .day
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: refDate)
+            guard let startOfWeek = calendar.date(from: components),
+                  let endOfWeek = calendar.date(byAdding: .day, value: 7, to: startOfWeek) else { return }
+            
+            self.startDate = startOfWeek
+            self.endDate = endOfWeek
+            
+        case .month:
+            // Month view: Shows daily data for the month containing reference date
+            grouping = .day
+            guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: refDate)),
+                  let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) else { return }
+             
+            self.startDate = startOfMonth
+            self.endDate = endOfMonth
+            
+        case .sixMonths:
+            // 6 Months view: Shows monthly data for the last 6 months from reference date
+            grouping = .month
+            // Get start of the month 5 months ago (so we have 6 months total including current)
+            guard let startOfCurrentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: refDate)),
+                  let startOfRange = calendar.date(byAdding: .month, value: -5, to: startOfCurrentMonth),
+                  let endOfRange = calendar.date(byAdding: .month, value: 1, to: startOfCurrentMonth) else { return }
+            
+            self.startDate = startOfRange
+            self.endDate = endOfRange
+            
+        case .year:
+            // Year view: Shows monthly data for the year containing reference date
+            grouping = .month
+            guard let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: refDate)),
+                  let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) else { return }
+            
+            self.startDate = startOfYear
+            self.endDate = endOfYear
+            
         case .custom:
             self.startDate = calendar.startOfDay(for: customStartDate)
             if let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) {
@@ -120,11 +216,19 @@ class AnalysisViewModel: ObservableObject {
                 self.endDate = customEndDate
             }
             
-            // If range > 60 days, default to monthly
-            if let days = calendar.dateComponents([.day], from: startDate, to: endDate).day, days > 60 {
-                grouping = .monthly
+            // Auto-detect grouping based on range duration for Custom
+            if let days = calendar.dateComponents([.day], from: startDate, to: endDate).day {
+                if days <= 1 {
+                    grouping = .hour
+                } else if days <= 60 {
+                    grouping = .day
+                } else if days <= 365 {
+                    grouping = .week
+                } else {
+                    grouping = .month
+                }
             } else {
-                grouping = .daily
+                grouping = .day
             }
         }
     }
@@ -135,11 +239,6 @@ class AnalysisViewModel: ObservableObject {
     }
     
     private func fetchNetWorth() {
-        // Net Worth is a snapshot of CURRENT balances.
-        // It is NOT affected by the Date Filter (usually), but IS affected by Wallet Filter.
-        // If specific wallet selected -> Show that wallet's balance.
-        // If All Wallets -> Sum of all balances.
-        
         guard let modelContext = modelContext else { return }
         
         do {
@@ -152,10 +251,6 @@ class AnalysisViewModel: ObservableObject {
             let walletsToSum = selectedWallet == nil ? wallets : wallets.filter { $0.id == selectedWallet?.id }
             
             for wallet in walletsToSum {
-                // Wallet.balance logic is computed property in extension.
-                // We assume it handles its own internal transaction summing correctly (which it does).
-                // We just need to convert the resulting balance to target currency.
-                
                 let balance = wallet.balance
                 let converted = CurrencyManager.shared.convert(amount: balance, from: wallet.currencyCode, to: targetCurrency)
                 totalNW += converted
@@ -175,7 +270,6 @@ class AnalysisViewModel: ObservableObject {
         
         let descriptor: FetchDescriptor<Transaction>
         
-        // Build Predicate
         if let walletId = walletId {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
@@ -200,9 +294,9 @@ class AnalysisViewModel: ObservableObject {
             var exp: Decimal = 0
             let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
             
-            // For Charts
             var rawChartData: [Date: (income: Decimal, expense: Decimal)] = [:]
-            var rawCategoryData: [Category: Decimal] = [:] // Expense only for now
+            var rawExpenseCategoryData: [Category: Decimal] = [:]
+            var rawIncomeCategoryData: [Category: Decimal] = [:] 
             
             let calendar = Calendar.current
             
@@ -210,14 +304,23 @@ class AnalysisViewModel: ObservableObject {
                 // Convert Amount
                 let amount = CurrencyManager.shared.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency)
                 
-                // Determine Chart Entry specific Date based on Grouping
+                // Grouping Logic
                 let chartDate: Date
-                if grouping == .monthly {
-                    // Normalize to start of Month
-                    chartDate = calendar.date(from: calendar.dateComponents([.year, .month], from: txn.date)) ?? txn.date
-                } else {
-                    // Normalize to start of Day
+                switch grouping {
+                case .hour:
+                    // Group by hour
+                    chartDate = calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
+                case .day:
                     chartDate = calendar.startOfDay(for: txn.date)
+                case .week:
+                    // Group by start of week. 
+                    // Note: This relies on user's calendar preferences (e.g. Sunday vs Monday start)
+                    let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: txn.date)
+                    chartDate = calendar.date(from: components) ?? calendar.startOfDay(for: txn.date)
+                case .month:
+                    chartDate = calendar.date(from: calendar.dateComponents([.year, .month], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
+                case .year:
+                    chartDate = calendar.date(from: calendar.dateComponents([.year], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
                 }
                 
                 if txn.type == .income {
@@ -227,6 +330,11 @@ class AnalysisViewModel: ObservableObject {
                     current.income += amount
                     rawChartData[chartDate] = current
                     
+                    // Track income categories
+                    if let cat = txn.category {
+                        rawIncomeCategoryData[cat, default: 0] += amount
+                    }
+                    
                 } else if txn.type == .expense {
                     exp += amount
                     
@@ -234,9 +342,9 @@ class AnalysisViewModel: ObservableObject {
                     current.expense += amount
                     rawChartData[chartDate] = current
                     
-                    // Category Stat
+                    // Track expense categories
                     if let cat = txn.category {
-                        rawCategoryData[cat, default: 0] += amount
+                        rawExpenseCategoryData[cat, default: 0] += amount
                     }
                 }
             }
@@ -244,7 +352,6 @@ class AnalysisViewModel: ObservableObject {
             self.totalIncome = inc
             self.totalExpense = exp
             
-            // Savings Rate
             if inc > 0 {
                 let savings = inc - exp
                 self.savingsRate = Double(truncating: savings as NSNumber) / Double(truncating: inc as NSNumber)
@@ -252,12 +359,13 @@ class AnalysisViewModel: ObservableObject {
                 self.savingsRate = 0
             }
             
-            // Prepare Chart Data
             self.dailyStats = rawChartData.map { (date, values) in
                 DailyStat(date: date, income: values.income, expense: values.expense)
             }.sorted { $0.date < $1.date }
             
-            self.categoryStats = rawCategoryData.map { (cat, amount) in
+            // Use the appropriate category data based on selected transaction type
+            let categoryData = selectedTransactionType == .expense ? rawExpenseCategoryData : rawIncomeCategoryData
+            self.categoryStats = categoryData.map { (cat, amount) in
                 CategoryStat(category: cat, amount: amount, colorHex: cat.colorHex)
             }.sorted { $0.amount > $1.amount }
             

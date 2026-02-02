@@ -20,97 +20,45 @@ struct AnalysisContentView: View {
     @State private var showCustomDateSheet = false
     
     // For Wallet Filter - We need to query wallets. 
-    // Since we are inside a view, we can use @Query.
     @Query(sort: \Wallet.name) private var wallets: [Wallet]
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Filter Description Header (Matching HomeView)
-                    Text(vm.filterDescription)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .padding(.top, 4)
-
-                    // Overview Cards
-                    OverviewSection(vm: vm)
-                    
-                    // Charts
-                    if !vm.dailyStats.isEmpty {
-                        SpendingTrendChart(vm: vm)
-                    }
+                    // Charts (Now includes the Period Picker)
+                    SpendingTrendChart(vm: vm)
                     
                     if !vm.categoryStats.isEmpty {
                         CategoryBreakdownChart(vm: vm)
-                    } else {
-                        ContentUnavailableView(
-                            "No Data",
-                            systemImage: "chart.pie",
-                            description: Text("No expenses found for this period.")
-                        )
-                        .padding(.vertical, 40)
                     }
                 }
-                .padding()
+                .padding(.vertical)
             }
-            .navigationTitle("Financial Analysis")
+            .navigationTitle("Analysis")
             .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Section("Period") {
-                            ForEach(AnalysisViewModel.Period.allCases) { period in
-                                Button {
-                                    if period == .custom {
-                                        showCustomDateSheet = true
-                                    } else {
-                                        vm.selectedPeriod = period
-                                    }
-                                } label: {
-                                    if vm.selectedPeriod == period {
-                                        Label(period.rawValue, systemImage: "checkmark")
-                                    } else {
-                                        Text(period.rawValue)
-                                    }
-                                }
-                            }
+                        Picker("Transaction Type", selection: $vm.selectedTransactionType) {
+                            Text("Expense").tag(AnalysisViewModel.TransactionTypeFilter.expense)
+                            Text("Income").tag(AnalysisViewModel.TransactionTypeFilter.income)
                         }
                         
-                        Section("Wallet") {
-                            Button {
-                                vm.selectedWallet = nil
-                            } label: {
-                                if vm.selectedWallet == nil {
-                                    Label("All Wallets", systemImage: "checkmark")
-                                } else {
-                                    Text("All Wallets")
-                                }
-                            }
-                            
+                        Divider()
+                        
+                        Picker("Wallet", selection: $vm.selectedWallet) {
+                            Text("All Wallets").tag(nil as Wallet?)
                             ForEach(wallets) { wallet in
-                                Button {
-                                    vm.selectedWallet = wallet
-                                } label: {
-                                    if vm.selectedWallet?.id == wallet.id {
-                                        Label(wallet.name, systemImage: "checkmark")
-                                    } else {
-                                        Text(wallet.name)
-                                    }
-                                }
+                                Text(wallet.name).tag(wallet as Wallet?)
                             }
                         }
                     } label: {
-                        Image(systemName: vm.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .font(.title3)
-                            .foregroundStyle(vm.isFilterActive ? .blue : .primary)
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .symbolVariant(vm.selectedWallet != nil ? .fill : .none)
                     }
                 }
             }
-
-
             .sheet(isPresented: $showCustomDateSheet) {
                 NavigationStack {
                     Form {
@@ -142,209 +90,221 @@ struct AnalysisContentView: View {
     @ViewBuilder
     private func OverviewSection(vm: AnalysisViewModel) -> some View {
         VStack(spacing: 16) {
-            // Net Worth Card - Hero Style
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Net Worth")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .textCase(.uppercase)
-                
-                HStack(alignment: .lastTextBaseline) {
-                    Text(vm.netWorth.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(Color.blue.gradient)
-            .cornerRadius(16)
-            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
-            
-            // Vibrant Cards Grid (Income, Expense, Savings)
-            HStack(spacing: 12) {
-                AnalysisSummaryCard(
-                    title: "Income",
-                    amount: vm.totalIncome,
-                    color: .green,
-                    icon: "arrow.down"
-                )
-                
-                AnalysisSummaryCard(
-                    title: "Expense",
-                    amount: vm.totalExpense,
-                    color: .red,
-                    icon: "arrow.up"
-                )
-                
-                AnalysisSummaryCard(
-                    title: "Savings",
-                    amount: vm.totalIncome - vm.totalExpense,
-                    color: .orange,
-                    icon: "leaf.fill"
-                )
-            }
+            FinancialSummaryCards(income: vm.totalIncome, expense: vm.totalExpense)
+                .padding(.horizontal)
         }
     }
 }
 
-struct AnalysisSummaryCard: View {
-    let title: String
-    let amount: Decimal
-    let color: Color
-    let icon: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.caption.bold())
-                    .foregroundStyle(color)
-                    .padding(6)
-                    .background(.white.opacity(0.9)) // Contrast against colored bg
-                    .clipShape(Circle())
-                
-                Spacer()
-            }
-            
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.9))
-                .textCase(.uppercase)
-                .fontWeight(.medium)
-            
-            Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                .font(.system(.callout, design: .rounded)) 
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading) // Fill available width
-        .background(color.gradient) // Vibrant Gradient Background
-        .cornerRadius(16)
-        .shadow(color: color.opacity(0.3), radius: 6, x: 0, y: 4)
-    }
-}
 
 struct SpendingTrendChart: View {
     @ObservedObject var vm: AnalysisViewModel
-    @State private var selectedDate: Date?
+    @State private var dragOffset: CGFloat = 0
+    @State private var slideDirection: Int = 0 // -1 = left, 0 = none, 1 = right
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header: Net Flow
-            VStack(alignment: .leading, spacing: 4) {
-               Text("Net Flow")
-                   .font(.subheadline)
-                   .foregroundStyle(.secondary)
-               
-               let totalNet = vm.totalIncome - vm.totalExpense
-               Text(totalNet.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                   .font(.title2.bold())
-                   .foregroundStyle(totalNet >= 0 ? Color.primary : Color.red)
-           }
-           .padding(.horizontal)
-
-            // Selection Details
-            VStack(alignment: .leading, spacing: 4) {
-                if let selected = selectedDate, let stat = vm.dailyStats.first(where: { self.isSamePeriod($0.date, as: selected) }) {
-                     Text("\(self.formatPeriod(stat.date))")
+        VStack(alignment: .leading, spacing: 20) {
+            // 1. Segmented Control
+            Picker("Period", selection: $vm.selectedPeriod) {
+                Text("D").tag(AnalysisViewModel.Period.day)
+                Text("W").tag(AnalysisViewModel.Period.week)
+                Text("M").tag(AnalysisViewModel.Period.month)
+                Text("6M").tag(AnalysisViewModel.Period.sixMonths)
+                Text("Y").tag(AnalysisViewModel.Period.year)
+            }
+            .pickerStyle(.segmented)
+            
+            // 2. Header Stats with Navigation
+            HStack {
+                // Back Button
+                Button {
+                    slideDirection = 1
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        vm.navigateBack()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        slideDirection = 0
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(vm.selectedPeriod == .custom)
+                
+                Spacer()
+                
+                VStack(spacing: 4) {
+                    Text(vm.selectedTransactionType == .expense ? "TOTAL SPENDING" : "TOTAL INCOME")
                         .font(.caption)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.down")
-                            Text(stat.income.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                        }
-                        .font(.caption.bold())
-                        .foregroundStyle(.green)
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up")
-                            Text(stat.expense.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                        }
-                        .font(.caption.bold())
-                        .foregroundStyle(.red)
-                    }
-                } else {
-                    Text("Select a bar to view inflow & outflow")
-                        .font(.caption)
+                    let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
+                    Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.primary)
+                    
+                    Text(vm.filterDescription)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-            }
-            .padding(.horizontal)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                Chart {
-                    ForEach(vm.dailyStats) { stat in
-                        // Income Bar
-                        BarMark(
-                            x: .value("Date", stat.date, unit: vm.grouping == .monthly ? .month : .day),
-                            y: .value("Amount", stat.income)
-                        )
-                        .foregroundStyle(Color.green.gradient)
-                        .cornerRadius(4)
-                        
-                        // Expense Bar
-                        BarMark(
-                            x: .value("Date", stat.date, unit: vm.grouping == .monthly ? .month : .day),
-                            y: .value("Amount", stat.expense)
-                        )
-                        .foregroundStyle(Color.red.gradient)
-                        .cornerRadius(4)
+                
+                Spacer()
+                
+                // Forward Button
+                Button {
+                    slideDirection = -1
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        vm.navigateForward()
                     }
-                }
-                .chartXSelection(value: $selectedDate)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: vm.grouping == .monthly ? .month : .day, count: vm.grouping == .monthly ? 1 : 5)) { _ in
-                        AxisValueLabel(format: vm.grouping == .monthly ? .dateTime.month() : .dateTime.day())
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        slideDirection = 0
                     }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
                 }
-                .chartYAxis(.hidden)
-                .frame(height: 220)
-                // Dynamic Width Logic
-                .frame(width: chartWidth) 
-                .padding(.horizontal)
+                .disabled(vm.selectedPeriod == .custom)
             }
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
+            .frame(height: 80)
+
+            // 3. Chart with swipe navigation between periods
+            chartContent
+                .frame(height: 250)
+                .contentShape(Rectangle())
+                .offset(x: dragOffset)
+                .opacity(1.0 - Double(abs(dragOffset)) / 300.0)
+                .id(vm.currentReferenceDate) // Trigger transition on date change
+                .transition(.asymmetric(
+                    insertion: .move(edge: slideDirection >= 0 ? .leading : .trailing),
+                    removal: .move(edge: slideDirection >= 0 ? .trailing : .leading)
+                ))
+                .animation(.easeInOut(duration: 0.3), value: vm.currentReferenceDate)
+                .gesture(
+                    DragGesture(minimumDistance: 20)
+                        .onChanged { value in
+                            // Only track horizontal drags
+                            if abs(value.translation.width) > abs(value.translation.height) {
+                                dragOffset = value.translation.width * 0.5
+                            }
+                        }
+                        .onEnded { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else {
+                                withAnimation(.spring()) { dragOffset = 0 }
+                                return
+                            }
+                            
+                            if value.translation.width > 60 {
+                                // Swipe right -> go back
+                                slideDirection = 1
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    dragOffset = 0
+                                    vm.navigateBack()
+                                }
+                            } else if value.translation.width < -60 {
+                                // Swipe left -> go forward
+                                slideDirection = -1
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    dragOffset = 0
+                                    vm.navigateForward()
+                                }
+                            } else {
+                                // Snap back
+                                withAnimation(.spring()) {
+                                    dragOffset = 0
+                                }
+                            }
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                slideDirection = 0
+                            }
+                        }
+                )
         }
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
+        .padding(.horizontal)
     }
     
-    // Helpers
-    var averageExpense: Decimal {
-        guard !vm.dailyStats.isEmpty else { return 0 }
-        let total = vm.dailyStats.reduce(0) { $0 + $1.expense }
-        return total / Decimal(vm.dailyStats.count)
-    }
-    
-    var chartWidth: CGFloat {
-        if vm.grouping == .monthly {
-             return UIScreen.main.bounds.width - 60 // Fit Screen roughly
+    @ViewBuilder
+    private var chartContent: some View {
+        if vm.dailyStats.isEmpty {
+            ContentUnavailableView(
+                "No Data",
+                systemImage: "chart.bar",
+                description: Text("No transactions found for this period.")
+            )
         } else {
-             // Ensure at least screen width, but expand for scrolling if many days
-             return max(UIScreen.main.bounds.width - 60, CGFloat(vm.dailyStats.count * 12)) 
+            Chart {
+                ForEach(vm.dailyStats) { stat in
+                    let amount = vm.selectedTransactionType == .expense ? stat.expense : stat.income
+                    let color = vm.selectedTransactionType == .expense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor
+                    BarMark(
+                        x: .value("Date", stat.date, unit: self.chartUnit),
+                        y: .value("Amount", amount)
+                    )
+                    .foregroundStyle(color.gradient)
+                    .cornerRadius(4)
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: self.chartUnit, count: self.axisStrideCount)) { value in
+                    AxisValueLabel(format: self.axisFormat, centered: true)
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.2))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.2))
+                    AxisValueLabel()
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
     
-    func isSamePeriod(_ date1: Date, as date2: Date) -> Bool {
-        return Calendar.current.isDate(date1, equalTo: date2, toGranularity: vm.grouping == .monthly ? .month : .day)
+    // Helpers
+    
+    var chartUnit: Calendar.Component {
+        switch vm.grouping {
+        case .hour: return .hour
+        case .day: return .day
+        case .week: return .weekOfYear
+        case .month: return .month
+        case .year: return .year
+        }
     }
     
-    func formatPeriod(_ date: Date) -> String {
-        return date.formatted(vm.grouping == .monthly ? .dateTime.month(.wide).year() : .dateTime.day().month(.abbreviated))
+    var axisStrideCount: Int {
+        // Customize stride based on the visible range (Period)
+        switch vm.selectedPeriod {
+        case .day: return 4 // Every 4 hours
+        case .week: return 1 // Every day
+        case .month: return 5 // Every 5 days
+        case .sixMonths: return 1 // Every month
+        case .year: return 1 // Every month
+        case .custom: return 5
+        }
     }
     
-    func isDateSelected(_ date: Date) -> Bool {
-        guard let selected = selectedDate else { return false }
-        return isSamePeriod(date, as: selected)
+    var axisFormat: Date.FormatStyle {
+        switch vm.selectedPeriod {
+        case .day: return .dateTime.hour()
+        case .week: return .dateTime.weekday(.abbreviated)
+        case .month: return .dateTime.day()
+        case .sixMonths: return .dateTime.month(.abbreviated)
+        case .year: return .dateTime.month(.abbreviated)
+        case .custom: return .dateTime.day().month()
+        }
     }
+    
+
 }
 
 struct CategoryBreakdownChart: View {
@@ -352,8 +312,16 @@ struct CategoryBreakdownChart: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Top Spending Categories")
-                .font(.headline)
+            HStack {
+                Text(vm.selectedTransactionType == .expense ? "Top Spending Categories" : "Top Income Categories")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Text(vm.filterDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             
             LazyVStack(spacing: 0) {
                 ForEach(vm.categoryStats.prefix(5)) { stat in
@@ -405,9 +373,10 @@ struct CategoryBreakdownChart: View {
                     }
                 }
             }
-            .padding()
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
         }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(16)
+        .padding(.horizontal)
     }
 }

@@ -30,13 +30,19 @@ struct QuaraMoneyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .onAppear {
-                    let context = sharedModelContainer.mainContext
-                    let service = RecurringRuleService(modelContext: context)
-                    service.checkAndGenerateTransactions()
-                }
+            if isOnboardingCompleted {
+                ContentView()
+                    .onAppear {
+                        let context = sharedModelContainer.mainContext
+                        let service = RecurringRuleService(modelContext: context)
+                        service.checkAndGenerateTransactions()
+                    }
+            } else {
+                OnboardingView()
+            }
         }
         .modelContainer(sharedModelContainer)
     }
+
+    @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
 }

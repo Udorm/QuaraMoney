@@ -107,7 +107,7 @@ struct DailySectionHeader: View {
             Spacer()
             Text(section.dailyTotal.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
                 .font(.subheadline)
-                .foregroundStyle(section.dailyTotal >= 0 ? .green : .red)
+                .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }
         .padding(.vertical, 4)
     }

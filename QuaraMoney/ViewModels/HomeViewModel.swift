@@ -55,6 +55,26 @@ class HomeViewModel: ObservableObject {
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         updateDateRange()
+        
+        // Listen for data resets (e.g. from Settings)
+        NotificationCenter.default.addObserver(
+            forName: .dataDidUpdate,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.resetAndRefresh()
+        }
+    }
+    
+    // Clear current data immediately then refresh
+    private func resetAndRefresh() {
+        self.dailySections = []
+        self.incomeTotal = 0
+        self.expenseTotal = 0
+        // Small delay to ensure context is settled? Or immediate?
+        // Immediate is safer to clear invalid objects from UI.
+        // Then assume context is fresh.
+        refreshData()
     }
     
     private func updateDateRange() {

@@ -38,8 +38,19 @@ struct RecurringRuleListView: View {
             .navigationTitle("Subscriptions")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingAddRule = true }) {
-                        Label("Add Subscription", systemImage: "plus")
+                    HStack {
+                        Text("Preview")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.2))
+                            .foregroundStyle(.orange)
+                            .clipShape(Capsule())
+                        
+                        Button(action: { showingAddRule = true }) {
+                            Label("Add Subscription", systemImage: "plus")
+                        }
                     }
                 }
             }

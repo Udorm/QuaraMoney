@@ -1,0 +1,405 @@
+Date,Amount,Category,Note,Wallet
+2024-08-12,-5.66,Transport,Transport expense,Credit Card
+2024-08-14,-72.63,Groceries,Groceries expense,Bank Account
+2024-08-14,391.18,Freelance,Side project,Bank Account
+2024-08-16,-30.73,Entertainment,Entertainment expense,Bank Account
+2024-08-17,-5.47,Food,Food expense,Cash
+2024-08-21,-8.06,Food,Food expense,Cash
+2024-08-23,-12.66,Food,Food expense,Credit Card
+2024-08-23,-110.37,Groceries,Groceries expense,Cash
+2024-08-24,-122.59,Groceries,Groceries expense,Credit Card
+2024-08-25,5000,Salary,Monthly Salary,Bank Account
+2024-08-26,-12.35,Transport,Transport expense,Cash
+2024-08-29,-14.03,Food,Food expense,Credit Card
+2024-08-29,-3.11,Transport,Transport expense,Credit Card
+2024-08-30,931.70,Freelance,Side project,Bank Account
+2024-09-01,-2.88,Transport,Transport expense,Cash
+2024-09-02,-146.52,Groceries,Groceries expense,Credit Card
+2024-09-04,-59.43,Shopping,Shopping expense,Credit Card
+2024-09-06,-19.39,Food,Food expense,Credit Card
+2024-09-06,367.49,Freelance,Side project,Bank Account
+2024-09-07,-5.62,Food,Food expense,Cash
+2024-09-07,-27.95,Entertainment,Entertainment expense,Cash
+2024-09-08,478.81,Freelance,Side project,Bank Account
+2024-09-09,-12.25,Food,Food expense,Bank Account
+2024-09-09,-6.50,Food,Food expense,Credit Card
+2024-09-10,-13.66,Food,Food expense,Bank Account
+2024-09-10,-132.341217263967,Utilities,Electric/Water,Bank Account
+2024-09-12,-119.63,Groceries,Groceries expense,Credit Card
+2024-09-13,-15.02,Food,Food expense,Credit Card
+2024-09-13,-11.33,Transport,Transport expense,Bank Account
+2024-09-13,-12.01,Food,Food expense,Cash
+2024-09-14,-18.32,Food,Food expense,Bank Account
+2024-09-15,-11.99,Health,Health expense,Credit Card
+2024-09-16,-10.57,Food,Food expense,Credit Card
+2024-09-18,-9.80,Food,Food expense,Bank Account
+2024-09-20,-154.75,Shopping,Shopping expense,Bank Account
+2024-09-21,-14.15,Transport,Transport expense,Bank Account
+2024-09-25,5000,Salary,Monthly Salary,Bank Account
+2024-09-26,-7.22,Transport,Transport expense,Credit Card
+2024-09-27,-5.94,Transport,Transport expense,Credit Card
+2024-09-28,-124.20,Groceries,Groceries expense,Cash
+2024-10-01,-12.40,Transport,Transport expense,Bank Account
+2024-10-05,-77.11,Groceries,Groceries expense,Bank Account
+2024-10-05,-116.22,Groceries,Groceries expense,Credit Card
+2024-10-08,-120.84,Groceries,Groceries expense,Cash
+2024-10-11,696.12,Freelance,Side project,Bank Account
+2024-10-12,-21.97,Entertainment,Entertainment expense,Bank Account
+2024-10-14,-8.40,Food,Food expense,Credit Card
+2024-10-14,-4.57,Transport,Transport expense,Bank Account
+2024-10-19,-12.31,Transport,Transport expense,Bank Account
+2024-10-19,870.71,Freelance,Side project,Bank Account
+2024-10-21,-13.25,Food,Food expense,Credit Card
+2024-10-21,-13.94,Transport,Transport expense,Cash
+2024-10-25,5000,Salary,Monthly Salary,Bank Account
+2024-10-25,358.44,Freelance,Side project,Bank Account
+2024-10-26,-13.93,Transport,Transport expense,Cash
+2024-10-27,-19.73,Food,Food expense,Credit Card
+2024-10-27,-12.63,Transport,Transport expense,Credit Card
+2024-10-28,-10.26,Transport,Transport expense,Bank Account
+2024-10-28,-8.29,Transport,Transport expense,Bank Account
+2024-10-28,803.74,Freelance,Side project,Bank Account
+2024-11-01,-19.67,Food,Food expense,Credit Card
+2024-11-04,-14.24,Food,Food expense,Bank Account
+2024-11-04,-2.15,Transport,Transport expense,Cash
+2024-11-05,-11.03,Transport,Transport expense,Bank Account
+2024-11-08,-14.43,Food,Food expense,Cash
+2024-11-08,-19.92,Food,Food expense,Cash
+2024-11-10,-112.49664902353094,Utilities,Electric/Water,Bank Account
+2024-11-10,-87.63,Groceries,Groceries expense,Credit Card
+2024-11-10,-101.29,Groceries,Groceries expense,Bank Account
+2024-11-11,-29.95,Health,Health expense,Bank Account
+2024-11-13,-4.67,Transport,Transport expense,Credit Card
+2024-11-16,-13.70,Food,Food expense,Cash
+2024-11-17,-9.08,Food,Food expense,Bank Account
+2024-11-17,-9.89,Transport,Transport expense,Credit Card
+2024-11-18,-3.23,Transport,Transport expense,Credit Card
+2024-11-18,-7.50,Transport,Transport expense,Bank Account
+2024-11-21,-11.69,Food,Food expense,Credit Card
+2024-11-21,-7.89,Food,Food expense,Credit Card
+2024-11-22,-17.85,Food,Food expense,Bank Account
+2024-11-24,-12.29,Transport,Transport expense,Credit Card
+2024-11-24,-56.92,Entertainment,Entertainment expense,Credit Card
+2024-11-24,-2.39,Transport,Transport expense,Cash
+2024-11-25,5000,Salary,Monthly Salary,Bank Account
+2024-11-25,382.02,Freelance,Side project,Bank Account
+2024-11-26,-5.33,Transport,Transport expense,Credit Card
+2024-11-29,-14.52,Food,Food expense,Bank Account
+2024-12-01,-5.51,Transport,Transport expense,Cash
+2024-12-01,-1000,Rent,Monthly Rent,Bank Account
+2024-12-03,-2.66,Transport,Transport expense,Bank Account
+2024-12-04,686.70,Freelance,Side project,Bank Account
+2024-12-05,-6.26,Transport,Transport expense,Cash
+2024-12-08,-63.19,Entertainment,Entertainment expense,Cash
+2024-12-08,-10.26,Food,Food expense,Bank Account
+2024-12-08,-70.76,Entertainment,Entertainment expense,Bank Account
+2024-12-08,-23.65,Entertainment,Entertainment expense,Credit Card
+2024-12-09,-5.11,Food,Food expense,Bank Account
+2024-12-10,-60.8557285695022,Utilities,Electric/Water,Bank Account
+2024-12-10,-10.81,Food,Food expense,Bank Account
+2024-12-10,-108.29046067392132,Utilities,Electric/Water,Bank Account
+2024-12-12,621.16,Freelance,Side project,Bank Account
+2024-12-13,-11.58,Food,Food expense,Credit Card
+2024-12-14,605.91,Freelance,Side project,Bank Account
+2024-12-15,-47.15,Health,Health expense,Credit Card
+2024-12-18,-15.71,Food,Food expense,Credit Card
+2024-12-20,-2.64,Transport,Transport expense,Credit Card
+2024-12-25,5000,Salary,Monthly Salary,Bank Account
+2024-12-28,-10.23,Food,Food expense,Cash
+2024-12-29,-8.66,Transport,Transport expense,Bank Account
+2024-12-29,701.47,Freelance,Side project,Bank Account
+2024-12-30,-59.79,Shopping,Shopping expense,Bank Account
+2024-12-31,-120.29,Shopping,Shopping expense,Bank Account
+2025-01-01,-1000,Rent,Monthly Rent,Bank Account
+2025-01-01,-10.11,Transport,Transport expense,Cash
+2025-01-04,-8.06,Transport,Transport expense,Bank Account
+2025-01-04,-7.23,Transport,Transport expense,Cash
+2025-01-06,-19.12,Food,Food expense,Cash
+2025-01-07,-5.71,Food,Food expense,Cash
+2025-01-08,-11.75,Food,Food expense,Credit Card
+2025-01-08,-17.86,Food,Food expense,Credit Card
+2025-01-10,-125.99292495983919,Utilities,Electric/Water,Bank Account
+2025-01-11,-110.17,Groceries,Groceries expense,Credit Card
+2025-01-12,-15.76,Food,Food expense,Bank Account
+2025-01-14,-8.16,Food,Food expense,Bank Account
+2025-01-15,-13.95,Health,Health expense,Bank Account
+2025-01-16,741.95,Freelance,Side project,Bank Account
+2025-01-19,326.86,Freelance,Side project,Bank Account
+2025-01-25,5000,Salary,Monthly Salary,Bank Account
+2025-01-26,783.94,Freelance,Side project,Bank Account
+2025-01-30,604.72,Freelance,Side project,Bank Account
+2025-02-01,-1000,Rent,Monthly Rent,Bank Account
+2025-02-02,946.19,Freelance,Side project,Bank Account
+2025-02-03,-83.31,Shopping,Shopping expense,Credit Card
+2025-02-04,-128.26,Shopping,Shopping expense,Cash
+2025-02-04,-64.77,Entertainment,Entertainment expense,Bank Account
+2025-02-04,-14.71,Transport,Transport expense,Cash
+2025-02-07,-93.36,Entertainment,Entertainment expense,Bank Account
+2025-02-07,-10.26,Food,Food expense,Bank Account
+2025-02-10,-6.45,Food,Food expense,Cash
+2025-02-12,-16.05,Food,Food expense,Bank Account
+2025-02-14,-12.72,Transport,Transport expense,Cash
+2025-02-14,-6.94,Food,Food expense,Credit Card
+2025-02-15,-9.03,Transport,Transport expense,Bank Account
+2025-02-16,-16.45,Food,Food expense,Bank Account
+2025-02-16,-51.67,Entertainment,Entertainment expense,Cash
+2025-02-17,-7.27,Food,Food expense,Bank Account
+2025-02-17,-105.46,Groceries,Groceries expense,Bank Account
+2025-02-18,-14.44,Transport,Transport expense,Bank Account
+2025-02-19,-110.81,Shopping,Shopping expense,Bank Account
+2025-02-24,-168.34,Shopping,Shopping expense,Bank Account
+2025-02-25,5000,Salary,Monthly Salary,Bank Account
+2025-03-01,-11.79,Transport,Transport expense,Cash
+2025-03-01,-9.24,Food,Food expense,Cash
+2025-03-04,-9.72,Transport,Transport expense,Bank Account
+2025-03-07,-18.00,Health,Health expense,Bank Account
+2025-03-07,-105.81,Groceries,Groceries expense,Bank Account
+2025-03-08,-7.47,Transport,Transport expense,Credit Card
+2025-03-09,-45.78,Health,Health expense,Cash
+2025-03-10,-10.46,Food,Food expense,Bank Account
+2025-03-13,-10.83,Transport,Transport expense,Cash
+2025-03-13,-9.62,Food,Food expense,Bank Account
+2025-03-13,-53.27,Groceries,Groceries expense,Bank Account
+2025-03-16,-19.35,Food,Food expense,Credit Card
+2025-03-19,-5.16,Food,Food expense,Cash
+2025-03-20,449.98,Freelance,Side project,Bank Account
+2025-03-21,-9.05,Transport,Transport expense,Bank Account
+2025-03-22,-104.62,Shopping,Shopping expense,Bank Account
+2025-03-23,512.94,Freelance,Side project,Bank Account
+2025-03-24,-24.14,Health,Health expense,Credit Card
+2025-03-25,5000,Salary,Monthly Salary,Bank Account
+2025-03-25,731.89,Freelance,Side project,Bank Account
+2025-03-26,-13.44,Food,Food expense,Credit Card
+2025-03-26,-11.10,Transport,Transport expense,Credit Card
+2025-03-27,516.55,Freelance,Side project,Bank Account
+2025-03-28,-5.43,Food,Food expense,Credit Card
+2025-03-29,331.26,Freelance,Side project,Bank Account
+2025-04-01,273.75,Freelance,Side project,Bank Account
+2025-04-02,-9.16,Food,Food expense,Cash
+2025-04-06,372.72,Freelance,Side project,Bank Account
+2025-04-08,-17.79,Food,Food expense,Bank Account
+2025-04-08,250.22,Freelance,Side project,Bank Account
+2025-04-09,-55.13,Groceries,Groceries expense,Cash
+2025-04-09,-10.78,Food,Food expense,Cash
+2025-04-11,-9.36,Transport,Transport expense,Cash
+2025-04-11,-18.95,Food,Food expense,Bank Account
+2025-04-14,-16.94,Food,Food expense,Credit Card
+2025-04-16,-11.15,Food,Food expense,Credit Card
+2025-04-16,-3.14,Transport,Transport expense,Credit Card
+2025-04-17,-12.42,Transport,Transport expense,Bank Account
+2025-04-19,-5.70,Transport,Transport expense,Bank Account
+2025-04-21,-3.51,Transport,Transport expense,Credit Card
+2025-04-24,-17.43,Food,Food expense,Bank Account
+2025-04-24,-10.06,Transport,Transport expense,Credit Card
+2025-04-25,5000,Salary,Monthly Salary,Bank Account
+2025-04-27,-12.07,Food,Food expense,Cash
+2025-04-27,-3.15,Transport,Transport expense,Cash
+2025-04-28,-13.25,Food,Food expense,Cash
+2025-04-30,-14.07,Transport,Transport expense,Cash
+2025-04-30,-6.21,Food,Food expense,Credit Card
+2025-05-02,-17.50,Health,Health expense,Cash
+2025-05-03,-11.21,Food,Food expense,Cash
+2025-05-04,-19.08,Food,Food expense,Cash
+2025-05-04,-4.22,Transport,Transport expense,Cash
+2025-05-08,-8.01,Food,Food expense,Cash
+2025-05-08,-7.73,Food,Food expense,Credit Card
+2025-05-11,-13.27,Transport,Transport expense,Bank Account
+2025-05-13,-13.03,Food,Food expense,Credit Card
+2025-05-14,465.34,Freelance,Side project,Bank Account
+2025-05-15,-18.05,Food,Food expense,Bank Account
+2025-05-17,-16.97,Food,Food expense,Bank Account
+2025-05-18,-2.55,Transport,Transport expense,Credit Card
+2025-05-18,-139.04,Shopping,Shopping expense,Bank Account
+2025-05-23,-6.42,Food,Food expense,Cash
+2025-05-23,-2.49,Transport,Transport expense,Bank Account
+2025-05-25,5000,Salary,Monthly Salary,Bank Account
+2025-05-27,-14.18,Food,Food expense,Bank Account
+2025-05-30,287.68,Freelance,Side project,Bank Account
+2025-06-02,-41.17,Shopping,Shopping expense,Credit Card
+2025-06-03,-175.53,Shopping,Shopping expense,Credit Card
+2025-06-04,-6.85,Transport,Transport expense,Credit Card
+2025-06-04,986.48,Freelance,Side project,Bank Account
+2025-06-05,-13.01,Transport,Transport expense,Cash
+2025-06-05,-5.51,Transport,Transport expense,Cash
+2025-06-08,-4.18,Transport,Transport expense,Cash
+2025-06-10,-124.65,Groceries,Groceries expense,Credit Card
+2025-06-11,-4.72,Transport,Transport expense,Credit Card
+2025-06-13,-5.58,Food,Food expense,Cash
+2025-06-16,-14.43,Food,Food expense,Bank Account
+2025-06-16,472.45,Freelance,Side project,Bank Account
+2025-06-18,-90.26,Shopping,Shopping expense,Credit Card
+2025-06-19,-7.25,Food,Food expense,Cash
+2025-06-22,-6.92,Food,Food expense,Credit Card
+2025-06-23,-12.61,Food,Food expense,Bank Account
+2025-06-23,-21.90,Entertainment,Entertainment expense,Credit Card
+2025-06-25,5000,Salary,Monthly Salary,Bank Account
+2025-06-26,-58.18,Groceries,Groceries expense,Cash
+2025-06-28,-7.02,Transport,Transport expense,Credit Card
+2025-06-29,-9.64,Transport,Transport expense,Bank Account
+2025-06-29,-5.22,Transport,Transport expense,Cash
+2025-06-29,686.91,Freelance,Side project,Bank Account
+2025-06-30,-3.10,Transport,Transport expense,Cash
+2025-07-01,-1000,Rent,Monthly Rent,Bank Account
+2025-07-01,-66.17,Shopping,Shopping expense,Cash
+2025-07-02,-7.62,Transport,Transport expense,Cash
+2025-07-02,-12.44,Food,Food expense,Bank Account
+2025-07-05,-5.29,Transport,Transport expense,Credit Card
+2025-07-06,-11.00,Transport,Transport expense,Credit Card
+2025-07-08,-3.51,Transport,Transport expense,Bank Account
+2025-07-09,-17.42,Food,Food expense,Bank Account
+2025-07-09,-3.31,Transport,Transport expense,Credit Card
+2025-07-12,952.98,Freelance,Side project,Bank Account
+2025-07-14,-17.04,Food,Food expense,Cash
+2025-07-14,894.43,Freelance,Side project,Bank Account
+2025-07-15,-9.33,Transport,Transport expense,Cash
+2025-07-16,-15.38,Food,Food expense,Bank Account
+2025-07-17,-10.51,Food,Food expense,Cash
+2025-07-18,-4.07,Transport,Transport expense,Credit Card
+2025-07-19,-7.53,Food,Food expense,Bank Account
+2025-07-19,-10.24,Food,Food expense,Cash
+2025-07-19,289.89,Freelance,Side project,Bank Account
+2025-07-20,-12.12,Food,Food expense,Bank Account
+2025-07-20,-10.45,Transport,Transport expense,Cash
+2025-07-22,-8.18,Transport,Transport expense,Cash
+2025-07-23,-3.81,Transport,Transport expense,Cash
+2025-07-23,-12.70,Food,Food expense,Bank Account
+2025-07-25,5000,Salary,Monthly Salary,Bank Account
+2025-07-26,-7.01,Food,Food expense,Bank Account
+2025-07-29,-11.34,Food,Food expense,Bank Account
+2025-07-30,-16.07,Food,Food expense,Cash
+2025-07-30,-16.56,Food,Food expense,Cash
+2025-07-31,-19.09,Food,Food expense,Credit Card
+2025-07-31,-8.89,Transport,Transport expense,Bank Account
+2025-08-01,-13.95,Food,Food expense,Credit Card
+2025-08-03,-8.08,Food,Food expense,Cash
+2025-08-03,-17.48,Food,Food expense,Cash
+2025-08-04,-5.48,Transport,Transport expense,Cash
+2025-08-06,-35.39,Health,Health expense,Bank Account
+2025-08-08,-33.54,Entertainment,Entertainment expense,Bank Account
+2025-08-08,-125.94,Groceries,Groceries expense,Cash
+2025-08-12,-10.64,Food,Food expense,Bank Account
+2025-08-13,-16.92,Food,Food expense,Bank Account
+2025-08-13,-8.33,Food,Food expense,Bank Account
+2025-08-13,-17.37,Food,Food expense,Cash
+2025-08-15,-128.14,Groceries,Groceries expense,Credit Card
+2025-08-15,-115.63,Groceries,Groceries expense,Cash
+2025-08-16,-11.51,Food,Food expense,Bank Account
+2025-08-17,-9.17,Transport,Transport expense,Bank Account
+2025-08-20,-12.81,Food,Food expense,Cash
+2025-08-21,-17.32,Food,Food expense,Cash
+2025-08-22,-5.95,Food,Food expense,Cash
+2025-08-23,577.30,Freelance,Side project,Bank Account
+2025-08-25,5000,Salary,Monthly Salary,Bank Account
+2025-08-27,-11.73,Food,Food expense,Bank Account
+2025-08-30,-13.71,Transport,Transport expense,Credit Card
+2025-08-31,-7.88,Transport,Transport expense,Bank Account
+2025-08-31,-12.91,Transport,Transport expense,Credit Card
+2025-09-01,-155.51,Shopping,Shopping expense,Bank Account
+2025-09-01,906.15,Freelance,Side project,Bank Account
+2025-09-02,-55.17,Entertainment,Entertainment expense,Cash
+2025-09-03,-14.06,Food,Food expense,Bank Account
+2025-09-05,-9.49,Food,Food expense,Credit Card
+2025-09-08,-7.68,Transport,Transport expense,Bank Account
+2025-09-09,-4.42,Transport,Transport expense,Credit Card
+2025-09-09,-15.43,Food,Food expense,Bank Account
+2025-09-10,-107.01,Groceries,Groceries expense,Credit Card
+2025-09-10,-52.32049075386338,Utilities,Electric/Water,Bank Account
+2025-09-12,-57.10,Entertainment,Entertainment expense,Cash
+2025-09-12,-53.21,Groceries,Groceries expense,Cash
+2025-09-12,-101.75,Groceries,Groceries expense,Cash
+2025-09-13,-3.39,Transport,Transport expense,Credit Card
+2025-09-13,-111.69,Groceries,Groceries expense,Cash
+2025-09-16,-12.25,Food,Food expense,Bank Account
+2025-09-18,-11.60,Health,Health expense,Credit Card
+2025-09-21,-11.47,Transport,Transport expense,Credit Card
+2025-09-25,5000,Salary,Monthly Salary,Bank Account
+2025-09-25,-16.17,Food,Food expense,Credit Card
+2025-09-26,-7.24,Transport,Transport expense,Bank Account
+2025-09-28,-14.12,Food,Food expense,Credit Card
+2025-09-30,-8.99,Transport,Transport expense,Bank Account
+2025-10-04,-8.82,Food,Food expense,Bank Account
+2025-10-06,-12.06,Transport,Transport expense,Bank Account
+2025-10-07,-19.74,Food,Food expense,Bank Account
+2025-10-07,643.01,Freelance,Side project,Bank Account
+2025-10-10,-13.48,Food,Food expense,Cash
+2025-10-11,-11.03,Transport,Transport expense,Bank Account
+2025-10-11,-7.79,Food,Food expense,Bank Account
+2025-10-11,-148.85,Shopping,Shopping expense,Bank Account
+2025-10-15,-19.64,Food,Food expense,Cash
+2025-10-22,-2.09,Transport,Transport expense,Cash
+2025-10-23,-8.43,Food,Food expense,Bank Account
+2025-10-24,-7.67,Transport,Transport expense,Credit Card
+2025-10-24,-16.49,Food,Food expense,Bank Account
+2025-10-25,5000,Salary,Monthly Salary,Bank Account
+2025-10-25,-9.03,Transport,Transport expense,Bank Account
+2025-10-25,-12.82,Food,Food expense,Credit Card
+2025-10-28,-12.22,Transport,Transport expense,Cash
+2025-10-28,-47.50,Health,Health expense,Credit Card
+2025-10-29,-16.49,Food,Food expense,Cash
+2025-10-30,-80.06,Groceries,Groceries expense,Bank Account
+2025-10-31,909.83,Freelance,Side project,Bank Account
+2025-11-05,-8.79,Transport,Transport expense,Credit Card
+2025-11-07,-46.04,Entertainment,Entertainment expense,Credit Card
+2025-11-12,444.55,Freelance,Side project,Bank Account
+2025-11-15,-7.32,Transport,Transport expense,Credit Card
+2025-11-15,582.87,Freelance,Side project,Bank Account
+2025-11-16,-6.50,Food,Food expense,Credit Card
+2025-11-17,-9.87,Food,Food expense,Bank Account
+2025-11-18,-13.91,Food,Food expense,Credit Card
+2025-11-18,-45.59,Entertainment,Entertainment expense,Cash
+2025-11-20,-18.28,Food,Food expense,Cash
+2025-11-22,-88.36,Entertainment,Entertainment expense,Cash
+2025-11-24,674.06,Freelance,Side project,Bank Account
+2025-11-25,5000,Salary,Monthly Salary,Bank Account
+2025-11-25,-5.82,Food,Food expense,Bank Account
+2025-11-29,-11.91,Food,Food expense,Cash
+2025-11-29,-3.70,Transport,Transport expense,Credit Card
+2025-11-30,-11.71,Food,Food expense,Cash
+2025-11-30,-53.20,Shopping,Shopping expense,Bank Account
+2025-11-30,-12.20,Food,Food expense,Bank Account
+2025-11-30,-11.15,Transport,Transport expense,Cash
+2025-12-01,-14.93,Transport,Transport expense,Credit Card
+2025-12-02,-14.50,Food,Food expense,Cash
+2025-12-02,-133.25,Groceries,Groceries expense,Bank Account
+2025-12-05,-19.05,Food,Food expense,Bank Account
+2025-12-06,-3.39,Transport,Transport expense,Cash
+2025-12-06,-9.92,Food,Food expense,Cash
+2025-12-07,-5.33,Food,Food expense,Bank Account
+2025-12-07,-5.54,Food,Food expense,Cash
+2025-12-07,-22.50,Health,Health expense,Credit Card
+2025-12-07,-16.19,Food,Food expense,Cash
+2025-12-08,-25.85,Health,Health expense,Credit Card
+2025-12-09,-13.32,Transport,Transport expense,Bank Account
+2025-12-10,-11.02,Food,Food expense,Credit Card
+2025-12-11,983.81,Freelance,Side project,Bank Account
+2025-12-13,-15.95,Food,Food expense,Credit Card
+2025-12-13,-142.46,Shopping,Shopping expense,Cash
+2025-12-13,-9.92,Food,Food expense,Credit Card
+2025-12-15,-12.27,Transport,Transport expense,Credit Card
+2025-12-21,-6.85,Food,Food expense,Bank Account
+2025-12-21,475.80,Freelance,Side project,Bank Account
+2025-12-22,-6.75,Transport,Transport expense,Credit Card
+2025-12-24,-6.66,Transport,Transport expense,Credit Card
+2025-12-24,-91.32,Entertainment,Entertainment expense,Bank Account
+2025-12-25,5000,Salary,Monthly Salary,Bank Account
+2025-12-25,-5.23,Food,Food expense,Bank Account
+2025-12-28,-14.04,Transport,Transport expense,Bank Account
+2025-12-28,-16.86,Food,Food expense,Credit Card
+2025-12-29,-14.60,Transport,Transport expense,Cash
+2025-12-29,-19.14,Food,Food expense,Cash
+2025-12-31,-138.25,Shopping,Shopping expense,Cash
+2026-01-03,392.57,Freelance,Side project,Bank Account
+2026-01-05,-10.19,Food,Food expense,Credit Card
+2026-01-05,-16.51,Food,Food expense,Credit Card
+2026-01-07,-52.49,Entertainment,Entertainment expense,Bank Account
+2026-01-08,-89.19,Groceries,Groceries expense,Cash
+2026-01-08,-13.80,Transport,Transport expense,Cash
+2026-01-16,-3.27,Transport,Transport expense,Credit Card
+2026-01-17,-10.11,Food,Food expense,Cash
+2026-01-22,-11.30,Transport,Transport expense,Credit Card
+2026-01-25,5000,Salary,Monthly Salary,Bank Account
+2026-01-28,-9.36,Transport,Transport expense,Cash
+2026-01-30,-10.42,Transport,Transport expense,Cash
+2026-01-31,-12.53,Transport,Transport expense,Credit Card
+2026-01-31,-137.98,Groceries,Groceries expense,Cash
+2026-02-01,-7.45,Food,Food expense,Cash

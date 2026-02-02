@@ -25,69 +25,76 @@ struct AddCategoryView: View {
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Details") {
-                    TextField("Category Name", text: $name)
-                    
-                    Picker("Type", selection: $selectedType) {
-                        Text("Expense").tag(TransactionType.expense)
-                        Text("Income").tag(TransactionType.income)
-                    }
-                    .pickerStyle(.segmented)
-                }
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
-                Section("Appearance") {
-                    // Visual Preview
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 12) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header Section
+                        VStack(spacing: 24) {
+                            // Preview
                             ZStack {
                                 Circle()
-                                    .fill(Color(hex: selectedColorHex) ?? .blue)
-                                    .frame(width: 80, height: 80)
-                                    .shadow(radius: 5)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(hex: selectedColorHex) ?? .blue,
+                                                (Color(hex: selectedColorHex) ?? .blue).opacity(0.7)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 100, height: 100)
+                                    .shadow(color: (Color(hex: selectedColorHex) ?? .blue).opacity(0.3), radius: 10, x: 0, y: 5)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(.white.opacity(0.2), lineWidth: 1)
+                                    )
                                 
                                 Image(systemName: selectedIcon)
-                                    .font(.system(size: 36))
+                                    .font(.system(size: 40, weight: .semibold))
                                     .foregroundColor(.white)
+                                    .shadow(color: .black.opacity(0.1), radius: 2)
                             }
+                            .padding(.top, 20)
                             
-                            Text("Preview")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            VStack(spacing: 16) {
+                                TextField("Category Name", text: $name)
+                                    .font(.title3.bold())
+                                    .multilineTextAlignment(.center)
+                                    .submitLabel(.done)
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 16)
+                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .cornerRadius(12)
+                                    .padding(.horizontal, 32)
+                                
+                                Picker("Type", selection: $selectedType) {
+                                    Text("Expense").tag(TransactionType.expense)
+                                    Text("Income").tag(TransactionType.income)
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, 32)
+                                .padding(.bottom, 8)
+                            }
                         }
-                        Spacer()
-                    }
-                    .padding(.vertical)
-                    .listRowBackground(Color.clear)
-                    
-                    NavigationLink {
-                        ColorPickerView(selectedColorHex: $selectedColorHex)
-                            .navigationTitle("Select Color")
-                    } label: {
-                        HStack {
-                            Text("Color")
-                            Spacer()
-                            Circle()
-                                .fill(Color(hex: selectedColorHex) ?? .blue)
-                                .frame(width: 24, height: 24)
+                        
+                        // Pickers
+                        VStack(spacing: 24) {
+                            ColorPickerContainer(selectedColorHex: $selectedColorHex)
+                                .padding(.horizontal, 16)
+                            
+                            SymbolPickerContainer(selectedIcon: $selectedIcon, selectedColorHex: selectedColorHex)
+                                .padding(.horizontal, 16)
                         }
-                    }
-                    
-                    NavigationLink {
-                        IconPickerView(selectedIcon: $selectedIcon, selectedColorHex: $selectedColorHex)
-                            .navigationTitle("Select Icon")
-                    } label: {
-                        HStack {
-                            Text("Icon")
-                            Spacer()
-                            Image(systemName: selectedIcon)
-                                .foregroundColor(Color(hex: selectedColorHex) ?? .blue)
-                        }
+                        .padding(.bottom, 30)
                     }
                 }
             }
             .navigationTitle(categoryToEdit != nil ? "Edit Category" : "New Category")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -99,6 +106,7 @@ struct AddCategoryView: View {
                         dismiss()
                     }
                     .disabled(name.isEmpty)
+                    .fontWeight(.bold)
                 }
             }
         }
@@ -116,6 +124,3 @@ struct AddCategoryView: View {
         }
     }
 }
-
-// Helper for Hex Color from previous implementation or we check Utils
-// Assuming Color(hex:) extension exists as used in other views.

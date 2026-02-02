@@ -119,8 +119,8 @@ struct CalculatorKeyboardView: View {
     // Row 4: 1, 2, 3, +
     // Row 5: 00, 0, ., =
     
-    private let buttonSpacing: CGFloat = 6 // Compact spacing
-    private let buttonHeight: CGFloat = 42 // More compact height
+    private let buttonSpacing: CGFloat = 4 // Compact spacing
+    private let buttonHeight: CGFloat = 34 // More compact height
     
     var body: some View {
         VStack(spacing: buttonSpacing) {
@@ -164,26 +164,38 @@ struct CalculatorKeyboardView: View {
                 CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
             }
         }
-        .padding(12) // Slightly more padding container
+        .padding(8) // Slightly more padding container
         .background(CalcColors.background)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous)) // Rounded top corners
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) // Rounded top corners
         .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: -5) // Floating shadow
         .padding(.horizontal, 8) // Float slightly from edges
-        .padding(.bottom, 8) // Float from bottom
+        .padding(.bottom, 2) // Float from bottom
     }
     
 
     // MARK: - Button Handlers
     
+    private func updateEvaluation() {
+        if let result = ExpressionEvaluator.evaluate(expression) {
+            evaluatedAmount = abs(result)
+        } else if expression.isEmpty {
+            evaluatedAmount = 0
+        }
+    }
+    
     private func handleNumber(_ num: String) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         expression += num
+        updateEvaluation()
     }
     
     private func handleOperator(_ op: String) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if expression.isEmpty {
-            if op == "-" { expression = "-" }
+            if op == "-" { 
+                expression = "-" 
+                updateEvaluation()
+            }
             return
         }
         if expression.last == "." { return }
@@ -191,12 +203,14 @@ struct CalculatorKeyboardView: View {
             expression.removeLast()
         }
         expression += op
+        updateEvaluation()
     }
     
     private func handleDecimal() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if expression.isEmpty {
             expression = "0."
+            updateEvaluation()
             return
         }
         
@@ -210,6 +224,7 @@ struct CalculatorKeyboardView: View {
         } else {
             expression += "0."
         }
+        updateEvaluation()
     }
     
     private func handleClear() {
@@ -222,9 +237,7 @@ struct CalculatorKeyboardView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if !expression.isEmpty {
             expression.removeLast()
-            if expression.isEmpty {
-                evaluatedAmount = 0
-            }
+            updateEvaluation()
         }
     }
     
@@ -281,16 +294,16 @@ struct CalcButton: View {
             Group {
                 if let systemImage = systemImage {
                     Image(systemName: systemImage)
-                        .font(.title3)
+                        .font(.headline)
                         .fontWeight(.medium)
                 } else if let text = text {
                     Text(text)
-                        .font(.title3)
+                        .font(.headline)
                         .fontWeight(.medium)
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 42) // Compact height
+            .frame(height: 34) // Compact height
         }
         .buttonStyle(.borderedProminent)
         .tint(color)

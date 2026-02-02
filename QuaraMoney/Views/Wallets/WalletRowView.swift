@@ -25,7 +25,7 @@ struct WalletRowView: View {
             Text(wallet.balance.formatted(.currency(code: wallet.currencyCode)))
                 .font(.body)
                 .monospacedDigit()
-                .foregroundStyle(wallet.balance >= 0 ? Color.primary : Color.red)
+                .foregroundStyle(wallet.balance >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
         }
     }
 }

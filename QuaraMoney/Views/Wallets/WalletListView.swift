@@ -11,6 +11,14 @@ struct WalletListView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !wallets.isEmpty {
+                    Section {
+                        NetWorthCard(wallets: wallets)
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                    }
+                }
+                
                 ForEach(wallets) { wallet in
                     NavigationLink(destination: WalletDetailView(wallet: wallet, modelContext: modelContext)) {
                         WalletRowView(wallet: wallet)
@@ -44,6 +52,7 @@ struct WalletListView: View {
                 }
             }
             .navigationTitle("Wallets")
+            .listStyle(.insetGrouped)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddWallet = true }) {

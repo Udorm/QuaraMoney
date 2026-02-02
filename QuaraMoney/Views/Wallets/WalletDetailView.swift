@@ -61,26 +61,15 @@ struct WalletDetailView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach(WalletDetailViewModel.Period.allCases) { period in
-                        Button {
-                            if period == .custom {
-                                showingCustomDateSheet = true
-                            } else {
-                                viewModel.selectedPeriod = period
-                            }
-                        } label: {
-                            if viewModel.selectedPeriod == period {
-                                Label(period.rawValue, systemImage: "checkmark")
-                            } else {
-                                Text(period.rawValue)
-                            }
-                        }
+                FilterMenuView(
+                    selectedPeriod: $viewModel.selectedPeriod,
+                    selectedWallet: .constant(nil),
+                    wallets: [],
+                    showWalletFilter: false,
+                    onCustomPeriodSelect: {
+                        showingCustomDateSheet = true
                     }
-                } label: {
-                    Image(systemName: viewModel.isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .foregroundStyle(viewModel.isFilterActive ? .blue : .primary)
-                }
+                )
             }
         }
         .sheet(isPresented: $showingAddTransaction) {

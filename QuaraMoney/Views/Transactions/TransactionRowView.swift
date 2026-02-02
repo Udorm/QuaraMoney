@@ -55,7 +55,7 @@ struct TransactionRowView: View {
                 Text("\(isPositive ? "+" : "-")\(transaction.amount.formatted(.currency(code: transaction.currencyCode)))")
                     .font(.body)
                     .fontWeight(.semibold)
-                    .foregroundStyle(isPositive ? .green : .red)
+                    .foregroundStyle(isPositive ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                 
                 Text(transaction.date.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)

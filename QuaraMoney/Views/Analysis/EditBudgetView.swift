@@ -1,16 +1,29 @@
 import SwiftUI
 import SwiftData
 
-struct AddBudgetView: View {
+struct EditBudgetView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
+    @Bindable var budget: Budget
+    
     @Query(sort: \Category.name) private var categories: [Category]
+    
     @State private var selectedCategory: Category?
     @State private var amountString: String = ""
-    @State private var selectedCurrency: String = CurrencyManager.shared.preferredCurrencyCode
-    @State private var month: Int = Calendar.current.component(.month, from: Date())
-    @State private var year: Int = Calendar.current.component(.year, from: Date())
+    @State private var selectedCurrency: String = ""
+    @State private var month: Int = 1
+    @State private var year: Int = 2026
+    
+    init(budget: Budget) {
+        self.budget = budget
+        // Initialize state from budget values
+        _selectedCategory = State(initialValue: budget.category)
+        _amountString = State(initialValue: "\(budget.amountLimit)")
+        _selectedCurrency = State(initialValue: budget.currencyCode)
+        _month = State(initialValue: budget.month)
+        _year = State(initialValue: budget.year)
+    }
     
     var body: some View {
         NavigationStack {
@@ -21,14 +34,14 @@ struct AddBudgetView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         Picker("Category", selection: $selectedCategory) {
-                             Text("Select Category").tag(nil as Category?)
-                             ForEach(categories) { category in
-                                 HStack {
-                                     Image(systemName: category.icon)
-                                     Text(category.name)
-                                 }
-                                 .tag(category as Category?)
-                             }
+                            Text("Select Category").tag(nil as Category?)
+                            ForEach(categories) { category in
+                                HStack {
+                                    Image(systemName: category.icon)
+                                    Text(category.name)
+                                }
+                                .tag(category as Category?)
+                            }
                         }
                     }
                 }
@@ -58,7 +71,8 @@ struct AddBudgetView: View {
                     }
                 }
             }
-            .navigationTitle("New Budget")
+            .navigationTitle("Edit Budget")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -75,10 +89,21 @@ struct AddBudgetView: View {
     }
     
     private func saveBudget() {
-        guard let category = selectedCategory, let amount = Decimal(string: amountString) else { return }
+        guard let category = selectedCategory,
+              let amount = Decimal(string: amountString) else { return }
         
-        // MVP: Just creating. Real app should check for duplicate budget for same month/cat.
-        let budget = Budget(amountLimit: amount, currencyCode: selectedCurrency, category: category, month: month, year: year)
-        modelContext.insert(budget)
+        // Update the budget properties
+        budget.category = category
+        budget.amountLimit = amount
+        budget.currencyCode = selectedCurrency
+        budget.month = month
+        budget.year = year
     }
+}
+
+#Preview {
+    @Previewable @State var budget = Budget(amountLimit: 500, currencyCode: "USD", category: nil, month: 2, year: 2026)
+    
+    EditBudgetView(budget: budget)
+        .modelContainer(for: [Budget.self, Category.self], inMemory: true)
 }

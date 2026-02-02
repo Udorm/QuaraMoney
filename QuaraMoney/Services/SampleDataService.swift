@@ -1,5 +1,10 @@
 import Foundation
 import SwiftData
+import SwiftUI // For Notification
+
+extension Notification.Name {
+    static let dataDidUpdate = Notification.Name("dataDidUpdate")
+}
 
 @MainActor
 final class SampleDataService {
@@ -13,7 +18,7 @@ final class SampleDataService {
         // Clear existing data
         try await clearAllData()
         
-        // create Wallets
+        // Create Wallets
         let cashWallet = Wallet(name: "Cash", currencyCode: "USD", icon: "banknote", colorHex: "#4CAF50")
         let bankWallet = Wallet(name: "Bank Account", currencyCode: "USD", icon: "building.columns", colorHex: "#2196F3")
         let creditCardWallet = Wallet(name: "Credit Card", currencyCode: "USD", icon: "creditcard", colorHex: "#E91E63")
@@ -22,85 +27,128 @@ final class SampleDataService {
         modelContext.insert(bankWallet)
         modelContext.insert(creditCardWallet)
         
-        try modelContext.save() // Save wallets first
-        
         // Create Categories
-        // Income
         let salaryCategory = Category(name: "Salary", icon: "dollarsign.circle", colorHex: "#4CAF50", type: .income)
         let freelanceCategory = Category(name: "Freelance", icon: "laptopcomputer", colorHex: "#8BC34A", type: .income)
-        
-        // Expense
         let foodCategory = Category(name: "Food & Dining", icon: "fork.knife", colorHex: "#FF5722", type: .expense)
         let transportCategory = Category(name: "Transport", icon: "car", colorHex: "#03A9F4", type: .expense)
         let shoppingCategory = Category(name: "Shopping", icon: "cart", colorHex: "#9C27B0", type: .expense)
         let entertainmentCategory = Category(name: "Entertainment", icon: "tv", colorHex: "#673AB7", type: .expense)
         let billsCategory = Category(name: "Bills & Utilities", icon: "doc.text", colorHex: "#607D8B", type: .expense)
         
-        modelContext.insert(salaryCategory)
-        modelContext.insert(freelanceCategory)
-        modelContext.insert(foodCategory)
-        modelContext.insert(transportCategory)
-        modelContext.insert(shoppingCategory)
-        modelContext.insert(entertainmentCategory)
-        modelContext.insert(billsCategory)
-        
-        try modelContext.save() // Save categories
-        
-        // Generate Transactions
-        let calendar = Calendar.current
-        let today = Date()
-        
-        // Last 3 months
-        for i in 0..<90 {
-            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
-            
-            // Random chance to create transaction
-            let numberOfTransactions = Int.random(in: 0...3)
-            
-            for _ in 0..<numberOfTransactions {
-                // expense
-                if Bool.random() { 
-                    let amount = Decimal(Int.random(in: 5...100))
-                    let category = [foodCategory, transportCategory, shoppingCategory, entertainmentCategory].randomElement()!
-                    let wallet = [cashWallet, creditCardWallet].randomElement()!
-                    
-                    let transaction = Transaction(amount: amount, currencyCode: "USD", date: date, type: .expense)
-                    transaction.category = category
-                    transaction.sourceWallet = wallet
-                    transaction.note = "Sample \(category.name)"
-                    modelContext.insert(transaction)
-                }
-            }
+        let allCategories = [salaryCategory, freelanceCategory, foodCategory, transportCategory, shoppingCategory, entertainmentCategory, billsCategory]
+        for category in allCategories {
+            modelContext.insert(category)
         }
         
-        // Monthly Salary
-        for i in 0..<3 {
-            if let date = calendar.date(byAdding: .month, value: -i, to: today) {
-                let transaction = Transaction(amount: 3000, currencyCode: "USD", date: date, type: .income)
+        // Save wallets and categories first
+        try modelContext.save()
+        
+        // Pre-compute arrays for faster random selection
+        let expenseCategories = [foodCategory, transportCategory, shoppingCategory, entertainmentCategory, billsCategory]
+        let expenseWallets = [cashWallet, creditCardWallet]
+        let categoryNotes = expenseCategories.map { "Sample \($0.name)" }
+        
+        // Generate transactions in background then insert
+        let transactionData = await generateTransactionData()
+        
+        // Batch insert transactions
+        let batchSize = 100
+        var insertCount = 0
+        
+        for data in transactionData {
+            let transaction = Transaction(
+                amount: data.amount,
+                currencyCode: "USD",
+                date: data.date,
+                type: data.type
+            )
+            
+            switch data.type {
+            case .expense:
+                let categoryIndex = data.categoryIndex % expenseCategories.count
+                transaction.category = expenseCategories[categoryIndex]
+                transaction.sourceWallet = expenseWallets[data.walletIndex % expenseWallets.count]
+                transaction.note = categoryNotes[categoryIndex]
+            case .income:
                 transaction.category = salaryCategory
-                transaction.sourceWallet = bankWallet // Salary usually goes to bank
+                transaction.sourceWallet = bankWallet
                 transaction.note = "Monthly Salary"
-                modelContext.insert(transaction)
-            }
-        }
-        
-        // Pay Credit Card Bill (Transfer)
-        for i in 0..<3 {
-             if let date = calendar.date(byAdding: .month, value: -i, to: today) {
-                let transferAmount: Decimal = 500
-                let transaction = Transaction(amount: transferAmount, currencyCode: "USD", date: date, type: .transfer)
+            case .transfer:
                 transaction.sourceWallet = bankWallet
                 transaction.destinationWallet = creditCardWallet
                 transaction.note = "Pay Credit Card"
-                modelContext.insert(transaction)
+            }
+            
+            modelContext.insert(transaction)
+            insertCount += 1
+            
+            // Save in batches to avoid memory pressure
+            if insertCount % batchSize == 0 {
+                try modelContext.save()
             }
         }
         
+        // Final save
         try modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    }
+    
+    // Generate transaction data off the main actor for better performance
+    private nonisolated func generateTransactionData() async -> [TransactionData] {
+        var data: [TransactionData] = []
+        data.reserveCapacity(800) // Pre-allocate approximate size
+        
+        let calendar = Calendar.current
+        let today = Date()
+        
+        // Generate daily expenses (2 years = 730 days)
+        // Simplified: 1 transaction per day instead of random 0-3
+        for i in 0..<730 {
+            guard let date = calendar.date(byAdding: .day, value: -i, to: today) else { continue }
+            
+            // Create 1 expense per day (deterministic based on day for consistency)
+            let amount = Decimal(10 + (i % 90)) // Varies from 10-99
+            data.append(TransactionData(
+                amount: amount,
+                date: date,
+                type: .expense,
+                categoryIndex: i % 5,
+                walletIndex: i % 2
+            ))
+        }
+        
+        // Monthly salary (24 months)
+        for i in 0..<24 {
+            if let date = calendar.date(byAdding: .month, value: -i, to: today) {
+                data.append(TransactionData(
+                    amount: 3000,
+                    date: date,
+                    type: .income,
+                    categoryIndex: 0,
+                    walletIndex: 0
+                ))
+            }
+        }
+        
+        // Monthly credit card payments (24 months)
+        for i in 0..<24 {
+            if let date = calendar.date(byAdding: .month, value: -i, to: today) {
+                data.append(TransactionData(
+                    amount: 500,
+                    date: date,
+                    type: .transfer,
+                    categoryIndex: 0,
+                    walletIndex: 0
+                ))
+            }
+        }
+        
+        return data
     }
     
     private func clearAllData() async throws {
-        // Fetch and delete all data manually to ensure context updates are propagated correctly to the UI
+        // Fetch and delete - safer than bulk delete for SwiftData
         let transactions = try modelContext.fetch(FetchDescriptor<Transaction>())
         for transaction in transactions { modelContext.delete(transaction) }
         
@@ -121,4 +169,22 @@ final class SampleDataService {
         
         try modelContext.save()
     }
+    
+    func deleteAllTransactions() async throws {
+        let transactions = try modelContext.fetch(FetchDescriptor<Transaction>())
+        for transaction in transactions {
+            modelContext.delete(transaction)
+        }
+        try modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    }
+}
+
+// Lightweight struct for generating data off main thread
+private struct TransactionData {
+    let amount: Decimal
+    let date: Date
+    let type: TransactionType
+    let categoryIndex: Int
+    let walletIndex: Int
 }

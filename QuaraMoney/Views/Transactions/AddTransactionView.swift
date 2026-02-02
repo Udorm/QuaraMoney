@@ -219,6 +219,9 @@ struct AddTransactionView: View {
                 }
             }
         }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
         .sheet(isPresented: $showAllWallets) {
             walletPickerSheet
         }
@@ -349,8 +352,8 @@ struct AddTransactionView: View {
                     .foregroundStyle(.secondary)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
             } else {
                 // Show frequent categories in grid
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
@@ -373,7 +376,7 @@ struct AddTransactionView: View {
                                     .font(.system(size: 24))
                                     .foregroundColor(.secondary)
                                     .frame(width: 40, height: 40)
-                                    .background(Color(.secondarySystemGroupedBackground))
+                                    .background(Color(.tertiarySystemGroupedBackground))
                                     .clipShape(Circle())
                                 
                                 Text("More")
@@ -386,6 +389,9 @@ struct AddTransactionView: View {
                 }
             }
         }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
         .sheet(isPresented: $showAllCategories) {
             categoryPickerSheet
         }
@@ -581,15 +587,30 @@ struct CategoryGridItem: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(systemName: category.icon)
-                    .font(.title3)
-                    .foregroundColor(isSelected ? .white : categoryColor)
-                    .frame(width: 40, height: 40)
-                    .background(isSelected ? categoryColor : categoryColor.opacity(0.15))
-                    .clipShape(Circle())
+                ZStack {
+                    // Selection ring for selected state
+                    if isSelected {
+                        Circle()
+                            .stroke(categoryColor, lineWidth: 2)
+                            .frame(width: 46, height: 46)
+                    }
+                    
+                    Image(systemName: category.icon)
+                        .font(.title3)
+                        .foregroundColor(isSelected ? .white : categoryColor)
+                        .frame(width: 40, height: 40)
+                        .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
+                        .clipShape(Circle())
+                        .overlay(
+                            // Optional: subtle border for unselected to make them distinct from background
+                            Circle()
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: isSelected ? 0 : 1)
+                        )
+                }
                 
                 Text(category.name)
                     .font(.caption2)
+                    .fontWeight(isSelected ? .bold : .regular)
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? categoryColor : .secondary)
             }

@@ -5,7 +5,7 @@ import Foundation
 final class Transaction {
     @Attribute(.unique) var id: UUID
     var type: TransactionType
-    var date: Date
+    @Attribute(.indexed) var date: Date  // Indexed for fast date-range queries
     var note: String?
     
     // Financials

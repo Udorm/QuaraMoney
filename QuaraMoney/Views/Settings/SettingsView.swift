@@ -3,9 +3,12 @@ import SwiftData
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @ObservedObject private var currencyManager = CurrencyManager.shared
     @State private var showPopulateConfirmation = false
+    @State private var showDeleteConfirmation = false
     @State private var isPopulating = false
+    @State private var isDeleting = false
     @State private var showError = false
     @State private var errorMessage = ""
     
@@ -16,6 +19,25 @@ struct SettingsView: View {
                     ForEach(currencyManager.availableCurrencies, id: \.self) { code in
                         Text(code).tag(code)
                     }
+                }
+                
+                NavigationLink(destination: ThemeSettingsView()) {
+                    HStack {
+                        Text("Theme & Colors")
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(ThemeManager.shared.incomeColor)
+                                .frame(width: 12, height: 12)
+                            Circle()
+                                .fill(ThemeManager.shared.expenseColor)
+                                .frame(width: 12, height: 12)
+                        }
+                    }
+                }
+                
+                NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
+                    Label("Import from CSV", systemImage: "square.and.arrow.down")
                 }
             }
             
@@ -40,7 +62,22 @@ struct SettingsView: View {
                 }
             }
             
-            Section("Development") {
+            Section("Data Management") {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    if isDeleting {
+                        HStack {
+                            Text("Deleting...")
+                            Spacer()
+                            ProgressView()
+                        }
+                    } else {
+                        Text("Delete All Transactions")
+                    }
+                }
+                .disabled(isPopulating || isDeleting)
+                
                 Button {
                     showPopulateConfirmation = true
                 } label: {
@@ -54,8 +91,11 @@ struct SettingsView: View {
                         Text("Populate Sample Data")
                     }
                 }
-                .disabled(isPopulating)
-                .tint(.red)
+                .disabled(isPopulating || isDeleting)
+                
+                Button("Reset Onboarding") {
+                    isOnboardingCompleted = false
+                }
             }
             
             Section {
@@ -95,7 +135,6 @@ struct SettingsView: View {
                     let service = SampleDataService(modelContext: modelContext)
                     do {
                         try await service.populate()
-                        // Small delay to ensure user sees the completion
                         try? await Task.sleep(nanoseconds: 500_000_000) 
                     } catch {
                         errorMessage = "Error populating data: \(error.localizedDescription)"
@@ -106,6 +145,25 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will delete all existing data and replace it with sample wallets, categories, and transactions. This action cannot be undone.")
+        }
+        .alert("Delete All Transactions?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                isDeleting = true
+                Task {
+                    let service = SampleDataService(modelContext: modelContext)
+                    do {
+                        try await service.deleteAllTransactions()
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    } catch {
+                        errorMessage = "Error deleting transactions: \(error.localizedDescription)"
+                        showError = true
+                    }
+                    isDeleting = false
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete all transactions? Wallets and Categories will be kept. This action cannot be undone.")
         }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }

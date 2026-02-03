@@ -8,18 +8,7 @@ class WalletDetailViewModel: ObservableObject {
     private var modelContext: ModelContext
     let wallet: Wallet
     
-    // We can reuse the same Period enum logic or define it here.
-    // Defining here for encapsulation.
-    enum Period: String, CaseIterable, Identifiable {
-        case thisMonth = "This Month"
-        case lastMonth = "Last Month"
-        case thisYear = "This Year"
-        case custom = "Custom"
-        
-        var id: String { self.rawValue }
-    }
-    
-    @Published var selectedPeriod: Period = .thisMonth {
+    @Published var selectedPeriod: FilterPeriod = .thisMonth {
         didSet {
             updateDateRange()
             fetchTransactions()
@@ -27,10 +16,10 @@ class WalletDetailViewModel: ObservableObject {
     }
     
     @Published var customStartDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { fetchTransactions() } }
+        didSet { if selectedPeriod == .custom { updateDateRange(); fetchTransactions() } }
     }
     @Published var customEndDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { fetchTransactions() } }
+        didSet { if selectedPeriod == .custom { updateDateRange(); fetchTransactions() } }
     }
     
     @Published var transactions: [Transaction] = []
@@ -39,14 +28,7 @@ class WalletDetailViewModel: ObservableObject {
     private var endDate: Date = Date()
     
     var filterDescription: String {
-        switch selectedPeriod {
-        case .custom:
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            return "\(formatter.string(from: startDate)) - \(formatter.string(from: endDate))"
-        default:
-            return selectedPeriod.rawValue
-        }
+        selectedPeriod.description(customStart: customStartDate, customEnd: customEndDate)
     }
     
     init(modelContext: ModelContext, wallet: Wallet) {
@@ -57,34 +39,9 @@ class WalletDetailViewModel: ObservableObject {
     }
     
     private func updateDateRange() {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        switch selectedPeriod {
-        case .thisMonth:
-            guard let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .lastMonth:
-            guard let thisMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)),
-                  let start = calendar.date(byAdding: .month, value: -1, to: thisMonthStart),
-                  let end = calendar.date(byAdding: .month, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .thisYear:
-            guard let start = calendar.date(from: calendar.dateComponents([.year], from: now)),
-                  let end = calendar.date(byAdding: .year, value: 1, to: start) else { return }
-            self.startDate = start
-            self.endDate = end
-        case .custom:
-            self.startDate = calendar.startOfDay(for: customStartDate)
-             if let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) {
-                self.endDate = endOfDay
-            } else {
-                self.endDate = customEndDate
-            }
-        }
+        let range = selectedPeriod.dateRange(customStart: customStartDate, customEnd: customEndDate)
+        self.startDate = range.start
+        self.endDate = range.end
     }
     
     func fetchTransactions() {
@@ -104,7 +61,9 @@ class WalletDetailViewModel: ObservableObject {
         do {
             transactions = try modelContext.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("WalletDetail Transactions Fetch Error: \(error)")
+            #endif
         }
     }
     
@@ -118,7 +77,9 @@ class WalletDetailViewModel: ObservableObject {
             try modelContext.save()
             fetchTransactions()
         } catch {
+            #if DEBUG
             print("Error deleting transaction: \(error)")
+            #endif
         }
     }
     

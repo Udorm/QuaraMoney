@@ -5,9 +5,15 @@ struct TransactionRowView: View {
     let transaction: Transaction
     let contextWallet: Wallet?
     
+    // Cache theme colors for performance
+    private let incomeColor: Color
+    private let expenseColor: Color
+    
     init(transaction: Transaction, contextWallet: Wallet? = nil) {
         self.transaction = transaction
         self.contextWallet = contextWallet
+        self.incomeColor = ThemeManager.shared.incomeColor
+        self.expenseColor = ThemeManager.shared.expenseColor
     }
     
     private var isPositive: Bool {
@@ -55,7 +61,7 @@ struct TransactionRowView: View {
                 Text("\(isPositive ? "+" : "-")\(transaction.amount.formatted(.currency(code: transaction.currencyCode)))")
                     .font(.body)
                     .fontWeight(.semibold)
-                    .foregroundStyle(isPositive ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                    .foregroundStyle(isPositive ? incomeColor : expenseColor)
                 
                 Text(transaction.date.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)

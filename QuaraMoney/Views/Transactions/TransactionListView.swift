@@ -8,35 +8,9 @@ struct TransactionListView: View {
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
     
-    /// Groups transactions by date
-    private var dailySections: [DailySection] {
-        let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
-        
-        // Group by day
-        let grouped = Dictionary(grouping: transactions) { txn -> Date in
-            Calendar.current.startOfDay(for: txn.date)
-        }
-        
-        let sortedKeys = grouped.keys.sorted(by: >)
-        
-        return sortedKeys.map { date in
-            let txns = grouped[date] ?? []
-            
-            // Calculate daily net flow (income positive, expense negative)
-            let dailyFlow = txns.reduce(Decimal.zero) { result, txn in
-                let amountInTarget = CurrencyManager.shared.convert(
-                    amount: txn.amount,
-                    from: txn.currencyCode,
-                    to: targetCurrency
-                )
-                
-                if txn.type == .income { return result + amountInTarget }
-                if txn.type == .expense { return result - amountInTarget }
-                return result // transfer is neutral
-            }
-            
-            return DailySection(date: date, transactions: txns, dailyTotal: dailyFlow)
-        }
+    /// Groups transactions by date using shared TransactionProcessor
+    private var dailySections: [DailyTransactionSection] {
+        TransactionProcessor.groupByDay(transactions)
     }
     
     var body: some View {
@@ -86,28 +60,30 @@ struct TransactionListView: View {
     }
 }
 
-// MARK: - Supporting Types
-
-/// Represents a group of transactions for a single day
-struct DailySection: Identifiable {
-    let id = UUID()
-    let date: Date
-    let transactions: [Transaction]
-    let dailyTotal: Decimal
-}
-
 /// Header view for a daily section showing date and aggregate total
 struct DailySectionHeader: View {
-    let section: DailySection
+    let section: DailyTransactionSection
+    
+    // Cache singleton values for performance
+    private let currencyCode: String
+    private let incomeColor: Color
+    private let expenseColor: Color
+    
+    init(section: DailyTransactionSection) {
+        self.section = section
+        self.currencyCode = CurrencyManager.shared.preferredCurrencyCode
+        self.incomeColor = ThemeManager.shared.incomeColor
+        self.expenseColor = ThemeManager.shared.expenseColor
+    }
     
     var body: some View {
         HStack {
             Text(section.date, style: .date)
                 .font(.headline)
             Spacer()
-            Text(section.dailyTotal.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+            Text(section.dailyTotal.formatted(.currency(code: currencyCode)))
                 .font(.subheadline)
-                .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                .foregroundStyle(section.dailyTotal >= 0 ? incomeColor : expenseColor)
         }
         .padding(.vertical, 4)
     }

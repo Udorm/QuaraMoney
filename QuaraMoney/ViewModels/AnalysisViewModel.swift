@@ -8,18 +8,8 @@ class AnalysisViewModel: ObservableObject {
     private var modelContext: ModelContext?
     
     // MARK: - Filters
-    enum Period: String, CaseIterable, Identifiable {
-        case day = "Day"
-        case week = "Week"
-        case month = "Month"
-        case sixMonths = "6 Months"
-        case year = "Year"
-        case custom = "Custom"
-        
-        var id: String { self.rawValue }
-    }
     
-    @Published var selectedPeriod: Period = .day {
+    @Published var selectedPeriod: AnalysisPeriod = .day {
         didSet {
             // Reset reference date to now when changing period
             currentReferenceDate = Date()
@@ -29,11 +19,11 @@ class AnalysisViewModel: ObservableObject {
     }
     
     @Published var customStartDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { refreshData() } }
+        didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
     @Published var customEndDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { refreshData() } }
+        didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
     @Published var selectedWallet: Wallet? {
@@ -56,54 +46,20 @@ class AnalysisViewModel: ObservableObject {
     private var startDate: Date = Date()
     private var endDate: Date = Date()
     
-    enum TimeGrouping {
-        case hour
-        case day
-        case week
-        case month
-        case year
-    }
-    
     @Published var grouping: TimeGrouping = .day
     
     // MARK: - Navigation
     
     func navigateBack() {
-        let calendar = Calendar.current
-        switch selectedPeriod {
-        case .day:
-            currentReferenceDate = calendar.date(byAdding: .day, value: -1, to: currentReferenceDate) ?? currentReferenceDate
-        case .week:
-            currentReferenceDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentReferenceDate) ?? currentReferenceDate
-        case .month:
-            currentReferenceDate = calendar.date(byAdding: .month, value: -1, to: currentReferenceDate) ?? currentReferenceDate
-        case .sixMonths:
-            currentReferenceDate = calendar.date(byAdding: .month, value: -3, to: currentReferenceDate) ?? currentReferenceDate
-        case .year:
-            currentReferenceDate = calendar.date(byAdding: .year, value: -1, to: currentReferenceDate) ?? currentReferenceDate
-        case .custom:
-            break // No navigation for custom
-        }
+        guard selectedPeriod != .custom else { return }
+        currentReferenceDate = selectedPeriod.navigateBack(from: currentReferenceDate)
         updateDateRange()
         refreshData()
     }
     
     func navigateForward() {
-        let calendar = Calendar.current
-        switch selectedPeriod {
-        case .day:
-            currentReferenceDate = calendar.date(byAdding: .day, value: 1, to: currentReferenceDate) ?? currentReferenceDate
-        case .week:
-            currentReferenceDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentReferenceDate) ?? currentReferenceDate
-        case .month:
-            currentReferenceDate = calendar.date(byAdding: .month, value: 1, to: currentReferenceDate) ?? currentReferenceDate
-        case .sixMonths:
-            currentReferenceDate = calendar.date(byAdding: .month, value: 3, to: currentReferenceDate) ?? currentReferenceDate
-        case .year:
-            currentReferenceDate = calendar.date(byAdding: .year, value: 1, to: currentReferenceDate) ?? currentReferenceDate
-        case .custom:
-            break // No navigation for custom
-        }
+        guard selectedPeriod != .custom else { return }
+        currentReferenceDate = selectedPeriod.navigateForward(from: currentReferenceDate)
         updateDateRange()
         refreshData()
     }
@@ -123,35 +79,19 @@ class AnalysisViewModel: ObservableObject {
     }
     
     var filterDescription: String {
-        let calendar = Calendar.current
-        
-        switch selectedPeriod {
-        case .day:
-            // Show full date for the day
-            return startDate.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
-        case .week:
-            // Show week range: "Jan 27 - Feb 2, 2026"
-            let weekEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-            return "\(startDate.formatted(.dateTime.month(.abbreviated).day())) - \(weekEnd.formatted(.dateTime.month(.abbreviated).day().year()))"
-        case .month:
-            // Show month and year: "February 2026"
-            return startDate.formatted(.dateTime.month(.wide).year())
-        case .sixMonths:
-            // Show range: "Sep 2025 - Feb 2026"
-            let rangeEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-            return "\(startDate.formatted(.dateTime.month(.abbreviated).year())) - \(rangeEnd.formatted(.dateTime.month(.abbreviated).year()))"
-        case .year:
-            // Show year: "2026"
-            return startDate.formatted(.dateTime.year())
-        case .custom:
-            return "\(customStartDate.formatted(date: .abbreviated, time: .omitted)) - \(customEndDate.formatted(date: .abbreviated, time: .omitted))"
-        }
+        selectedPeriod.description(
+            referenceDate: currentReferenceDate,
+            customStart: customStartDate,
+            customEnd: customEndDate
+        )
     }
     
     init() {
         updateDateRange()
     }
     
+    /// Configure the model context - call this on view appear
+    /// Using configure pattern to handle SwiftData context lifecycle safely
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
@@ -159,77 +99,19 @@ class AnalysisViewModel: ObservableObject {
     // MARK: - Logic
     
     private func updateDateRange() {
-        let calendar = Calendar.current
-        let refDate = currentReferenceDate
+        let range = selectedPeriod.dateRange(
+            referenceDate: currentReferenceDate,
+            customStart: customStartDate,
+            customEnd: customEndDate
+        )
+        self.startDate = range.start
+        self.endDate = range.end
         
-        switch selectedPeriod {
-        case .day:
-            // Day view: Shows hourly data for the reference date
-            grouping = .hour
-            self.startDate = calendar.startOfDay(for: refDate)
-            self.endDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? refDate
-            
-        case .week:
-            // Week view: Shows daily data for the week containing reference date
-            grouping = .day
-            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: refDate)
-            guard let startOfWeek = calendar.date(from: components),
-                  let endOfWeek = calendar.date(byAdding: .day, value: 7, to: startOfWeek) else { return }
-            
-            self.startDate = startOfWeek
-            self.endDate = endOfWeek
-            
-        case .month:
-            // Month view: Shows daily data for the month containing reference date
-            grouping = .day
-            guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: refDate)),
-                  let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth) else { return }
-             
-            self.startDate = startOfMonth
-            self.endDate = endOfMonth
-            
-        case .sixMonths:
-            // 6 Months view: Shows monthly data for the last 6 months from reference date
-            grouping = .month
-            // Get start of the month 5 months ago (so we have 6 months total including current)
-            guard let startOfCurrentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: refDate)),
-                  let startOfRange = calendar.date(byAdding: .month, value: -5, to: startOfCurrentMonth),
-                  let endOfRange = calendar.date(byAdding: .month, value: 1, to: startOfCurrentMonth) else { return }
-            
-            self.startDate = startOfRange
-            self.endDate = endOfRange
-            
-        case .year:
-            // Year view: Shows monthly data for the year containing reference date
-            grouping = .month
-            guard let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: refDate)),
-                  let endOfYear = calendar.date(byAdding: .year, value: 1, to: startOfYear) else { return }
-            
-            self.startDate = startOfYear
-            self.endDate = endOfYear
-            
-        case .custom:
-            self.startDate = calendar.startOfDay(for: customStartDate)
-            if let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) {
-                self.endDate = endOfDay
-            } else {
-                self.endDate = customEndDate
-            }
-            
-            // Auto-detect grouping based on range duration for Custom
-            if let days = calendar.dateComponents([.day], from: startDate, to: endDate).day {
-                if days <= 1 {
-                    grouping = .hour
-                } else if days <= 60 {
-                    grouping = .day
-                } else if days <= 365 {
-                    grouping = .week
-                } else {
-                    grouping = .month
-                }
-            } else {
-                grouping = .day
-            }
+        // Update grouping
+        if selectedPeriod == .custom {
+            self.grouping = AnalysisPeriod.autoDetectGrouping(start: startDate, end: endDate)
+        } else {
+            self.grouping = selectedPeriod.grouping
         }
     }
     
@@ -259,7 +141,9 @@ class AnalysisViewModel: ObservableObject {
             self.netWorth = totalNW
             
         } catch {
+            #if DEBUG
             print("Error fetching wallets for Net Worth: \(error)")
+            #endif
         }
     }
     
@@ -370,20 +254,24 @@ class AnalysisViewModel: ObservableObject {
             }.sorted { $0.amount > $1.amount }
             
         } catch {
+            #if DEBUG
             print("Error fetching transactions for Analysis: \(error)")
+            #endif
         }
     }
 }
 
+// MARK: - Stats with Stable IDs for Chart Performance
+
 struct DailyStat: Identifiable {
-    let id = UUID()
+    var id: Date { date }
     let date: Date
     let income: Decimal
     let expense: Decimal
 }
 
 struct CategoryStat: Identifiable {
-    let id = UUID()
+    var id: UUID { category.id }
     let category: Category
     let amount: Decimal
     let colorHex: String

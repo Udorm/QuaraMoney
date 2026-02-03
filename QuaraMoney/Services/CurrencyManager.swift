@@ -77,10 +77,14 @@ class CurrencyManager: ObservableObject {
             saveRatesToCache()
             
             self.lastRatesFetchDate = Date().timeIntervalSince1970
+            #if DEBUG
             print("Rates fetched successfully. USD -> KHR: \(self.rates["KHR"] ?? 0)")
+            #endif
             
         } catch {
+            #if DEBUG
             print("Failed to fetch rates: \(error)")
+            #endif
             // Fallback defaults if empty
             if rates["KHR"] == nil { rates["KHR"] = 4000.0 }
         }

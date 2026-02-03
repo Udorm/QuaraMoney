@@ -55,8 +55,12 @@ class AddTransactionViewModel: BaseViewModel {
         }
     }
     
+    // Maximum allowed transaction amount to prevent Decimal overflow
+    static let maxTransactionAmount: Decimal = 999_999_999_999
+    
     var isValid: Bool {
-        guard evaluatedAmount > 0 else { return false }
+        // Amount must be positive and within bounds
+        guard evaluatedAmount > 0, evaluatedAmount <= Self.maxTransactionAmount else { return false }
         guard selectedWallet != nil else { return false }
         
         if type == .transfer {

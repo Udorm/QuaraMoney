@@ -3,6 +3,14 @@ import SwiftUI
 struct WalletRowView: View {
     let wallet: Wallet
     
+    // Cache theme color for performance
+    private let expenseColor: Color
+    
+    init(wallet: Wallet) {
+        self.wallet = wallet
+        self.expenseColor = ThemeManager.shared.expenseColor
+    }
+    
     var body: some View {
         HStack {
             Image(systemName: wallet.icon)
@@ -25,9 +33,7 @@ struct WalletRowView: View {
             Text(wallet.balance.formatted(.currency(code: wallet.currencyCode)))
                 .font(.body)
                 .monospacedDigit()
-                .foregroundStyle(wallet.balance >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
+                .foregroundStyle(wallet.balance >= 0 ? Color.primary : expenseColor)
         }
     }
 }
-
-

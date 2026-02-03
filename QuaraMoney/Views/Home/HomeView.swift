@@ -160,8 +160,6 @@ struct AddTransactionContainer: View {
         )
     }
 }
-
-
 struct DailyHeader: View {
     let section: DailyTransactionSection
     
@@ -179,11 +177,13 @@ struct DailyHeader: View {
         .padding(.vertical, 4)
     }
 }
-
 // Reusing TransactionRow if it exists, otherwise defining a simple one.
 // I think we defined TransactionRow in WalletDetailView?
 // I should likely move it to a shared file or redefine it here.
 // I will verify if I can import or redefine.
 // Let's use a simple one here for now.
+
+
+
 
 

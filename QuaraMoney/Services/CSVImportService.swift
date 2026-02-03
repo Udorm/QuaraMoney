@@ -77,6 +77,11 @@ struct CSVImportResult {
 final class CSVImportService {
     private let modelContext: ModelContext
     
+    // Security: Maximum string lengths to prevent memory issues
+    private static let maxNoteLength = 1000
+    private static let maxCategoryNameLength = 100
+    private static let maxWalletNameLength = 100
+    
     // Supported date formats (ordered by priority)
     private let dateFormats = [
         "yyyy-MM-dd",
@@ -91,6 +96,36 @@ final class CSVImportService {
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+    }
+    
+    // MARK: - String Sanitization
+    
+    /// Sanitizes input strings by removing control characters and limiting length
+    private func sanitizeString(_ string: String, maxLength: Int) -> String {
+        // Remove control characters (except common whitespace)
+        let allowedCharacters = CharacterSet.controlCharacters.inverted.union(.whitespaces)
+        let sanitized = string.unicodeScalars
+            .filter { allowedCharacters.contains($0) }
+            .map { Character($0) }
+        
+        // Trim whitespace and limit length
+        let trimmed = String(sanitized).trimmingCharacters(in: .whitespaces)
+        if trimmed.count > maxLength {
+            return String(trimmed.prefix(maxLength))
+        }
+        return trimmed
+    }
+    
+    /// Sanitizes note field
+    private func sanitizeNote(_ string: String?) -> String? {
+        guard let string = string, !string.isEmpty else { return nil }
+        let sanitized = sanitizeString(string, maxLength: Self.maxNoteLength)
+        return sanitized.isEmpty ? nil : sanitized
+    }
+    
+    /// Sanitizes category/wallet names
+    private func sanitizeName(_ string: String) -> String {
+        sanitizeString(string, maxLength: Self.maxCategoryNameLength)
     }
     
     // MARK: - Parse Headers & Preview
@@ -198,17 +233,17 @@ final class CSVImportService {
             }
             
             if let col = mapping.categoryColumn, col < values.count {
-                let name = values[col]
+                let name = sanitizeName(values[col])
                 row.categoryName = name
                 row.matchedCategory = matchCategory(name: name, type: row.type ?? .expense, from: categories)
             }
             
             if let col = mapping.noteColumn, col < values.count {
-                row.note = values[col].isEmpty ? nil : values[col]
+                row.note = sanitizeNote(values[col])
             }
             
             if let col = mapping.walletColumn, col < values.count {
-                let name = values[col]
+                let name = sanitizeName(values[col])
                 row.walletName = name
                 row.matchedWallet = matchWallet(name: name, from: wallets)
             }
@@ -389,10 +424,10 @@ final class CSVImportService {
                 }
             }
             
-            // Note
+            // Note (sanitized)
             var note: String?
             if let col = mapping.noteColumn, col < values.count {
-                note = values[col].isEmpty ? nil : values[col]
+                note = sanitizeNote(values[col])
             }
             
             // Create Transaction

@@ -15,6 +15,8 @@ class BaseViewModel: ObservableObject {
     
     func handleError(_ error: Error) {
         self.errorMessage = error.localizedDescription
+        #if DEBUG
         print("Error: \(error)")
+        #endif
     }
 }

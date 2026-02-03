@@ -6,78 +6,66 @@ struct AddWalletView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemGroupedBackground)
-                    .ignoresSafeArea()
+            Form {
+                Section("Details") {
+                    TextField("Name", text: $viewModel.name)
+                    
+                    Picker("Currency", selection: $viewModel.currencyCode) {
+                        Text("USD").tag("USD")
+                        Text("EUR").tag("EUR")
+                        Text("KHR").tag("KHR")
+                        Text("JPY").tag("JPY")
+                    }
+                }
                 
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Header Section
-                        VStack(spacing: 24) {
-                            // Preview
+                Section("Appearance") {
+                    // Visual Preview
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(hex: viewModel.colorHex) ?? .blue,
-                                                (Color(hex: viewModel.colorHex) ?? .blue).opacity(0.7)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 100, height: 100)
-                                    .shadow(color: (Color(hex: viewModel.colorHex) ?? .blue).opacity(0.3), radius: 10, x: 0, y: 5)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(.white.opacity(0.2), lineWidth: 1)
-                                    )
+                                    .fill(Color(hex: viewModel.colorHex) ?? .blue)
+                                    .frame(width: 80, height: 80)
+                                    .shadow(radius: 5)
                                 
                                 Image(systemName: viewModel.icon)
-                                    .font(.system(size: 40, weight: .semibold))
+                                    .font(.system(size: 36))
                                     .foregroundColor(.white)
-                                    .shadow(color: .black.opacity(0.1), radius: 2)
                             }
-                            .padding(.top, 20)
                             
-                            VStack(spacing: 16) {
-                                TextField("Wallet Name", text: $viewModel.name)
-                                    .font(.title3.bold())
-                                    .multilineTextAlignment(.center)
-                                    .submitLabel(.done)
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 16)
-                                    .background(Color(.secondarySystemGroupedBackground))
-                                    .cornerRadius(12)
-                                    .padding(.horizontal, 32)
-                                
-                                HStack {
-                                    Text("Currency")
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Picker("Currency", selection: $viewModel.currencyCode) {
-                                        Text("USD ($)").tag("USD")
-                                        Text("EUR (€)").tag("EUR")
-                                        Text("KHR (៛)").tag("KHR")
-                                        Text("JPY (¥)").tag("JPY")
-                                    }
-                                    .tint(.primary)
-                                }
-                                .padding(.horizontal, 32)
-                                .padding(.bottom, 8)
-                            }
+                            Text("Preview")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        
-                        // Pickers
-                        VStack(spacing: 24) {
-                            ColorPickerContainer(selectedColorHex: $viewModel.colorHex)
-                                .padding(.horizontal, 16)
-                            
-                            SymbolPickerContainer(selectedIcon: $viewModel.icon, selectedColorHex: viewModel.colorHex)
-                                .padding(.horizontal, 16)
+                        Spacer()
+                    }
+                    .padding(.vertical)
+                    .listRowBackground(Color.clear)
+                    
+                    NavigationLink {
+                        ColorPickerView(selectedColorHex: $viewModel.colorHex)
+                            .navigationTitle("Select Color")
+                    } label: {
+                        HStack {
+                            Text("Color")
+                            Spacer()
+                            Circle()
+                                .fill(Color(hex: viewModel.colorHex) ?? .blue)
+                                .frame(width: 24, height: 24)
                         }
-                        .padding(.bottom, 30)
+                    }
+                    
+                    NavigationLink {
+                        IconPickerView(selectedIcon: $viewModel.icon, selectedColorHex: $viewModel.colorHex)
+                            .navigationTitle("Select Icon")
+                    } label: {
+                        HStack {
+                            Text("Icon")
+                            Spacer()
+                            Image(systemName: viewModel.icon)
+                                .foregroundColor(Color(hex: viewModel.colorHex) ?? .blue)
+                        }
                     }
                 }
             }
@@ -93,7 +81,6 @@ struct AddWalletView: View {
                         dismiss()
                     }
                     .disabled(!viewModel.isValid)
-                    .fontWeight(.bold)
                 }
             }
         }

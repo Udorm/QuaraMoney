@@ -23,7 +23,9 @@ class RecurringRuleService {
             
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("Failed to fetch or process rules: \(error)")
+            #endif
         }
     }
     

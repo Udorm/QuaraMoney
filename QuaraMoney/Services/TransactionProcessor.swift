@@ -146,7 +146,9 @@ struct TransactionProcessor {
                 dailySections: sections
             )
         } catch {
+            #if DEBUG
             print("TransactionProcessor fetch error: \(error)")
+            #endif
             return ProcessedTransactionData(
                 transactions: [],
                 incomeTotal: 0,
@@ -190,13 +192,23 @@ struct TransactionProcessor {
             
             return (transactions, hasMore)
         } catch {
+            #if DEBUG
             print("TransactionProcessor paginated fetch error: \(error)")
+            #endif
             return ([], false)
         }
     }
 }
 
 // MARK: - Supporting Types
+
+/// Represents a group of transactions for a single day with aggregate total
+struct DailyTransactionSection: Identifiable {
+    var id: Date { date }
+    let date: Date
+    let transactions: [Transaction]
+    let dailyTotal: Decimal
+}
 
 /// Result of fetchAndProcess - contains all computed data from a single fetch
 struct ProcessedTransactionData {

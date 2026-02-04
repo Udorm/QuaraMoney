@@ -209,6 +209,12 @@ struct BudgetSummarySection: View {
         }
     }
     
+    private var totalSpent: Decimal {
+        budgets.reduce(Decimal.zero) { total, budget in
+            total + calculateSpending(for: budget)
+        }
+    }
+    
     private var onTrackCount: Int {
         budgets.filter { budget in
             let spent = calculateSpending(for: budget)
@@ -218,40 +224,59 @@ struct BudgetSummarySection: View {
                 to: preferredCurrency
             )
             let progress = limit > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber) : 0
-            return progress <= 0.8
+            return progress <= 1.0 // Changed to 1.0 to consider "on track" as not over budget, or strict 0.8? Sticking to logic "over budget" count implies > 1.0 usually, but let's keep original logic loosely or refine. Original was <= 0.8. Let's use <= 1.0 for "On Track" in general sense, or strictly adhering to "Healthy". 
+            // Let's stick to "On Track" meaning "Not Over Budget" for the text label "X on track, Y over".
+            return progress <= 1.0
         }.count
     }
     
     var body: some View {
         Section {
-            HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Total Budgeted")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(totalBudgeted.formatted(.currency(code: preferredCurrency)))
-                        .font(.title3)
-                        .fontWeight(.semibold)
+            VStack(spacing: 16) {
+                // Top Row: Spent vs Budgeted
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Total Spent")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(totalSpent.formatted(.currency(code: preferredCurrency)))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Total Budgeted")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(totalBudgeted.formatted(.currency(code: preferredCurrency)))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("On Track")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 4) {
-                        Text("\(onTrackCount)/\(budgets.count)")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                        Image(systemName: onTrackCount == budgets.count ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                            .foregroundStyle(onTrackCount == budgets.count ? ThemeManager.shared.incomeColor : .orange)
+                // Progress Bar
+                let progress = totalBudgeted > 0 ? Double(truncating: totalSpent as NSNumber) / Double(truncating: totalBudgeted as NSNumber) : 0
+                VStack(spacing: 8) {
+                    ProgressView(value: min(progress, 1.0))
+                        .tint(progress > 1.0 ? .red : (progress > 0.9 ? .orange : ThemeManager.shared.incomeColor))
+                    
+                    HStack {
+                        Text("\(Int(progress * 100))% of budget used")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        Text("\(onTrackCount) on track, \(budgets.count - onTrackCount) over")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
             .padding(.vertical, 8)
-        } header: {
-            Text("Summary")
         }
     }
     
@@ -307,12 +332,17 @@ struct BudgetRowView: View {
     
     private var progressColor: Color {
         if isOverBudget {
-            return ThemeManager.shared.expenseColor
-        } else if progress > 0.8 {
+            return .red
+        } else if progress > 0.9 {
             return .orange
         } else {
             return ThemeManager.shared.incomeColor
         }
+    }
+    
+    // Remaining amount calculation
+    private var remaining: Decimal {
+        max(budgetLimitConverted - spent, 0)
     }
     
     private var budgetIcon: String {
@@ -321,119 +351,110 @@ struct BudgetRowView: View {
         } else if let group = budget.categoryGroup {
             return group.iconName
         } else {
-            return "sum"
+            return "chart.pie.fill"
         }
     }
     
+    private var iconColor: Color {
+        if let category = budget.category {
+            return Color(hex: category.colorHex) ?? .blue
+        } else if let group = budget.categoryGroup {
+            return Color(hex: group.colorHex) ?? .purple
+        } else {
+            return .blue
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Top row: Icon, Name, Badges, Amount
-            HStack {
-                Image(systemName: budgetIcon)
-                    .foregroundStyle(progressColor)
-                    .frame(width: 30)
+        HStack(spacing: 16) {
+            // MARK: Icon
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.1))
+                    .frame(width: 48, height: 48)
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(budget.displayName)
-                            .font(.headline)
+                Image(systemName: budgetIcon)
+                    .font(.title3)
+                    .foregroundStyle(iconColor)
+            }
+            
+            // MARK: Content
+            VStack(alignment: .leading, spacing: 6) {
+                // Title Row
+                HStack {
+                    Text(budget.displayName)
+                        .font(.body) // Fixed syntax
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    // Primary Value: Remaining or Spent based on preference/context
+                    // Here we focus on "Amount Left" as it's usually what users care about
+                    if isOverBudget {
+                        Text(spent.formatted(.currency(code: preferredCurrency)))
+                            .font(.body)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.red)
+                    } else {
+                        Text(remaining.formatted(.currency(code: preferredCurrency)))
+                            .font(.body)
+                            .fontWeight(.bold)
+                            .foregroundStyle(Color.primary)
+                    }
+                }
+                
+                // Progress Bar
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color(.systemGray4).opacity(0.5))
+                            .frame(height: 6)
                         
-                        // Badges
+                        Capsule()
+                            .fill(progressColor.gradient)
+                            .frame(width: min(geometry.size.width * CGFloat(min(progress, 1.0)), geometry.size.width), height: 6)
+                    }
+                }
+                .frame(height: 6)
+                
+                // Footer / Subtitle Row
+                HStack {
+                    // Left: Budget Info / Badges
+                    HStack(spacing: 4) {
                         if budget.isRecurring {
                             Image(systemName: "repeat")
                                 .font(.caption2)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.secondary)
                         }
                         
-                        if budget.isTotalBudget {
-                            Text("TOTAL")
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.2))
-                                .foregroundStyle(.blue)
-                                .cornerRadius(4)
-                        }
-                        
-                        if budget.isGroupBudget {
-                            Text("GROUP")
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.2))
-                                .foregroundStyle(.purple)
-                                .cornerRadius(4)
-                        }
-                    }
-                    
-                    HStack(spacing: 8) {
-                        Text(budget.periodDisplayString)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        if budget.isActive {
-                            Text("\(budget.daysRemaining) days left")
+                        if isOverBudget {
+                             Text("Over by \((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency)))")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        } else {
+                            Text("left of \(budgetLimitConverted.formatted(.currency(code: preferredCurrency)))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        } else if budget.isPeriodEnded {
-                            Text("Ended")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
                         }
                     }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(spent.formatted(.currency(code: preferredCurrency))) / \(budgetLimitConverted.formatted(.currency(code: preferredCurrency)))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     
-                    HStack(spacing: 4) {
-                        Text("\(Int(min(progress, 1.0) * 100))%")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundStyle(progressColor)
-                        
-                        if budget.rolloverAmount > 0 {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.green)
-                        }
+                    Spacer()
+                    
+                    // Right: Time Info
+                    if budget.isActive {
+                        Text("\(budget.daysRemaining) days left")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if budget.isPeriodEnded {
+                        Text("Ended")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-            }
-            
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background track
-                    Capsule()
-                        .fill(Color(.systemGray5))
-                        .frame(height: 8)
-                    
-                    // Progress fill
-                    Capsule()
-                        .fill(progressColor.gradient)
-                        .frame(width: min(geometry.size.width * CGFloat(min(progress, 1.0)), geometry.size.width), height: 8)
-                }
-            }
-            .frame(height: 8)
-            
-            // Rollover indicator
-            if budget.rolloverAmount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.green)
-                    Text("Includes \(budget.rolloverAmount.formatted(.currency(code: preferredCurrency))) rollover")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
 

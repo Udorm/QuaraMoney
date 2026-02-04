@@ -339,7 +339,7 @@ struct CategoryBreakdownChart: View {
                                 
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
-                                        Capsule().fill(Color(.systemGray6))
+                                        Capsule().fill(Color(.systemGray4).opacity(0.5))
                                             .frame(height: 6)
                                         
                                         let maxAmount = vm.categoryStats.first?.amount ?? 1

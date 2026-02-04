@@ -156,36 +156,52 @@ struct SavingsGoalListView: View {
 
 // MARK: - Savings Goal Row View
 
+
 struct SavingsGoalRowView: View {
     let goal: SavingsGoal
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: goal.iconName)
-                .font(.title2)
-                .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
-                .frame(width: 44, height: 44)
-                .background((Color(hex: goal.colorHex) ?? .blue).opacity(0.15))
-                .cornerRadius(12)
+        HStack(spacing: 16) {
+            // MARK: Icon
+            ZStack {
+                Circle()
+                    .fill((Color(hex: goal.colorHex) ?? .blue).opacity(0.1))
+                    .frame(width: 48, height: 48)
+                
+                Image(systemName: goal.iconName)
+                    .font(.title3)
+                    .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
+            }
             
-            VStack(alignment: .leading, spacing: 8) {
+            // MARK: Content
+            VStack(alignment: .leading, spacing: 6) {
+                // Title Row
                 HStack {
                     Text(goal.name)
-                        .font(.headline)
+                         .font(.body)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
                     
                     if goal.isCompleted {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.caption)
                     }
+                    
+                    Spacer()
+                    
+                    // Primary Value: Current Saved Amount
+                     Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode)))
+                        .font(.body)
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
                 }
                 
-                // Progress bar
+                // Progress Bar
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color(.systemGray5))
+                            .fill(Color(.systemGray4).opacity(0.5))
                             .frame(height: 6)
                         
                         Capsule()
@@ -195,25 +211,35 @@ struct SavingsGoalRowView: View {
                 }
                 .frame(height: 6)
                 
+                // Footer / Subtitle Row
                 HStack {
-                    Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode)))
-                        .font(.caption)
-                        .fontWeight(.medium)
-                    
-                    Text("of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
+                    // Left: Progress Percentage
+                    Text(goal.progressPercent)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
+                    // Center/Divider
+                    Text("•")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        
+                    // Right: Target info
+                    Text("of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
+                         .font(.caption)
+                         .foregroundStyle(.secondary)
+
                     Spacer()
                     
-                    Text(goal.progressPercent)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
+                    // Far Right: Target Date
+                    if let targetDate = goal.targetDate {
+                         Text(targetDate.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
 

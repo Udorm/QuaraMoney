@@ -14,9 +14,9 @@ struct BudgetTabView: View {
             Group {
                 switch selectedSection {
                 case .budgets:
-                    BudgetListContent()
+                    BudgetListView()
                 case .savings:
-                    SavingsGoalListContent()
+                    SavingsGoalListView()
                 }
             }
             .toolbar {

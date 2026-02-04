@@ -14,23 +14,26 @@ struct BudgetDetailView: View {
         CurrencyManager.shared.preferredCurrencyCode
     }
     
-    /// Transactions relevant to this budget (filtered by category, month, year, expense type)
+    /// Transactions relevant to this budget (filtered by category, period, expense type)
     private var relevantTransactions: [Transaction] {
-        guard let categoryId = budget.category?.id else { return [] }
-        
-        let calendar = Calendar.current
+        let periodRange = budget.periodDateRange
         
         return transactions.filter { txn in
             guard txn.type == .expense,
-                  let txnCategoryId = txn.category?.id,
-                  txnCategoryId == categoryId else {
+                  txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }
             
-            let txnMonth = calendar.component(.month, from: txn.date)
-            let txnYear = calendar.component(.year, from: txn.date)
+            // Check if transaction matches budget target
+            if budget.isTotalBudget {
+                return true
+            } else if let categoryId = budget.category?.id {
+                return txn.category?.id == categoryId
+            } else if let group = budget.categoryGroup {
+                return group.categoryIds.contains(txn.category?.id ?? UUID())
+            }
             
-            return txnMonth == budget.month && txnYear == budget.year
+            return false
         }.sorted { $0.date > $1.date }
     }
     
@@ -49,7 +52,7 @@ struct BudgetDetailView: View {
     /// Budget limit converted to preferred currency
     private var budgetLimitConverted: Decimal {
         CurrencyManager.shared.convert(
-            amount: budget.amountLimit,
+            amount: budget.effectiveLimit,
             from: budget.currencyCode,
             to: preferredCurrency
         )
@@ -80,6 +83,34 @@ struct BudgetDetailView: View {
         }
     }
     
+    /// Daily spending average
+    private var dailyAverage: Decimal {
+        let daysElapsed = budget.totalDays - budget.daysRemaining
+        guard daysElapsed > 0 else { return 0 }
+        return totalSpent / Decimal(daysElapsed)
+    }
+    
+    /// Projected spending at current rate
+    private var projectedSpending: Decimal {
+        dailyAverage * Decimal(budget.totalDays)
+    }
+    
+    /// Daily budget to stay on track
+    private var dailyBudget: Decimal {
+        guard budget.daysRemaining > 0 else { return 0 }
+        return max(remaining, 0) / Decimal(budget.daysRemaining)
+    }
+    
+    private var budgetIcon: String {
+        if let category = budget.category {
+            return category.icon
+        } else if let group = budget.categoryGroup {
+            return group.iconName
+        } else {
+            return "sum"
+        }
+    }
+    
     var body: some View {
         List {
             // MARK: - Header Section with Donut Chart
@@ -88,26 +119,38 @@ struct BudgetDetailView: View {
                     // Header Info
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(budget.category?.name ?? "Unknown Category")
-                                .font(.title2)
-                                .fontWeight(.bold)
+                            HStack(spacing: 8) {
+                                Text(budget.displayName)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                
+                                // Badges
+                                if budget.isRecurring {
+                                    Image(systemName: "repeat.circle.fill")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
                             
-                            Text("\(Calendar.current.monthSymbols[budget.month - 1]) \(String(budget.year))")
+                            Text(budget.periodDisplayString)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                            
+                            if budget.isActive {
+                                Text("\(budget.daysRemaining) days remaining")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         
                         Spacer()
                         
-                        if let category = budget.category {
-                            Image(systemName: category.icon)
-                                .font(.title2)
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(progressColor.gradient)
-                                .clipShape(Circle())
-                                .shadow(color: progressColor.opacity(0.3), radius: 4, x: 0, y: 2)
-                        }
+                        Image(systemName: budgetIcon)
+                            .font(.title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(progressColor.gradient)
+                            .clipShape(Circle())
+                            .shadow(color: progressColor.opacity(0.3), radius: 4, x: 0, y: 2)
                     }
                     .padding(.horizontal, 4)
                     
@@ -168,6 +211,16 @@ struct BudgetDetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 
+                if budget.rolloverAmount > 0 {
+                    HStack {
+                        Label("Rollover", systemImage: "arrow.up.circle.fill")
+                            .foregroundStyle(.green)
+                        Spacer()
+                        Text("+\(budget.rolloverAmount.formatted(.currency(code: preferredCurrency)))")
+                            .foregroundStyle(.green)
+                    }
+                }
+                
                 HStack {
                     Text("Spent")
                     Spacer()
@@ -194,7 +247,144 @@ struct BudgetDetailView: View {
                 }
             }
             
-            // MARK: - Transactions Section (using shared component)
+            // MARK: - Insights Section
+            if budget.isActive {
+                Section("Insights") {
+                    // Daily Average
+                    HStack {
+                        Label("Daily Average", systemImage: "chart.bar.fill")
+                        Spacer()
+                        Text(dailyAverage.formatted(.currency(code: preferredCurrency)))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    // Daily Budget to Stay on Track
+                    HStack {
+                        Label("Daily Budget", systemImage: "target")
+                        Spacer()
+                        Text(dailyBudget.formatted(.currency(code: preferredCurrency)))
+                            .foregroundStyle(dailyBudget > 0 ? ThemeManager.shared.incomeColor : .secondary)
+                    }
+                    
+                    // Projected Spending
+                    HStack {
+                        Label("Projected Total", systemImage: "chart.line.uptrend.xyaxis")
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(projectedSpending.formatted(.currency(code: preferredCurrency)))
+                                .foregroundStyle(projectedSpending > budgetLimitConverted ? ThemeManager.shared.expenseColor : .secondary)
+                            if projectedSpending > budgetLimitConverted {
+                                Text("Over by \((projectedSpending - budgetLimitConverted).formatted(.currency(code: preferredCurrency)))")
+                                    .font(.caption2)
+                                    .foregroundStyle(ThemeManager.shared.expenseColor)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // MARK: - Linked Savings Goal
+            if let goal = budget.savingsGoal {
+                Section {
+                    NavigationLink {
+                        SavingsGoalDetailView(goal: goal)
+                    } label: {
+                        HStack {
+                            Image(systemName: goal.iconName)
+                                .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
+                                .frame(width: 30)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(goal.name)
+                                    .font(.headline)
+                                
+                                ProgressView(value: goal.progress)
+                                    .tint(Color(hex: goal.colorHex) ?? .blue)
+                                
+                                Text("\(goal.progressPercent) of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            if goal.isCompleted {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("Linked Savings Goal")
+                }
+            }
+            
+            // MARK: - Alert Settings
+            Section {
+                HStack {
+                    Text("Alerts")
+                    Spacer()
+                    HStack(spacing: 8) {
+                        if budget.alertAt50 {
+                            Text("50%")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.2))
+                                .foregroundStyle(.blue)
+                                .cornerRadius(4)
+                        }
+                        if budget.alertAt80 {
+                            Text("80%")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
+                                .foregroundStyle(.orange)
+                                .cornerRadius(4)
+                        }
+                        if budget.alertAt100 {
+                            Text("100%")
+                                .font(.caption)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.2))
+                                .foregroundStyle(.red)
+                                .cornerRadius(4)
+                        }
+                        if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
+                            Text("None")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                
+                if budget.isRecurring {
+                    HStack {
+                        Text("Recurring")
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Image(systemName: "repeat")
+                                .foregroundStyle(.blue)
+                            Text(budget.periodType.displayName)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    HStack {
+                        Text("Rollover")
+                        Spacer()
+                        Text(budget.rolloverExcess ? "Enabled" : "Disabled")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Settings")
+            }
+            
+            // MARK: - Transactions Section
             if relevantTransactions.isEmpty {
                 Section("Transactions (0)") {
                     Text("No transactions yet")
@@ -252,5 +442,5 @@ struct BudgetDetailView: View {
     NavigationStack {
         BudgetDetailView(budget: budget, transactions: [])
     }
-    .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
+    .modelContainer(for: [Budget.self, Transaction.self, Category.self, SavingsGoal.self], inMemory: true)
 }

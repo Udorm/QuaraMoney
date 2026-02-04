@@ -14,8 +14,8 @@ struct ContentView: View {
                 HomeView(modelContext: modelContext)
             }
             
-            Tab("Wallets", systemImage: "wallet.pass", value: .wallets) {
-                WalletListView()
+            Tab("Budget", systemImage: "dollarsign.circle.fill", value: .budgets) {
+                BudgetTabView()
             }
             
             Tab("Analysis", systemImage: "chart.pie", value: .analysis) {
@@ -39,7 +39,7 @@ struct ContentView: View {
     }
     
     enum TabIdentifier: Hashable {
-        case home, wallets, analysis, more
+        case home, budgets, analysis, more
     }
 }
 

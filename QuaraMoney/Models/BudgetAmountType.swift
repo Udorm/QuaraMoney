@@ -1,0 +1,207 @@
+import Foundation
+
+/// Defines how a budget amount is calculated
+enum BudgetAmountType: Codable, Equatable {
+    /// Fixed amount budget (e.g., $500)
+    case fixed(Decimal)
+    
+    /// Percentage of income (e.g., 30% of monthly income)
+    /// Value is stored as 0.0 - 1.0 (e.g., 0.30 for 30%)
+    case percentOfIncome(Double)
+    
+    // MARK: - Computed Properties
+    
+    var isFixed: Bool {
+        if case .fixed = self { return true }
+        return false
+    }
+    
+    var isPercentage: Bool {
+        if case .percentOfIncome = self { return true }
+        return false
+    }
+    
+    var fixedAmount: Decimal? {
+        if case .fixed(let amount) = self { return amount }
+        return nil
+    }
+    
+    var percentage: Double? {
+        if case .percentOfIncome(let percent) = self { return percent }
+        return nil
+    }
+    
+    var displayString: String {
+        switch self {
+        case .fixed(let amount):
+            return amount.formatted(.number.precision(.fractionLength(2)))
+        case .percentOfIncome(let percent):
+            return "\(Int(percent * 100))% of income"
+        }
+    }
+    
+    // MARK: - Calculations
+    
+    /// Calculate the actual budget limit based on income (for percentage-based budgets)
+    func calculateLimit(income: Decimal) -> Decimal {
+        switch self {
+        case .fixed(let amount):
+            return amount
+        case .percentOfIncome(let percent):
+            return income * Decimal(percent)
+        }
+    }
+    
+    // MARK: - Codable
+    
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case value
+    }
+    
+    private enum AmountTypeIdentifier: String, Codable {
+        case fixed
+        case percentOfIncome
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(AmountTypeIdentifier.self, forKey: .type)
+        
+        switch type {
+        case .fixed:
+            let value = try container.decode(Decimal.self, forKey: .value)
+            self = .fixed(value)
+        case .percentOfIncome:
+            let value = try container.decode(Double.self, forKey: .value)
+            self = .percentOfIncome(value)
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        switch self {
+        case .fixed(let amount):
+            try container.encode(AmountTypeIdentifier.fixed, forKey: .type)
+            try container.encode(amount, forKey: .value)
+        case .percentOfIncome(let percent):
+            try container.encode(AmountTypeIdentifier.percentOfIncome, forKey: .type)
+            try container.encode(percent, forKey: .value)
+        }
+    }
+}
+
+// MARK: - Budget Templates
+
+/// Pre-built budget allocation templates
+enum BudgetTemplate: String, CaseIterable, Identifiable {
+    case conservative
+    case balanced
+    case fiftyThirtyTwenty
+    case zeroBased
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .conservative: return "Conservative"
+        case .balanced: return "Balanced"
+        case .fiftyThirtyTwenty: return "50/30/20 Rule"
+        case .zeroBased: return "Zero-Based"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .conservative:
+            return "Tight spending limits with focus on savings. Best for aggressive debt payoff or savings goals."
+        case .balanced:
+            return "Moderate approach balancing needs, wants, and savings equally."
+        case .fiftyThirtyTwenty:
+            return "50% needs, 30% wants, 20% savings. Popular and sustainable approach."
+        case .zeroBased:
+            return "Every dollar has a purpose. Assign all income to specific categories."
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .conservative: return "shield.fill"
+        case .balanced: return "scale.3d"
+        case .fiftyThirtyTwenty: return "chart.pie.fill"
+        case .zeroBased: return "target"
+        }
+    }
+    
+    /// Category allocations as percentage of income
+    /// Returns dictionary of category type to percentage (0.0 - 1.0)
+    var allocations: [BudgetCategoryType: Double] {
+        switch self {
+        case .conservative:
+            return [
+                .needs: 0.50,
+                .wants: 0.20,
+                .savings: 0.30
+            ]
+        case .balanced:
+            return [
+                .needs: 0.40,
+                .wants: 0.35,
+                .savings: 0.25
+            ]
+        case .fiftyThirtyTwenty:
+            return [
+                .needs: 0.50,
+                .wants: 0.30,
+                .savings: 0.20
+            ]
+        case .zeroBased:
+            // Zero-based assigns 100% but requires manual category assignment
+            return [
+                .needs: 0.50,
+                .wants: 0.30,
+                .savings: 0.20
+            ]
+        }
+    }
+}
+
+/// High-level budget category types for template-based allocation
+enum BudgetCategoryType: String, CaseIterable, Codable {
+    case needs    // Essential expenses: housing, utilities, groceries, insurance
+    case wants    // Discretionary: entertainment, dining out, hobbies
+    case savings  // Savings & debt: emergency fund, investments, debt payoff
+    
+    var displayName: String {
+        switch self {
+        case .needs: return "Needs"
+        case .wants: return "Wants"
+        case .savings: return "Savings & Debt"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .needs: return "Essential expenses you must pay"
+        case .wants: return "Non-essential spending for enjoyment"
+        case .savings: return "Building wealth and paying off debt"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .needs: return "house.fill"
+        case .wants: return "star.fill"
+        case .savings: return "banknote.fill"
+        }
+    }
+    
+    var color: String {
+        switch self {
+        case .needs: return "#3B82F6"   // Blue
+        case .wants: return "#8B5CF6"   // Purple
+        case .savings: return "#10B981" // Green
+        }
+    }
+}

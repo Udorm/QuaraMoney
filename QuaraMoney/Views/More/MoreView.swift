@@ -1,9 +1,52 @@
 import SwiftUI
 
 struct MoreView: View {
+    @State private var showBudgetWizard = false
+    @State private var showNotifications = false
+    
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Wallets Section
+                Section {
+                    NavigationLink(destination: WalletListView()) {
+                        Label {
+                            Text("Wallets")
+                        } icon: {
+                            Image(systemName: "wallet.pass.fill")
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                } header: {
+                    Text("Wallets")
+                }
+                
+                // MARK: - Planning Tools Section
+                Section {
+                    NavigationLink(destination: BudgetInsightsView()) {
+                        Label {
+                            Text("Budget Insights")
+                        } icon: {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundStyle(.purple)
+                        }
+                    }
+                    
+                    Button {
+                        showBudgetWizard = true
+                    } label: {
+                        Label {
+                            Text("Budget Setup Wizard")
+                        } icon: {
+                            Image(systemName: "wand.and.stars")
+                                .foregroundStyle(.pink)
+                        }
+                    }
+                } header: {
+                    Text("Planning Tools")
+                }
+                
+                // MARK: - Features Section
                 Section {
                     NavigationLink(destination: RecurringRuleListView()) {
                         Label {
@@ -26,6 +69,7 @@ struct MoreView: View {
                     Text("Features")
                 }
                 
+                // MARK: - Management Section
                 Section {
                     NavigationLink(destination: CategoryListView()) {
                         Label {
@@ -36,18 +80,19 @@ struct MoreView: View {
                         }
                     }
                     
-                    NavigationLink(destination: BudgetListView()) {
+                    NavigationLink(destination: CategoryGroupListView()) {
                         Label {
-                            Text("Budgets")
+                            Text("Category Groups")
                         } icon: {
-                            Image(systemName: "dollarsign.circle.fill")
-                                .foregroundStyle(.green)
+                            Image(systemName: "folder.fill.badge.gearshape")
+                                .foregroundStyle(.cyan)
                         }
                     }
                 } header: {
                     Text("Management")
                 }
                 
+                // MARK: - App Section
                 Section {
                     NavigationLink(destination: SettingsView()) {
                         Label {
@@ -62,6 +107,14 @@ struct MoreView: View {
                 }
             }
             .navigationTitle("More")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NotificationBellButton()
+                }
+            }
+            .sheet(isPresented: $showBudgetWizard) {
+                BudgetSetupWizardView()
+            }
         }
     }
 }

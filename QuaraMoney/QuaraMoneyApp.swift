@@ -17,7 +17,9 @@ struct QuaraMoneyApp: App {
             Event.self,
             RecurringRule.self,
             Transaction.self,
-            Budget.self
+            Budget.self,
+            SavingsGoal.self,
+            CategoryGroup.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -34,8 +36,19 @@ struct QuaraMoneyApp: App {
                 ContentView()
                     .onAppear {
                         let context = sharedModelContainer.mainContext
-                        let service = RecurringRuleService(modelContext: context)
-                        service.checkAndGenerateTransactions()
+                        
+                        // Check recurring transactions
+                        let recurringService = RecurringRuleService(modelContext: context)
+                        recurringService.checkAndGenerateTransactions()
+                        
+                        // Check budget rollovers
+                        let rolloverService = BudgetRolloverService(modelContext: context)
+                        rolloverService.checkAndProcessBudgetRollovers()
+                        
+                        // Setup notification service
+                        BudgetNotificationService.shared.configure(modelContext: context)
+                        BudgetNotificationService.shared.loadNotifications()
+                        BudgetNotificationService.shared.setupNotificationCategories()
                     }
             } else {
                 OnboardingView()

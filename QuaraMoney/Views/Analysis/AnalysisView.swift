@@ -106,11 +106,11 @@ struct SpendingTrendChart: View {
         VStack(alignment: .leading, spacing: 20) {
             // 1. Segmented Control
             Picker("Period", selection: $vm.selectedPeriod) {
-                Text("D").tag(AnalysisViewModel.Period.day)
-                Text("W").tag(AnalysisViewModel.Period.week)
-                Text("M").tag(AnalysisViewModel.Period.month)
-                Text("6M").tag(AnalysisViewModel.Period.sixMonths)
-                Text("Y").tag(AnalysisViewModel.Period.year)
+                Text("D").tag(AnalysisPeriod.day)
+                Text("W").tag(AnalysisPeriod.week)
+                Text("M").tag(AnalysisPeriod.month)
+                Text("6M").tag(AnalysisPeriod.sixMonths)
+                Text("Y").tag(AnalysisPeriod.year)
             }
             .pickerStyle(.segmented)
             

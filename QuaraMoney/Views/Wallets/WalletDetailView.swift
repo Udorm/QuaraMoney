@@ -6,9 +6,9 @@ struct WalletDetailView: View {
     @StateObject private var viewModel: WalletDetailViewModel
     
     @State private var showingAddTransaction = false
-    @State private var showingCustomDateSheet = false
-    
     @State private var transactionToEdit: Transaction?
+    @State private var showingEditWallet = false
+    @State private var isSearchPresented = false
     
     init(wallet: Wallet, modelContext: ModelContext) {
         _viewModel = StateObject(wrappedValue: WalletDetailViewModel(modelContext: modelContext, wallet: wallet))
@@ -17,32 +17,74 @@ struct WalletDetailView: View {
     var body: some View {
         List {
             // Header Section (Balance)
+            // Header Section (Hero)
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Total Balance")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(spacing: 20) {
+                    // Icon
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(0.2))
+                            .frame(width: 80, height: 80)
+                        
+                        Image(systemName: viewModel.wallet.icon)
+                            .appFont(size: 36)
+                            .foregroundStyle(.white)
+                    }
+                    
+                    // Balance
                     Text(viewModel.wallet.balance.formatted(.currency(code: viewModel.wallet.currencyCode)))
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                        .font(.app(.largeTitle, weight: .bold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.vertical, 8)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .padding(.horizontal, 20) // Internal content padding
+                .overlay(alignment: .topTrailing) {
+                    if viewModel.wallet.isArchived {
+                        Text(L10n.Wallet.Status.archived)
+                            .font(.app(.caption, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.black.opacity(0.3))
+                            .clipShape(Capsule())
+                            .padding(12)
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: viewModel.wallet.colorHex) ?? .blue,
+                                    (Color(hex: viewModel.wallet.colorHex) ?? .blue).opacity(0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: (Color(hex: viewModel.wallet.colorHex) ?? .blue).opacity(0.3), radius: 8, x: 0, y: 4)
+                )
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets()) // Expand to full row width
+            .listRowSeparator(.hidden)
             
+            // Filter Description Header
             // Transactions List (grouped by date using reusable component)
             if viewModel.transactions.isEmpty {
-                Section(header: Text(viewModel.filterDescription).font(.subheadline).textCase(nil)) {
-                    ContentUnavailableView(
+                Section {
+                    AppEmptyStateView(
                         "No Transactions",
                         systemImage: "list.bullet.clipboard",
-                        description: Text("No transactions in this period.")
+                        description: "No transactions in this period."
                     )
                 }
             } else {
                 TransactionListView(
                     transactions: viewModel.transactions,
+                    listHeader: viewModel.filterDescription, // Pass filter description as integrated header
                     onEdit: { txn in
                         transactionToEdit = txn
                     },
@@ -53,24 +95,49 @@ struct WalletDetailView: View {
             }
         }
         .navigationTitle(viewModel.wallet.name)
+        .searchable(text: $viewModel.searchText, isPresented: $isSearchPresented)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingAddTransaction = true }) {
-                    Label("Add Transaction", systemImage: "plus")
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                // Search Button (Discoverability)
+                Button {
+                    isSearchPresented = true
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
                 }
-            }
-            
-            ToolbarItem(placement: .topBarTrailing) {
-                FilterMenuView(
+                
+                // Edit Button
+                Button {
+                    showingEditWallet = true
+                } label: {
+                    Label(L10n.Common.edit, systemImage: "pencil")
+                }
+                
+                // Filter Button
+                FilterSheetButton(
                     selectedPeriod: $viewModel.selectedPeriod,
                     selectedWallet: .constant(nil),
+                    customStartDate: $viewModel.customStartDate,
+                    customEndDate: $viewModel.customEndDate,
                     wallets: [],
-                    showWalletFilter: false,
-                    onCustomPeriodSelect: {
-                        showingCustomDateSheet = true
-                    }
+                    defaultPeriod: .thisMonth,
+                    showWalletFilter: false
                 )
+                
+                // Add Button (Top Right / Prominent)
+                Button {
+                    showingAddTransaction = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
+        }
+        .sheet(isPresented: $showingEditWallet) {
+            AddWalletView(viewModel: AddWalletViewModel(
+                dataService: SwiftDataService(modelContext: modelContext),
+                walletToEdit: viewModel.wallet
+            ))
         }
         .sheet(isPresented: $showingAddTransaction) {
             AddTransactionView(
@@ -90,24 +157,6 @@ struct WalletDetailView: View {
                 ),
                 isNewTransaction: false
             )
-        }
-        .sheet(isPresented: $showingCustomDateSheet) {
-            NavigationStack {
-                Form {
-                    DatePicker("Start Date", selection: $viewModel.customStartDate, displayedComponents: .date)
-                    DatePicker("End Date", selection: $viewModel.customEndDate, displayedComponents: .date)
-                }
-                .navigationTitle("Custom Range")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            viewModel.selectedPeriod = .custom
-                            showingCustomDateSheet = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium])
         }
         .onAppear {
             viewModel.fetchTransactions()

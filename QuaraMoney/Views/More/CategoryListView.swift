@@ -18,7 +18,7 @@ struct CategoryListView: View {
     var body: some View {
         List {
             if !incomeCategories.isEmpty {
-                Section("Income") {
+                Section(L10n.Transaction.TransactionType.income) {
                     ForEach(incomeCategories) { category in
                         CategoryRow(category: category)
                             .contentShape(Rectangle())
@@ -33,7 +33,7 @@ struct CategoryListView: View {
             }
             
             if !expenseCategories.isEmpty {
-                Section("Expense") {
+                Section(L10n.Transaction.TransactionType.expense) {
                     ForEach(expenseCategories) { category in
                         CategoryRow(category: category)
                             .contentShape(Rectangle())
@@ -47,11 +47,11 @@ struct CategoryListView: View {
                 }
             }
         }
-        .navigationTitle("Categories")
+        .navigationTitle(L10n.Category.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showingAddCategory = true }) {
-                    Label("Add Category", systemImage: "plus")
+                    Label(L10n.Category.add, systemImage: "plus")
                 }
             }
         }

@@ -23,16 +23,15 @@ struct NetWorthCard: View {
                     .background(Color.blue.opacity(0.1))
                     .clipShape(Circle())
                 
-                Text("Total Net Worth")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                Text(L10n.Wallet.netWorth)
+                    .font(.app(.subheadline, weight: .medium))
                     .foregroundStyle(.secondary)
                 
                 Spacer()
             }
             
             Text(totalNetWorth.formatted(.currency(code: currencyManager.preferredCurrencyCode)))
-                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .font(.app(.largeTitle, weight: .bold)) // Approximating size 36 with largeTitle
                 .contentTransition(.numericText())
                 .foregroundStyle(totalNetWorth >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
         }

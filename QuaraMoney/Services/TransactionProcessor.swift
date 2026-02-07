@@ -78,33 +78,58 @@ struct TransactionProcessor {
     
     /// Creates a FetchDescriptor for transactions within a date range.
     /// Consolidates duplicate predicate building from multiple ViewModels.
+    /// - Parameters:
+    ///   - startDate: Start of date range (inclusive)
+    ///   - endDate: End of date range (exclusive)
+    ///   - walletId: Optional specific wallet to filter by. When provided, shows all transactions for that wallet regardless of archived status.
+    ///   - sortDescending: Sort order by date
+    ///   - limit: Optional fetch limit for pagination
+    ///   - offset: Offset for pagination
+    ///   - excludeArchivedWallets: When true and walletId is nil, excludes transactions from archived wallets. Defaults to true.
     static func makeDescriptor(
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
         sortDescending: Bool = true,
         limit: Int? = nil,
-        offset: Int = 0
+        offset: Int = 0,
+        excludeArchivedWallets: Bool = true
     ) -> FetchDescriptor<Transaction> {
         let start = startDate
         let end = endDate
         
+        // Pre-compute sort descriptors to simplify predicate expressions
+        let sortDescriptors: [SortDescriptor<Transaction>] = sortDescending 
+            ? [SortDescriptor(\.date, order: .reverse)] 
+            : [SortDescriptor(\.date)]
+        
         var descriptor: FetchDescriptor<Transaction>
         
         if let walletId = walletId {
+            // Specific wallet query
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end &&
                     (txn.sourceWallet?.id == walletId || txn.destinationWallet?.id == walletId)
                 },
-                sortBy: sortDescending ? [SortDescriptor(\.date, order: .reverse)] : [SortDescriptor(\.date)]
+                sortBy: sortDescriptors
+            )
+        } else if excludeArchivedWallets {
+            // Exclude archived wallets
+            descriptor = FetchDescriptor<Transaction>(
+                predicate: #Predicate { txn in
+                    txn.date >= start && txn.date < end &&
+                    txn.sourceWallet?.isArchived != true
+                },
+                sortBy: sortDescriptors
             )
         } else {
+            // All wallets
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end
                 },
-                sortBy: sortDescending ? [SortDescriptor(\.date, order: .reverse)] : [SortDescriptor(\.date)]
+                sortBy: sortDescriptors
             )
         }
         
@@ -119,12 +144,14 @@ struct TransactionProcessor {
     
     /// Fetches transactions and computes all derived data in a single pass.
     /// Eliminates duplicate fetches for summary + daily sections.
+    /// Search filtering is performed in-memory to avoid complex SwiftData predicate expressions.
     static func fetchAndProcess(
         context: ModelContext,
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
-        currency: String? = nil
+        currency: String? = nil,
+        searchText: String? = nil
     ) -> ProcessedTransactionData {
         let targetCurrency = currency ?? CurrencyManager.shared.preferredCurrencyCode
         
@@ -135,7 +162,17 @@ struct TransactionProcessor {
         )
         
         do {
-            let transactions = try context.fetch(descriptor)
+            var transactions = try context.fetch(descriptor)
+            
+            // Apply search filter in-memory (SwiftData predicates can't handle complex string operations)
+            if let searchText = searchText?.trimmingCharacters(in: .whitespacesAndNewlines), !searchText.isEmpty {
+                transactions = transactions.filter { txn in
+                    let noteMatch = txn.note?.localizedCaseInsensitiveContains(searchText) ?? false
+                    let categoryMatch = txn.category?.name.localizedCaseInsensitiveContains(searchText) ?? false
+                    return noteMatch || categoryMatch
+                }
+            }
+            
             let totals = calculateTotals(transactions, currency: targetCurrency)
             let sections = groupByDay(transactions, currency: targetCurrency)
             
@@ -161,7 +198,7 @@ struct TransactionProcessor {
     // MARK: - Pagination Support
     
     /// Default page size for paginated fetches
-    static let defaultPageSize = 50
+    nonisolated static let defaultPageSize = 50
     
     /// Fetches a page of transactions for infinite scroll implementation.
     /// Returns transactions and a flag indicating if more data is available.

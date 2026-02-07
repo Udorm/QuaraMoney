@@ -5,6 +5,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @ObservedObject private var currencyManager = CurrencyManager.shared
+    @ObservedObject private var languageManager = LanguageManager.shared
+    @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @State private var showPopulateConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isPopulating = false
@@ -14,8 +16,18 @@ struct SettingsView: View {
     
     var body: some View {
         Form {
-            Section("General") {
-                Picker("Default Currency", selection: $currencyManager.preferredCurrencyCode) {
+            Section(L10n.Settings.general) {
+                // Language Picker
+                Picker(L10n.Settings.language, selection: Binding(
+                    get: { languageManager.selectedLanguage },
+                    set: { languageManager.selectedLanguage = $0 }
+                )) {
+                    ForEach(LanguageManager.Language.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                
+                Picker(L10n.Settings.defaultCurrency, selection: $currencyManager.preferredCurrencyCode) {
                     ForEach(currencyManager.availableCurrencies, id: \.self) { code in
                         Text(code).tag(code)
                     }
@@ -23,7 +35,7 @@ struct SettingsView: View {
                 
                 NavigationLink(destination: ThemeSettingsView()) {
                     HStack {
-                        Text("Theme & Colors")
+                        Text(L10n.Settings.themeColors)
                         Spacer()
                         HStack(spacing: 4) {
                             Circle()
@@ -37,12 +49,16 @@ struct SettingsView: View {
                 }
                 
                 NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
-                    Label("Import from CSV", systemImage: "square.and.arrow.down")
+                    Label(L10n.Settings.importCSV, systemImage: "square.and.arrow.down")
+                }
+                
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Toggle(L10n.Settings.useSidebarOniPad, isOn: $useSidebarOniPad)
                 }
             }
             
-            Section("Exchange Rates (Base: USD)") {
-                Button("Refresh Rates") {
+            Section(L10n.Settings.exchangeRates) {
+                Button(L10n.Settings.refreshRates) {
                     Task {
                         await currencyManager.fetchRates()
                     }
@@ -62,18 +78,18 @@ struct SettingsView: View {
                 }
             }
             
-            Section("Data Management") {
+            Section(L10n.Settings.dataManagement) {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
                     if isDeleting {
                         HStack {
-                            Text("Deleting...")
+                            Text(L10n.Status.deleting)
                             Spacer()
                             ProgressView()
                         }
                     } else {
-                        Text("Delete All Transactions")
+                        Text(L10n.Settings.deleteAllTransactions)
                     }
                 }
                 .disabled(isPopulating || isDeleting)
@@ -83,29 +99,29 @@ struct SettingsView: View {
                 } label: {
                     if isPopulating {
                         HStack {
-                            Text("Populating...")
+                            Text(L10n.Status.populating)
                             Spacer()
                             ProgressView()
                         }
                     } else {
-                        Text("Populate Sample Data")
+                        Text(L10n.Settings.populateSampleData)
                     }
                 }
                 .disabled(isPopulating || isDeleting)
                 
-                Button("Reset Onboarding") {
+                Button(L10n.Settings.resetOnboarding) {
                     isOnboardingCompleted = false
                 }
             }
             
             Section {
-                 Text("QuaraMoney v1.0")
+                 Text(L10n.Settings.version)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .foregroundStyle(.secondary)
-                    .font(.footnote)
+                    .font(.app(.footnote))
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle(L10n.Settings.title)
         .disabled(isPopulating)
         .overlay {
             if isPopulating {
@@ -117,8 +133,8 @@ struct SettingsView: View {
                         ProgressView()
                             .scaleEffect(1.5)
                             .tint(.primary)
-                        Text("Populating Data...")
-                            .font(.headline)
+                        Text(L10n.Status.populatingData)
+                            .font(.app(.headline))
                     }
                     .padding(24)
                     .background(.thickMaterial)
@@ -127,9 +143,9 @@ struct SettingsView: View {
                 }
             }
         }
-        .alert("Populate Sample Data?", isPresented: $showPopulateConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Populate", role: .destructive) {
+        .alert(L10n.Alert.PopulateData.title, isPresented: $showPopulateConfirmation) {
+            Button(L10n.Common.cancel, role: .cancel) { }
+            Button(L10n.Alert.PopulateData.confirm, role: .destructive) {
                 isPopulating = true
                 Task {
                     let service = SampleDataService(modelContext: modelContext)
@@ -144,11 +160,11 @@ struct SettingsView: View {
                 }
             }
         } message: {
-            Text("This will delete all existing data and replace it with sample wallets, categories, and transactions. This action cannot be undone.")
+            Text(L10n.Alert.PopulateData.message)
         }
-        .alert("Delete All Transactions?", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Delete", role: .destructive) {
+        .alert(L10n.Alert.DeleteTransactions.title, isPresented: $showDeleteConfirmation) {
+            Button(L10n.Common.cancel, role: .cancel) { }
+            Button(L10n.Common.delete, role: .destructive) {
                 isDeleting = true
                 Task {
                     let service = SampleDataService(modelContext: modelContext)
@@ -163,10 +179,10 @@ struct SettingsView: View {
                 }
             }
         } message: {
-            Text("Are you sure you want to delete all transactions? Wallets and Categories will be kept. This action cannot be undone.")
+            Text(L10n.Alert.DeleteTransactions.message)
         }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) { }
+        .alert(L10n.Common.error, isPresented: $showError) {
+            Button(L10n.Common.ok, role: .cancel) { }
         } message: {
             Text(errorMessage)
         }

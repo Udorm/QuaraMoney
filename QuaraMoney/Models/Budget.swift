@@ -60,14 +60,14 @@ final class Budget {
     
     var amountType: BudgetAmountType {
         get {
-            guard let data = amountTypeData,
-                  let decoded = try? JSONDecoder().decode(BudgetAmountType.self, from: data) else {
+            guard let data = amountTypeData else {
                 return .fixed(amountLimit)
             }
-            return decoded
+
+            return BudgetAmountType.decode(from: data) ?? .fixed(amountLimit)
         }
         set {
-            amountTypeData = try? JSONEncoder().encode(newValue)
+            amountTypeData = newValue.encode()
             // Keep amountLimit in sync for fixed amounts
             if case .fixed(let amount) = newValue {
                 amountLimit = amount
@@ -371,13 +371,13 @@ enum BudgetAlertType: String, CaseIterable, Codable {
     func message(budgetName: String) -> String {
         switch self {
         case .info50:
-            return "You've spent 50% of your \(budgetName) budget"
+            return L10n.Alert.Budget.info50(budgetName)
         case .warning80:
-            return "Warning: 80% of your \(budgetName) budget is spent"
+            return L10n.Alert.Budget.warning80(budgetName)
         case .exceeded:
-            return "You've exceeded your \(budgetName) budget!"
+            return L10n.Alert.Budget.exceeded(budgetName)
         case .projectedOverspend:
-            return "At this rate, you'll exceed your \(budgetName) budget"
+            return L10n.Alert.Budget.projectedOverspend(budgetName)
         }
     }
 }

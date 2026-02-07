@@ -17,10 +17,9 @@ struct AnalysisView: View {
 
 struct AnalysisContentView: View {
     @ObservedObject var vm: AnalysisViewModel
-    @State private var showCustomDateSheet = false
     
     // For Wallet Filter - We need to query wallets. 
-    @Query(sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     var body: some View {
         NavigationStack {
@@ -35,54 +34,18 @@ struct AnalysisContentView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Analysis")
+            .navigationTitle(L10n.Analysis.title)
             .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Transaction Type", selection: $vm.selectedTransactionType) {
-                            Text("Expense").tag(AnalysisViewModel.TransactionTypeFilter.expense)
-                            Text("Income").tag(AnalysisViewModel.TransactionTypeFilter.income)
-                        }
-                        
-                        Divider()
-                        
-                        Picker("Wallet", selection: $vm.selectedWallet) {
-                            Text("All Wallets").tag(nil as Wallet?)
-                            ForEach(wallets) { wallet in
-                                Text(wallet.name).tag(wallet as Wallet?)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
-                            .symbolVariant(vm.selectedWallet != nil ? .fill : .none)
-                    }
+                    AnalysisFilterSheetButton(
+                        selectedTransactionType: $vm.selectedTransactionType,
+                        selectedWallet: $vm.selectedWallet,
+                        customStartDate: $vm.customStartDate,
+                        customEndDate: $vm.customEndDate,
+                        wallets: wallets
+                    )
                 }
-            }
-            .sheet(isPresented: $showCustomDateSheet) {
-                NavigationStack {
-                    Form {
-                        DatePicker("Start Date", selection: Binding(
-                            get: { vm.customStartDate },
-                            set: { vm.customStartDate = $0 }
-                        ), displayedComponents: .date)
-                        
-                        DatePicker("End Date", selection: Binding(
-                            get: { vm.customEndDate },
-                            set: { vm.customEndDate = $0 }
-                        ), displayedComponents: .date)
-                    }
-                    .navigationTitle("Custom Range")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                vm.selectedPeriod = .custom
-                                showCustomDateSheet = false
-                            }
-                        }
-                    }
-                }
-                .presentationDetents([.medium])
             }
         }
     }
@@ -111,6 +74,7 @@ struct SpendingTrendChart: View {
                 Text("M").tag(AnalysisPeriod.month)
                 Text("6M").tag(AnalysisPeriod.sixMonths)
                 Text("Y").tag(AnalysisPeriod.year)
+                Text("LY").tag(AnalysisPeriod.lastYear)
             }
             .pickerStyle(.segmented)
             
@@ -127,7 +91,7 @@ struct SpendingTrendChart: View {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.title2)
+                        .appFont(.title2)
                         .foregroundStyle(.secondary)
                 }
                 .disabled(vm.selectedPeriod == .custom)
@@ -135,18 +99,17 @@ struct SpendingTrendChart: View {
                 Spacer()
                 
                 VStack(spacing: 4) {
-                    Text(vm.selectedTransactionType == .expense ? "TOTAL SPENDING" : "TOTAL INCOME")
-                        .font(.caption)
-                        .fontWeight(.semibold)
+                    Text(vm.selectedTransactionType == .expense ? "analysis.totalSpending".localized : "analysis.totalIncome".localized)
+                        .font(.app(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                     
                     let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
                     Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.app(.title, weight: .bold))
                         .foregroundStyle(Color.primary)
                     
                     Text(vm.filterDescription)
-                        .font(.subheadline)
+                        .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
                 }
                 
@@ -163,7 +126,7 @@ struct SpendingTrendChart: View {
                     }
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.title2)
+                        .appFont(.title2)
                         .foregroundStyle(.secondary)
                 }
                 .disabled(vm.selectedPeriod == .custom)
@@ -232,10 +195,10 @@ struct SpendingTrendChart: View {
     @ViewBuilder
     private var chartContent: some View {
         if vm.dailyStats.isEmpty {
-            ContentUnavailableView(
-                "No Data",
+            AppEmptyStateView(
+                "analysis.noData".localized,
                 systemImage: "chart.bar",
-                description: Text("No transactions found for this period.")
+                description: "analysis.noTransactionsForPeriod".localized
             )
         } else {
             Chart {
@@ -253,6 +216,7 @@ struct SpendingTrendChart: View {
             .chartXAxis {
                 AxisMarks(values: .stride(by: self.chartUnit, count: self.axisStrideCount)) { value in
                     AxisValueLabel(format: self.axisFormat, centered: true)
+                        .font(.app(.caption2))
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
                         .foregroundStyle(Color.secondary.opacity(0.2))
                 }
@@ -262,7 +226,7 @@ struct SpendingTrendChart: View {
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
                         .foregroundStyle(Color.secondary.opacity(0.2))
                     AxisValueLabel()
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -289,6 +253,7 @@ struct SpendingTrendChart: View {
         case .month: return 5 // Every 5 days
         case .sixMonths: return 1 // Every month
         case .year: return 1 // Every month
+        case .lastYear: return 1
         case .custom: return 5
         }
     }
@@ -300,6 +265,7 @@ struct SpendingTrendChart: View {
         case .month: return .dateTime.day()
         case .sixMonths: return .dateTime.month(.abbreviated)
         case .year: return .dateTime.month(.abbreviated)
+        case .lastYear: return .dateTime.month(.abbreviated)
         case .custom: return .dateTime.day().month()
         }
     }
@@ -313,13 +279,13 @@ struct CategoryBreakdownChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text(vm.selectedTransactionType == .expense ? "Top Spending Categories" : "Top Income Categories")
-                    .font(.headline)
+                Text(vm.selectedTransactionType == .expense ? "analysis.topSpendingCategories".localized : "analysis.topIncomeCategories".localized)
+                    .font(.app(.headline))
                 
                 Spacer()
                 
                 Text(vm.filterDescription)
-                    .font(.caption)
+                    .font(.app(.caption))
                     .foregroundStyle(.secondary)
             }
             
@@ -328,14 +294,13 @@ struct CategoryBreakdownChart: View {
                     VStack(spacing: 12) {
                         HStack {
                             Image(systemName: stat.category.icon.isEmpty ? "circle.fill" : stat.category.icon)
-                                .font(.title3)
+                                .appFont(.title3)
                                 .foregroundStyle(Color(hex: stat.colorHex) ?? .blue)
                                 .frame(width: 30)
                                 
                             VStack(alignment: .leading) {
                                 Text(stat.category.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                                    .font(.app(.subheadline, weight: .medium))
                                 
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
@@ -356,13 +321,13 @@ struct CategoryBreakdownChart: View {
                             
                             VStack(alignment: .trailing) {
                                 Text(stat.amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                                    .font(.callout)
+                                    .font(.app(.callout))
                                     .monospacedDigit()
                                 
                                 let total = vm.categoryStats.reduce(0) { $0 + $1.amount }
                                 let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
                                 Text(percent.formatted(.percent.precision(.fractionLength(0))))
-                                    .font(.caption2)
+                                    .font(.app(.caption2))
                                     .foregroundStyle(.secondary)
                             }
                         }

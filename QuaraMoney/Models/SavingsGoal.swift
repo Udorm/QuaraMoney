@@ -120,24 +120,24 @@ final class SavingsGoal {
     /// Status message for the goal
     var statusMessage: String {
         if isCompleted {
-            return "Goal reached! 🎉"
+            return L10n.Savings.Status.reached
         }
         
         if let days = daysRemaining {
             if days < 0 {
-                return "Past target date"
+                return L10n.Savings.Status.pastDate
             } else if days == 0 {
-                return "Target date is today"
+                return L10n.Savings.Status.today
             } else if days <= 7 {
-                return "\(days) days left"
+                return L10n.Savings.Status.daysLeft(days)
             } else if days <= 30 {
-                return "\(days / 7) weeks left"
+                return L10n.Savings.Status.weeksLeft(days / 7)
             } else {
-                return "\(days / 30) months left"
+                return L10n.Savings.Status.monthsLeft(days / 30)
             }
         }
         
-        return "No target date"
+        return L10n.Savings.Status.noDate
     }
     
     // MARK: - Methods
@@ -185,16 +185,16 @@ enum SavingsGoalTemplate: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .emergencyFund: return "Emergency Fund"
-        case .vacation: return "Vacation"
-        case .carPurchase: return "Car Purchase"
-        case .homePurchase: return "Home Down Payment"
-        case .retirement: return "Retirement"
-        case .education: return "Education"
-        case .wedding: return "Wedding"
-        case .debtPayoff: return "Debt Payoff"
-        case .electronics: return "Electronics"
-        case .custom: return "Custom Goal"
+        case .emergencyFund: return L10n.Savings.Template.EmergencyFund.title
+        case .vacation: return L10n.Savings.Template.Vacation.title
+        case .carPurchase: return L10n.Savings.Template.CarPurchase.title
+        case .homePurchase: return L10n.Savings.Template.HomePurchase.title
+        case .retirement: return L10n.Savings.Template.Retirement.title
+        case .education: return L10n.Savings.Template.Education.title
+        case .wedding: return L10n.Savings.Template.Wedding.title
+        case .debtPayoff: return L10n.Savings.Template.DebtPayoff.title
+        case .electronics: return L10n.Savings.Template.Electronics.title
+        case .custom: return L10n.Savings.Template.Custom.title
         }
     }
     
@@ -246,26 +246,16 @@ enum SavingsGoalTemplate: String, CaseIterable, Identifiable {
     
     var description: String {
         switch self {
-        case .emergencyFund:
-            return "3-6 months of living expenses for unexpected situations"
-        case .vacation:
-            return "Dream trip fund for travel and experiences"
-        case .carPurchase:
-            return "Down payment or full purchase of a vehicle"
-        case .homePurchase:
-            return "Down payment for your home purchase"
-        case .retirement:
-            return "Long-term savings for retirement"
-        case .education:
-            return "Tuition, courses, or professional development"
-        case .wedding:
-            return "Save for your special day"
-        case .debtPayoff:
-            return "Pay off loans, credit cards, or other debt"
-        case .electronics:
-            return "New phone, laptop, or gadgets"
-        case .custom:
-            return "Create your own savings goal"
+        case .emergencyFund: return L10n.Savings.Template.EmergencyFund.desc
+        case .vacation: return L10n.Savings.Template.Vacation.desc
+        case .carPurchase: return L10n.Savings.Template.CarPurchase.desc
+        case .homePurchase: return L10n.Savings.Template.HomePurchase.desc
+        case .retirement: return L10n.Savings.Template.Retirement.desc
+        case .education: return L10n.Savings.Template.Education.desc
+        case .wedding: return L10n.Savings.Template.Wedding.desc
+        case .debtPayoff: return L10n.Savings.Template.DebtPayoff.desc
+        case .electronics: return L10n.Savings.Template.Electronics.desc
+        case .custom: return L10n.Savings.Template.Custom.desc
         }
     }
 }

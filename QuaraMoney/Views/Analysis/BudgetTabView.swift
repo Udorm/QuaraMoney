@@ -4,9 +4,16 @@ import SwiftData
 struct BudgetTabView: View {
     @State private var selectedSection: BudgetSection = .budgets
     
-    enum BudgetSection: String, CaseIterable {
-        case budgets = "Budgets"
-        case savings = "Savings"
+    enum BudgetSection: CaseIterable {
+        case budgets
+        case savings
+        
+        var displayName: String {
+            switch self {
+            case .budgets: return L10n.Budget.title
+            case .savings: return L10n.Savings.title
+            }
+        }
     }
     
     var body: some View {
@@ -23,7 +30,7 @@ struct BudgetTabView: View {
                 ToolbarItem(placement: .principal) {
                     Picker("Section", selection: $selectedSection) {
                         ForEach(BudgetSection.allCases, id: \.self) { section in
-                            Text(section.rawValue).tag(section)
+                            Text(section.displayName).tag(section)
                         }
                     }
                     .pickerStyle(.segmented)

@@ -32,25 +32,25 @@ struct BudgetSetupWizardView: View {
         
         var title: String {
             switch self {
-            case .welcome: return "Welcome"
-            case .selectTemplate: return "Choose a Method"
-            case .enterIncome: return "Your Income"
-            case .assignCategories: return "Assign Categories"
-            case .customizeAllocations: return "Customize"
-            case .review: return "Review"
-            case .complete: return "Done"
+            case .welcome: return L10n.Wizard.Start.title
+            case .selectTemplate: return L10n.Wizard.SelectTemplate.title
+            case .enterIncome: return L10n.Wizard.EnterIncome.title
+            case .assignCategories: return L10n.Wizard.AssignCategories.title
+            case .customizeAllocations: return L10n.Wizard.Customize.title
+            case .review: return L10n.Wizard.Review.title
+            case .complete: return L10n.Wizard.Complete.title
             }
         }
         
         var subtitle: String {
             switch self {
-            case .welcome: return "Let's set up your budgets"
-            case .selectTemplate: return "Pick a budgeting method that works for you"
-            case .enterIncome: return "How much do you earn monthly?"
-            case .assignCategories: return "Organize your spending categories"
-            case .customizeAllocations: return "Adjust the percentages if needed"
-            case .review: return "Review your budget plan"
-            case .complete: return "Your budgets are ready!"
+            case .welcome: return L10n.Wizard.Start.subtitle
+            case .selectTemplate: return L10n.Wizard.SelectTemplate.subtitle
+            case .enterIncome: return L10n.Wizard.EnterIncome.subtitle
+            case .assignCategories: return L10n.Wizard.AssignCategories.subtitle
+            case .customizeAllocations: return L10n.Wizard.Customize.subtitle
+            case .review: return L10n.Wizard.Review.subtitle
+            case .complete: return L10n.Wizard.Complete.subtitle
             }
         }
     }
@@ -78,8 +78,8 @@ struct BudgetSetupWizardView: View {
                 
                 // Step indicator
                 HStack {
-                    Text("Step \(currentStep.rawValue + 1) of \(WizardStep.allCases.count)")
-                        .font(.caption)
+                    Text(L10n.Wizard.step(currentStep.rawValue + 1, WizardStep.allCases.count))
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -92,11 +92,10 @@ struct BudgetSetupWizardView: View {
                         // Header
                         VStack(alignment: .leading, spacing: 8) {
                             Text(currentStep.title)
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
+                                .font(.app(.largeTitle, weight: .bold))
                             
                             Text(currentStep.subtitle)
-                                .font(.subheadline)
+                                .font(.app(.subheadline))
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal)
@@ -115,7 +114,7 @@ struct BudgetSetupWizardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
             }
         }
@@ -146,33 +145,33 @@ struct BudgetSetupWizardView: View {
     private var welcomeContent: some View {
         VStack(spacing: 32) {
             Image(systemName: "chart.pie.fill")
-                .font(.system(size: 80))
+                .appFont(size: 80) // Keep size 80, but could wrap in Font.app if we had a size variant, but system is fine for icon
                 .foregroundStyle(.blue.gradient)
                 .padding(.top, 40)
             
             VStack(spacing: 16) {
                 FeatureRow(
                     icon: "target",
-                    title: "Set Spending Limits",
-                    description: "Create budgets for different categories"
+                    title: L10n.Wizard.Start.limitsTitle,
+                    description: L10n.Wizard.Start.limitsDesc
                 )
                 
                 FeatureRow(
                     icon: "bell.badge",
-                    title: "Get Alerts",
-                    description: "Know when you're approaching your limits"
+                    title: L10n.Wizard.Start.alertsTitle,
+                    description: L10n.Wizard.Start.alertsDesc
                 )
                 
                 FeatureRow(
                     icon: "chart.line.uptrend.xyaxis",
-                    title: "Track Progress",
-                    description: "See how you're doing at a glance"
+                    title: L10n.Wizard.Start.trackTitle,
+                    description: L10n.Wizard.Start.trackDesc
                 )
                 
                 FeatureRow(
                     icon: "repeat",
-                    title: "Auto-Renew",
-                    description: "Budgets reset automatically each period"
+                    title: L10n.Wizard.Start.autoRenewTitle,
+                    description: L10n.Wizard.Start.autoRenewDesc
                 )
             }
             .padding(.vertical)
@@ -197,17 +196,17 @@ struct BudgetSetupWizardView: View {
     
     private var incomeEntryContent: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Enter your monthly take-home pay (after taxes)")
-                .font(.subheadline)
+            Text(L10n.Wizard.incomePrompt)
+                .font(.app(.subheadline))
                 .foregroundStyle(.secondary)
             
             HStack(alignment: .center, spacing: 8) {
                 Text(CurrencyManager.shared.preferredCurrencyCode)
-                    .font(.title2)
+                    .font(.app(.title2))
                     .foregroundStyle(.secondary)
                 
                 TextField("0", text: $monthlyIncome)
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .font(.app(.largeTitle, weight: .bold)) // 48 is roughly largeTitle++ but largeTitle (34) is consistent
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
             }
@@ -217,8 +216,8 @@ struct BudgetSetupWizardView: View {
             
             if let income = Decimal(string: monthlyIncome), income > 0, let template = selectedTemplate {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Based on \(template.displayName):")
-                        .font(.headline)
+                    Text(L10n.Wizard.basedOn(template.displayName))
+                        .font(.app(.headline))
                     
                     ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                         if let allocation = template.allocations[type] {
@@ -227,7 +226,7 @@ struct BudgetSetupWizardView: View {
                                     .foregroundStyle(Color(hex: type.color) ?? .gray)
                                 Spacer()
                                 Text((income * Decimal(allocation)).formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                                    .fontWeight(.semibold)
+                                    .font(.app(.body, weight: .semibold))
                             }
                         }
                     }
@@ -241,8 +240,8 @@ struct BudgetSetupWizardView: View {
     
     private var categoryAssignmentContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Assign your expense categories to each budget type")
-                .font(.subheadline)
+            Text(L10n.Wizard.assignPrompt)
+                .font(.app(.subheadline))
                 .foregroundStyle(.secondary)
             
             ForEach(BudgetCategoryType.allCases, id: \.self) { budgetType in
@@ -251,15 +250,15 @@ struct BudgetSetupWizardView: View {
                         Image(systemName: budgetType.icon)
                             .foregroundStyle(Color(hex: budgetType.color) ?? .gray)
                         Text(budgetType.displayName)
-                            .font(.headline)
+                            .font(.app(.headline))
                         Spacer()
-                        Text("\(selectedCategories[budgetType]?.count ?? 0) selected")
-                            .font(.caption)
+                        Text(L10n.Wizard.selectedCount(selectedCategories[budgetType]?.count ?? 0))
+                            .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }
                     
                     Text(budgetType.description)
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                     
                     FlowLayout(spacing: 8) {
@@ -291,8 +290,7 @@ struct BudgetSetupWizardView: View {
                                 .foregroundStyle(Color(hex: type.color) ?? .gray)
                             Spacer()
                             Text("\(Int(customAllocations[type, default: 0] * 100))%")
-                                .font(.title3)
-                                .fontWeight(.bold)
+                                .font(.app(.title3, weight: .bold))
                                 .monospacedDigit()
                         }
                         
@@ -307,7 +305,7 @@ struct BudgetSetupWizardView: View {
                         .tint(Color(hex: type.color) ?? .blue)
                         
                         Text((income * Decimal(customAllocations[type, default: 0])).formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                            .font(.subheadline)
+                            .font(.app(.subheadline))
                             .foregroundStyle(.secondary)
                     }
                     .padding()
@@ -318,12 +316,11 @@ struct BudgetSetupWizardView: View {
                 // Total check
                 let total = customAllocations.values.reduce(0, +)
                 HStack {
-                    Text("Total Allocation")
-                        .font(.headline)
+                    Text(L10n.Wizard.totalAllocation)
+                        .font(.app(.headline))
                     Spacer()
                     Text("\(Int(total * 100))%")
-                        .font(.title3)
-                        .fontWeight(.bold)
+                        .font(.app(.title3, weight: .bold))
                         .foregroundStyle(abs(total - 1.0) < 0.01 ? .green : .orange)
                 }
                 .padding()
@@ -344,11 +341,11 @@ struct BudgetSetupWizardView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Label(type.displayName, systemImage: type.icon)
-                                    .font(.headline)
+                                    .font(.app(.headline))
                                     .foregroundStyle(Color(hex: type.color) ?? .gray)
                                 
                                 Text("\(categoryCount) categories")
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             
@@ -356,11 +353,10 @@ struct BudgetSetupWizardView: View {
                             
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                                    .font(.title3)
-                                    .fontWeight(.bold)
+                                    .font(.app(.title3, weight: .bold))
                                 
-                                Text("\(Int(customAllocations[type, default: 0] * 100))% of income")
-                                    .font(.caption)
+                                Text(L10n.Budget.ofIncome)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -374,19 +370,19 @@ struct BudgetSetupWizardView: View {
                     .padding(.vertical)
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Budgets to Create")
-                        .font(.headline)
+                    Text(L10n.Wizard.budgetsToCreate)
+                        .font(.app(.headline))
                     
-                    Text("• 3 category-type budgets (Needs, Wants, Savings)")
-                        .font(.subheadline)
+                    Text(L10n.Wizard.Review.point1)
+                        .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
                     
-                    Text("• Monthly recurring with auto-renewal")
-                        .font(.subheadline)
+                    Text(L10n.Wizard.Review.point2)
+                        .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
                     
-                    Text("• Alerts at 80% and 100% spending")
-                        .font(.subheadline)
+                    Text(L10n.Wizard.Review.point3)
+                        .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
                 }
                 .padding()
@@ -402,27 +398,26 @@ struct BudgetSetupWizardView: View {
     private var completeContent: some View {
         VStack(spacing: 32) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 80))
+                .appFont(size: 80)
                 .foregroundStyle(.green.gradient)
                 .padding(.top, 40)
             
             VStack(spacing: 12) {
-                Text("You're All Set!")
-                    .font(.title)
-                    .fontWeight(.bold)
+                Text(L10n.Wizard.Complete.allSetTitle)
+                    .font(.app(.title, weight: .bold))
                 
-                Text("Your budgets have been created. You can always adjust them later from the Budgets screen.")
-                    .font(.subheadline)
+                Text(L10n.Wizard.Complete.allSetMessage)
+                    .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             
             VStack(spacing: 16) {
-                Label("View your budgets in the Analysis tab", systemImage: "chart.bar.fill")
-                Label("Get alerts when approaching limits", systemImage: "bell.badge.fill")
-                Label("Track your progress daily", systemImage: "calendar.badge.clock")
+                Label(L10n.Wizard.Complete.point1, systemImage: "chart.bar.fill")
+                Label(L10n.Wizard.Complete.point2, systemImage: "bell.badge.fill")
+                Label(L10n.Wizard.Complete.point3, systemImage: "calendar.badge.clock")
             }
-            .font(.subheadline)
+            .font(.app(.subheadline))
             .foregroundStyle(.secondary)
         }
     }
@@ -440,7 +435,7 @@ struct BudgetSetupWizardView: View {
                             goBack()
                         }
                     } label: {
-                        Text("Back")
+                        Text(L10n.Wizard.back)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -455,7 +450,7 @@ struct BudgetSetupWizardView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text(currentStep == .review ? "Create Budgets" : (currentStep == .complete ? "Done" : "Continue"))
+                        Text(currentStep == .review ? L10n.Wizard.createBudgets : (currentStep == .complete ? L10n.Wizard.Complete.title : L10n.Wizard.continueAction))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -584,7 +579,7 @@ struct FeatureRow: View {
     var body: some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.title2)
+                .font(.app(.title2))
                 .foregroundStyle(.blue)
                 .frame(width: 44, height: 44)
                 .background(Color.blue.opacity(0.1))
@@ -592,9 +587,9 @@ struct FeatureRow: View {
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
+                    .font(.app(.headline))
                 Text(description)
-                    .font(.subheadline)
+                    .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
             }
             
@@ -613,7 +608,7 @@ struct TemplateCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: template.icon)
-                        .font(.title2)
+                        .font(.app(.title2))
                         .foregroundStyle(isSelected ? .white : .blue)
                         .frame(width: 44, height: 44)
                         .background(isSelected ? Color.blue : Color.blue.opacity(0.1))
@@ -621,11 +616,11 @@ struct TemplateCard: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(template.displayName)
-                            .font(.headline)
+                            .font(.app(.headline))
                             .foregroundStyle(isSelected ? .white : .primary)
                         
                         Text(template.description)
-                            .font(.caption)
+                            .font(.app(.caption))
                             .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
                             .lineLimit(2)
                     }
@@ -643,7 +638,7 @@ struct TemplateCard: View {
                     ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                         if let allocation = template.allocations[type] {
                             Text("\(Int(allocation * 100))% \(type.displayName)")
-                                .font(.caption2)
+                                .font(.app(.caption2))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .background(isSelected ? Color.white.opacity(0.2) : Color(hex: type.color)?.opacity(0.15))
@@ -675,9 +670,9 @@ struct CategoryChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: category.icon)
-                    .font(.caption)
+                    .font(.app(.caption))
                 Text(category.name)
-                    .font(.caption)
+                    .font(.app(.caption))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

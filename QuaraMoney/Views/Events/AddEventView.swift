@@ -13,27 +13,27 @@ struct AddEventView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Event Details") {
-                    TextField("Event Name", text: $title)
-                    DatePicker("Start Date", selection: $startDate, displayedComponents: [.date])
+                Section(L10n.Event.details) {
+                    TextField(L10n.Event.name, text: $title)
+                    DatePicker(L10n.Budget.startDate, selection: $startDate, displayedComponents: [.date])
                 }
                 
-                Section("Budget & Notes") {
-                    TextField("Total Budget (Optional)", text: $budgetString)
+                Section(L10n.Event.budgetNotes) {
+                    TextField(L10n.Event.budgetOptional, text: $budgetString)
                         .keyboardType(.decimalPad)
                     
-                    TextField("Notes", text: $notes, axis: .vertical)
+                    TextField(L10n.Event.notes, text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle("New Event")
+            .navigationTitle(L10n.Event.new)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(L10n.Common.add) {
                         saveEvent()
                         dismiss()
                     }

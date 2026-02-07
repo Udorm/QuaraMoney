@@ -2,15 +2,17 @@ import SwiftUI
 
 struct AmountDisplayView: View {
     let amount: Decimal
-    let currencyCode: String
+    @Binding var currencyCode: String
     let expression: String
     let isEditing: Bool
+    var exchangeRateInfo: String? = nil
     
-    init(amount: Decimal, currencyCode: String, expression: String = "", isEditing: Bool = false) {
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, exchangeRateInfo: String? = nil) {
         self.amount = amount
-        self.currencyCode = currencyCode
+        self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
+        self.exchangeRateInfo = exchangeRateInfo
     }
     
     /// Display the raw expression when editing, formatted amount when finalized
@@ -100,19 +102,44 @@ struct AmountDisplayView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            // Currency code
-            Text(currencyCode)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
+            // Currency Selection & Rate
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
+                        Button(code) {
+                            currencyCode = code
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(currencyCode)
+                            .font(.app(.subheadline, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(.secondarySystemBackground))
+                    .foregroundColor(.primary)
+                    .clipShape(Capsule())
+                }
+                
+                if let info = exchangeRateInfo {
+                    Text(info)
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                }
+            }
             
             // Main amount/expression display
             HStack(alignment: .center, spacing: 4) {
                 Text(displayText)
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.app(size: 48, weight: .bold))
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)
-                    .foregroundStyle(expression.isEmpty && amount == 0 ? .tertiary : .primary)
+                    // Use ternary for color based on amount/expression
+                    .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.1), value: displayText)
                 
@@ -128,7 +155,7 @@ struct AmountDisplayView: View {
             // Calculation preview when operators present
             if hasOperators && amount > 0 {
                 Text("= \(formatAmount(amount))")
-                    .font(.callout)
+                    .font(.app(.callout))
                     .foregroundStyle(.secondary)
                     .transition(.opacity)
             }
@@ -143,7 +170,7 @@ struct AmountDisplayView: View {
 #Preview("Editing - No Decimal") {
     AmountDisplayView(
         amount: 1234,
-        currencyCode: "USD",
+        currencyCode: .constant("USD"),
         expression: "1234",
         isEditing: true
     )
@@ -152,7 +179,7 @@ struct AmountDisplayView: View {
 #Preview("Editing - With Decimal") {
     AmountDisplayView(
         amount: 123.45,
-        currencyCode: "USD",
+        currencyCode: .constant("USD"),
         expression: "123.45",
         isEditing: true
     )
@@ -161,7 +188,7 @@ struct AmountDisplayView: View {
 #Preview("Editing - Expression") {
     AmountDisplayView(
         amount: 250,
-        currencyCode: "USD",
+        currencyCode: .constant("USD"),
         expression: "150+100",
         isEditing: true
     )
@@ -170,7 +197,7 @@ struct AmountDisplayView: View {
 #Preview("Finalized") {
     AmountDisplayView(
         amount: 1234.56,
-        currencyCode: "USD",
+        currencyCode: .constant("USD"),
         expression: "",
         isEditing: false
     )
@@ -179,7 +206,7 @@ struct AmountDisplayView: View {
 #Preview("Empty") {
     AmountDisplayView(
         amount: 0,
-        currencyCode: "USD",
+        currencyCode: .constant("USD"),
         expression: "",
         isEditing: true
     )

@@ -58,7 +58,7 @@ struct OnboardingView: View {
                 // Navigation Buttons
                 HStack {
                     if currentStep != .welcome {
-                        Button("Back") {
+                        Button(L10n.Common.back) {
                             withAnimation {
                                 if let prev = OnboardingStep(rawValue: currentStep.rawValue - 1) {
                                     currentStep = prev
@@ -80,8 +80,8 @@ struct OnboardingView: View {
                             }
                         }
                     }) {
-                        Text(currentStep == .final ? "Get Started" : "Next")
-                            .fontWeight(.bold)
+                        Text(currentStep == .final ? L10n.Onboarding.getStarted : L10n.Common.next)
+                            .font(.app(.body, weight: .bold))
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
                             .background(Color.accentColor)
@@ -106,13 +106,14 @@ struct OnboardingView: View {
                 .foregroundColor(.accentColor)
                 .padding(.bottom, 20)
             
-            Text("Welcome to QuaraMoney")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                .padding(.bottom, 20)
+            
+            Text(L10n.Onboarding.welcomeTitle)
+                .font(.app(.largeTitle, weight: .bold))
                 .multilineTextAlignment(.center)
             
-            Text("Take control of your finances.\nTrack expenses, budget smarter, and save more.")
-                .font(.body)
+            Text(L10n.Onboarding.welcomeDescription)
+                .font(.app(.body))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -122,12 +123,11 @@ struct OnboardingView: View {
     
     private var currencyView: some View {
         VStack(spacing: 24) {
-            Text("Select Currency")
-                .font(.title)
-                .fontWeight(.bold)
+            Text(L10n.Onboarding.selectCurrency)
+                .font(.app(.title, weight: .bold))
             
-            Text("Choose your default currency for reporting.\nYou can change this later.")
-                .font(.subheadline)
+            Text(L10n.Onboarding.currencyDescription)
+                .font(.app(.subheadline))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
@@ -141,7 +141,7 @@ struct OnboardingView: View {
                         }) {
                             VStack {
                                 Text(currency)
-                                    .font(.headline)
+                                    .font(.app(.headline))
                                     .foregroundColor(currencyManager.preferredCurrencyCode == currency ? .white : .primary)
                             }
                             .frame(maxWidth: .infinity)
@@ -166,26 +166,25 @@ struct OnboardingView: View {
     private var themeView: some View {
         ScrollView {
             VStack(spacing: 32) {
-                Text("Personalize Colors")
-                    .font(.title)
-                    .fontWeight(.bold)
+                Text(L10n.Onboarding.personalizeColors)
+                    .font(.app(.title, weight: .bold))
                 
-                Text("Choose colors for your income and expenses.")
-                    .font(.subheadline)
+                Text(L10n.Onboarding.themeDescription)
+                    .font(.app(.subheadline))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Income Color")
-                        .font(.headline)
+                    Text(L10n.Onboarding.incomeColor)
+                        .font(.app(.headline))
                     
                     ColorPickerView(selectedColorHex: $themeManager.incomeColorHex)
                         .frame(height: 150)
                 }
                 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Expense Color")
-                        .font(.headline)
+                    Text(L10n.Onboarding.expenseColor)
+                        .font(.app(.headline))
                     
                     ColorPickerView(selectedColorHex: $themeManager.expenseColorHex)
                         .frame(height: 150)
@@ -204,12 +203,13 @@ struct OnboardingView: View {
                 .foregroundColor(.green)
                 .padding(.bottom, 20)
             
-            Text("You're All Set!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                .padding(.bottom, 20)
             
-            Text("Let's create your first wallet to get started.")
-                .font(.body)
+            Text(L10n.Onboarding.finalTitle)
+                .font(.app(.largeTitle, weight: .bold))
+            
+            Text(L10n.Onboarding.finalDescription)
+                .font(.app(.body))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)

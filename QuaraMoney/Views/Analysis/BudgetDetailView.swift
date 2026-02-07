@@ -121,8 +121,7 @@ struct BudgetDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text(budget.displayName)
-                                    .font(.title2)
-                                    .fontWeight(.bold)
+                                    .font(.app(.title2, weight: .bold))
                                 
                                 // Badges
                                 if budget.isRecurring {
@@ -132,12 +131,12 @@ struct BudgetDetailView: View {
                             }
                             
                             Text(budget.periodDisplayString)
-                                .font(.subheadline)
+                                .font(.app(.subheadline))
                                 .foregroundStyle(.secondary)
                             
                             if budget.isActive {
-                                Text("\(budget.daysRemaining) days remaining")
-                                    .font(.caption)
+                                Text(L10n.Budget.daysLeft(budget.daysRemaining))
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -145,7 +144,7 @@ struct BudgetDetailView: View {
                         Spacer()
                         
                         Image(systemName: budgetIcon)
-                            .font(.title2)
+                            .font(.app(.title2))
                             .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
                             .background(progressColor.gradient)
@@ -187,12 +186,11 @@ struct BudgetDetailView: View {
                         // Center Label
                         VStack(spacing: 4) {
                             Text("\(Int(progress * 100))%")
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .font(.app(.largeTitle, weight: .bold))
                                 .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
                             
-                            Text(isOverBudget ? "Over Budget" : "Used")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                            Text(isOverBudget ? L10n.Budget.overBudgetLabel : L10n.Budget.used)
+                                .font(.app(.subheadline, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -203,9 +201,9 @@ struct BudgetDetailView: View {
             .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
             
             // MARK: - Summary Section
-            Section("Summary") {
+            Section(L10n.Budget.summary) {
                 HStack {
-                    Text("Budget Limit")
+                    Text(L10n.Budget.limit)
                     Spacer()
                     Text(budgetLimitConverted.formatted(.currency(code: preferredCurrency)))
                         .foregroundStyle(.secondary)
@@ -213,7 +211,7 @@ struct BudgetDetailView: View {
                 
                 if budget.rolloverAmount > 0 {
                     HStack {
-                        Label("Rollover", systemImage: "arrow.up.circle.fill")
+                        Label(L10n.Budget.rolloverTitle, systemImage: "arrow.up.circle.fill")
                             .foregroundStyle(.green)
                         Spacer()
                         Text("+\(budget.rolloverAmount.formatted(.currency(code: preferredCurrency)))")
@@ -222,37 +220,37 @@ struct BudgetDetailView: View {
                 }
                 
                 HStack {
-                    Text("Spent")
+                    Text(L10n.Budget.totalSpent)
                     Spacer()
                     Text(totalSpent.formatted(.currency(code: preferredCurrency)))
                         .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
                 }
                 
                 HStack {
-                    Text("Remaining")
+                    Text(L10n.Budget.remaining)
                     Spacer()
                     Text(remaining.formatted(.currency(code: preferredCurrency)))
+                        .font(.app(.body, weight: .medium))
                         .foregroundStyle(remaining >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
-                        .fontWeight(.medium)
                 }
                 
                 if budget.currencyCode != preferredCurrency {
                     HStack {
-                        Text("Original Budget")
+                        Text(L10n.Budget.original)
                         Spacer()
                         Text(budget.amountLimit.formatted(.currency(code: budget.currencyCode)))
                             .foregroundStyle(.secondary)
-                            .font(.caption)
+                            .font(.app(.caption))
                     }
                 }
             }
             
             // MARK: - Insights Section
             if budget.isActive {
-                Section("Insights") {
+                Section(L10n.Budget.insights) {
                     // Daily Average
                     HStack {
-                        Label("Daily Average", systemImage: "chart.bar.fill")
+                        Label(L10n.Budget.dailyAverage, systemImage: "chart.bar.fill")
                         Spacer()
                         Text(dailyAverage.formatted(.currency(code: preferredCurrency)))
                             .foregroundStyle(.secondary)
@@ -260,7 +258,7 @@ struct BudgetDetailView: View {
                     
                     // Daily Budget to Stay on Track
                     HStack {
-                        Label("Daily Budget", systemImage: "target")
+                        Label(L10n.Budget.dailyBudget, systemImage: "target")
                         Spacer()
                         Text(dailyBudget.formatted(.currency(code: preferredCurrency)))
                             .foregroundStyle(dailyBudget > 0 ? ThemeManager.shared.incomeColor : .secondary)
@@ -268,14 +266,14 @@ struct BudgetDetailView: View {
                     
                     // Projected Spending
                     HStack {
-                        Label("Projected Total", systemImage: "chart.line.uptrend.xyaxis")
+                        Label(L10n.Budget.projectedTotal, systemImage: "chart.line.uptrend.xyaxis")
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(projectedSpending.formatted(.currency(code: preferredCurrency)))
                                 .foregroundStyle(projectedSpending > budgetLimitConverted ? ThemeManager.shared.expenseColor : .secondary)
                             if projectedSpending > budgetLimitConverted {
-                                Text("Over by \((projectedSpending - budgetLimitConverted).formatted(.currency(code: preferredCurrency)))")
-                                    .font(.caption2)
+                                Text(L10n.Budget.overBy((projectedSpending - budgetLimitConverted).formatted(.currency(code: preferredCurrency))))
+                                    .font(.app(.caption2))
                                     .foregroundStyle(ThemeManager.shared.expenseColor)
                             }
                         }
@@ -296,13 +294,13 @@ struct BudgetDetailView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(goal.name)
-                                    .font(.headline)
+                                    .font(.app(.headline))
                                 
                                 ProgressView(value: goal.progress)
                                     .tint(Color(hex: goal.colorHex) ?? .blue)
                                 
                                 Text("\(goal.progressPercent) of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             
@@ -316,19 +314,19 @@ struct BudgetDetailView: View {
                         .padding(.vertical, 4)
                     }
                 } header: {
-                    Text("Linked Savings Goal")
+                    Text(L10n.Budget.linkedSavings)
                 }
             }
             
             // MARK: - Alert Settings
             Section {
                 HStack {
-                    Text("Alerts")
+                    Text(L10n.Budget.alerts)
                     Spacer()
                     HStack(spacing: 8) {
                         if budget.alertAt50 {
                             Text("50%")
-                                .font(.caption)
+                                .font(.app(.caption))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.blue.opacity(0.2))
@@ -337,7 +335,7 @@ struct BudgetDetailView: View {
                         }
                         if budget.alertAt80 {
                             Text("80%")
-                                .font(.caption)
+                                .font(.app(.caption))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.orange.opacity(0.2))
@@ -346,7 +344,7 @@ struct BudgetDetailView: View {
                         }
                         if budget.alertAt100 {
                             Text("100%")
-                                .font(.caption)
+                                .font(.app(.caption))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.red.opacity(0.2))
@@ -354,8 +352,8 @@ struct BudgetDetailView: View {
                                 .cornerRadius(4)
                         }
                         if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
-                            Text("None")
-                                .font(.caption)
+                            Text(L10n.CategoryGroup.none) // L10n.CategoryGroup.none is "None". Good.
+                                .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -363,7 +361,7 @@ struct BudgetDetailView: View {
                 
                 if budget.isRecurring {
                     HStack {
-                        Text("Recurring")
+                        Text(L10n.Budget.recurring)
                         Spacer()
                         HStack(spacing: 4) {
                             Image(systemName: "repeat")
@@ -374,20 +372,20 @@ struct BudgetDetailView: View {
                     }
                     
                     HStack {
-                        Text("Rollover")
+                        Text(L10n.Budget.rolloverTitle)
                         Spacer()
-                        Text(budget.rolloverExcess ? "Enabled" : "Disabled")
+                        Text(budget.rolloverExcess ? L10n.Budget.enabled : L10n.Budget.disabled)
                             .foregroundStyle(.secondary)
                     }
                 }
             } header: {
-                Text("Settings")
+                Text(L10n.Settings.title)
             }
             
             // MARK: - Transactions Section
             if relevantTransactions.isEmpty {
-                Section("Transactions (0)") {
-                    Text("No transactions yet")
+                Section(L10n.Budget.transactions(0)) {
+                    Text(L10n.Budget.noTransactions)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
@@ -404,14 +402,14 @@ struct BudgetDetailView: View {
                 )
             }
         }
-        .navigationTitle("Budget Details")
+        .navigationTitle(L10n.Budget.details)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showEditBudget = true
                 } label: {
-                    Text("Edit")
+                    Text(L10n.Common.edit)
                 }
             }
         }

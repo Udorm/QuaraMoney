@@ -48,13 +48,13 @@ struct AddCategoryView: View {
                                     .shadow(radius: 5)
                                 
                                 Image(systemName: selectedIcon)
-                                    .font(.system(size: 36))
+                                    .appFont(size: 36)
                                     .foregroundColor(.white)
                             }
                             
-                            Text("Preview")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                Text("Preview")
+                                    .font(.app(.caption))
+                                    .foregroundStyle(.secondary)
                         }
                         Spacer()
                     }

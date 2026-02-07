@@ -13,12 +13,12 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .weekly: return "Weekly"
-        case .biweekly: return "Bi-Weekly"
-        case .monthly: return "Monthly"
-        case .quarterly: return "Quarterly"
-        case .yearly: return "Yearly"
-        case .custom: return "Custom"
+        case .weekly: return L10n.Period.weekly
+        case .biweekly: return "period.biweekly".localized
+        case .monthly: return L10n.Period.monthly
+        case .quarterly: return L10n.Period.quarterly
+        case .yearly: return L10n.Period.yearly
+        case .custom: return L10n.Period.custom
         }
     }
     

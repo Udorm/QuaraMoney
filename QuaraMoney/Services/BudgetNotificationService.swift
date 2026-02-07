@@ -191,8 +191,8 @@ class BudgetNotificationService: ObservableObject {
         center.removePendingNotificationRequests(withIdentifiers: ["daily_budget_summary"])
         
         let content = UNMutableNotificationContent()
-        content.title = "Daily Budget Summary"
-        content.body = "Check your spending progress for today"
+        content.title = L10n.Notifications.dailySummaryTitle
+        content.body = L10n.Notifications.dailySummaryBody
         content.sound = .default
         content.categoryIdentifier = "DAILY_SUMMARY"
         
@@ -244,13 +244,13 @@ class BudgetNotificationService: ObservableObject {
         // Budget alert actions
         let viewAction = UNNotificationAction(
             identifier: "VIEW_BUDGET",
-            title: "View Budget",
+            title: L10n.Notifications.viewBudget,
             options: [.foreground]
         )
         
         let dismissAction = UNNotificationAction(
             identifier: "DISMISS",
-            title: "Dismiss",
+            title: L10n.Notifications.dismiss,
             options: []
         )
         
@@ -264,7 +264,7 @@ class BudgetNotificationService: ObservableObject {
         // Daily summary actions
         let summaryViewAction = UNNotificationAction(
             identifier: "VIEW_SUMMARY",
-            title: "View Analysis",
+            title: L10n.Notifications.viewAnalysis,
             options: [.foreground]
         )
         

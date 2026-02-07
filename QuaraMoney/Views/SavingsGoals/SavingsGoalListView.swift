@@ -41,10 +41,10 @@ struct SavingsGoalListView: View {
     var body: some View {
         Group {
             if goals.isEmpty {
-                ContentUnavailableView(
-                    "No Savings Goals",
+                AppEmptyStateView(
+                    L10n.Savings.noGoals,
                     systemImage: "target",
-                    description: Text("Create a savings goal to start tracking your progress toward financial targets.")
+                    description: L10n.Savings.noGoalsDescription
                 )
             } else {
                 List {
@@ -53,23 +53,21 @@ struct SavingsGoalListView: View {
                         VStack(spacing: 16) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Total Saved")
-                                        .font(.caption)
+                                    Text(L10n.Savings.totalSaved)
+                                        .font(.app(.caption))
                                         .foregroundStyle(.secondary)
                                     Text(totalSaved.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                                        .font(.title2)
-                                        .fontWeight(.bold)
+                                        .font(.app(.title2, weight: .bold))
                                 }
                                 
                                 Spacer()
                                 
                                 VStack(alignment: .trailing, spacing: 4) {
-                                    Text("Total Target")
-                                        .font(.caption)
+                                    Text(L10n.Savings.totalTarget)
+                                        .font(.app(.caption))
                                         .foregroundStyle(.secondary)
                                     Text(totalTarget.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
-                                        .font(.title2)
-                                        .fontWeight(.bold)
+                                        .font(.app(.title2, weight: .bold))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -81,12 +79,14 @@ struct SavingsGoalListView: View {
                                     .tint(.green)
                                 
                                 HStack {
-                                    Text("\(Int(overallProgress * 100))% of total goals")
-                                        .font(.caption)
+//                                    Text("\(Int(overallProgress * 100))% of total goals")
+                                     Text(L10n.Budget.percentUsed(Int(overallProgress * 100))) // Reusing percent format
+                                        .font(.app(.caption))
                                         .foregroundStyle(.secondary)
                                     Spacer()
-                                    Text("\(activeGoals.count) active, \(completedGoals.count) completed")
-                                        .font(.caption)
+                                    // Simplified summary
+                                    Text("\(activeGoals.count) \(L10n.Budget.Filter.active), \(completedGoals.count) \(L10n.Common.done)")
+                                        .font(.app(.caption))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -96,7 +96,7 @@ struct SavingsGoalListView: View {
                     
                     // Active Goals
                     if !activeGoals.isEmpty {
-                        Section("Active Goals") {
+                        Section(L10n.Savings.activeGoals) {
                             ForEach(activeGoals) { goal in
                                 NavigationLink {
                                     SavingsGoalDetailView(goal: goal)
@@ -113,7 +113,7 @@ struct SavingsGoalListView: View {
                     // Completed Goals
                     if !completedGoals.isEmpty {
                         Section {
-                            DisclosureGroup("Completed Goals (\(completedGoals.count))", isExpanded: $showCompletedGoals) {
+                            DisclosureGroup("\(L10n.Savings.completedGoals) (\(completedGoals.count))", isExpanded: $showCompletedGoals) {
                                 ForEach(completedGoals) { goal in
                                     NavigationLink {
                                         SavingsGoalDetailView(goal: goal)
@@ -130,7 +130,7 @@ struct SavingsGoalListView: View {
                 }
             }
         }
-        .navigationTitle("Savings Goals")
+        .navigationTitle(L10n.Savings.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -169,7 +169,7 @@ struct SavingsGoalRowView: View {
                     .frame(width: 48, height: 48)
                 
                 Image(systemName: goal.iconName)
-                    .font(.title3)
+                    .font(.app(.title3))
                     .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
             }
             
@@ -178,22 +178,20 @@ struct SavingsGoalRowView: View {
                 // Title Row
                 HStack {
                     Text(goal.name)
-                         .font(.body)
-                        .fontWeight(.semibold)
+                         .font(.app(.body, weight: .semibold))
                         .lineLimit(1)
                     
                     if goal.isCompleted {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                            .font(.caption)
+                            .font(.app(.caption))
                     }
                     
                     Spacer()
                     
                     // Primary Value: Current Saved Amount
                      Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode)))
-                        .font(.body)
-                        .fontWeight(.bold)
+                        .font(.app(.body, weight: .bold))
                         .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
                 }
                 
@@ -215,17 +213,17 @@ struct SavingsGoalRowView: View {
                 HStack {
                     // Left: Progress Percentage
                     Text(goal.progressPercent)
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                     
                     // Center/Divider
                     Text("•")
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                         
                     // Right: Target info
-                    Text("of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
-                         .font(.caption)
+                    Text(L10n.Budget.leftOf(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))) // Reusing leftOf "of $100"
+                         .font(.app(.caption))
                          .foregroundStyle(.secondary)
 
                     Spacer()
@@ -233,7 +231,7 @@ struct SavingsGoalRowView: View {
                     // Far Right: Target Date
                     if let targetDate = goal.targetDate {
                          Text(targetDate.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption)
+                            .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -275,7 +273,7 @@ struct AddSavingsGoalView: View {
         NavigationStack {
             Form {
                 // Template Selection
-                Section("Quick Start") {
+                Section(L10n.Savings.quickStart) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(SavingsGoalTemplate.allCases, id: \.self) { template in
@@ -292,11 +290,11 @@ struct AddSavingsGoalView: View {
                 }
                 
                 // Goal Details
-                Section("Goal Details") {
-                    TextField("Goal Name", text: $name)
+                Section(L10n.Budget.details) {
+                    TextField(L10n.Savings.goalName, text: $name)
                     
                     HStack {
-                        TextField("Target Amount", text: $targetAmountString)
+                        TextField(L10n.Savings.targetAmount, text: $targetAmountString)
                             .keyboardType(.decimalPad)
                         
                         Picker("", selection: $selectedCurrency) {
@@ -311,11 +309,11 @@ struct AddSavingsGoalView: View {
                 
                 // Target Date
                 Section {
-                    Toggle("Set Target Date", isOn: $hasTargetDate)
+                    Toggle(L10n.Savings.targetDate, isOn: $hasTargetDate) // Reusing "Target Date" for toggle label
                     
                     if hasTargetDate {
                         DatePicker(
-                            "Target Date",
+                            L10n.Savings.targetDate,
                             selection: $targetDate,
                             in: Date()...,
                             displayedComponents: .date
@@ -323,7 +321,7 @@ struct AddSavingsGoalView: View {
                         
                         if let suggested = calculateSuggestedMonthly() {
                             HStack {
-                                Text("Suggested Monthly")
+                                Text(L10n.Savings.suggestedMonthly)
                                 Spacer()
                                 Text(suggested.formatted(.currency(code: selectedCurrency)))
                                     .foregroundStyle(.blue)
@@ -331,20 +329,20 @@ struct AddSavingsGoalView: View {
                         }
                     }
                 } header: {
-                    Text("Timeline")
+                    Text(L10n.Savings.timeline)
                 } footer: {
                     if hasTargetDate {
-                        Text("We'll calculate how much you need to save each month")
+                        Text(L10n.Savings.timelineDescription)
                     }
                 }
                 
                 // Appearance
-                Section("Appearance") {
+                Section(L10n.CategoryGroup.appearance) {
                     Button {
                         showIconPicker = true
                     } label: {
                         HStack {
-                            Text("Icon")
+                            Text(L10n.Wallet.icon)
                             Spacer()
                             Image(systemName: selectedIcon)
                                 .foregroundStyle(Color(hex: selectedColor) ?? .blue)
@@ -355,7 +353,7 @@ struct AddSavingsGoalView: View {
                         showColorPicker = true
                     } label: {
                         HStack {
-                            Text("Color")
+                            Text(L10n.Wallet.color)
                             Spacer()
                             Circle()
                                 .fill(Color(hex: selectedColor) ?? .blue)
@@ -364,29 +362,28 @@ struct AddSavingsGoalView: View {
                     }
                 }
                 
-                // Linked Wallet
                 if !wallets.isEmpty {
                     Section {
-                        Picker("Link to Wallet", selection: $linkedWallet) {
-                            Text("None").tag(nil as Wallet?)
+                        Picker(L10n.Savings.wallet, selection: $linkedWallet) {
+                            Text(L10n.CategoryGroup.none).tag(nil as Wallet?)
                             ForEach(wallets) { wallet in
                                 Text(wallet.name).tag(wallet as Wallet?)
                             }
                         }
                     } header: {
-                        Text("Wallet")
+                        Text(L10n.Savings.wallet)
                     } footer: {
-                        Text("Track contributions from a specific wallet")
+                        Text(L10n.Savings.walletDescription)
                     }
                 }
                 
                 // Auto-Contribute
                 Section {
-                    Toggle("Auto-Contribute Reminder", isOn: $autoContributeEnabled)
+                    Toggle(L10n.Savings.autoContribute, isOn: $autoContributeEnabled)
                     
                     if autoContributeEnabled {
                         HStack {
-                            TextField("Amount", text: $autoContributeAmountString)
+                            TextField(L10n.Transaction.amount, text: $autoContributeAmountString)
                                 .keyboardType(.decimalPad)
                             
                             Picker("", selection: $autoContributePeriod) {
@@ -398,21 +395,21 @@ struct AddSavingsGoalView: View {
                         }
                     }
                 } header: {
-                    Text("Automation")
+                    Text(L10n.Savings.automation)
                 } footer: {
                     if autoContributeEnabled {
-                        Text("Get reminded to contribute regularly")
+                        Text(L10n.Savings.autoContributeDescription)
                     }
                 }
             }
-            .navigationTitle("New Savings Goal")
+            .navigationTitle(L10n.Savings.new)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button(L10n.Common.create) {
                         createGoal()
                         dismiss()
                     }
@@ -486,14 +483,14 @@ struct TemplateButton: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: template.icon)
-                    .font(.title2)
+                    .font(.app(.title2))
                     .foregroundStyle(isSelected ? .white : Color(hex: template.suggestedColor) ?? .blue)
                     .frame(width: 50, height: 50)
                     .background(isSelected ? (Color(hex: template.suggestedColor) ?? .blue) : (Color(hex: template.suggestedColor) ?? .blue).opacity(0.15))
                     .cornerRadius(12)
                 
                 Text(template.displayName)
-                    .font(.caption)
+                    .font(.app(.caption))
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .lineLimit(1)
             }
@@ -520,7 +517,7 @@ struct SavingsGoalDetailView: View {
                 VStack(spacing: 20) {
                     // Icon
                     Image(systemName: goal.iconName)
-                        .font(.system(size: 48))
+                        .appFont(size: 48)
                         .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
                     
                     // Progress Circle
@@ -538,10 +535,10 @@ struct SavingsGoalDetailView: View {
                         
                         VStack(spacing: 4) {
                             Text(goal.progressPercent)
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .font(.app(.largeTitle, weight: .bold)) // Approximating 32pt
                             
-                            Text(goal.isCompleted ? "Complete!" : "Progress")
-                                .font(.caption)
+                            Text(goal.isCompleted ? L10n.Savings.complete : L10n.Savings.progress)
+                                .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -550,10 +547,9 @@ struct SavingsGoalDetailView: View {
                     // Amount Progress
                     VStack(spacing: 8) {
                         Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode)))
-                            .font(.title)
-                            .fontWeight(.bold)
+                            .font(.app(.title, weight: .bold))
                         
-                        Text("of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
+                        Text(L10n.Budget.leftOf(goal.targetAmount.formatted(.currency(code: goal.currencyCode))))
                             .foregroundStyle(.secondary)
                     }
                     
@@ -562,7 +558,7 @@ struct SavingsGoalDetailView: View {
                         Button {
                             showAddContribution = true
                         } label: {
-                            Label("Add Contribution", systemImage: "plus.circle.fill")
+                            Label(L10n.Savings.addContribution, systemImage: "plus.circle.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
@@ -575,10 +571,10 @@ struct SavingsGoalDetailView: View {
             .listRowBackground(Color.clear)
             
             // Details Section
-            Section("Details") {
+            Section(L10n.Budget.details) {
                 if let targetDate = goal.targetDate {
                     HStack {
-                        Label("Target Date", systemImage: "calendar")
+                        Label(L10n.Savings.targetDate, systemImage: "calendar")
                         Spacer()
                         Text(targetDate.formatted(date: .abbreviated, time: .omitted))
                             .foregroundStyle(.secondary)
@@ -586,7 +582,7 @@ struct SavingsGoalDetailView: View {
                     
                     if let days = goal.daysRemaining {
                         HStack {
-                            Label("Days Remaining", systemImage: "clock")
+                            Label(L10n.Savings.daysRemaining, systemImage: "clock")
                             Spacer()
                             Text("\(days)")
                                 .foregroundStyle(days < 30 ? .orange : .secondary)
@@ -594,8 +590,9 @@ struct SavingsGoalDetailView: View {
                     }
                 }
                 
+                
                 HStack {
-                    Label("Remaining", systemImage: "arrow.up.right")
+                    Label(L10n.Savings.remaining, systemImage: "arrow.up.right")
                     Spacer()
                     Text(goal.remainingAmount.formatted(.currency(code: goal.currencyCode)))
                         .foregroundStyle(.secondary)
@@ -603,7 +600,7 @@ struct SavingsGoalDetailView: View {
                 
                 if let suggested = goal.suggestedMonthlyContribution {
                     HStack {
-                        Label("Monthly Needed", systemImage: "calendar.badge.clock")
+                        Label(L10n.Savings.monthlyNeeded, systemImage: "calendar.badge.clock")
                         Spacer()
                         Text(suggested.formatted(.currency(code: goal.currencyCode)))
                             .foregroundStyle(.blue)
@@ -611,7 +608,7 @@ struct SavingsGoalDetailView: View {
                 }
                 
                 HStack {
-                    Label("Status", systemImage: goal.isOnTrack ? "checkmark.circle" : "exclamationmark.triangle")
+                    Label(L10n.Savings.status, systemImage: goal.isOnTrack ? "checkmark.circle" : "exclamationmark.triangle")
                     Spacer()
                     Text(goal.statusMessage)
                         .foregroundStyle(goal.isOnTrack ? .green : .orange)
@@ -620,9 +617,9 @@ struct SavingsGoalDetailView: View {
             
             // Auto-Contribute Info
             if goal.autoContributeEnabled, let amount = goal.autoContributeAmount {
-                Section("Auto-Contribute") {
+                Section(L10n.Savings.automation) {
                     HStack {
-                        Label("Amount", systemImage: "repeat")
+                        Label(L10n.Transaction.amount, systemImage: "repeat")
                         Spacer()
                         Text("\(amount.formatted(.currency(code: goal.currencyCode))) / \(goal.autoContributePeriod?.displayName ?? "month")")
                             .foregroundStyle(.secondary)
@@ -632,7 +629,7 @@ struct SavingsGoalDetailView: View {
             
             // Linked Wallet
             if let wallet = goal.linkedWallet {
-                Section("Linked Wallet") {
+                Section(L10n.Savings.wallet) {
                     HStack {
                         Image(systemName: wallet.icon)
                             .foregroundStyle(Color(hex: wallet.colorHex) ?? .blue)
@@ -651,35 +648,35 @@ struct SavingsGoalDetailView: View {
                         goal.isCompleted = false
                         goal.completedDate = nil
                     } label: {
-                        Label("Mark as Active", systemImage: "arrow.uturn.backward")
+                        Label(L10n.Savings.markActive, systemImage: "arrow.uturn.backward")
                     }
                 }
                 
                 Button {
                     showEditGoal = true
                 } label: {
-                    Label("Edit Goal", systemImage: "pencil")
+                    Label(L10n.Savings.edit, systemImage: "pencil")
                 }
             }
         }
         .navigationTitle(goal.name)
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Add Contribution", isPresented: $showAddContribution) {
-            TextField("Amount", text: $contributionAmountString)
+        .alert(L10n.Savings.addContribution, isPresented: $showAddContribution) {
+            TextField(L10n.Transaction.amount, text: $contributionAmountString)
                 .keyboardType(.decimalPad)
             
-            Button("Cancel", role: .cancel) {
+            Button(L10n.Common.cancel, role: .cancel) {
                 contributionAmountString = ""
             }
             
-            Button("Add") {
+            Button(L10n.Common.add) {
                 if let amount = Decimal(string: contributionAmountString) {
                     goal.addContribution(amount)
                     contributionAmountString = ""
                 }
             }
         } message: {
-            Text("Enter the contribution amount in \(goal.currencyCode)")
+            Text(String(format: L10n.Savings.enterContributionAmount, goal.currencyCode))
         }
         .sheet(isPresented: $showEditGoal) {
             EditSavingsGoalView(goal: goal)
@@ -709,42 +706,42 @@ struct EditSavingsGoalView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Goal Details") {
-                    TextField("Goal Name", text: $name)
+                Section(L10n.Budget.details) {
+                    TextField(L10n.Savings.goalName, text: $name)
                     
-                    TextField("Target Amount", text: $targetAmountString)
+                    TextField(L10n.Savings.targetAmount, text: $targetAmountString)
                         .keyboardType(.decimalPad)
                 }
                 
-                Section("Timeline") {
-                    Toggle("Set Target Date", isOn: $hasTargetDate)
+                Section(L10n.Savings.timeline) {
+                    Toggle(L10n.Savings.targetDate, isOn: $hasTargetDate)
                     
                     if hasTargetDate {
                         DatePicker(
-                            "Target Date",
+                            L10n.Savings.targetDate,
                             selection: $targetDate,
                             displayedComponents: .date
                         )
                     }
                 }
                 
-                Section("Progress") {
+                Section(L10n.Savings.progress) {
                     HStack {
-                        Text("Current Amount")
+                        Text(L10n.Budget.currentPeriod) // Reusing Current Period or similar
                         Spacer()
                         Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode)))
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            .navigationTitle("Edit Goal")
+            .navigationTitle(L10n.Savings.edit)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L10n.Common.save) {
                         saveChanges()
                         dismiss()
                     }

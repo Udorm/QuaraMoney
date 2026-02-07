@@ -8,10 +8,10 @@ struct NotificationCenterView: View {
         NavigationStack {
             Group {
                 if notificationService.inAppNotifications.isEmpty {
-                    ContentUnavailableView(
-                        "No Notifications",
+                    AppEmptyStateView(
+                        L10n.Notifications.emptyTitle,
                         systemImage: "bell.slash",
-                        description: Text("Budget alerts will appear here")
+                        description: L10n.Notifications.emptyDescription
                     )
                 } else {
                     List {
@@ -21,7 +21,7 @@ struct NotificationCenterView: View {
                                     Button(role: .destructive) {
                                         notificationService.clearNotification(notification)
                                     } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Label(L10n.Common.delete, systemImage: "trash")
                                     }
                                 }
                                 .swipeActions(edge: .leading) {
@@ -29,7 +29,7 @@ struct NotificationCenterView: View {
                                         Button {
                                             notificationService.markAsRead(notification)
                                         } label: {
-                                            Label("Read", systemImage: "envelope.open")
+                                            Label(L10n.Notifications.read, systemImage: "envelope.open")
                                         }
                                         .tint(.blue)
                                     }
@@ -38,11 +38,11 @@ struct NotificationCenterView: View {
                     }
                 }
             }
-            .navigationTitle("Notifications")
+            .navigationTitle(L10n.Notifications.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
+                    Button(L10n.Common.close) { dismiss() }
                 }
                 
                 if !notificationService.inAppNotifications.isEmpty {
@@ -51,13 +51,13 @@ struct NotificationCenterView: View {
                             Button {
                                 notificationService.markAllAsRead()
                             } label: {
-                                Label("Mark All Read", systemImage: "envelope.open")
+                                Label(L10n.Notifications.markAllRead, systemImage: "envelope.open")
                             }
                             
                             Button(role: .destructive) {
                                 notificationService.clearAllNotifications()
                             } label: {
-                                Label("Clear All", systemImage: "trash")
+                                Label(L10n.Notifications.clearAll, systemImage: "trash")
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
@@ -86,25 +86,25 @@ struct NotificationRowView: View {
                     .frame(width: 44, height: 44)
                 
                 Image(systemName: notification.alertType.icon)
-                    .font(.title3)
+                    .font(.app(.title3))
                     .foregroundStyle(Color(hex: notification.alertType.color) ?? .gray)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(notification.alertType.rawValue)
-                        .font(.headline)
+                        .font(.app(.headline))
                         .foregroundStyle(notification.isRead ? .secondary : .primary)
                     
                     Spacer()
                     
                     Text(notification.timeAgo)
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
                 
                 Text(notification.alertType.message(budgetName: notification.budgetName))
-                    .font(.subheadline)
+                    .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 
@@ -114,8 +114,7 @@ struct NotificationRowView: View {
                         .tint(Color(hex: notification.alertType.color) ?? .blue)
                     
                     Text("\(notification.progressPercent)%")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                        .font(.app(.caption, weight: .medium))
                         .foregroundStyle(Color(hex: notification.alertType.color) ?? .gray)
                 }
             }
@@ -143,11 +142,11 @@ struct NotificationBellButton: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")
-                    .font(.title3)
+                    .font(.app(.title3))
                 
                 if notificationService.unreadCount > 0 {
                     Text("\(min(notificationService.unreadCount, 99))")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.app(.caption2, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(4)
                         .background(Color.red)

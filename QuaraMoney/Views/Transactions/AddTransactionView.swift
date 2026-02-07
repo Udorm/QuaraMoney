@@ -8,7 +8,7 @@ struct AddTransactionView: View {
     
     // Query data
     @Query(sort: \Category.name) private var categories: [Category]
-    @Query(sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
     
     // UI State
@@ -59,14 +59,23 @@ struct AddTransactionView: View {
         return items
     }
     
-    /// Get frequently used wallets - limit to maxQuickWallets
+    /// Get frequently used wallets (by transaction count) - limit to maxQuickWallets
     private var frequentWallets: [Wallet] {
         let sorted = wallets.sorted { w1, w2 in
-            // Could sort by transaction count or last used
-            // For now just take first N
-            return true
+            let count1 = (w1.outgoingTransactions?.count ?? 0) + (w1.incomingTransactions?.count ?? 0)
+            let count2 = (w2.outgoingTransactions?.count ?? 0) + (w2.incomingTransactions?.count ?? 0)
+            return count1 > count2
         }
         return Array(sorted.prefix(maxQuickWallets))
+    }
+    
+    /// Get the most used wallet (by transaction count)
+    private var mostUsedWallet: Wallet? {
+        wallets.max { w1, w2 in
+            let count1 = (w1.outgoingTransactions?.count ?? 0) + (w1.incomingTransactions?.count ?? 0)
+            let count2 = (w2.outgoingTransactions?.count ?? 0) + (w2.incomingTransactions?.count ?? 0)
+            return count1 < count2
+        }
     }
     
     var body: some View {
@@ -85,9 +94,10 @@ struct AddTransactionView: View {
                             // MARK: - Amount Display (Top Priority)
                             AmountDisplayView(
                                 amount: viewModel.evaluatedAmount,
-                                currencyCode: viewModel.selectedWallet?.currencyCode ?? "USD",
+                                currencyCode: $viewModel.selectedCurrencyCode,
                                 expression: viewModel.expression,
-                                isEditing: showKeyboard
+                                isEditing: showKeyboard,
+                                exchangeRateInfo: exchangeRateString
                             )
                             .onTapGesture {
                                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -98,6 +108,8 @@ struct AddTransactionView: View {
                         
                         // MARK: - Transaction Type Selector
                         transactionTypeSelector
+                        
+
                         
                         // MARK: - Wallet Selector
                         walletSelector
@@ -131,14 +143,14 @@ struct AddTransactionView: View {
                 }
                 }
             }
-            .navigationTitle(viewModel.isEditing ? "Edit Transaction" : "New Transaction")
+            .navigationTitle(viewModel.isEditing ? L10n.Common.edit : L10n.Transaction.add)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(viewModel.isEditing ? "Save" : "Add") {
+                    Button(viewModel.isEditing ? L10n.Common.save : L10n.Common.add) {
                         viewModel.saveTransaction()
                         dismiss()
                     }
@@ -147,8 +159,10 @@ struct AddTransactionView: View {
                 }
             }
             .onAppear {
-                if viewModel.selectedWallet == nil, let first = wallets.first {
-                    viewModel.selectedWallet = first
+                // Preselect the most used wallet (by transaction count)
+                if viewModel.selectedWallet == nil, let wallet = mostUsedWallet ?? wallets.first {
+                    viewModel.selectedWallet = wallet
+                    viewModel.syncCurrencyToWallet()
                 }
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction
@@ -176,10 +190,10 @@ struct AddTransactionView: View {
     
     // MARK: - Transaction Type Selector
     private var transactionTypeSelector: some View {
-        Picker("Type", selection: $viewModel.type) {
-            Text("Expense").tag(TransactionType.expense)
-            Text("Income").tag(TransactionType.income)
-            Text("Transfer").tag(TransactionType.transfer)
+        Picker("transaction.type".localized, selection: $viewModel.type) {
+            Text(L10n.Transaction.TransactionType.expense).tag(TransactionType.expense)
+            Text(L10n.Transaction.TransactionType.income).tag(TransactionType.income)
+            Text(L10n.Transaction.TransactionType.transfer).tag(TransactionType.transfer)
         }
         .pickerStyle(.segmented)
         .onChange(of: viewModel.type) { _, newType in
@@ -189,19 +203,28 @@ struct AddTransactionView: View {
         }
     }
     
+    private var exchangeRateString: String? {
+        guard let wallet = viewModel.selectedWallet,
+              viewModel.selectedCurrencyCode != wallet.currencyCode else { return nil }
+        
+        let rate = viewModel.exchangeRate
+        let rateString = rate.formatted(.number.precision(.significantDigits(2...6)))
+        return "1 \(viewModel.selectedCurrencyCode) ≈ \(rateString) \(wallet.currencyCode)"
+    }
+    
     // MARK: - Wallet Selector
     private var walletSelector: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("From Wallet")
-                    .font(.caption)
+                Text("transaction.fromWallet".localized)
+                    .font(.app(.caption))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if wallets.count > maxQuickWallets {
-                    Button("See All") {
+                    Button(L10n.Common.seeAll) {
                         showAllWallets = true
                     }
-                    .font(.caption)
+                    .font(.app(.caption))
                 }
             }
             
@@ -213,6 +236,7 @@ struct AddTransactionView: View {
                             isSelected: viewModel.selectedWallet?.id == wallet.id
                         ) {
                             viewModel.selectedWallet = wallet
+                            viewModel.syncCurrencyToWallet()
                             viewModel.updateExchangeRate()
                         }
                     }
@@ -236,6 +260,7 @@ struct AddTransactionView: View {
                 ForEach(displayWallets) { wallet in
                     Button {
                         viewModel.selectedWallet = wallet
+                        viewModel.syncCurrencyToWallet()
                         viewModel.updateExchangeRate()
                         showAllWallets = false
                     } label: {
@@ -246,7 +271,7 @@ struct AddTransactionView: View {
                             VStack(alignment: .leading) {
                                 Text(wallet.name)
                                 Text(wallet.currencyCode)
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -259,12 +284,12 @@ struct AddTransactionView: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .navigationTitle("Select Wallet")
+            .navigationTitle(L10n.Wallet.selectWallet)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $walletSearchText, prompt: "Search wallets")
+            .searchable(text: $walletSearchText, prompt: Text("transaction.searchWallets".localized))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showAllWallets = false }
+                    Button(L10n.Common.cancel) { showAllWallets = false }
                 }
             }
         }
@@ -277,17 +302,17 @@ struct AddTransactionView: View {
         let availableWallets = wallets.filter { $0.id != viewModel.selectedWallet?.id }
         
         VStack(alignment: .leading, spacing: 8) {
-            Text("To Wallet")
-                .font(.caption)
+            Text("transaction.toWallet".localized)
+                .font(.app(.caption))
                 .foregroundStyle(.secondary)
             
             if availableWallets.isEmpty {
-                Text("No other wallets available")
+                Text("transaction.noOtherWallets".localized)
                     .foregroundStyle(.secondary)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(12)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -311,25 +336,28 @@ struct AddTransactionView: View {
                 exchangeRateSection(source: source, destination: dest)
             }
         }
+        .padding(12)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
     
     private func exchangeRateSection(source: Wallet, destination: Wallet) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("1 \(source.currencyCode) =")
+                    .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
-                TextField("Rate", value: $viewModel.exchangeRate, format: .number)
+                TextField(L10n.Transaction.rate, value: $viewModel.exchangeRate, format: .number)
                     .keyboardType(.decimalPad)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 100)
                 Text(destination.currencyCode)
-                    .fontWeight(.semibold)
+                    .font(.app(.subheadline, weight: .semibold))
             }
-            .font(.subheadline)
             
             let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
             Text("≈ \(convertedAmount.formatted(.currency(code: destination.currencyCode)))")
-                .font(.caption)
+                .font(.app(.caption))
                 .foregroundStyle(.blue)
         }
         .padding()
@@ -341,14 +369,14 @@ struct AddTransactionView: View {
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Category")
-                    .font(.caption)
+                Text(L10n.Category.title)
+                    .font(.app(.caption))
                     .foregroundStyle(.secondary)
                 Spacer()
             }
             
             if filteredCategories.isEmpty {
-                Text("No categories for \(viewModel.type.rawValue)")
+                Text("transaction.noCategoriesForType".localized(with: viewModel.type.title))
                     .foregroundStyle(.secondary)
                     .padding()
                     .frame(maxWidth: .infinity)
@@ -373,14 +401,14 @@ struct AddTransactionView: View {
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: "ellipsis.circle.fill")
-                                    .font(.system(size: 24))
+                                    .font(.app(.title3))
                                     .foregroundColor(.secondary)
                                     .frame(width: 40, height: 40)
                                     .background(Color(.tertiarySystemGroupedBackground))
                                     .clipShape(Circle())
                                 
-                                Text("More")
-                                    .font(.caption2)
+                                Text("common.more".localized)
+                                    .font(.app(.caption2))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -447,7 +475,7 @@ struct AddTransactionView: View {
                     Image(systemName: "calendar")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
-                    Text("Date")
+                    Text("transaction.date".localized)
                 }
             }
             .padding(.horizontal, 12)
@@ -460,7 +488,7 @@ struct AddTransactionView: View {
                 Image(systemName: "note.text")
                     .foregroundStyle(.blue)
                     .frame(width: 24)
-                TextField("Add note...", text: $viewModel.note)
+                TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
             }
             .padding(.horizontal, 12)
@@ -480,7 +508,7 @@ struct AddTransactionView: View {
                         .foregroundStyle(viewModel.selectedEvent != nil ? .primary : .secondary)
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.caption)
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
@@ -506,7 +534,7 @@ struct AddTransactionView: View {
                     showEventPicker = false
                 } label: {
                     HStack {
-                        Text("No Event")
+                        Text("event.noEvent".localized)
                         Spacer()
                         if viewModel.selectedEvent == nil {
                             Image(systemName: "checkmark")
@@ -524,7 +552,7 @@ struct AddTransactionView: View {
                             VStack(alignment: .leading) {
                                 Text(event.title)
                                 Text(event.startDate.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -559,10 +587,9 @@ struct WalletChip: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: wallet.icon)
-                    .font(.caption2)
+                    .font(.app(.caption2))
                 Text(wallet.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.app(.subheadline, weight: .medium))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -596,7 +623,7 @@ struct CategoryGridItem: View {
                     }
                     
                     Image(systemName: category.icon)
-                        .font(.title3)
+                        .font(.app(.title3))
                         .foregroundColor(isSelected ? .white : categoryColor)
                         .frame(width: 40, height: 40)
                         .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
@@ -609,8 +636,7 @@ struct CategoryGridItem: View {
                 }
                 
                 Text(category.name)
-                    .font(.caption2)
-                    .fontWeight(isSelected ? .bold : .regular)
+                    .font(.app(.caption2, weight: isSelected ? .bold : .regular))
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? categoryColor : .secondary)
             }
@@ -618,3 +644,5 @@ struct CategoryGridItem: View {
         .buttonStyle(.plain)
     }
 }
+
+

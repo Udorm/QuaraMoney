@@ -14,9 +14,9 @@ struct RecurringRuleListView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(rule.name)
-                                .font(.headline)
-                            Text(rule.frequency.rawValue.capitalized)
-                                .font(.caption)
+                                .font(.app(.headline))
+                            Text(rule.frequency.displayName)
+                                .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -24,24 +24,22 @@ struct RecurringRuleListView: View {
                         
                         VStack(alignment: .trailing) {
                             Text(rule.amount.formatted(.currency(code: rule.currencyCode)))
-                                .font(.body)
-                                .fontWeight(.semibold)
+                                .font(.app(.body, weight: .semibold))
                             
-                            Text("Next: \(rule.nextDueDate.formatted(date: .numeric, time: .omitted))")
-                                .font(.caption2)
+                            Text(L10n.Recurring.next(rule.nextDueDate.formatted(date: .numeric, time: .omitted)))
+                                .font(.app(.caption2))
                                 .foregroundStyle(rule.nextDueDate <= Date() ? .red : .secondary)
                         }
                     }
                 }
                 .onDelete(perform: deleteRule)
             }
-            .navigationTitle("Subscriptions")
+            .navigationTitle(L10n.Recurring.title)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     HStack {
-                        Text("Preview")
-                            .font(.caption)
-                            .fontWeight(.bold)
+                        Text(L10n.Recurring.preview)
+                            .font(.app(.caption, weight: .bold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.orange.opacity(0.2))
@@ -49,7 +47,7 @@ struct RecurringRuleListView: View {
                             .clipShape(Capsule())
                         
                         Button(action: { showingAddRule = true }) {
-                            Label("Add Subscription", systemImage: "plus")
+                            Label(L10n.Recurring.add, systemImage: "plus")
                         }
                     }
                 }
@@ -59,10 +57,10 @@ struct RecurringRuleListView: View {
             }
             .overlay {
                 if rules.isEmpty {
-                    ContentUnavailableView(
-                        "No Subscriptions",
+                    AppEmptyStateView(
+                        L10n.Recurring.emptyTitle,
                         systemImage: "calendar.badge.clock",
-                        description: Text("Add recurring bills to track them automatically.")
+                        description: L10n.Recurring.emptyState
                     )
                 }
             }

@@ -11,10 +11,10 @@ struct CategoryGroupListView: View {
     var body: some View {
         Group {
             if groups.isEmpty {
-                ContentUnavailableView(
-                    "No Category Groups",
+                AppEmptyStateView(
+                    L10n.CategoryGroup.emptyState,
                     systemImage: "folder.fill.badge.gearshape",
-                    description: Text("Create groups to organize related categories together for easier budgeting.")
+                    description: L10n.CategoryGroup.emptyDescription
                 )
             } else {
                 List {
@@ -29,7 +29,7 @@ struct CategoryGroupListView: View {
                 }
             }
         }
-        .navigationTitle("Category Groups")
+        .navigationTitle(L10n.CategoryGroup.title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -61,7 +61,7 @@ struct CategoryGroupRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: group.iconName)
-                .font(.title2)
+                .font(.app(.title2))
                 .foregroundStyle(Color(hex: group.colorHex) ?? .blue)
                 .frame(width: 44, height: 44)
                 .background((Color(hex: group.colorHex) ?? .blue).opacity(0.15))
@@ -69,16 +69,16 @@ struct CategoryGroupRowView: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(group.name)
-                    .font(.headline)
+                    .font(.app(.headline))
                 
                 HStack(spacing: 8) {
-                    Text("\(group.categoryCount) categories")
-                        .font(.caption)
+                    Text(L10n.CategoryGroup.count(group.categoryCount))
+                        .font(.app(.caption))
                         .foregroundStyle(.secondary)
                     
                     if let budgetType = group.budgetCategoryType {
                         Text(budgetType.displayName)
-                            .font(.caption2)
+                            .font(.app(.caption2))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color(hex: budgetType.color)?.opacity(0.2) ?? Color.gray.opacity(0.2))
@@ -120,19 +120,19 @@ struct AddCategoryGroupView: View {
         NavigationStack {
             Form {
                 // Basic Info
-                Section("Group Info") {
-                    TextField("Group Name", text: $name)
+                Section(L10n.CategoryGroup.groupInfo) {
+                    TextField(L10n.CategoryGroup.name, text: $name)
                     
-                    TextField("Description (Optional)", text: $description)
+                    TextField(L10n.CategoryGroup.description, text: $description)
                 }
                 
                 // Appearance
-                Section("Appearance") {
+                Section(L10n.CategoryGroup.appearance) {
                     Button {
                         showIconPicker = true
                     } label: {
                         HStack {
-                            Text("Icon")
+                            Text(L10n.Wallet.icon)
                             Spacer()
                             Image(systemName: selectedIcon)
                                 .foregroundStyle(Color(hex: selectedColor) ?? .gray)
@@ -143,7 +143,7 @@ struct AddCategoryGroupView: View {
                         showColorPicker = true
                     } label: {
                         HStack {
-                            Text("Color")
+                            Text(L10n.Wallet.color)
                             Spacer()
                             Circle()
                                 .fill(Color(hex: selectedColor) ?? .gray)
@@ -155,22 +155,22 @@ struct AddCategoryGroupView: View {
                 // Budget Category Type
                 Section {
                     Picker("Budget Type", selection: $budgetCategoryType) {
-                        Text("None").tag(nil as BudgetCategoryType?)
+                        Text(L10n.CategoryGroup.none).tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)
                         }
                     }
                 } header: {
-                    Text("Categorization")
+                    Text(L10n.CategoryGroup.categorization)
                 } footer: {
-                    Text("Helps organize groups for template-based budgeting")
+                    Text(L10n.CategoryGroup.categorizationFooter)
                 }
                 
                 // Categories
                 Section {
                     if categories.filter({ $0.type == .expense }).isEmpty {
-                        Text("No expense categories available")
+                        Text(L10n.CategoryGroup.noExpenseCategories)
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(categories.filter { $0.type == .expense }) { category in
@@ -196,11 +196,11 @@ struct AddCategoryGroupView: View {
                         }
                     }
                 } header: {
-                    Text("Categories (\(selectedCategories.count) selected)")
+                    Text(L10n.CategoryGroup.selectedCount(selectedCategories.count))
                 }
                 
                 // Quick Templates
-                Section("Quick Templates") {
+                Section(L10n.CategoryGroup.quickTemplates) {
                     ForEach(PredefinedCategoryGroup.allCases, id: \.self) { template in
                         Button {
                             applyTemplate(template)
@@ -214,7 +214,7 @@ struct AddCategoryGroupView: View {
                                     Text(template.displayName)
                                         .foregroundStyle(.primary)
                                     Text(template.description)
-                                        .font(.caption)
+                                        .font(.app(.caption))
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -222,14 +222,14 @@ struct AddCategoryGroupView: View {
                     }
                 }
             }
-            .navigationTitle("New Category Group")
+            .navigationTitle(L10n.CategoryGroup.new)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button(L10n.Common.create) {
                         createGroup()
                         dismiss()
                     }
@@ -311,17 +311,16 @@ struct CategoryGroupDetailView: View {
             Section {
                 VStack(spacing: 16) {
                     Image(systemName: group.iconName)
-                        .font(.system(size: 48))
+                        .appFont(size: 48)
                         .foregroundStyle(Color(hex: group.colorHex) ?? .blue)
                     
                     VStack(spacing: 4) {
                         Text(group.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.app(.title2, weight: .bold))
                         
                         if let description = group.groupDescription {
                             Text(description)
-                                .font(.subheadline)
+                                .font(.app(.subheadline))
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
@@ -331,7 +330,7 @@ struct CategoryGroupDetailView: View {
                                 Image(systemName: budgetType.icon)
                                 Text(budgetType.displayName)
                             }
-                            .font(.caption)
+                            .font(.app(.caption))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color(hex: budgetType.color)?.opacity(0.2) ?? Color.gray.opacity(0.2))
@@ -348,7 +347,7 @@ struct CategoryGroupDetailView: View {
             // Categories Section
             Section {
                 if group.categories.isEmpty {
-                    Text("No categories in this group")
+                    Text(L10n.CategoryGroup.noCategoriesInGroup)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(group.categories) { category in
@@ -368,40 +367,40 @@ struct CategoryGroupDetailView: View {
                 Button {
                     showAddCategories = true
                 } label: {
-                    Label("Add Categories", systemImage: "plus.circle")
+                    Label(L10n.CategoryGroup.addCategories, systemImage: "plus.circle")
                 }
             } header: {
-                Text("Categories (\(group.categoryCount))")
+                Text(L10n.CategoryGroup.selectedCount(group.categoryCount))
             }
             
             // Linked Budgets
             if !linkedBudgets.isEmpty {
-                Section("Linked Budgets") {
+                Section(L10n.CategoryGroup.linkedBudgets) {
                     ForEach(linkedBudgets) { budget in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(budget.displayName)
-                                    .font(.subheadline)
+                                    .font(.app(.subheadline))
                                 Text(budget.periodDisplayString)
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             
                             Spacer()
                             
                             Text(budget.amountLimit.formatted(.currency(code: budget.currencyCode)))
-                                .font(.subheadline)
+                                .font(.app(.subheadline))
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
         }
-        .navigationTitle("Group Details")
+        .navigationTitle(L10n.CategoryGroup.details)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Edit") {
+                Button(L10n.Common.edit) {
                     showEditGroup = true
                 }
             }
@@ -450,9 +449,9 @@ struct EditCategoryGroupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Group Info") {
-                    TextField("Group Name", text: $name)
-                    TextField("Description (Optional)", text: $description)
+                Section(L10n.CategoryGroup.groupInfo) {
+                    TextField(L10n.CategoryGroup.name, text: $name)
+                    TextField(L10n.CategoryGroup.description, text: $description)
                 }
                 
                 Section("Appearance") {
@@ -480,9 +479,9 @@ struct EditCategoryGroupView: View {
                     }
                 }
                 
-                Section("Categorization") {
+                Section(L10n.CategoryGroup.categorization) {
                     Picker("Budget Type", selection: $budgetCategoryType) {
-                        Text("None").tag(nil as BudgetCategoryType?)
+                        Text(L10n.CategoryGroup.none).tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)
@@ -490,14 +489,14 @@ struct EditCategoryGroupView: View {
                     }
                 }
             }
-            .navigationTitle("Edit Group")
+            .navigationTitle(L10n.CategoryGroup.edit)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L10n.Common.save) {
                         saveChanges()
                         dismiss()
                     }
@@ -541,10 +540,10 @@ struct AddCategoriesToGroupSheet: View {
         NavigationStack {
             List {
                 if availableCategories.isEmpty {
-                    ContentUnavailableView(
-                        "All Categories Added",
+                    AppEmptyStateView(
+                        L10n.CategoryGroup.allAdded,
                         systemImage: "checkmark.circle",
-                        description: Text("All expense categories are already in this group.")
+                        description: L10n.CategoryGroup.allAddedDescription
                     )
                 } else {
                     ForEach(availableCategories) { category in
@@ -570,14 +569,15 @@ struct AddCategoriesToGroupSheet: View {
                     }
                 }
             }
-            .navigationTitle("Add Categories")
+
+            .navigationTitle(L10n.CategoryGroup.addCategories)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add (\(selectedCategories.count))") {
+                    Button("\(L10n.Common.add) (\(selectedCategories.count))") {
                         addSelectedCategories()
                         dismiss()
                     }

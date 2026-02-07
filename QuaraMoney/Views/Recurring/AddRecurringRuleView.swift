@@ -5,7 +5,7 @@ struct AddRecurringRuleView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Query(sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     @Query(sort: \Category.name) private var categories: [Category]
     
     @State private var name: String = ""
@@ -21,8 +21,8 @@ struct AddRecurringRuleView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Details") {
-                    TextField("Name (e.g., Netflix)", text: $name)
+                Section(L10n.Budget.details) {
+                    TextField(L10n.Recurring.name, text: $name)
                     
                     HStack {
                         Text(selectedWallet?.currencyCode ?? "USD")
@@ -31,31 +31,32 @@ struct AddRecurringRuleView: View {
                             .keyboardType(.decimalPad)
                     }
                     
-                    Picker("Frequency", selection: $frequency) {
-                        Text("Daily").tag(Frequency.daily)
-                        Text("Weekly").tag(Frequency.weekly)
-                        Text("Monthly").tag(Frequency.monthly)
-                        Text("Yearly").tag(Frequency.yearly)
+
+                    
+                    Picker(L10n.Recurring.frequency, selection: $frequency) {
+                        ForEach(Frequency.allCases) { freq in
+                            Text(freq.displayName).tag(freq)
+                        }
                     }
                     
-                    DatePicker("Start Date", selection: $startDate, displayedComponents: [.date])
+                    DatePicker(L10n.Budget.startDate, selection: $startDate, displayedComponents: [.date])
                 }
                 
-                Section("Assignments") {
+                Section(L10n.Recurring.assignments) {
                     if wallets.isEmpty {
-                        Text("Create a Wallet first to add subscriptions.")
+                        Text(L10n.Recurring.createWalletFirst)
                             .foregroundStyle(.red)
                     } else {
-                        Picker("Wallet", selection: $selectedWallet) {
-                            Text("Select Wallet").tag(nil as Wallet?)
+                        Picker(L10n.Wallet.selectWallet, selection: $selectedWallet) {
+                            Text(L10n.Wallet.selectWallet).tag(nil as Wallet?)
                             ForEach(wallets) { wallet in
                                 Text(wallet.name).tag(wallet as Wallet?)
                             }
                         }
                     }
                     
-                    Picker("Category", selection: $selectedCategory) {
-                        Text("Select Category").tag(nil as Category?)
+                    Picker(L10n.Category.select, selection: $selectedCategory) {
+                        Text(L10n.Category.select).tag(nil as Category?)
                         ForEach(categories) { category in
                             HStack {
                                 Image(systemName: category.icon)
@@ -66,14 +67,14 @@ struct AddRecurringRuleView: View {
                     }
                 }
             }
-            .navigationTitle("New Subscription")
+            .navigationTitle(L10n.Recurring.new)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(L10n.Common.add) {
                         saveRule()
                         dismiss()
                     }

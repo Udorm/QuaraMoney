@@ -1,7 +1,7 @@
 import Foundation
 
 /// Defines how a budget amount is calculated
-enum BudgetAmountType: Codable, Equatable {
+enum BudgetAmountType: Codable, Equatable, Sendable {
     /// Fixed amount budget (e.g., $500)
     case fixed(Decimal)
     
@@ -90,6 +90,17 @@ enum BudgetAmountType: Codable, Equatable {
             try container.encode(percent, forKey: .value)
         }
     }
+
+    
+    // MARK: - Helpers
+    
+    static func decode(from data: Data) -> BudgetAmountType? {
+        try? JSONDecoder().decode(BudgetAmountType.self, from: data)
+    }
+    
+    func encode() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
 }
 
 // MARK: - Budget Templates
@@ -105,23 +116,23 @@ enum BudgetTemplate: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .conservative: return "Conservative"
-        case .balanced: return "Balanced"
-        case .fiftyThirtyTwenty: return "50/30/20 Rule"
-        case .zeroBased: return "Zero-Based"
+        case .conservative: return L10n.BudgetTemplate.Conservative.title
+        case .balanced: return L10n.BudgetTemplate.Balanced.title
+        case .fiftyThirtyTwenty: return L10n.BudgetTemplate.FiftyThirtyTwenty.title
+        case .zeroBased: return L10n.BudgetTemplate.ZeroBased.title
         }
     }
     
     var description: String {
         switch self {
         case .conservative:
-            return "Tight spending limits with focus on savings. Best for aggressive debt payoff or savings goals."
+            return L10n.BudgetTemplate.Conservative.desc
         case .balanced:
-            return "Moderate approach balancing needs, wants, and savings equally."
+            return L10n.BudgetTemplate.Balanced.desc
         case .fiftyThirtyTwenty:
-            return "50% needs, 30% wants, 20% savings. Popular and sustainable approach."
+            return L10n.BudgetTemplate.FiftyThirtyTwenty.desc
         case .zeroBased:
-            return "Every dollar has a purpose. Assign all income to specific categories."
+            return L10n.BudgetTemplate.ZeroBased.desc
         }
     }
     
@@ -175,17 +186,17 @@ enum BudgetCategoryType: String, CaseIterable, Codable {
     
     var displayName: String {
         switch self {
-        case .needs: return "Needs"
-        case .wants: return "Wants"
-        case .savings: return "Savings & Debt"
+        case .needs: return L10n.BudgetCategoryType.Needs.title
+        case .wants: return L10n.BudgetCategoryType.Wants.title
+        case .savings: return L10n.BudgetCategoryType.Savings.title
         }
     }
     
     var description: String {
         switch self {
-        case .needs: return "Essential expenses you must pay"
-        case .wants: return "Non-essential spending for enjoyment"
-        case .savings: return "Building wealth and paying off debt"
+        case .needs: return L10n.BudgetCategoryType.Needs.desc
+        case .wants: return L10n.BudgetCategoryType.Wants.desc
+        case .savings: return L10n.BudgetCategoryType.Savings.desc
         }
     }
     

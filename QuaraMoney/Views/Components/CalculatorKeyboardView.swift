@@ -294,12 +294,10 @@ struct CalcButton: View {
             Group {
                 if let systemImage = systemImage {
                     Image(systemName: systemImage)
-                        .font(.headline)
-                        .fontWeight(.medium)
+                        .font(.app(.headline, weight: .medium))
                 } else if let text = text {
                     Text(text)
-                        .font(.headline)
-                        .fontWeight(.medium)
+                        .font(.app(.headline, weight: .medium))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -320,7 +318,7 @@ struct CalcButton: View {
         var body: some View {
             VStack {
                 Text("Expression: \(expression.isEmpty ? "0" : expression)")
-                    .font(.largeTitle)
+                    .font(.app(.largeTitle))
                 Text("Amount: \(amount.formatted())")
                 Spacer()
                 CalculatorKeyboardView(

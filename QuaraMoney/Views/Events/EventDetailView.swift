@@ -46,7 +46,7 @@ struct EventDetailView: View {
                     // Notes
                     if let notes = event.notes, !notes.isEmpty {
                         Text(notes)
-                            .font(.body)
+                            .font(.app(.body))
                     }
                     
                     // Budget visualization
@@ -75,7 +75,7 @@ struct EventDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showingAddTransaction = true }) {
-                    Label("Add Transaction", systemImage: "plus")
+                    Label(L10n.Transaction.add, systemImage: "plus")
                 }
             }
         }
@@ -131,13 +131,12 @@ struct BudgetProgressView: View {
             
             // Progress bar with labels
             HStack {
-                Text("Budget")
-                    .font(.subheadline)
+                Text(L10n.Event.budget)
+                    .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(spent.formatted(.currency(code: currencyCode))) / \(budget.formatted(.currency(code: currencyCode)))")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.app(.subheadline, weight: .medium))
             }
             
             // Progress bar
@@ -158,19 +157,19 @@ struct BudgetProgressView: View {
             
             // Percentage label
             HStack {
-                Text("\(Int(min(progress, 1.0) * 100))% spent")
-                    .font(.caption)
+                Text(L10n.Event.spent(Int(min(progress, 1.0) * 100)))
+                    .font(.app(.caption))
                     .foregroundStyle(.secondary)
                 
                 Spacer()
                 
                 if spent > budget {
-                    Text("Over budget by \((spent - budget).formatted(.currency(code: currencyCode)))")
-                        .font(.caption)
+                    Text(L10n.Event.overBudget((spent - budget).formatted(.currency(code: currencyCode))))
+                        .font(.app(.caption))
                         .foregroundStyle(.red)
                 } else {
-                    Text("\((budget - spent).formatted(.currency(code: currencyCode))) remaining")
-                        .font(.caption)
+                    Text(L10n.Event.remaining((budget - spent).formatted(.currency(code: currencyCode))))
+                        .font(.app(.caption))
                         .foregroundStyle(.green)
                 }
             }

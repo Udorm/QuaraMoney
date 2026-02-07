@@ -19,6 +19,15 @@ class AddTransactionViewModel: BaseViewModel {
     
     @Published var exchangeRate: Double = 1.0
     
+    // Multi-currency support: transaction currency (may differ from wallet currency)
+    @Published var selectedCurrencyCode: String = "USD" {
+        didSet {
+            if oldValue != selectedCurrencyCode {
+                updateTransactionCurrencyExchangeRate()
+            }
+        }
+    }
+    
     private var existingTransaction: Transaction?
     var isEditing: Bool { existingTransaction != nil }
     
@@ -36,13 +45,16 @@ class AddTransactionViewModel: BaseViewModel {
             self.note = txn.note ?? ""
             self.selectedWallet = txn.sourceWallet
             self.selectedEvent = txn.event
+            self.selectedCurrencyCode = txn.currencyCode
+            self.exchangeRate = NSDecimalNumber(decimal: txn.exchangeRate).doubleValue
             
             if txn.type == .transfer {
                 self.destinationWallet = txn.destinationWallet
-                self.exchangeRate = NSDecimalNumber(decimal: txn.exchangeRate).doubleValue
             } else {
                 self.selectedCategory = txn.category
             }
+        } else if let wallet = initialWallet {
+            self.selectedCurrencyCode = wallet.currencyCode
         }
     }
     
@@ -72,7 +84,7 @@ class AddTransactionViewModel: BaseViewModel {
         return true
     }
     
-    // Updates exchange rate when wallets change
+    // Updates exchange rate when wallets change (for transfers)
     func updateExchangeRate() {
         guard type == .transfer,
               let source = selectedWallet,
@@ -91,6 +103,38 @@ class AddTransactionViewModel: BaseViewModel {
         }
     }
     
+    // Updates exchange rate when transaction currency changes (for income/expense)
+    func updateTransactionCurrencyExchangeRate() {
+        guard let wallet = selectedWallet else {
+            exchangeRate = 1.0
+            return
+        }
+        
+        // If same currency, no conversion needed
+        if selectedCurrencyCode == wallet.currencyCode {
+            exchangeRate = 1.0
+            return
+        }
+        
+        // Get rate from transaction currency to wallet currency
+        let manager = CurrencyManager.shared
+        if let txnRate = manager.rates[selectedCurrencyCode],
+           let walletRate = manager.rates[wallet.currencyCode] {
+            // Exchange rate: how many wallet currency units per 1 transaction currency unit
+            self.exchangeRate = walletRate / txnRate
+        } else {
+            self.exchangeRate = 1.0
+        }
+    }
+    
+    // Sync currency to wallet when wallet changes (if not editing)
+    func syncCurrencyToWallet() {
+        if !isEditing, let wallet = selectedWallet {
+            selectedCurrencyCode = wallet.currencyCode
+            exchangeRate = 1.0
+        }
+    }
+    
     func saveTransaction() {
         guard evaluatedAmount > 0, let wallet = selectedWallet else { return }
         
@@ -98,13 +142,13 @@ class AddTransactionViewModel: BaseViewModel {
         if let existing = existingTransaction {
             transaction = existing
             transaction.amount = evaluatedAmount
-            transaction.currencyCode = wallet.currencyCode
+            transaction.currencyCode = selectedCurrencyCode
             transaction.date = date
             transaction.type = type
         } else {
             transaction = Transaction(
                 amount: evaluatedAmount,
-                currencyCode: wallet.currencyCode,
+                currencyCode: selectedCurrencyCode,
                 date: date,
                 type: type
             )
@@ -120,7 +164,8 @@ class AddTransactionViewModel: BaseViewModel {
         } else {
             transaction.category = selectedCategory
             transaction.destinationWallet = nil
-            transaction.exchangeRate = 1.0
+            // Store exchange rate for multi-currency income/expense
+            transaction.exchangeRate = Decimal(exchangeRate)
         }
         
         transaction.event = selectedEvent

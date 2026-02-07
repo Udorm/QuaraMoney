@@ -15,15 +15,15 @@ struct EventListView: View {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text(event.title)
-                                    .font(.headline)
+                                    .font(.app(.headline))
                                 Text(event.startDate.formatted(date: .long, time: .omitted))
-                                    .font(.caption)
+                                    .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
                             if let budget = event.totalBudget {
-                                Text("Budget: \(budget.formatted(.currency(code: "USD")))") // Currency assumption for budget
-                                    .font(.caption2)
+                                Text("\(L10n.Event.budget): \(budget.formatted(.currency(code: "USD")))") // Currency assumption for budget
+                                    .font(.app(.caption2))
                                     .padding(4)
                                     .background(.secondary.opacity(0.1))
                                     .cornerRadius(4)
@@ -33,11 +33,11 @@ struct EventListView: View {
                 }
                 .onDelete(perform: deleteEvent)
             }
-            .navigationTitle("Events")
+            .navigationTitle(L10n.Event.title)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddEvent = true }) {
-                        Label("Add Event", systemImage: "plus")
+                        Label(L10n.Event.add, systemImage: "plus")
                     }
                 }
             }
@@ -46,10 +46,10 @@ struct EventListView: View {
             }
             .overlay {
                 if events.isEmpty {
-                    ContentUnavailableView(
-                        "No Events",
+                    AppEmptyStateView(
+                        L10n.Event.noEvent,
                         systemImage: "party.popper",
-                        description: Text("Plan trips, parties, or projects.")
+                        description: L10n.Event.emptyState
                     )
                 }
             }

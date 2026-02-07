@@ -3,12 +3,23 @@ import Foundation
 /// Shared filter period enum used across ViewModels.
 /// Consolidates duplicate Period enums from HomeViewModel, AnalysisViewModel, WalletDetailViewModel.
 enum FilterPeriod: String, CaseIterable, Identifiable {
-    case thisMonth = "This Month"
-    case lastMonth = "Last Month"
-    case thisYear = "This Year"
-    case custom = "Custom"
+    case thisMonth
+    case lastMonth
+    case thisYear
+    case lastYear
+    case custom
     
     var id: String { self.rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .thisMonth: return L10n.Filter.thisMonth
+        case .lastMonth: return L10n.Filter.lastMonth
+        case .thisYear: return L10n.Filter.thisYear
+        case .lastYear: return L10n.Filter.lastYear
+        case .custom: return L10n.Period.custom
+        }
+    }
     
     /// Returns the start and end dates for this period
     func dateRange(customStart: Date? = nil, customEnd: Date? = nil) -> (start: Date, end: Date) {
@@ -38,6 +49,14 @@ enum FilterPeriod: String, CaseIterable, Identifiable {
             }
             return (start, end)
             
+        case .lastYear:
+            guard let thisYearStart = calendar.date(from: calendar.dateComponents([.year], from: now)),
+                  let start = calendar.date(byAdding: .year, value: -1, to: thisYearStart),
+                  let end = calendar.date(byAdding: .year, value: 1, to: start) else {
+                return (now, now)
+            }
+            return (start, end)
+            
         case .custom:
             let start = calendar.startOfDay(for: customStart ?? now)
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd ?? now) ?? now
@@ -55,7 +74,7 @@ enum FilterPeriod: String, CaseIterable, Identifiable {
             let end = customEnd ?? Date()
             return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
         default:
-            return self.rawValue
+            return self.displayName
         }
     }
 }
@@ -64,14 +83,27 @@ enum FilterPeriod: String, CaseIterable, Identifiable {
 
 /// Period enum specifically for AnalysisView with time-based navigation
 enum AnalysisPeriod: String, CaseIterable, Identifiable {
-    case day = "Day"
-    case week = "Week"
-    case month = "Month"
-    case sixMonths = "6 Months"
-    case year = "Year"
-    case custom = "Custom"
+    case day
+    case week
+    case month
+    case sixMonths
+    case year
+    case lastYear
+    case custom
     
     var id: String { self.rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .day: return L10n.Filter.day
+        case .week: return L10n.Filter.week
+        case .month: return L10n.Filter.month
+        case .sixMonths: return L10n.Filter.sixMonths
+        case .year: return L10n.Filter.year
+        case .lastYear: return L10n.Filter.lastYear
+        case .custom: return L10n.Period.custom
+        }
+    }
     
     /// Time grouping for chart display
     var grouping: TimeGrouping {
@@ -79,6 +111,7 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
         case .day: return .hour
         case .week, .month: return .day
         case .sixMonths, .year: return .month
+        case .lastYear: return .month
         case .custom: return .day // Will be auto-detected based on range
         }
     }
@@ -123,6 +156,14 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
             }
             return (startOfYear, endOfYear)
             
+        case .lastYear:
+            guard let startOfCurrentYear = calendar.date(from: calendar.dateComponents([.year], from: referenceDate)),
+                  let start = calendar.date(byAdding: .year, value: -1, to: startOfCurrentYear),
+                  let end = calendar.date(byAdding: .year, value: 1, to: start) else {
+                return (referenceDate, referenceDate)
+            }
+            return (start, end)
+            
         case .custom:
             let start = calendar.startOfDay(for: customStart ?? referenceDate)
             let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd ?? referenceDate) ?? referenceDate
@@ -144,6 +185,8 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
             return calendar.date(byAdding: .month, value: -3, to: date) ?? date
         case .year:
             return calendar.date(byAdding: .year, value: -1, to: date) ?? date
+        case .lastYear: // Navigate by year for last year view too
+            return calendar.date(byAdding: .year, value: -1, to: date) ?? date
         case .custom:
             return date
         }
@@ -162,6 +205,8 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
         case .sixMonths:
             return calendar.date(byAdding: .month, value: 3, to: date) ?? date
         case .year:
+            return calendar.date(byAdding: .year, value: 1, to: date) ?? date
+        case .lastYear:
             return calendar.date(byAdding: .year, value: 1, to: date) ?? date
         case .custom:
             return date
@@ -186,6 +231,8 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
             return "\(range.start.formatted(.dateTime.month(.abbreviated).year())) - \(rangeEnd.formatted(.dateTime.month(.abbreviated).year()))"
         case .year:
             return range.start.formatted(.dateTime.year())
+        case .lastYear:
+             return range.start.formatted(.dateTime.year())
         case .custom:
             return "\((customStart ?? Date()).formatted(date: .abbreviated, time: .omitted)) - \((customEnd ?? Date()).formatted(date: .abbreviated, time: .omitted))"
         }

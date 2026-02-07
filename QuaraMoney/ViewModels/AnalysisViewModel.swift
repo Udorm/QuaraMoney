@@ -6,6 +6,7 @@ import Combine
 @MainActor
 class AnalysisViewModel: ObservableObject {
     private var modelContext: ModelContext?
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Filters
     
@@ -79,15 +80,25 @@ class AnalysisViewModel: ObservableObject {
     }
     
     var filterDescription: String {
-        selectedPeriod.description(
+        let periodDesc = selectedPeriod.description(
             referenceDate: currentReferenceDate,
             customStart: customStartDate,
             customEnd: customEndDate
         )
+        let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
+        return "\(periodDesc) • \(walletDesc)"
     }
     
     init() {
         updateDateRange()
+        
+        // Listen for data updates (e.g., wallet archive/unarchive)
+        NotificationCenter.default.publisher(for: .dataDidUpdate)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshData()
+            }
+            .store(in: &cancellables)
     }
     
     /// Configure the model context - call this on view appear
@@ -152,22 +163,13 @@ class AnalysisViewModel: ObservableObject {
         let end = self.endDate
         let walletId = selectedWallet?.id
         
-        let descriptor: FetchDescriptor<Transaction>
-        
-        if let walletId = walletId {
-            descriptor = FetchDescriptor<Transaction>(
-                predicate: #Predicate { txn in
-                    txn.date >= start && txn.date < end &&
-                    (txn.sourceWallet?.id == walletId || txn.destinationWallet?.id == walletId)
-                }
-            )
-        } else {
-            descriptor = FetchDescriptor<Transaction>(
-                predicate: #Predicate { txn in
-                    txn.date >= start && txn.date < end
-                }
-            )
-        }
+        // Use centralized TransactionProcessor for consistent archived wallet filtering
+        let descriptor = TransactionProcessor.makeDescriptor(
+            startDate: start,
+            endDate: end,
+            walletId: walletId,
+            sortDescending: false  // We sort after processing anyway
+        )
         
         guard let modelContext = modelContext else { return }
         

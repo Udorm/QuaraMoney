@@ -1,0 +1,509 @@
+/* 
+  Localizable.strings (Khmer - ភាសាខ្មែរ)
+  QuaraMoney
+  
+  Khmer localization strings
+*/
+
+// MARK: - Common (ទូទៅ)
+"common.cancel" = "បោះបង់";
+"common.save" = "រក្សាទុក";
+"common.done" = "រួចរាល់";
+"common.add" = "បន្ថែម";
+"common.edit" = "កែ";
+"common.delete" = "លុប";
+"common.ok" = "យល់ព្រម";
+"common.back" = "ថយក្រោយ";
+"common.close" = "បិទ";
+"common.create" = "បង្កើត";
+"common.preview" = "មើលជាមុន";
+"common.seeAll" = "មើលទាំងអស់";
+"common.error" = "បញ្ហា";
+"common.advancedOptions" = "ជម្រើសកម្រិតខ្ពស់";
+"common.search" = "ស្វែងរក";
+
+// MARK: - Tab Bar (របារផ្ទាំង)
+"tab.home" = "ទំព័រដើម";
+"tab.wallets" = "កាបូប";
+"tab.analysis" = "ការវិភាគ";
+"tab.more" = "បន្ថែមទៀត";
+
+// MARK: - Home (ទំព័រដើម)
+"home.title" = "ទំព័រដើម";
+"home.noTransactions" = "គ្មានប្រតិបត្តិការក្នុងអំឡុងពេលនេះ";
+
+// MARK: - Wallets (កាបូប)
+"wallet.title" = "កាបូបលុយ";
+"wallet.add" = "បន្ថែមកាបូប";
+"wallet.totalBalance" = "សមតុល្យសរុប";
+"wallet.netWorth" = "ទ្រព្យសកម្មសរុប";
+"wallet.selectWallet" = "ជ្រើសរើសកាបូប";
+"wallet.name" = "ឈ្មោះ";
+"wallet.currency" = "រូបិយប័ណ្ណ";
+"wallet.color" = "ពណ៌";
+"wallet.icon" = "រូបតំណាង";
+"wallet.emptyState" = "ចុច + ដើម្បីបង្កើតកាបូបដំបូង";
+"wallet.customRange" = "តាមតម្រូវការ";
+"wallet.archive" = "ទុកក្នុងបណ្ណសារ";
+"wallet.unarchive" = "ឈប់ទុកក្នុងបណ្ណសារ";
+"wallet.archivedWallets" = "កាបូបក្នុងបណ្ណសារ";
+"wallet.deleteRelatedTransactionsWarning" = "ការលុបកាបូបនេះនឹងលុបប្រតិបត្តិការដែលពាក់ព័ន្ធចំនួន %d ផងដែរ។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។";
+"wallet.archiveInstead" = "ទុកក្នុងបណ្ណសារជំនួសវិញ";
+"wallet.deleteAnyway" = "លុបចោល";
+"wallet.restore" = "ស្តារឡើងវិញ";
+"wallet.archived" = "បានទុកក្នុងបណ្ណសារ";
+"wallet.noArchivedWallets" = "គ្មានកាបូបក្នុងបណ្ណសារ";
+"wallet.new" = "កាបូបថ្មី";
+"wallet.edit" = "កែសម្រួលកាបូប";
+"wallet.details" = "ព័ត៌មានលម្អិតកាបូប";
+"wallet.appearance" = "រូបរាង";
+"filter.status" = "ស្ថានភាព";
+"status.active" = "សកម្ម";
+"status.archived" = "បានទុកក្នុងបណ្ណសារ";
+"status.activeWallets" = "កាបូបសកម្ម";
+"status.archivedWallets" = "កាបូបក្នុងបណ្ណសារ";
+
+// MARK: - Transactions (ប្រតិបត្តិការ)
+"transaction.add" = "បន្ថែមប្រតិបត្តិការ";
+"transaction.amount" = "ចំនួនទឹកប្រាក់";
+"transaction.note" = "បន្ថែមកំណត់ចំណាំ...";
+"transaction.rate" = "អត្រា";
+"transaction.type" = "ប្រភេទ";
+"transaction.fromWallet" = "ពីកាបូប";
+"transaction.toWallet" = "ទៅកាន់កាបូប";
+"transaction.searchWallets" = "ស្វែងរកកាបូប";
+"transaction.noOtherWallets" = "គ្មានកាបូបផ្សេងទៀតទេ";
+"transaction.date" = "កាលបរិច្ឆេទ";
+"transaction.noCategoriesForType" = "គ្មានប្រភេទសម្រាប់ %@";
+"transaction.type.income" = "ចំណូល";
+"transaction.type.expense" = "ចំណាយ";
+"transaction.type.transfer" = "ផ្ទេរ";
+"transaction.currency" = "រូបិយប័ណ្ណ";
+
+"common.more" = "បន្ថែមទៀត";
+
+// MARK: - Categories (ប្រភេទ)
+"category.title" = "ប្រភេទ";
+"category.add" = "បន្ថែមប្រភេទ";
+"category.select" = "ជ្រើសរើសប្រភេទ";
+"category.name" = "ឈ្មោះប្រភេទ";
+"category.selectColor" = "ជ្រើសរើសពណ៌";
+"category.selectIcon" = "ជ្រើសរើសរូបតំណាង";
+
+// Predefined Categories (ប្រភេទកំណត់ជាមុន)
+"category.foodAndDrink" = "អាហារ និងភេសជ្ជៈ";
+"category.housing" = "លំនៅដ្ឋាន";
+"category.waterBill" = "វិក្កយបត្រទឹក";
+"category.electricityBill" = "វិក្កយបត្រអគ្គិសនី";
+"category.internetBill" = "វិក្កយបត្រអ៊ីនធឺណិត";
+"category.subscriptions" = "ការជាវ";
+"category.transportation" = "ការធ្វើដំណើរ";
+"category.personalLifestyle" = "ផ្ទាល់ខ្លួន និងរបៀបរស់នៅ";
+"category.health" = "សុខភាព";
+"category.financial" = "ហិរញ្ញវត្ថុ";
+"category.others" = "ផ្សេងៗ";
+"category.salary" = "ប្រាក់បៀវត្ស";
+"category.investments" = "ការវិនិយោគ";
+"category.services" = "សេវាកម្ម";
+"category.leisure" = "ការកម្សាន្ត";
+"category.education" = "ការអប់រំ";
+"category.tech" = "បច្ចេកវិទ្យា";
+
+// MARK: - Category Groups (ក្រុមប្រភេទ)
+"categoryGroup.title" = "ក្រុមប្រភេទ";
+"categoryGroup.new" = "ក្រុមប្រភេទថ្មី";
+"categoryGroup.details" = "ព័ត៌មានលម្អិតក្រុម";
+"categoryGroup.edit" = "កែសម្រួលក្រុម";
+"categoryGroup.addCategories" = "បន្ថែមប្រភេទ";
+"categoryGroup.name" = "ឈ្មោះក្រុម";
+"categoryGroup.description" = "ការពិពណ៌នា (ជម្រើស)";
+"categoryGroup.emptyState" = "គ្មានក្រុមប្រភេទ";
+"categoryGroup.emptyDescription" = "បង្កើតក្រុមដើម្បីរៀបចំប្រភេទដែលទាក់ទងគ្នាសម្រាប់ការរៀបចំថវិកាកាន់តែងាយស្រួល";
+"categoryGroup.count" = "%d ប្រភេទ";
+"categoryGroup.none" = "គ្មាន";
+"categoryGroup.categorization" = "ការបែងចែកប្រភេទ";
+"categoryGroup.categorizationFooter" = "ជួយរៀបចំក្រុមសម្រាប់ការរៀបចំថវិកាផ្អែកលើគំរូ";
+"categoryGroup.noExpenseCategories" = "គ្មានប្រភេទចំណាយដែលបើប្រើបាន";
+"categoryGroup.selectedCount" = "ប្រភេទ (%d បានជ្រើសរើស)";
+"categoryGroup.quickTemplates" = "គំរូសង្ខេប";
+"categoryGroup.groupInfo" = "ព័ត៌មានក្រុម";
+"categoryGroup.appearance" = "រូបរាង";
+"categoryGroup.linkedBudgets" = "ថវិកាភ្ជាប់គ្នា";
+"categoryGroup.noCategoriesInGroup" = "គ្មានប្រភេទក្នុងក្រុមនេះ";
+"categoryGroup.allAdded" = "ប្រភេទទាំងអស់ត្រូវបានបន្ថែម";
+"categoryGroup.allAddedDescription" = "ប្រភេទចំណាយទាំងអស់មាននៅក្នុងក្រុមនេះហើយ";
+
+// MARK: - Budget (ថវិកា)
+"budget.title" = "ថវិកា";
+"budget.new" = "ថវិកាថ្មី";
+"budget.edit" = "កែសម្រួលថវិកា";
+"budget.details" = "ព័ត៌មានលម្អិតថវិកា";
+"budget.insights" = "ការយល់ដឹងថវិកា";
+"budget.name" = "ឈ្មោះថវិកា";
+"budget.createCategoryGroup" = "បង្កើតក្រុមប្រភេទ";
+"budget.notifications" = "ការជូនដំណឹង";
+"budget.rollover" = "ផ្ទេរសល់";
+"budget.dailyAverage" = "មធ្យមភាគប្រចាំថ្ងៃ";
+"budget.dailyBudget" = "ថវិកាប្រចាំថ្ងៃ";
+"budget.projectedTotal" = "សរុបព្យាករណ៍";
+"budget.emptyState" = "គ្មានថវិកា";
+"budget.emptyDescription" = "រៀបចំថវិកាដើម្បីតាមដានទម្លាប់ចំណាយរបស់អ្នក";
+"budget.recurringOnly" = "ថ្លៃចំណាយប្រចាំប៉ុណ្ណោះ";
+"budget.totalSpent" = "ចំណាយសរុប";
+"budget.totalBudgeted" = "ថវិកាសរុប";
+"budget.onTrackCount" = "%d តាមដាន, %d លើស";
+"budget.percentUsed" = "%d%% នៃថវិកាបានប្រើ";
+"budget.overBy" = "លើសចំនួន %@";
+"budget.leftOf" = "នៅសល់នៃ %@";
+"budget.daysLeft" = "នៅសល់ %d ថ្ងៃ";
+"budget.ended" = "បានបញ្ចប់";
+"budget.nameOptional" = "ឈ្មោះថវិកា (ជម្រើស)";
+"budget.nameHint" = "ទុកឱ្យនៅទំនេរដើម្បីប្រើឈ្មោះប្រភេទ";
+"budget.whatToBudget" = "អ្វីដែលត្រូវដាក់ថវិកា";
+"budget.allExpenses" = "ថវិកាសម្រាប់ចំណាយទាំងអស់";
+"budget.limit" = "ដែនកំណត់ថវិកា";
+"budget.usePercentage" = "ប្រើភាគរយនៃចំណូល";
+"budget.ofIncome" = "នៃចំណូលប្រចាំខែ";
+"budget.periodType" = "ប្រភេទរយៈពេល";
+"budget.startDate" = "ថ្ងៃចាប់ផ្តើម";
+"budget.endDate" = "ថ្ងៃបញ្ចប់";
+"budget.recurring" = "ថវិកាវិលជុំ";
+"budget.rolloverDescription" = "ថវិកាដែលមិនប្រើនឹងត្រូវបានបន្តទៅវគ្គបន្ទាប់";
+"budget.resetDescription" = "ថវិកានឹងកំណត់ឡើងវិញទៅដែនកំណត់រៀងរាល់វគ្គ";
+"budget.linkSavings" = "ភ្ជាប់ទៅគោលដៅសន្សំ";
+"budget.target.category" = "ប្រភេទតែមួយ";
+"budget.target.group" = "ក្រុមប្រភេទ";
+"budget.target.total" = "ការចំណាយសរុប";
+"budget.filter.active" = "សកម្ម";
+"budget.filter.upcoming" = "នឹងមកដល់";
+"budget.filter.past" = "អតីតកាល";
+"budget.filter.all" = "ទាំងអស់";
+"budget.target.type" = "ប្រភេទថវិកា";
+"category.noAvailable" = "គ្មានប្រភេទ";
+"categoryGroup.noAvailable" = "គ្មានក្រុមប្រភេទ";
+"categoryGroup.create" = "បង្កើតក្រុមប្រភេទ";
+"categoryGroup.select" = "ជ្រើសរើសក្រុម";
+"savings.selectGoal" = "ជ្រើសរើសគោលដៅ";
+"budget.alertAt" = "ជូនដំណឹងនៅ %d%%";
+"budget.category" = "ប្រភេទថវិកា";
+"budget.summary" = "សង្ខេប";
+"budget.original" = "ថវិកាដើម";
+"budget.used" = "បានប្រើ";
+"budget.remaining" = "ដែលនៅសល់";
+"budget.overBudgetLabel" = "លើសថវិកា";
+"budget.rolloverTitle" = "ផ្ទេរសល់";
+"budget.linkedSavings" = "គោលដៅសន្សំដែលបានភ្ជាប់";
+"budget.alerts" = "ការជូនដំណឹង";
+"budget.enabled" = "បានបើក";
+"budget.disabled" = "បានបិទ";
+"budget.transactions" = "ប្រតិបត្តិការ (%d)";
+"budget.noTransactions" = "មិនទាន់មានប្រតិបត្តិការទេ";
+"budget.currentPeriod" = "រយៈពេលបច្ចុប្បន្ន";
+"budget.rolloverAmountLabel" = "ចំនួនទឹកប្រាក់ផ្ទេរសល់";
+
+// MARK: - Budget Category Types
+"budget.type.needs.title" = "តម្រូវការចាំបាច់";
+"budget.type.needs.desc" = "ចំណាយចាំបាច់ដែលអ្នកត្រូវតែបង់";
+"budget.type.wants.title" = "តម្រូវការបន្ថែម";
+"budget.type.wants.desc" = "ការចំណាយមិនចាំបាច់សម្រាប់ការសប្បាយ";
+"budget.type.savings.title" = "ការសន្សំ និងបំណុល";
+"budget.type.savings.desc" = "កសាងទ្រព្យសម្បត្តិ និងសងបំណុល";
+
+// MARK: - Budget Templates
+"template.conservative.title" = "អភិរក្ស";
+"template.conservative.desc" = "ដែនកំណត់ចំណាយតឹងរឹងដោយផ្តោតលើការសន្សំ";
+"template.balanced.title" = "តុល្យភាព";
+"template.balanced.desc" = "វិធីសាស្រ្តមធ្យម ថ្លឹងថ្លែងតម្រូវការចាំបាច់ តម្រូវការបន្ថែម និងការសន្សំស្មើគ្នា";
+"template.503020.title" = "ច្បាប់ ៥០/៣០/២០";
+"template.503020.desc" = "៥០% តម្រូវការចាំបាច់, ៣០% តម្រូវការបន្ថែម, ២០% ការសន្សំ";
+"template.zeroBased.title" = "ផ្អែកលើសូន្យ";
+"template.zeroBased.desc" = "គ្រប់ដុល្លារមានគោលដៅ";
+
+// MARK: - Budget Setup Wizard
+"wizard.step" = "ជំហាន %d នៃ %d";
+"wizard.welcome.title" = "សូមស្វាគមន៍";
+"wizard.welcome.subtitle" = "តោះរៀបចំថវិការបស់អ្នក";
+"wizard.selectTemplate.title" = "ជ្រើសរើសវិធីសាស្រ្ត";
+"wizard.selectTemplate.subtitle" = "ជ្រើសរើសវិធីសាស្រ្តថវិកាដែលសមនឹងអ្នក";
+"wizard.enterIncome.title" = "ចំណូលរបស់អ្នក";
+"wizard.enterIncome.subtitle" = "តើអ្នករកចំណូលបានប៉ុន្មានក្នុងមួយខែ?";
+"wizard.assignCategories.title" = "កំណត់ប្រភេទ";
+"wizard.assignCategories.subtitle" = "រៀបចំប្រភេទចំណាយរបស់អ្នក";
+"wizard.customize.title" = "កែសម្រួល";
+"wizard.customize.subtitle" = "កែសម្រួលភាគរយប្រសិនបើត្រូវការ";
+"wizard.review.title" = "ត្រួតពិនិត្យ";
+"wizard.review.subtitle" = "ត្រួតពិនិត្យផែនការថវិការបស់អ្នក";
+"wizard.done.title" = "រួចរាល់";
+"wizard.done.subtitle" = "ថវិការបស់អ្នករួចរាល់ហើយ!";
+
+"wizard.feature.limits.title" = "កំណត់ដែនកំណត់ចំណាយ";
+"wizard.feature.limits.desc" = "បង្កើតថវិកាសម្រាប់ប្រភេទផ្សេងៗ";
+"wizard.feature.alerts.title" = "ទទួលបានការជូនដំណឹង";
+"wizard.feature.alerts.desc" = "ដឹងនៅពេលអ្នកជិតដល់ដែនកំណត់";
+"wizard.feature.track.title" = "តាមដានវឌ្ឍនភាព";
+"wizard.feature.track.desc" = "មើលថាអ្នកធ្វើបានល្អកម្រិតណា";
+"wizard.feature.autoRenew.title" = "បន្តដោយស្វ័យប្រវត្តិ";
+"wizard.feature.autoRenew.desc" = "ថវិកាកំណត់ឡើងវិញដោយស្វ័យប្រវត្តិរៀងរាល់វគ្គ";
+
+"wizard.income.prompt" = "បញ្ចូលចំណូលប្រចាំខែរបស់អ្នក (ក្រោយបង់ពន្ធ)";
+"wizard.basedOn" = "ផ្អែកលើ %@៖";
+"wizard.assign.prompt" = "កំណត់ប្រភេទចំណាយរបស់អ្នកទៅប្រភេទថវិកានីមួយៗ";
+"wizard.selected" = "បានជ្រើសរើស %d";
+"wizard.totalAllocation" = "ការបែងចែកសរុប";
+"wizard.budgetsToCreate" = "ថវិកាដែលត្រូវបង្កើត";
+"wizard.review.point1" = "• ថវិកាប្រភេទចំណាយ ៣ (តម្រូវការចាំបាច់, តម្រូវការបន្ថែម, ការសន្សំ)";
+"wizard.review.point2" = "• ប្រចាំខែដដែលៗជាមួយនឹងការបន្តដោយស្វ័យប្រវត្តិ";
+"wizard.review.point3" = "• ការជូនដំណឹងនៅចំណាយ ៨០% និង ១០០%";
+"wizard.allSet.title" = "អ្នករួចរាល់ហើយ!";
+"wizard.allSet.message" = "ថវិការបស់អ្នកត្រូវបានបង្កើត អ្នកអាចកែតម្រូវវានៅពេលក្រោយពីអេក្រង់ថវិកា";
+"wizard.allSet.point1" = "មើលថវិការបស់អ្នកនៅក្នុងផ្ទាំងវិភាគ";
+"wizard.allSet.point2" = "ទទួលបានការជូនដំណឹងនៅពេលជិតដល់ដែនកំណត់";
+"wizard.allSet.point3" = "តាមដានវឌ្ឍនភាពរបស់អ្នកជារៀងរាល់ថ្ងៃ";
+
+"wizard.back" = "ថយក្រោយ";
+"wizard.continue" = "បន្ត";
+"wizard.createBudgets" = "បង្កើតថវិកា";
+
+// MARK: - Budget Periods (រយៈពេលថវិកា)
+"period.daily" = "ប្រចាំថ្ងៃ";
+"period.weekly" = "ប្រចាំសប្ដាហ៍";
+"period.monthly" = "ប្រចាំខែ";
+"period.quarterly" = "ប្រចាំត្រីមាស";
+"period.yearly" = "ប្រចាំឆ្នាំ";
+"period.biweekly" = "ពីរសប្ដាហ៍ម្តង";
+"period.custom" = "ផ្ទាល់ខ្លួន";
+
+// MARK: - Filter Periods (រយៈពេលត្រង)
+"filter.thisMonth" = "ខែនេះ";
+"filter.lastMonth" = "ខែមុន";
+"filter.thisYear" = "ឆ្នាំនេះ";
+"filter.day" = "ថ្ងៃ";
+"filter.week" = "សប្ដាហ៍";
+"filter.month" = "ខែ";
+"filter.sixMonths" = "៦ ខែ";
+"filter.year" = "ឆ្នាំ";
+"filter.lastYear" = "ឆ្នាំមុន";
+
+// MARK: - Analysis (ការវិភាគ)
+"analysis.title" = "ការវិភាគ";
+"analysis.transactionType" = "ប្រភេទប្រតិបត្តិការ";
+"analysis.totalSpending" = "ចំណាយសរុប";
+"analysis.totalIncome" = "ចំណូលសរុប";
+"analysis.startDate" = "កាលបរិច្ឆេទចាប់ផ្ដើម";
+"analysis.endDate" = "កាលបរិច្ឆេទបញ្ចប់";
+"analysis.noData" = "គ្មានទិន្នន័យ";
+"analysis.noTransactionsForPeriod" = "រកមិនឃើញប្រតិបត្តិការសម្រាប់រយៈពេលនេះ";
+"analysis.topSpendingCategories" = "ប្រភេទចំណាយខ្ពស់";
+"analysis.topIncomeCategories" = "ប្រភេទចំណូលខ្ពស់";
+"filter.title" = "តម្រង";
+"filter.period" = "រយៈពេល";
+"filter.wallet" = "កាបូប";
+"filter.allWallets" = "កាបូបទាំងអស់";
+
+// MARK: - Events (ព្រឹត្តិការណ៍)
+"event.title" = "ព្រឹត្តិការណ៍";
+"event.new" = "ព្រឹត្តិការណ៍ថ្មី";
+"event.add" = "បន្ថែមព្រឹត្តិការណ៍";
+"event.name" = "ឈ្មោះព្រឹត្តិការណ៍";
+"event.budget" = "ថវិកា";
+"event.budgetOptional" = "ថវិកាសរុប (ជម្រើស)";
+"event.notes" = "កំណត់ចំណាំ";
+"event.select" = "ជ្រើសរើសព្រឹត្តិការណ៍";
+"event.emptyState" = "រៀបចំការធ្វើដំណើរ ពិធីជប់លៀង ឬគម្រោង";
+"event.overBudget" = "លើសថវិកាចំនួន %@";
+"event.remaining" = "%@ នៅសល់";
+"event.spent" = "បានចំណាយ %d%%";
+"event.noEvent" = "គ្មានព្រឹត្តិការណ៍";
+"event.details" = "ព័ត៌មានលម្អិតព្រឹត្តិការណ៍";
+"event.budgetNotes" = "ថវិកា និង កំណត់ចំណាំ";
+
+// MARK: - Savings Goals (គោលដៅសន្សំ)
+"savings.title" = "គោលដៅសន្សំ";
+"savings.new" = "គោលដៅសន្សំថ្មី";
+"savings.edit" = "កែសម្រួលគោលដៅ";
+"savings.goalName" = "ឈ្មោះគោលដៅ";
+"savings.targetAmount" = "ចំនួនគោលដៅ";
+"savings.totalSaved" = "សន្សំសរុប";
+"savings.totalTarget" = "គោលដៅសរុប";
+"savings.addContribution" = "បន្ថែមវិភាគទាន";
+"savings.targetDate" = "កាលបរិច្ឆេទគោលដៅ";
+"savings.daysRemaining" = "ថ្ងៃនៅសល់";
+"savings.remaining" = "នៅសល់";
+"savings.monthlyNeeded" = "ត្រូវការប្រចាំខែ";
+"savings.status" = "ស្ថានភាព";
+"savings.suggestedMonthly" = "ការណែនាំប្រចាំខែ";
+"savings.timeline" = "បន្ទាត់ពេលវេលា";
+"savings.timelineDescription" = "យើងនឹងគណនាចំនួនដែលអ្នកត្រូវសន្សំក្នុងមួយខែ";
+"savings.markActive" = "សម្គាល់ថាសកម្ម";
+"savings.emptyState" = "បង្កើតគោលដៅសន្សំដើម្បីចាប់ផ្ដើមតាមដានការរីកចម្រើនរបស់អ្នកឆ្ពោះទៅគោលដៅហិរញ្ញវត្ថុ";
+
+// MARK: - Recurring / Subscriptions (ការជាវ)
+"recurring.title" = "ការជាវ";
+"recurring.new" = "ការជាវថ្មី";
+"recurring.add" = "បន្ថែមការជាវ";
+"recurring.name" = "ឈ្មោះ (ឧ. Netflix)";
+"recurring.next" = "បន្ទាប់៖ %@";
+"recurring.emptyState" = "បន្ថែមវិក្កយបត្រដែលកើតឡើងម្តងហើយម្តងទៀតដើម្បីតាមដានដោយស្វ័យប្រវត្តិ";
+"recurring.createWalletFirst" = "បង្កើតកាបូបមុនដើម្បីបន្ថែមការជាវ";
+"recurring.frequency" = "ភាពញឹកញាប់";
+"recurring.assignments" = "ការចាត់តាំង";
+"recurring.preview" = "មើលជាមុន";
+"recurring.emptyTitle" = "គ្មានការជាវ";
+
+// MARK: - Frequencies (ភាពញឹកញាប់)
+"frequency.daily" = "ប្រចាំថ្ងៃ";
+"frequency.weekly" = "ប្រចាំសប្ដាហ៍";
+"frequency.monthly" = "ប្រចាំខែ";
+"frequency.yearly" = "ប្រចាំឆ្នាំ";
+
+// MARK: - Settings (ការកំណត់)
+"settings.title" = "ការកំណត់";
+"settings.general" = "ទូទៅ";
+"settings.defaultCurrency" = "រូបិយប័ណ្ណលំនាំដើម";
+"settings.themeColors" = "រចនាប័ទ្ម និងពណ៌";
+"settings.importCSV" = "នាំចូលពី CSV";
+"settings.exchangeRates" = "អត្រាប្តូរប្រាក់ (មូលដ្ឋាន៖ USD)";
+"settings.refreshRates" = "ធ្វើឱ្យអត្រាថ្មី";
+"settings.dataManagement" = "ការគ្រប់គ្រងទិន្នន័យ";
+"settings.deleteAllTransactions" = "លុបប្រតិបត្តិការទាំងអស់";
+"settings.populateSampleData" = "បំពេញទិន្នន័យគំរូ";
+"settings.resetOnboarding" = "កំណត់ការណែនាំឡើងវិញ";
+"settings.version" = "QuaraMoney ជំនាន់ 1.0";
+"settings.language" = "ភាសា";
+"settings.useSidebarOniPad" = "ប្រើរបារចំហៀងលើ iPad";
+
+// MARK: - Data Management Alerts (ការជូនដំណឹងគ្រប់គ្រងទិន្នន័យ)
+"alert.populateData.title" = "បំពេញទិន្នន័យគំរូ?";
+"alert.populateData.message" = "នេះនឹងលុបទិន្នន័យដែលមានស្រាប់ទាំងអស់ ហើយជំនួសវាដោយកាបូប ប្រភេទ និងប្រតិបត្តិការគំរូ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ";
+"alert.populateData.confirm" = "បំពេញ";
+
+"alert.deleteTransactions.title" = "លុបប្រតិបត្តិការទាំងអស់?";
+"alert.deleteTransactions.message" = "តើអ្នកប្រាកដជាចង់លុបប្រតិបត្តិការទាំងអស់មែនទេ? កាបូប និងប្រភេទនឹងត្រូវរក្សាទុក សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ";
+
+// MARK: - Theme Settings (ការកំណត់រចនាប័ទ្ម)
+"theme.title" = "រចនាប័ទ្ម និងពណ៌";
+"theme.incomeColor" = "ពណ៌ចំណូល";
+"theme.expenseColor" = "ពណ៌ចំណាយ";
+"theme.resetDefaults" = "កំណត់ទៅលំនាំដើម";
+
+// MARK: - CSV Import (នាំចូល CSV)
+"csv.title" = "នាំចូលប្រតិបត្តិការ";
+"csv.selectFile" = "ជ្រើសរើសឯកសារ CSV";
+"csv.selectCategory" = "ជ្រើសរើសប្រភេទ";
+
+// MARK: - More (បន្ថែមទៀត)
+"more.title" = "បន្ថែមទៀត";
+"more.planningTools" = "ឧបករណ៍រៀបចំ";
+"more.budgetWizard" = "អ្នកជំនួយរៀបចំថវិកា";
+"more.features" = "មុខងារ";
+"more.management" = "ការគ្រប់គ្រង";
+"more.app" = "កម្មវិធី";
+
+// MARK: - Notifications (ការជូនដំណឹង)
+"notifications.title" = "ការជូនដំណឹង";
+"notifications.markAllRead" = "សម្គាល់ទាំងអស់ថាអានហើយ";
+"notifications.clearAll" = "សម្អាតទាំងអស់";
+"notifications.read" = "អាន";
+
+// MARK: - Onboarding (ការណែនាំ)
+"onboarding.welcome" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
+"onboarding.tagline" = "គ្រប់គ្រងហិរញ្ញវត្ថុរបស់អ្នក\nតាមដានចំណាយ រៀបចំថវិកាឱ្យឆ្លាត និងសន្សំបានច្រើន";
+"onboarding.selectCurrency" = "ជ្រើសរើសរូបិយប័ណ្ណ";
+"onboarding.currencyDescription" = "ជ្រើសរើសរូបិយប័ណ្ណលំនាំដើមសម្រាប់រាយការណ៍\nអ្នកអាចផ្លាស់ប្តូរវាពេលក្រោយ";
+"onboarding.personalizeColors" = "ប្ដូរពណ៌តាមបំណង";
+"onboarding.colorDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូល និងចំណាយរបស់អ្នក";
+"onboarding.allSet" = "អ្នករួចរាល់ហើយ!";
+"onboarding.getStarted" = "តោះបង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្ដើម";
+
+// MARK: - Status Messages (សារស្ថានភាព)
+"status.deleting" = "កំពុងលុប...";
+"status.populating" = "កំពុងបំពេញ...";
+"status.populatingData" = "កំពុងបំពេញទិន្នន័យ...";
+
+// MARK: - Budget Amount Types (ប្រភេទចំនួនថវិកា)
+"amountType.fixed" = "ចំនួនទឹកប្រាក់ថេរ";
+"amountType.percentage" = "% នៃចំណូល";
+
+// MARK: - Notification Types (ប្រភេទការជូនដំណឹង)
+"notificationType.threshold" = "នៅកម្រិតកំណត់";
+"notificationType.exceeded" = "នៅពេលលើស";
+"notificationType.daily" = "សង្ខេបប្រចាំថ្ងៃ";
+
+// MARK: - Savings Goals (Detailed)
+"savings.activeGoals" = "គោលដៅសកម្ម";
+"savings.completedGoals" = "គោលដៅបានបញ្ចប់";
+"savings.noGoals" = "មិនទាន់មានគោលដៅសន្សំ";
+"savings.noGoalsDescription" = "បង្កើតគោលដៅសន្សំដើម្បីតាមដានវឌ្ឍនភាពរបស់អ្នក";
+"savings.quickStart" = "ចាប់ផ្តើមរហ័ស";
+"savings.wallet" = "កាបូប";
+"savings.walletDescription" = "តាមដានការចូលរួមពីកាបូបជាក់លាក់";
+"savings.automation" = "ស្វ័យប្រវត្តិកម្ម";
+"savings.autoContribute" = "រំលឹកការចូលរួមស្វ័យប្រវត្តិ";
+"savings.autoContributeDescription" = "ទទួលបានការរំលឹកដើម្បីចូលរួមជាប្រចាំ";
+"savings.enterContributionAmount" = "បញ្ចូលចំនួនទឹកប្រាក់ចូលរួមជា %@";
+"savings.progress" = "វឌ្ឍនភាព";
+"savings.complete" = "បានបញ្ចប់!";
+"savings.markActive" = "សម្គាល់ថាសកម្ម";
+"savings.template.emergencyFund.title" = "មូលនិធិគ្រាអាសន្ន";
+"savings.template.emergencyFund.desc" = "៣-៦ ខែនៃការចំណាយប្រចាំថ្ងៃសម្រាប់ស្ថានការណ៍មិនរំពឹងទុក";
+"savings.template.vacation.title" = "ដំណើរកម្សាន្ត";
+"savings.template.vacation.desc" = "មូលនិធិសម្រាប់ការធ្វើដំណើរ និងបទពិសោធន៍";
+"savings.template.carPurchase.title" = "ទិញរថយន្ត";
+"savings.template.carPurchase.desc" = "ប្រាក់កក់ ឬការទិញរថយន្តពេញលេញ";
+"savings.template.homePurchase.title" = "កក់ប្រាក់ទិញផ្ទះ";
+"savings.template.homePurchase.desc" = "ប្រាក់កក់សម្រាប់ការទិញផ្ទះរបស់អ្នក";
+"savings.template.retirement.title" = "ចូលនិវត្តន៍";
+"savings.template.retirement.desc" = "ការសន្សំរយៈពេលវែងសម្រាប់ការចូលនិវត្តន៍";
+"savings.template.education.title" = "ការសិក្សា";
+"savings.template.education.desc" = "ថ្លៃសិក្សា វគ្គសិក្សា ឬការអភិវឌ្ឍន៍វិជ្ជាជីវៈ";
+"savings.template.wedding.title" = "អាពាហ៍ពិពាហ៍";
+"savings.template.wedding.desc" = "សន្សំសម្រាប់ថ្ងៃពិសេសរបស់អ្នក";
+"savings.template.debtPayoff.title" = "សងបំណុល";
+"savings.template.debtPayoff.desc" = "សងកម្ចី ប័ណ្ណឥណទាន ឬបំណុលផ្សេងៗ";
+"savings.template.electronics.title" = "គ្រឿងអេឡិចត្រូនិក";
+"savings.template.electronics.desc" = "ទូរស័ព្ទថ្មី កុំព្យូទ័រយួរដៃ ឬឧបករណ៍ផ្សេងៗ";
+"savings.template.custom.title" = "គោលដៅ​ផ្ទាល់ខ្លួន";
+"savings.template.custom.desc" = "បង្កើតគោលដៅសន្សំផ្ទាល់ខ្លួនរបស់អ្នក";
+
+"savings.status.reached" = "សម្រេចគោលដៅហើយ! 🎉";
+"savings.status.pastDate" = "ហួសកាលបរិច្ឆេទគោលដៅ";
+"savings.status.today" = "កាលបរិច្ឆេទគោលដៅគឺថ្ងៃនេះ";
+"savings.status.noDate" = "គ្មានកាលបរិច្ឆេទគោលដៅ";
+"savings.status.daysLeft" = "នៅសល់ %d ថ្ងៃ";
+"savings.status.weeksLeft" = "នៅសល់ %d សប្តាហ៍";
+"savings.status.monthsLeft" = "នៅសល់ %d ខែ";
+
+// MARK: - Onboarding (ការចាប់ផ្តើម)
+"onboarding.getStarted" = "ចាប់ផ្តើម";
+"onboarding.welcomeTitle" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
+"onboarding.welcomeDescription" = "គ្រប់គ្រងហិរញ្ញវត្ថុរបស់អ្នក\nតាមដានការចំណាយ និងសន្សំ";
+"onboarding.selectCurrency" = "ជ្រើសរើសរូបិយប័ណ្ណ";
+"onboarding.currencyDescription" = "ជ្រើសរើសរូបិយប័ណ្ណលំនាំដើមរបស់អ្នក\nអ្នកអាចប្តូរវានៅពេលក្រោយ";
+"onboarding.personalizeColors" = "ប្ដូរពណ៌តាមចិត្ត";
+"onboarding.themeDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូលនិងចំណាយរបស់អ្នក";
+"onboarding.incomeColor" = "ពណ៌ចំណូល";
+"onboarding.expenseColor" = "ពណ៌ចំណាយ";
+"onboarding.finalTitle" = "រួចរាល់ហើយ!";
+"onboarding.finalDescription" = "បង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្តើម";
+
+// MARK: - Notifications (ការជូនដំណឹង)
+"notifications.title" = "ការជូនដំណឹង";
+"notifications.emptyTitle" = "គ្មានការជូនដំណឹង";
+"notifications.emptyDescription" = "ការជូនដំណឹងថវិកានឹងបង្ហាញនៅទីនេះ";
+"notifications.read" = "អាន";
+"notifications.markAllRead" = "សម្គាល់ថាបានអានទាំងអស់";
+"notifications.clearAll" = "សម្អាតទាំងអស់";
+"notifications.dailySummaryTitle" = "សង្ខេបថវិកាប្រចាំថ្ងៃ";
+"notifications.dailySummaryBody" = "ពិនិត្យមើលវឌ្ឍនភាពចំណាយថ្ងៃនេះ";
+"notifications.viewBudget" = "មើលថវិកា";
+"notifications.viewAnalysis" = "មើលការវិភាគ";
+"notifications.dismiss" = "បិទ";
+
+"alert.budget.info50" = "អ្នកបានចំណាយ ៥០%% នៃថវិកា %@ របស់អ្នកហើយ";
+"alert.budget.warning80" = "ព្រមាន៖ ៨០%% នៃថវិកា %@ របស់អ្នកត្រូវបានចំណាយ";
+"alert.budget.exceeded" = "អ្នកបានចំណាយលើសថវិកា %@ របស់អ្នកហើយ!";
+"alert.budget.projectedOverspend" = "ក្នុងអត្រានេះ អ្នកនឹងចំណាយលើសថវិកា %@ របស់អ្នក";
+
+"common.next" = "បន្ទាប់";
+"analysis.net" = "លុយលស់";
+

@@ -15,8 +15,8 @@ struct IconPickerView: View {
                 ForEach(categories, id: \.self) { category in
                     if let icons = AppTheme.icons[category] {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(category)
-                                .font(.headline)
+                            Text(getLocalizedCategory(category))
+                                .font(.app(.headline))
                                 .foregroundStyle(.secondary)
                                 .padding(.leading, 4)
                             
@@ -28,7 +28,7 @@ struct IconPickerView: View {
                                             .frame(width: 50, height: 50)
                                         
                                         Image(systemName: icon)
-                                            .font(.system(size: 22))
+                                            .appFont(size: 22) // Icons are okay as system usually
                                             .foregroundColor(selectedIcon == icon ? .white : .primary)
                                     }
                                     .onTapGesture {
@@ -45,6 +45,21 @@ struct IconPickerView: View {
                 }
             }
             .padding(.vertical)
+        }
+    }
+    
+    private func getLocalizedCategory(_ category: String) -> String {
+        switch category {
+        case "Finance": return L10n.Category.financial
+        case "Essentials": return L10n.Category.housing // Approximate mapping
+        case "Food & Drink": return L10n.Category.foodAndDrink
+        case "Transport": return L10n.Category.transportation
+        case "Services": return L10n.Category.services
+        case "Leisure": return L10n.Category.leisure
+        case "Education": return L10n.Category.education
+        case "Tech": return L10n.Category.tech
+        case "Misc": return L10n.Category.others
+        default: return category
         }
     }
 }

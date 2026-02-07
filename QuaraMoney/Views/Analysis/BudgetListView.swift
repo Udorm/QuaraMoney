@@ -39,52 +39,54 @@ struct BudgetListView: View {
     var body: some View {
         Group {
             if budgets.isEmpty {
-                ContentUnavailableView(
-                    "No Budgets",
+                AppEmptyStateView(
+                    L10n.Budget.emptyState,
                     systemImage: "chart.bar",
-                    description: Text("Set up a budget to track your spending habits.")
+                    description: L10n.Budget.emptyDescription
                 )
             } else {
                 List {
-                    // Summary section for active budgets
+                    // Summary section in its own card (for consistency with SavingsGoalListView)
                     if filterPeriod == .active || filterPeriod == .all {
-                        BudgetSummarySection(
-                            budgets: filteredBudgets.filter { $0.isActive },
-                            transactions: transactions
-                        )
-                    }
-                    
-                    // Budget list
-                    ForEach(filteredBudgets) { budget in
-                        NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
-                            BudgetRowView(
-                                budget: budget,
-                                spent: calculateSpending(for: budget),
-                                budgetLimitConverted: convertBudgetLimit(for: budget)
+                        Section {
+                            BudgetSummarySection(
+                                budgets: filteredBudgets.filter { $0.isActive },
+                                transactions: transactions
                             )
                         }
                     }
-                    .onDelete(perform: deleteBudgets)
+                    
+                    // Budget list section
+                    Section(header: Text(headerTitle).font(.app(.subheadline)).textCase(nil)) {
+                        ForEach(filteredBudgets) { budget in
+                            NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
+                                BudgetRowView(
+                                    budget: budget,
+                                    spent: calculateSpending(for: budget),
+                                    budgetLimitConverted: convertBudgetLimit(for: budget)
+                                )
+                            }
+                        }
+                        .onDelete(perform: deleteBudgets)
+                    }
                 }
             }
         }
-        .navigationTitle("Budgets")
+        .navigationTitle(L10n.Budget.title)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    Picker("Period", selection: $filterPeriod) {
-                        ForEach(BudgetFilterPeriod.allCases) { period in
-                            Label(period.displayName, systemImage: period.icon)
-                                .tag(period)
-                        }
+                FilterSheetButton(
+                    selectedPeriod: $filterPeriod,
+                    selectedWallet: .constant(nil),
+                    customStartDate: .constant(Date()),
+                    customEndDate: .constant(Date()),
+                    wallets: [],
+                    defaultPeriod: .active,
+                    showWalletFilter: false
+                ) {
+                    Section {
+                        Toggle(L10n.Budget.recurringOnly, isOn: $showRecurringOnly)
                     }
-                    
-                    Divider()
-                    
-                    Toggle("Recurring Only", isOn: $showRecurringOnly)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .symbolVariant(filterPeriod != .active || showRecurringOnly ? .fill : .none)
                 }
             }
             
@@ -101,9 +103,15 @@ struct BudgetListView: View {
         }
     }
     
+    private var headerTitle: String {
+        if showRecurringOnly {
+            return "\(filterPeriod.displayName) • \(L10n.Budget.recurringOnly)"
+        }
+        return filterPeriod.displayName
+    }
+    
     /// Calculate spending for a budget by filtering transactions and converting to preferred currency
     private func calculateSpending(for budget: Budget) -> Decimal {
-        let calendar = Calendar.current
         let periodRange = budget.periodDateRange
         
         // Filter transactions within the budget period
@@ -162,7 +170,7 @@ struct BudgetListView: View {
 
 // MARK: - Budget Filter Period
 
-enum BudgetFilterPeriod: String, CaseIterable, Identifiable {
+enum BudgetFilterPeriod: String, CaseIterable, Identifiable, LocalizableDisplayName {
     case active
     case upcoming
     case past
@@ -172,10 +180,10 @@ enum BudgetFilterPeriod: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .active: return "Active"
-        case .upcoming: return "Upcoming"
-        case .past: return "Past"
-        case .all: return "All Budgets"
+        case .active: return L10n.Budget.Filter.active
+        case .upcoming: return L10n.Budget.Filter.upcoming
+        case .past: return L10n.Budget.Filter.past
+        case .all: return L10n.Budget.Filter.all
         }
     }
     
@@ -226,58 +234,53 @@ struct BudgetSummarySection: View {
             let progress = limit > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber) : 0
             return progress <= 1.0 // Changed to 1.0 to consider "on track" as not over budget, or strict 0.8? Sticking to logic "over budget" count implies > 1.0 usually, but let's keep original logic loosely or refine. Original was <= 0.8. Let's use <= 1.0 for "On Track" in general sense, or strictly adhering to "Healthy". 
             // Let's stick to "On Track" meaning "Not Over Budget" for the text label "X on track, Y over".
-            return progress <= 1.0
         }.count
     }
     
     var body: some View {
-        Section {
-            VStack(spacing: 16) {
-                // Top Row: Spent vs Budgeted
+        VStack(spacing: 16) {
+            // Top Row: Spent vs Budgeted
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.Budget.totalSpent)
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                    Text(totalSpent.formatted(.currency(code: preferredCurrency)))
+                        .font(.app(.title2, weight: .bold))
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(L10n.Budget.totalBudgeted)
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                    Text(totalBudgeted.formatted(.currency(code: preferredCurrency)))
+                        .font(.app(.title2, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            // Progress Bar
+            let progress = totalBudgeted > 0 ? Double(truncating: totalSpent as NSNumber) / Double(truncating: totalBudgeted as NSNumber) : 0
+            VStack(spacing: 8) {
+                ProgressView(value: min(progress, 1.0))
+                    .tint(progress > 1.0 ? .red : (progress > 0.9 ? .orange : ThemeManager.shared.incomeColor))
+                
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Total Spent")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(totalSpent.formatted(.currency(code: preferredCurrency)))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                    }
+                    Text(L10n.Budget.percentUsed(Int(progress * 100)))
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
                     
                     Spacer()
                     
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Total Budgeted")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(totalBudgeted.formatted(.currency(code: preferredCurrency)))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                // Progress Bar
-                let progress = totalBudgeted > 0 ? Double(truncating: totalSpent as NSNumber) / Double(truncating: totalBudgeted as NSNumber) : 0
-                VStack(spacing: 8) {
-                    ProgressView(value: min(progress, 1.0))
-                        .tint(progress > 1.0 ? .red : (progress > 0.9 ? .orange : ThemeManager.shared.incomeColor))
-                    
-                    HStack {
-                        Text("\(Int(progress * 100))% of budget used")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        Spacer()
-                        
-                        Text("\(onTrackCount) on track, \(budgets.count - onTrackCount) over")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(L10n.Budget.onTrackCount(onTrackCount, budgets.count - onTrackCount))
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 8)
         }
+        .padding(.vertical, 8)
     }
     
     private func calculateSpending(for budget: Budget) -> Decimal {
@@ -374,7 +377,7 @@ struct BudgetRowView: View {
                     .frame(width: 48, height: 48)
                 
                 Image(systemName: budgetIcon)
-                    .font(.title3)
+                    .font(.app(.title3))
                     .foregroundStyle(iconColor)
             }
             
@@ -383,8 +386,7 @@ struct BudgetRowView: View {
                 // Title Row
                 HStack {
                     Text(budget.displayName)
-                        .font(.body) // Fixed syntax
-                        .fontWeight(.semibold)
+                        .font(.app(.body, weight: .semibold))
                         .lineLimit(1)
                     
                     Spacer()
@@ -393,13 +395,11 @@ struct BudgetRowView: View {
                     // Here we focus on "Amount Left" as it's usually what users care about
                     if isOverBudget {
                         Text(spent.formatted(.currency(code: preferredCurrency)))
-                            .font(.body)
-                            .fontWeight(.bold)
+                            .font(.app(.body, weight: .bold))
                             .foregroundStyle(.red)
                     } else {
                         Text(remaining.formatted(.currency(code: preferredCurrency)))
-                            .font(.body)
-                            .fontWeight(.bold)
+                            .font(.app(.body, weight: .bold))
                             .foregroundStyle(Color.primary)
                     }
                 }
@@ -424,17 +424,17 @@ struct BudgetRowView: View {
                     HStack(spacing: 4) {
                         if budget.isRecurring {
                             Image(systemName: "repeat")
-                                .font(.caption2)
+                                .font(.app(.caption2))
                                 .foregroundStyle(.secondary)
                         }
                         
                         if isOverBudget {
-                             Text("Over by \((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency)))")
-                                .font(.caption)
+                             Text(L10n.Budget.overBy((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency))))
+                                .font(.app(.caption))
                                 .foregroundStyle(.red)
                         } else {
-                            Text("left of \(budgetLimitConverted.formatted(.currency(code: preferredCurrency)))")
-                                .font(.caption)
+                            Text(L10n.Budget.leftOf(budgetLimitConverted.formatted(.currency(code: preferredCurrency))))
+                                .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -443,12 +443,12 @@ struct BudgetRowView: View {
                     
                     // Right: Time Info
                     if budget.isActive {
-                        Text("\(budget.daysRemaining) days left")
-                            .font(.caption)
+                        Text(L10n.Budget.daysLeft(budget.daysRemaining))
+                            .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     } else if budget.isPeriodEnded {
-                        Text("Ended")
-                            .font(.caption)
+                        Text(L10n.Budget.ended)
+                            .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }
                 }

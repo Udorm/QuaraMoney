@@ -1,0 +1,509 @@
+/* 
+  Localizable.strings (English)
+  QuaraMoney
+  
+  English localization strings
+*/
+
+// MARK: - Common
+"common.cancel" = "Cancel";
+"common.save" = "Save";
+"common.done" = "Done";
+"common.add" = "Add";
+"common.edit" = "Edit";
+"common.delete" = "Delete";
+"common.ok" = "OK";
+"common.back" = "Back";
+"common.close" = "Close";
+"common.create" = "Create";
+"common.preview" = "Preview";
+"common.seeAll" = "See All";
+"common.error" = "Error";
+"common.advancedOptions" = "Advanced Options";
+"common.search" = "Search";
+
+// MARK: - Tab Bar
+"tab.home" = "Home";
+"tab.wallets" = "Wallets";
+"tab.analysis" = "Analysis";
+"tab.more" = "More";
+
+// MARK: - Home
+"home.title" = "Home";
+"home.noTransactions" = "No transactions in this period.";
+
+// MARK: - Wallets
+"wallet.title" = "Wallets";
+"wallet.add" = "Add Wallet";
+"wallet.totalBalance" = "Total Balance";
+"wallet.netWorth" = "Total Net Worth";
+"wallet.selectWallet" = "Select Wallet";
+"wallet.name" = "Name";
+"wallet.currency" = "Currency";
+"wallet.color" = "Color";
+"wallet.icon" = "Icon";
+"wallet.emptyState" = "Tap + to create your first wallet.";
+"wallet.customRange" = "Custom Range";
+"wallet.archive" = "Archive";
+"wallet.unarchive" = "Unarchive";
+"wallet.archivedWallets" = "Archived Wallets";
+"wallet.deleteRelatedTransactionsWarning" = "Deleting this wallet will also delete all %d related transactions. This action cannot be undone.";
+"wallet.archiveInstead" = "Archive Instead";
+"wallet.deleteAnyway" = "Delete Anyway";
+"wallet.restore" = "Restore";
+"wallet.archived" = "Archived";
+"wallet.noArchivedWallets" = "No archived wallets";
+"wallet.new" = "New Wallet";
+"wallet.edit" = "Edit Wallet";
+"wallet.details" = "Wallet Details";
+"wallet.appearance" = "Appearance";
+"filter.status" = "Status";
+"status.active" = "Active";
+"status.archived" = "Archived";
+"status.activeWallets" = "Active Wallets";
+"status.archivedWallets" = "Archived Wallets";
+
+// MARK: - Transactions
+"transaction.add" = "Add Transaction";
+"transaction.amount" = "Amount";
+"transaction.note" = "Add note...";
+"transaction.rate" = "Rate";
+"transaction.type" = "Type";
+"transaction.fromWallet" = "From Wallet";
+"transaction.toWallet" = "To Wallet";
+"transaction.searchWallets" = "Search wallets";
+"transaction.noOtherWallets" = "No other wallets available";
+"transaction.date" = "Date";
+"transaction.noCategoriesForType" = "No categories for %@";
+"transaction.type.income" = "Income";
+"transaction.type.expense" = "Expense";
+"transaction.type.transfer" = "Transfer"; 
+"transaction.currency" = "Currency";
+
+"common.more" = "More";
+
+// MARK: - Categories
+"category.title" = "Categories";
+"category.add" = "Add Category";
+"category.select" = "Select Category";
+"category.name" = "Category Name";
+"category.selectColor" = "Select Color";
+"category.selectIcon" = "Select Icon";
+
+// Predefined Categories
+"category.foodAndDrink" = "Food and drink";
+"category.housing" = "Housing";
+"category.waterBill" = "Water bill";
+"category.electricityBill" = "Electricity bill";
+"category.internetBill" = "Internet bill";
+"category.subscriptions" = "Subscriptions";
+"category.transportation" = "Transportation";
+"category.personalLifestyle" = "Personal & lifestyle";
+"category.health" = "Health";
+"category.financial" = "Financial";
+"category.others" = "Others";
+"category.salary" = "Salary";
+"category.investments" = "Investments";
+"category.services" = "Services";
+"category.leisure" = "Leisure";
+"category.education" = "Education";
+"category.tech" = "Tech";
+
+// MARK: - Category Groups
+"categoryGroup.title" = "Category Groups";
+"categoryGroup.new" = "New Category Group";
+"categoryGroup.details" = "Group Details";
+"categoryGroup.edit" = "Edit Group";
+"categoryGroup.addCategories" = "Add Categories";
+"categoryGroup.name" = "Group Name";
+"categoryGroup.description" = "Description (Optional)";
+"categoryGroup.emptyState" = "No Category Groups";
+"categoryGroup.emptyDescription" = "Create groups to organize related categories together for easier budgeting.";
+"categoryGroup.count" = "%d categories";
+"categoryGroup.none" = "None";
+"categoryGroup.categorization" = "Categorization";
+"categoryGroup.categorizationFooter" = "Helps organize groups for template-based budgeting";
+"categoryGroup.noExpenseCategories" = "No expense categories available";
+"categoryGroup.selectedCount" = "Categories (%d selected)";
+"categoryGroup.quickTemplates" = "Quick Templates";
+"categoryGroup.groupInfo" = "Group Info";
+"categoryGroup.appearance" = "Appearance";
+"categoryGroup.linkedBudgets" = "Linked Budgets";
+"categoryGroup.noCategoriesInGroup" = "No categories in this group";
+"categoryGroup.allAdded" = "All Categories Added";
+"categoryGroup.allAddedDescription" = "All expense categories are already in this group.";
+
+// MARK: - Budget
+"budget.title" = "Budgets";
+"budget.new" = "New Budget";
+"budget.edit" = "Edit Budget";
+"budget.details" = "Budget Details";
+"budget.insights" = "Budget Insights";
+"budget.name" = "Budget Name";
+"budget.createCategoryGroup" = "Create Category Group";
+"budget.notifications" = "Notifications";
+"budget.rollover" = "Rollover Unused Amount";
+"budget.dailyAverage" = "Daily Average";
+"budget.dailyBudget" = "Daily Budget";
+"budget.projectedTotal" = "Projected Total";
+"budget.emptyState" = "No Budgets";
+"budget.emptyDescription" = "Set up a budget to track your spending habits.";
+"budget.recurringOnly" = "Recurring Only";
+"budget.totalSpent" = "Total Spent";
+"budget.totalBudgeted" = "Total Budgeted";
+"budget.onTrackCount" = "%d on track, %d over";
+"budget.percentUsed" = "%d%% of budget used";
+"budget.overBy" = "Over by %@";
+"budget.leftOf" = "left of %@";
+"budget.daysLeft" = "%d days left";
+"budget.ended" = "Ended";
+"budget.nameOptional" = "Budget Name (Optional)";
+"budget.nameHint" = "Leave empty to use the category name";
+"budget.whatToBudget" = "What to Budget";
+"budget.allExpenses" = "Budget for all expenses";
+"budget.limit" = "Budget Limit";
+"budget.usePercentage" = "Use Percentage of Income";
+"budget.ofIncome" = "of monthly income";
+"budget.periodType" = "Period Type";
+"budget.startDate" = "Start Date";
+"budget.endDate" = "End Date";
+"budget.recurring" = "Recurring Budget";
+"budget.rolloverDescription" = "Unused budget will carry over to the next period";
+"budget.resetDescription" = "Budget resets to the limit each period";
+"budget.linkSavings" = "Link to Savings Goal";
+"budget.target.category" = "Single Category";
+"budget.target.group" = "Category Group";
+"budget.target.total" = "Total Spending";
+"budget.filter.active" = "Active";
+"budget.filter.upcoming" = "Upcoming";
+"budget.filter.past" = "Past";
+"budget.filter.all" = "All";
+"budget.target.type" = "Budget Type";
+"category.noAvailable" = "No categories available";
+"categoryGroup.noAvailable" = "No category groups available";
+"categoryGroup.create" = "Create Category Group";
+"categoryGroup.select" = "Select Group";
+"savings.selectGoal" = "Select Goal";
+"budget.alertAt" = "Alert at %d%%";
+"budget.category" = "Budget Category";
+"budget.summary" = "Summary";
+"budget.original" = "Original Budget";
+"budget.used" = "Used";
+"budget.remaining" = "Remaining";
+"budget.overBudgetLabel" = "Over Budget";
+"budget.rolloverTitle" = "Rollover";
+"budget.linkedSavings" = "Linked Savings Goal";
+"budget.alerts" = "Alerts";
+"budget.enabled" = "Enabled";
+"budget.disabled" = "Disabled";
+"budget.transactions" = "Transactions (%d)";
+"budget.noTransactions" = "No transactions yet";
+"budget.currentPeriod" = "Current Period";
+"budget.rolloverAmountLabel" = "Rollover Amount";
+
+// MARK: - Budget Category Types
+"budget.type.needs.title" = "Needs";
+"budget.type.needs.desc" = "Essential expenses you must pay";
+"budget.type.wants.title" = "Wants";
+"budget.type.wants.desc" = "Non-essential spending for enjoyment";
+"budget.type.savings.title" = "Savings & Debt";
+"budget.type.savings.desc" = "Building wealth and paying off debt";
+
+// MARK: - Budget Templates
+"template.conservative.title" = "Conservative";
+"template.conservative.desc" = "Tight spending limits with focus on savings. Best for aggressive debt payoff or savings goals.";
+"template.balanced.title" = "Balanced";
+"template.balanced.desc" = "Moderate approach balancing needs, wants, and savings equally.";
+"template.503020.title" = "50/30/20 Rule";
+"template.503020.desc" = "50% needs, 30% wants, 20% savings. Popular and sustainable approach.";
+"template.zeroBased.title" = "Zero-Based";
+"template.zeroBased.desc" = "Every dollar has a purpose. Assign all income to specific categories.";
+
+// MARK: - Budget Setup Wizard
+"wizard.step" = "Step %d of %d";
+"wizard.welcome.title" = "Welcome";
+"wizard.welcome.subtitle" = "Let's set up your budgets";
+"wizard.selectTemplate.title" = "Choose a Method";
+"wizard.selectTemplate.subtitle" = "Pick a budgeting method that works for you";
+"wizard.enterIncome.title" = "Your Income";
+"wizard.enterIncome.subtitle" = "How much do you earn monthly?";
+"wizard.assignCategories.title" = "Assign Categories";
+"wizard.assignCategories.subtitle" = "Organize your spending categories";
+"wizard.customize.title" = "Customize";
+"wizard.customize.subtitle" = "Adjust the percentages if needed";
+"wizard.review.title" = "Review";
+"wizard.review.subtitle" = "Review your budget plan";
+"wizard.done.title" = "Done";
+"wizard.done.subtitle" = "Your budgets are ready!";
+
+"wizard.feature.limits.title" = "Set Spending Limits";
+"wizard.feature.limits.desc" = "Create budgets for different categories";
+"wizard.feature.alerts.title" = "Get Alerts";
+"wizard.feature.alerts.desc" = "Know when you're approaching your limits";
+"wizard.feature.track.title" = "Track Progress";
+"wizard.feature.track.desc" = "See how you're doing at a glance";
+"wizard.feature.autoRenew.title" = "Auto-Renew";
+"wizard.feature.autoRenew.desc" = "Budgets reset automatically each period";
+
+"wizard.income.prompt" = "Enter your monthly take-home pay (after taxes)";
+"wizard.basedOn" = "Based on %@:";
+"wizard.assign.prompt" = "Assign your expense categories to each budget type";
+"wizard.selected" = "%d selected";
+"wizard.totalAllocation" = "Total Allocation";
+"wizard.budgetsToCreate" = "Budgets to Create";
+"wizard.review.point1" = "• 3 category-type budgets (Needs, Wants, Savings)";
+"wizard.review.point2" = "• Monthly recurring with auto-renewal";
+"wizard.review.point3" = "• Alerts at 80% and 100% spending";
+"wizard.allSet.title" = "You're All Set!";
+"wizard.allSet.message" = "Your budgets have been created. You can always adjust them later from the Budgets screen.";
+"wizard.allSet.point1" = "View your budgets in the Analysis tab";
+"wizard.allSet.point2" = "Get alerts when approaching limits";
+"wizard.allSet.point3" = "Track your progress daily";
+
+"wizard.back" = "Back";
+"wizard.continue" = "Continue";
+"wizard.createBudgets" = "Create Budgets";
+
+// MARK: - Budget Periods
+"period.daily" = "Daily";
+"period.weekly" = "Weekly";
+"period.monthly" = "Monthly";
+"period.quarterly" = "Quarterly";
+"period.yearly" = "Yearly";
+"period.biweekly" = "Bi-Weekly";
+"period.custom" = "Custom";
+
+// MARK: - Filter Periods
+"filter.thisMonth" = "This Month";
+"filter.lastMonth" = "Last Month";
+"filter.thisYear" = "This Year";
+"filter.day" = "Day";
+"filter.week" = "Week";
+"filter.month" = "Month";
+"filter.sixMonths" = "6 Months";
+"filter.year" = "Year";
+"filter.lastYear" = "Last Year";
+
+// MARK: - Analysis
+"analysis.title" = "Analysis";
+"analysis.transactionType" = "Transaction Type";
+"analysis.totalSpending" = "TOTAL SPENDING";
+"analysis.totalIncome" = "TOTAL INCOME";
+"analysis.startDate" = "Start Date";
+"analysis.endDate" = "End Date";
+"analysis.noData" = "No Data";
+"analysis.noTransactionsForPeriod" = "No transactions found for this period.";
+"analysis.topSpendingCategories" = "Top Spending Categories";
+"analysis.topIncomeCategories" = "Top Income Categories";
+"analysis.net" = "Net";
+"analysis.topSpendingCategories" = "Top Spending Categories";
+"analysis.topIncomeCategories" = "Top Income Categories";
+"filter.title" = "Filter";
+"filter.period" = "Period";
+"filter.wallet" = "Wallet";
+"filter.allWallets" = "All Wallets";
+
+// MARK: - Events
+"event.title" = "Events";
+"event.new" = "New Event";
+"event.add" = "Add Event";
+"event.name" = "Event Name";
+"event.budget" = "Budget";
+"event.budgetOptional" = "Total Budget (Optional)";
+"event.notes" = "Notes";
+"event.select" = "Select Event";
+"event.emptyState" = "Plan trips, parties, or projects.";
+"event.overBudget" = "Over budget by %@";
+"event.remaining" = "%@ remaining";
+"event.spent" = "%d%% spent";
+"event.noEvent" = "No Event";
+"event.details" = "Event Details";
+"event.budgetNotes" = "Budget & Notes";
+
+// MARK: - Savings Goals
+"savings.title" = "Savings Goals";
+"savings.new" = "New Savings Goal";
+"savings.edit" = "Edit Goal";
+"savings.goalName" = "Goal Name";
+"savings.targetAmount" = "Target Amount";
+"savings.totalSaved" = "Total Saved";
+"savings.totalTarget" = "Total Target";
+"savings.addContribution" = "Add Contribution";
+"savings.targetDate" = "Target Date";
+"savings.daysRemaining" = "Days Remaining";
+"savings.remaining" = "Remaining";
+"savings.monthlyNeeded" = "Monthly Needed";
+"savings.status" = "Status";
+"savings.suggestedMonthly" = "Suggested Monthly";
+"savings.timeline" = "Timeline";
+"savings.timelineDescription" = "We'll calculate how much you need to save each month";
+"savings.markActive" = "Mark as Active";
+"savings.emptyState" = "Create a savings goal to start tracking your progress toward financial targets.";
+
+// MARK: - Recurring / Subscriptions
+"recurring.title" = "Subscriptions";
+"recurring.new" = "New Subscription";
+"recurring.add" = "Add Subscription";
+"recurring.name" = "Name (e.g., Netflix)";
+"recurring.next" = "Next: %@";
+"recurring.emptyState" = "Add recurring bills to track them automatically.";
+"recurring.createWalletFirst" = "Create a Wallet first to add subscriptions.";
+"recurring.frequency" = "Frequency";
+"recurring.assignments" = "Assignments";
+"recurring.preview" = "Preview";
+"recurring.emptyTitle" = "No Subscriptions";
+
+// MARK: - Frequencies
+"frequency.daily" = "Daily";
+"frequency.weekly" = "Weekly";
+"frequency.monthly" = "Monthly";
+"frequency.yearly" = "Yearly";
+
+// MARK: - Settings
+"settings.title" = "Settings";
+"settings.general" = "General";
+"settings.defaultCurrency" = "Default Currency";
+"settings.themeColors" = "Theme & Colors";
+"settings.importCSV" = "Import from CSV";
+"settings.exchangeRates" = "Exchange Rates (Base: USD)";
+"settings.refreshRates" = "Refresh Rates";
+"settings.dataManagement" = "Data Management";
+"settings.deleteAllTransactions" = "Delete All Transactions";
+"settings.populateSampleData" = "Populate Sample Data";
+"settings.resetOnboarding" = "Reset Onboarding";
+"settings.version" = "QuaraMoney v1.0";
+"settings.language" = "Language";
+"settings.useSidebarOniPad" = "Use Sidebar on iPad";
+
+// MARK: - Data Management Alerts
+"alert.populateData.title" = "Populate Sample Data?";
+"alert.populateData.message" = "This will delete all existing data and replace it with sample wallets, categories, and transactions. This action cannot be undone.";
+"alert.populateData.confirm" = "Populate";
+
+"alert.deleteTransactions.title" = "Delete All Transactions?";
+"alert.deleteTransactions.message" = "Are you sure you want to delete all transactions? Wallets and Categories will be kept. This action cannot be undone.";
+
+// MARK: - Theme Settings
+"theme.title" = "Theme & Colors";
+"theme.incomeColor" = "Income Color";
+"theme.expenseColor" = "Expense Color";
+"theme.resetDefaults" = "Reset to Defaults";
+
+// MARK: - CSV Import
+"csv.title" = "Import Transactions";
+"csv.selectFile" = "Select CSV File";
+"csv.selectCategory" = "Select Category";
+
+// MARK: - More
+"more.title" = "More";
+"more.planningTools" = "Planning Tools";
+"more.budgetWizard" = "Budget Setup Wizard";
+"more.features" = "Features";
+"more.management" = "Management";
+"more.app" = "App";
+
+// MARK: - Notifications
+"notifications.title" = "Notifications";
+"notifications.markAllRead" = "Mark All Read";
+"notifications.clearAll" = "Clear All";
+"notifications.read" = "Read";
+
+// MARK: - Onboarding
+"onboarding.welcome" = "Welcome to QuaraMoney";
+"onboarding.tagline" = "Take control of your finances.\nTrack expenses, budget smarter, and save more.";
+"onboarding.selectCurrency" = "Select Currency";
+"onboarding.currencyDescription" = "Choose your default currency for reporting.\nYou can change this later.";
+"onboarding.personalizeColors" = "Personalize Colors";
+"onboarding.colorDescription" = "Choose colors for your income and expenses.";
+"onboarding.allSet" = "You're All Set!";
+"onboarding.getStarted" = "Let's create your first wallet to get started.";
+
+// MARK: - Status Messages
+"status.deleting" = "Deleting...";
+"status.populating" = "Populating...";
+"status.populatingData" = "Populating Data...";
+
+// MARK: - Budget Amount Types
+"amountType.fixed" = "Fixed Amount";
+"amountType.percentage" = "% of Income";
+
+// MARK: - Notification Types
+"notificationType.threshold" = "At Threshold";
+"notificationType.exceeded" = "When Exceeded";
+"notificationType.daily" = "Daily Summary";
+
+// MARK: - Savings Goals (Detailed)
+"savings.activeGoals" = "Active Goals";
+"savings.completedGoals" = "Completed Goals";
+"savings.noGoals" = "No Savings Goals";
+"savings.noGoalsDescription" = "Create a savings goal to start tracking your progress toward financial targets.";
+"savings.quickStart" = "Quick Start";
+"savings.wallet" = "Wallet";
+"savings.walletDescription" = "Track contributions from a specific wallet";
+"savings.automation" = "Automation";
+"savings.autoContribute" = "Auto-Contribute Reminder";
+"savings.autoContributeDescription" = "Get reminded to contribute regularly";
+"savings.enterContributionAmount" = "Enter the contribution amount in %@";
+"savings.progress" = "Progress";
+"savings.complete" = "Complete!";
+"savings.markActive" = "Mark as Active";
+"savings.template.emergencyFund.title" = "Emergency Fund";
+"savings.template.emergencyFund.desc" = "3-6 months of living expenses for unexpected situations";
+"savings.template.vacation.title" = "Vacation";
+"savings.template.vacation.desc" = "Dream trip fund for travel and experiences";
+"savings.template.carPurchase.title" = "Car Purchase";
+"savings.template.carPurchase.desc" = "Down payment or full purchase of a vehicle";
+"savings.template.homePurchase.title" = "Home Down Payment";
+"savings.template.homePurchase.desc" = "Down payment for your home purchase";
+"savings.template.retirement.title" = "Retirement";
+"savings.template.retirement.desc" = "Long-term savings for retirement";
+"savings.template.education.title" = "Education";
+"savings.template.education.desc" = "Tuition, courses, or professional development";
+"savings.template.wedding.title" = "Wedding";
+"savings.template.wedding.desc" = "Save for your special day";
+"savings.template.debtPayoff.title" = "Debt Payoff";
+"savings.template.debtPayoff.desc" = "Pay off loans, credit cards, or other debt";
+"savings.template.electronics.title" = "Electronics";
+"savings.template.electronics.desc" = "New phone, laptop, or gadgets";
+"savings.template.custom.title" = "Custom Goal";
+"savings.template.custom.desc" = "Create your own savings goal";
+
+"savings.status.reached" = "Goal reached! 🎉";
+"savings.status.pastDate" = "Past target date";
+"savings.status.today" = "Target date is today";
+"savings.status.noDate" = "No target date";
+"savings.status.daysLeft" = "%d days left";
+"savings.status.weeksLeft" = "%d weeks left";
+"savings.status.monthsLeft" = "%d months left";
+// MARK: - Onboarding
+"onboarding.getStarted" = "Get Started";
+"onboarding.welcomeTitle" = "Welcome to QuaraMoney";
+"onboarding.welcomeDescription" = "Take control of your finances.\nTrack expenses, budget smarter, and save more.";
+"onboarding.selectCurrency" = "Select Currency";
+"onboarding.currencyDescription" = "Choose your default currency for reporting.\nYou can change this later.";
+"onboarding.personalizeColors" = "Personalize Colors";
+"onboarding.themeDescription" = "Choose colors for your income and expenses.";
+"onboarding.incomeColor" = "Income Color";
+"onboarding.expenseColor" = "Expense Color";
+"onboarding.finalTitle" = "You're All Set!";
+"onboarding.finalDescription" = "Let's create your first wallet to get started.";
+
+// MARK: - Notifications
+"notifications.title" = "Notifications";
+"notifications.emptyTitle" = "No Notifications";
+"notifications.emptyDescription" = "Budget alerts will appear here";
+"notifications.read" = "Read";
+"notifications.markAllRead" = "Mark All Read";
+"notifications.clearAll" = "Clear All";
+"notifications.dailySummaryTitle" = "Daily Budget Summary";
+"notifications.dailySummaryBody" = "Check your daily spending progress";
+"notifications.viewBudget" = "View Budget";
+"notifications.viewAnalysis" = "View Analysis";
+"notifications.dismiss" = "Dismiss";
+
+"common.next" = "Next";
+
+"alert.budget.info50" = "You've spent 50%% of your %@ budget";
+"alert.budget.warning80" = "Warning: 80%% of your %@ budget is spent";
+"alert.budget.exceeded" = "You've exceeded your %@ budget!";
+"alert.budget.projectedOverspend" = "At this rate, you'll exceed your %@ budget";

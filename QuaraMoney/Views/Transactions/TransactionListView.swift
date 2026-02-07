@@ -5,6 +5,7 @@ import SwiftData
 /// with edit/delete capabilities and daily aggregate totals.
 struct TransactionListView: View {
     let transactions: [Transaction]
+    var listHeader: String? = nil // Optional top-level header
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
     
@@ -15,11 +16,21 @@ struct TransactionListView: View {
     
     var body: some View {
         if transactions.isEmpty {
-            Text("No transactions")
+            Text(L10n.Budget.noTransactions)
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(dailySections) { section in
-                Section(header: DailySectionHeader(section: section)) {
+            ForEach(Array(dailySections.enumerated()), id: \.element.id) { index, section in
+                Section(header: 
+                    VStack(alignment: .leading, spacing: 4) {
+                        if index == 0, let listHeader, !listHeader.isEmpty {
+                            Text(listHeader)
+                                .font(.app(.subheadline))
+                                .foregroundStyle(.secondary)
+                                .padding(.bottom, 4)
+                        }
+                        DailySectionHeader(section: section)
+                    }
+                ) {
                     ForEach(section.transactions) { txn in
                         Button {
                             onEdit(txn)
@@ -31,13 +42,13 @@ struct TransactionListView: View {
                             Button(role: .destructive) {
                                 onDelete(txn)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(L10n.Common.delete, systemImage: "trash")
                             }
                             
                             Button {
                                 onEdit(txn)
                             } label: {
-                                Label("Edit", systemImage: "pencil")
+                                Label(L10n.Common.edit, systemImage: "pencil")
                             }
                             .tint(.blue)
                         }
@@ -45,12 +56,14 @@ struct TransactionListView: View {
                             Button {
                                 onEdit(txn)
                             } label: {
-                                Label("Edit", systemImage: "pencil")
+                                Label(L10n.Common.edit, systemImage: "pencil")
+                                    .font(.app(.body))
                             }
                             Button(role: .destructive) {
                                 onDelete(txn)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(L10n.Common.delete, systemImage: "trash")
+                                    .font(.app(.body))
                             }
                         }
                     }
@@ -79,10 +92,10 @@ struct DailySectionHeader: View {
     var body: some View {
         HStack {
             Text(section.date, style: .date)
-                .font(.headline)
+                .font(.app(.headline))
             Spacer()
             Text(section.dailyTotal.formatted(.currency(code: currencyCode)))
-                .font(.subheadline)
+                .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? incomeColor : expenseColor)
         }
         .padding(.vertical, 4)

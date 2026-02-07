@@ -22,7 +22,11 @@ class WalletDetailViewModel: ObservableObject {
         didSet { if selectedPeriod == .custom { updateDateRange(); fetchTransactions() } }
     }
     
+    @Published var searchText: String = ""
+    
     @Published var transactions: [Transaction] = []
+    
+    private var cancellables = Set<AnyCancellable>()
     
     private var startDate: Date = Date()
     private var endDate: Date = Date()
@@ -35,6 +39,16 @@ class WalletDetailViewModel: ObservableObject {
         self.modelContext = modelContext
         self.wallet = wallet
         updateDateRange()
+        
+        // Setup search debounce
+        $searchText
+            .dropFirst()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.fetchTransactions()
+            }
+            .store(in: &cancellables)
+            
         fetchTransactions()
     }
     
@@ -45,26 +59,14 @@ class WalletDetailViewModel: ObservableObject {
     }
     
     func fetchTransactions() {
-        let walletId = wallet.id
-        let start = self.startDate
-        let end = self.endDate
-        
-        // Fetch transactions for this wallet within the date range
-        let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { txn in
-                (txn.sourceWallet?.id == walletId || txn.destinationWallet?.id == walletId) &&
-                txn.date >= start && txn.date < end
-            },
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        let result = TransactionProcessor.fetchAndProcess(
+            context: modelContext,
+            startDate: startDate,
+            endDate: endDate,
+            walletId: wallet.id,
+            searchText: searchText
         )
-        
-        do {
-            transactions = try modelContext.fetch(descriptor)
-        } catch {
-            #if DEBUG
-            print("WalletDetail Transactions Fetch Error: \(error)")
-            #endif
-        }
+        self.transactions = result.transactions
     }
     
     func deleteTransaction(_ transaction: Transaction) {

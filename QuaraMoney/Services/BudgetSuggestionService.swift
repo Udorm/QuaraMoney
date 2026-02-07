@@ -266,11 +266,13 @@ class BudgetSuggestionService {
         let categoryId = category.id
         let expenseType = TransactionType.expense
         
+        // Filter out archived wallets for budget suggestions
         let descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate<Transaction> { txn in
                 txn.type == expenseType &&
                 txn.date >= startDate && txn.date <= endDate &&
-                txn.category?.id == categoryId
+                txn.category?.id == categoryId &&
+                txn.sourceWallet?.isArchived != true
             },
             sortBy: [SortDescriptor(\Transaction.date)]
         )
@@ -292,10 +294,12 @@ class BudgetSuggestionService {
         
         let expenseType = TransactionType.expense
         
+        // Filter out archived wallets for budget suggestions
         let descriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate<Transaction> { txn in
                 txn.type == expenseType &&
-                txn.date >= startDate && txn.date <= endDate
+                txn.date >= startDate && txn.date <= endDate &&
+                txn.sourceWallet?.isArchived != true
             },
             sortBy: [SortDescriptor(\Transaction.date)]
         )

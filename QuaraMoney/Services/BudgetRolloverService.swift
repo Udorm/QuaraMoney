@@ -83,28 +83,31 @@ class BudgetRolloverService {
         let expenseType = TransactionType.expense
         
         if budget.isTotalBudget {
-            // Total budget - all expenses
-            descriptor = FetchDescriptor<Transaction>(
-                predicate: #Predicate<Transaction> { txn in
-                    txn.type == expenseType &&
-                    txn.date >= start && txn.date < end
-                }
-            )
-        } else if let categoryId = budget.category?.id {
-            // Single category budget
+            // Total budget - all expenses (excluding archived wallets)
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
                     txn.date >= start && txn.date < end &&
-                    txn.category?.id == categoryId
+                    txn.sourceWallet?.isArchived != true
+                }
+            )
+        } else if let categoryId = budget.category?.id {
+            // Single category budget (excluding archived wallets)
+            descriptor = FetchDescriptor<Transaction>(
+                predicate: #Predicate<Transaction> { txn in
+                    txn.type == expenseType &&
+                    txn.date >= start && txn.date < end &&
+                    txn.category?.id == categoryId &&
+                    txn.sourceWallet?.isArchived != true
                 }
             )
         } else if let group = budget.categoryGroup {
-            // Category group budget - fetch all and filter
+            // Category group budget - fetch all and filter (excluding archived wallets)
             let baseDescriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
-                    txn.date >= start && txn.date < end
+                    txn.date >= start && txn.date < end &&
+                    txn.sourceWallet?.isArchived != true
                 }
             )
             
@@ -143,15 +146,7 @@ class BudgetRolloverService {
     // MARK: - Notifications
     
     private func notifyRollover(budget: Budget, amount: Decimal) {
-        let notification = BudgetNotification(
-            budgetId: budget.id,
-            budgetName: budget.displayName,
-            alertType: .info50, // Using info type for rollover
-            progress: 0,
-            timestamp: Date()
-        )
-        
-        // Add to notification service (custom notification for rollover)
+        // Schedule rollover notification
         Task {
             await scheduleRolloverNotification(budget: budget, amount: amount)
         }

@@ -1,6 +1,18 @@
 import SwiftUI
 
-struct FilterMenuView<Period: Hashable & Identifiable & RawRepresentable & CaseIterable>: View where Period.RawValue == String {
+/// Protocol for periods that have localized display names
+protocol LocalizableDisplayName {
+    var displayName: String { get }
+}
+
+extension FilterPeriod: LocalizableDisplayName {}
+extension AnalysisPeriod: LocalizableDisplayName {}
+
+/// NOTE: SwiftUI Menu uses UIKit's UIMenu under the hood.
+/// iOS does NOT allow custom fonts in UIMenu items - this is a platform limitation.
+/// The menu text will use the system font regardless of any .font() modifiers applied.
+/// This is the same behavior in all iOS apps using native Menu components.
+struct FilterMenuView<Period: Hashable & Identifiable & CaseIterable & LocalizableDisplayName>: View {
     @Binding var selectedPeriod: Period
     @Binding var selectedWallet: Wallet?
     var wallets: [Wallet]
@@ -12,7 +24,7 @@ struct FilterMenuView<Period: Hashable & Identifiable & RawRepresentable & CaseI
     // Check if filter is active for UI state
     var isFilterActive: Bool {
         // We assume the first case is the default "This Month" or similar standard
-        let isDefaultPeriod = selectedPeriod == Array(Period.allCases).first
+        let isDefaultPeriod = selectedPeriod as AnyHashable == Array(Period.allCases).first as AnyHashable
         // If wallet filter is hidden, only check period. If shown, check both.
         let isWalletActive = showWalletFilter ? (selectedWallet != nil) : false
         return !isDefaultPeriod || isWalletActive
@@ -20,77 +32,56 @@ struct FilterMenuView<Period: Hashable & Identifiable & RawRepresentable & CaseI
     
     var body: some View {
         Menu {
-            Section("Period") {
+            Section("filter.period".localized) {
                 ForEach(Array(Period.allCases)) { period in
                     Button {
-                        if period.rawValue == "Custom" {
+                        if period.displayName == L10n.Period.custom {
                             onCustomPeriodSelect()
                         } else {
                             selectedPeriod = period
                         }
                     } label: {
-                        HStack {
-                            Text(period.rawValue)
-                            Spacer()
-                            if selectedPeriod == period {
-                                Image(systemName: "checkmark")
-                            } else {
-                                Image(systemName: getIcon(for: period))
-                            }
-                        }
+                        Label(period.displayName, systemImage: (selectedPeriod as AnyHashable) == (period as AnyHashable) ? "checkmark" : getIcon(for: period))
                     }
                 }
             }
             
             if showWalletFilter {
-                Section("Wallet") {
+                Section("filter.wallet".localized) {
                     Button {
                         selectedWallet = nil
                     } label: {
-                        HStack {
-                            Text("All Wallets")
-                            Spacer()
-                            if selectedWallet == nil {
-                                Image(systemName: "checkmark")
-                            } else {
-                                Image(systemName: "square.stack.3d.up")
-                            }
-                        }
+                        Label("filter.allWallets".localized, systemImage: selectedWallet == nil ? "checkmark" : "square.stack.3d.up")
                     }
                     
                     ForEach(wallets) { wallet in
                         Button {
                             selectedWallet = wallet
                         } label: {
-                            HStack {
-                                Text(wallet.name)
-                                Spacer()
-                                if selectedWallet?.id == wallet.id {
-                                    Image(systemName: "checkmark")
-                                } else {
-                                    // Use wallet icon if available, fallback to creditcard
-                                    Image(systemName: wallet.icon.isEmpty ? "creditcard" : wallet.icon)
-                                }
-                            }
+                            Label(wallet.name, systemImage: selectedWallet?.id == wallet.id ? "checkmark" : (wallet.icon.isEmpty ? "creditcard" : wallet.icon))
                         }
                     }
                 }
             }
         } label: {
             Image(systemName: isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .font(.title3)
+                .font(.app(.title3))
                 .foregroundStyle(isFilterActive ? .blue : .primary)
         }
     }
     
     private func getIcon(for period: Period) -> String {
-        switch period.rawValue {
-        case "This Month": return "calendar"
-        case "Last Month": return "clock.arrow.circlepath"
-        case "This Year": return "calendar.badge.clock"
-        case "All Time": return "infinity"
-        case "Custom": return "calendar.badge.plus"
-        default: return "calendar"
-        }
+        let name = period.displayName
+        if name == L10n.Filter.thisMonth { return "calendar" }
+        if name == L10n.Filter.lastMonth { return "clock.arrow.circlepath" }
+        if name == L10n.Filter.thisYear { return "calendar.badge.clock" }
+        if name == L10n.Period.custom { return "calendar.badge.plus" }
+        if name == L10n.Filter.day { return "sun.max" }
+        if name == L10n.Filter.week { return "calendar" }
+        if name == L10n.Filter.month { return "calendar" }
+        if name == L10n.Filter.sixMonths { return "calendar.badge.clock" }
+        if name == L10n.Filter.year { return "calendar.badge.plus" }
+        if name == L10n.Filter.lastYear { return "calendar.badge.clock" }
+        return "calendar"
     }
 }

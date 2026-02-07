@@ -22,6 +22,8 @@ class HomeViewModel: ObservableObject {
         didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
+    @Published var searchText: String = ""
+    
     @Published var selectedWallet: Wallet? {
         didSet { refreshData() }
     }
@@ -30,7 +32,9 @@ class HomeViewModel: ObservableObject {
     private var endDate: Date = Date()
     
     var filterDescription: String {
-        selectedPeriod.description(customStart: customStartDate, customEnd: customEndDate)
+        let periodDesc = selectedPeriod.description(customStart: customStartDate, customEnd: customEndDate)
+        let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
+        return "\(periodDesc) • \(walletDesc)"
     }
     
     @Published var incomeTotal: Decimal = 0
@@ -46,6 +50,15 @@ class HomeViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.resetAndRefresh()
+            }
+            .store(in: &cancellables)
+            
+        // Setup search debounce
+        $searchText
+            .dropFirst() // Skip initial value
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshData()
             }
             .store(in: &cancellables)
     }
@@ -70,7 +83,8 @@ class HomeViewModel: ObservableObject {
             context: modelContext,
             startDate: startDate,
             endDate: endDate,
-            walletId: selectedWallet?.id
+            walletId: selectedWallet?.id,
+            searchText: searchText
         )
         
         self.incomeTotal = data.incomeTotal
@@ -102,5 +116,6 @@ class HomeViewModel: ObservableObject {
     func resetFilters() {
         selectedPeriod = .thisMonth
         selectedWallet = nil
+        searchText = ""
     }
 }

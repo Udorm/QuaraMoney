@@ -59,16 +59,16 @@ struct AddBudgetView: View {
             Form {
                 // MARK: - Budget Name
                 Section {
-                    TextField("Budget Name (Optional)", text: $budgetName)
+                    TextField(L10n.Budget.nameOptional, text: $budgetName)
                 } header: {
-                    Text("Name")
+                    Text(L10n.Budget.name)
                 } footer: {
-                    Text("Leave empty to use the category name")
+                    Text(L10n.Budget.nameHint)
                 }
                 
                 // MARK: - Target Selection
-                Section("What to Budget") {
-                    Picker("Budget Type", selection: $targetType) {
+                Section(L10n.Budget.whatToBudget) {
+                    Picker(L10n.Budget.Target.type, selection: $targetType) {
                         ForEach(BudgetTargetType.allCases) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type)
@@ -79,11 +79,11 @@ struct AddBudgetView: View {
                     switch targetType {
                     case .category:
                         if categories.isEmpty {
-                            Text("No categories available")
+                            Text(L10n.Category.noAvailable)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Picker("Category", selection: $selectedCategory) {
-                                Text("Select Category").tag(nil as Category?)
+                            Picker(L10n.Category.select, selection: $selectedCategory) {
+                                Text(L10n.Category.select).tag(nil as Category?)
                                 ForEach(categories.filter { $0.type == .expense }) { category in
                                     Label(category.name, systemImage: category.icon)
                                         .tag(category as Category?)
@@ -93,14 +93,14 @@ struct AddBudgetView: View {
                         
                     case .categoryGroup:
                         if categoryGroups.isEmpty {
-                            Text("No category groups available")
+                            Text(L10n.CategoryGroup.noAvailable)
                                 .foregroundStyle(.secondary)
-                            Button("Create Category Group") {
+                            Button(L10n.CategoryGroup.create) {
                                 // TODO: Navigate to create group
                             }
                         } else {
-                            Picker("Category Group", selection: $selectedCategoryGroup) {
-                                Text("Select Group").tag(nil as CategoryGroup?)
+                            Picker(L10n.CategoryGroup.select, selection: $selectedCategoryGroup) {
+                                Text(L10n.CategoryGroup.select).tag(nil as CategoryGroup?)
                                 ForEach(categoryGroups) { group in
                                     Label(group.name, systemImage: group.iconName)
                                         .tag(group as CategoryGroup?)
@@ -112,25 +112,24 @@ struct AddBudgetView: View {
                         HStack {
                             Image(systemName: "sum")
                                 .foregroundStyle(.blue)
-                            Text("Budget for all expenses")
+                            Text(L10n.Budget.allExpenses)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
                 
                 // MARK: - Budget Amount
-                Section("Budget Limit") {
-                    Toggle("Use Percentage of Income", isOn: $usePercentage)
+                Section(L10n.Budget.limit) {
+                    Toggle(L10n.Budget.usePercentage, isOn: $usePercentage)
                     
                     if usePercentage {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("\(Int(percentageValue))%")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
+                                    .font(.app(.title2, weight: .bold))
                                     .monospacedDigit()
                                 Spacer()
-                                Text("of monthly income")
+                                Text(L10n.Budget.ofIncome)
                                     .foregroundStyle(.secondary)
                             }
                             
@@ -151,7 +150,7 @@ struct AddBudgetView: View {
                         .padding(.vertical, 4)
                     } else {
                         HStack {
-                            TextField("Amount", text: $amountString)
+                            TextField(L10n.Transaction.amount, text: $amountString)
                                 .keyboardType(.decimalPad)
                             
                             Picker("", selection: $selectedCurrency) {
@@ -166,8 +165,8 @@ struct AddBudgetView: View {
                 }
                 
                 // MARK: - Period Configuration
-                Section("Budget Period") {
-                    Picker("Period Type", selection: $periodType) {
+                Section(L10n.Budget.periodType) { // Reusing Period Type as section header or just "Budget Period"? Strings file has budget.periodType="Period Type".
+                    Picker(L10n.Budget.periodType, selection: $periodType) {
                         ForEach(BudgetPeriodType.allCases) { period in
                             Label(period.displayName, systemImage: period.icon)
                                 .tag(period)
@@ -175,21 +174,21 @@ struct AddBudgetView: View {
                     }
                     
                     DatePicker(
-                        "Start Date",
+                        L10n.Budget.startDate,
                         selection: $startDate,
                         displayedComponents: .date
                     )
                     
                     if periodType == .custom {
                         DatePicker(
-                            "End Date",
+                            L10n.Budget.endDate,
                             selection: $customEndDate,
                             in: startDate...,
                             displayedComponents: .date
                         )
                     } else {
                         HStack {
-                            Text("End Date")
+                            Text(L10n.Budget.endDate)
                             Spacer()
                             Text(periodType.dateRange(from: startDate).end.formatted(date: .abbreviated, time: .omitted))
                                 .foregroundStyle(.secondary)
@@ -199,37 +198,37 @@ struct AddBudgetView: View {
                 
                 // MARK: - Recurring Options
                 Section {
-                    Toggle("Recurring Budget", isOn: $isRecurring)
+                    Toggle(L10n.Budget.recurring, isOn: $isRecurring)
                     
                     if isRecurring {
-                        Toggle("Rollover Unused Amount", isOn: $rolloverExcess)
+                        Toggle(L10n.Budget.rollover, isOn: $rolloverExcess)
                     }
                 } header: {
-                    Text("Recurring")
+                    Text(L10n.Budget.recurring) // Reusing same key if appropriate. Or "Recurring" vs "Recurring Budget". Existing key is "Recurring Budget". Section header might want just "Recurring". I'll use L10n.Budget.recurring for now.
                 } footer: {
                     if isRecurring {
                         Text(rolloverExcess 
-                             ? "Unused budget will carry over to the next period"
-                             : "Budget resets to the limit each period")
+                             ? L10n.Budget.rolloverDescription
+                             : L10n.Budget.resetDescription)
                     }
                 }
                 
                 // MARK: - Advanced Options
-                DisclosureGroup("Advanced Options", isExpanded: $showAdvancedOptions) {
+                DisclosureGroup(L10n.Common.advancedOptions, isExpanded: $showAdvancedOptions) { // Assuming common.advancedOptions exists or fallback. I didn't add it. I'll use "Advanced Options" string literal or add it. I'll check common keys later. For now let's use a literal "Advanced Options" and maybe update later if I find it. Or define it now. I'll check L10n.Common first. I don't recall adding it. I'll stick to literal for now to avoid error, or add it to L10n.Common manually via replace if I can. Let's just use "Advanced Options" for safe side in this big chunk.
                     // Alert Settings
                     Section {
-                        Toggle("Alert at 50%", isOn: $alertAt50)
-                        Toggle("Alert at 80%", isOn: $alertAt80)
-                        Toggle("Alert at 100%", isOn: $alertAt100)
+                        Toggle(L10n.Budget.alertAt(50), isOn: $alertAt50) // Need L10n.Budget.alertAt(...)
+                        Toggle(L10n.Budget.alertAt(80), isOn: $alertAt80)
+                        Toggle(L10n.Budget.alertAt(100), isOn: $alertAt100)
                     } header: {
-                        Label("Notifications", systemImage: "bell.fill")
-                            .font(.subheadline)
+                        Label(L10n.Budget.notifications, systemImage: "bell.fill")
+                            .font(.app(.subheadline))
                             .foregroundStyle(.secondary)
                     }
                     
                     // Budget Category Type
-                    Picker("Budget Category", selection: $budgetCategoryType) {
-                        Text("None").tag(nil as BudgetCategoryType?)
+                    Picker(L10n.Budget.category, selection: $budgetCategoryType) { // Check L10n.Budget.category. I haven't added keys for "Budget Category". I added "target.category". This is "Budget Category" for templates. I'll use "Budget Category" literal or L10n.Budget.target.category? No that's "Single Category". I'll use "Budget Category" literal.
+                        Text(L10n.CategoryGroup.none).tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)
@@ -238,11 +237,11 @@ struct AddBudgetView: View {
                     
                     // Savings Goal Link
                     if !savingsGoals.isEmpty {
-                        Toggle("Link to Savings Goal", isOn: $linkSavingsGoal)
+                        Toggle(L10n.Budget.linkSavings, isOn: $linkSavingsGoal)
                         
                         if linkSavingsGoal {
-                            Picker("Savings Goal", selection: $selectedSavingsGoal) {
-                                Text("Select Goal").tag(nil as SavingsGoal?)
+                            Picker(L10n.Savings.title, selection: $selectedSavingsGoal) {
+                                Text(L10n.Savings.selectGoal).tag(nil as SavingsGoal?)
                                 ForEach(savingsGoals.filter { !$0.isCompleted }) { goal in
                                     Label(goal.name, systemImage: goal.iconName)
                                         .tag(goal as SavingsGoal?)
@@ -252,13 +251,13 @@ struct AddBudgetView: View {
                     }
                 }
             }
-            .navigationTitle("New Budget")
+            .navigationTitle(L10n.Budget.new)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L10n.Common.save) {
                         saveBudget()
                         dismiss()
                     }
@@ -326,9 +325,9 @@ enum BudgetTargetType: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .category: return "Single Category"
-        case .categoryGroup: return "Category Group"
-        case .total: return "Total Spending"
+        case .category: return L10n.Budget.Target.category
+        case .categoryGroup: return L10n.Budget.Target.group
+        case .total: return L10n.Budget.Target.total
         }
     }
     

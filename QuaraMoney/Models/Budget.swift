@@ -114,11 +114,14 @@ final class Budget {
     /// Single category (nil = total/overall budget)
     @Relationship(deleteRule: .nullify) var category: Category?
     
-    /// Category group for bundled budgets (New)
-    @Relationship(deleteRule: .nullify) var categoryGroup: CategoryGroup?
+
+
     
     /// Linked savings goal (New)
     @Relationship(deleteRule: .nullify) var savingsGoal: SavingsGoal?
+    
+    /// List of categories for this budget (New - replaces single category and group)
+    @Relationship(deleteRule: .nullify) var categories: [Category]?
     
     // MARK: - Initialization
     
@@ -131,13 +134,14 @@ final class Budget {
         startDate: Date = Date(),
         customEndDate: Date? = nil,
         category: Category? = nil,
-        categoryGroup: CategoryGroup? = nil,
+
         isRecurring: Bool = false,
         rolloverExcess: Bool = false,
         alertAt50: Bool = false,
         alertAt80: Bool = true,
         alertAt100: Bool = true,
-        budgetCategoryType: BudgetCategoryType? = nil
+        budgetCategoryType: BudgetCategoryType? = nil,
+        categories: [Category]? = nil
     ) {
         self.id = UUID()
         self.name = name
@@ -147,14 +151,15 @@ final class Budget {
         self.startDate = startDate
         self.customEndDate = customEndDate
         self.category = category
-        self.categoryGroup = categoryGroup
         self.isRecurring = isRecurring
         self.rolloverExcess = rolloverExcess
         self.rolloverAmount = 0
         self.alertAt50 = alertAt50
         self.alertAt80 = alertAt80
         self.alertAt100 = alertAt100
+        self.alertAt100 = alertAt100
         self.budgetCategoryTypeRaw = budgetCategoryType?.rawValue
+        self.categories = categories
         
         // Set legacy fields from start date for compatibility
         let calendar = Calendar.current
@@ -194,24 +199,27 @@ final class Budget {
         if let name = name, !name.isEmpty {
             return name
         }
+        if let categories = categories, !categories.isEmpty {
+            if categories.count == 1 {
+                return categories.first?.name ?? "Budget"
+            } else if categories.count == 2 {
+                return "\(categories[0].name) & \(categories[1].name)"
+            } else {
+                return "\(categories[0].name) & \(categories.count - 1) others"
+            }
+        }
         if let category = category {
             return category.name
-        }
-        if let group = categoryGroup {
-            return group.name
         }
         return "Total Budget"
     }
     
     /// Whether this is a total/overall budget (no specific category)
     var isTotalBudget: Bool {
-        category == nil && categoryGroup == nil
+        (category == nil && (categories == nil || categories?.isEmpty == true))
     }
     
-    /// Whether this is a category group budget
-    var isGroupBudget: Bool {
-        categoryGroup != nil
-    }
+
     
     /// The effective budget period date range
     var periodDateRange: (start: Date, end: Date) {
@@ -262,11 +270,11 @@ final class Budget {
     
     /// All category IDs this budget tracks (for filtering transactions)
     var trackedCategoryIds: [UUID] {
+        if let categories = categories, !categories.isEmpty {
+            return categories.map { $0.id }
+        }
         if let category = category {
             return [category.id]
-        }
-        if let group = categoryGroup {
-            return group.categoryIds
         }
         return [] // Total budget tracks all
     }

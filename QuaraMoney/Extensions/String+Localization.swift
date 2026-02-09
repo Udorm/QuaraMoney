@@ -145,6 +145,9 @@ enum L10n {
         static var advancedOptions: String { "common.advancedOptions".localized }
         static var next: String { "common.next".localized }
         static var search: String { "common.search".localized }
+        static var select: String { "common.select".localized }
+        static var selectAll: String { "common.selectAll".localized }
+        static var deselectAll: String { "common.deselectAll".localized }
     }
     
     // MARK: - Tab Bar
@@ -242,36 +245,7 @@ enum L10n {
         static var tech: String { "category.tech".localized }
     }
     
-    // MARK: - Category Group
-    enum CategoryGroup {
-        static var title: String { "categoryGroup.title".localized }
-        static var new: String { "categoryGroup.new".localized }
-        static var details: String { "categoryGroup.details".localized }
-        static var edit: String { "categoryGroup.edit".localized }
-        static var addCategories: String { "categoryGroup.addCategories".localized }
-        static var name: String { "categoryGroup.name".localized }
-        static var description: String { "categoryGroup.description".localized }
-        static var emptyState: String { "categoryGroup.emptyState".localized }
-        static var emptyDescription: String { "categoryGroup.emptyDescription".localized }
-        static var none: String { "categoryGroup.none".localized }
-        static var categorization: String { "categoryGroup.categorization".localized }
-        static var categorizationFooter: String { "categoryGroup.categorizationFooter".localized }
-        static var noExpenseCategories: String { "categoryGroup.noExpenseCategories".localized }
-        static var quickTemplates: String { "categoryGroup.quickTemplates".localized }
-        static var groupInfo: String { "categoryGroup.groupInfo".localized }
-        static var appearance: String { "categoryGroup.appearance".localized }
-        static var linkedBudgets: String { "categoryGroup.linkedBudgets".localized }
-        static var noCategoriesInGroup: String { "categoryGroup.noCategoriesInGroup".localized }
-        static var allAdded: String { "categoryGroup.allAdded".localized }
-        static var allAddedDescription: String { "categoryGroup.allAddedDescription".localized }
-        static var noAvailable: String { "categoryGroup.noAvailable".localized }
-        static var create: String { "categoryGroup.create".localized }
-        static var select: String { "categoryGroup.select".localized }
 
-        
-        static func count(_ count: Int) -> String { "categoryGroup.count".localized(with: count) }
-        static func selectedCount(_ count: Int) -> String { "categoryGroup.selectedCount".localized(with: count) }
-    }
     
     // MARK: - Budget
     enum Budget {
@@ -281,7 +255,7 @@ enum L10n {
         static var details: String { "budget.details".localized }
         static var insights: String { "budget.insights".localized }
         static var name: String { "budget.name".localized }
-        static var createCategoryGroup: String { "budget.createCategoryGroup".localized }
+
         static var notifications: String { "budget.notifications".localized }
         static var rollover: String { "budget.rollover".localized }
         static var dailyAverage: String { "budget.dailyAverage".localized }
@@ -312,6 +286,7 @@ enum L10n {
         static var rolloverDescription: String { "budget.rolloverDescription".localized }
         static var resetDescription: String { "budget.resetDescription".localized }
         static var linkSavings: String { "budget.linkSavings".localized }
+        static var selectCategories: String { "budget.selectCategories".localized }
         static var category: String { "budget.category".localized }
         static var summary: String { "budget.summary".localized }
         static var original: String { "budget.original".localized }
@@ -333,7 +308,8 @@ enum L10n {
         
         enum Target {
             static var category: String { "budget.target.category".localized }
-            static var group: String { "budget.target.group".localized }
+
+            static var specificCategories: String { "budget.target.specificCategories".localized }
             static var total: String { "budget.target.total".localized }
             static var type: String { "budget.target.type".localized }
         }

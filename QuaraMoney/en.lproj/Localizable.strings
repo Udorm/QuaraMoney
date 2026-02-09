@@ -21,6 +21,9 @@
 "common.error" = "Error";
 "common.advancedOptions" = "Advanced Options";
 "common.search" = "Search";
+"common.select" = "Select";
+"common.selectAll" = "Select All";
+"common.deselectAll" = "Deselect All";
 
 // MARK: - Tab Bar
 "tab.home" = "Home";
@@ -109,29 +112,6 @@
 "category.education" = "Education";
 "category.tech" = "Tech";
 
-// MARK: - Category Groups
-"categoryGroup.title" = "Category Groups";
-"categoryGroup.new" = "New Category Group";
-"categoryGroup.details" = "Group Details";
-"categoryGroup.edit" = "Edit Group";
-"categoryGroup.addCategories" = "Add Categories";
-"categoryGroup.name" = "Group Name";
-"categoryGroup.description" = "Description (Optional)";
-"categoryGroup.emptyState" = "No Category Groups";
-"categoryGroup.emptyDescription" = "Create groups to organize related categories together for easier budgeting.";
-"categoryGroup.count" = "%d categories";
-"categoryGroup.none" = "None";
-"categoryGroup.categorization" = "Categorization";
-"categoryGroup.categorizationFooter" = "Helps organize groups for template-based budgeting";
-"categoryGroup.noExpenseCategories" = "No expense categories available";
-"categoryGroup.selectedCount" = "Categories (%d selected)";
-"categoryGroup.quickTemplates" = "Quick Templates";
-"categoryGroup.groupInfo" = "Group Info";
-"categoryGroup.appearance" = "Appearance";
-"categoryGroup.linkedBudgets" = "Linked Budgets";
-"categoryGroup.noCategoriesInGroup" = "No categories in this group";
-"categoryGroup.allAdded" = "All Categories Added";
-"categoryGroup.allAddedDescription" = "All expense categories are already in this group.";
 
 // MARK: - Budget
 "budget.title" = "Budgets";
@@ -140,7 +120,7 @@
 "budget.details" = "Budget Details";
 "budget.insights" = "Budget Insights";
 "budget.name" = "Budget Name";
-"budget.createCategoryGroup" = "Create Category Group";
+
 "budget.notifications" = "Notifications";
 "budget.rollover" = "Rollover Unused Amount";
 "budget.dailyAverage" = "Daily Average";
@@ -172,17 +152,17 @@
 "budget.resetDescription" = "Budget resets to the limit each period";
 "budget.linkSavings" = "Link to Savings Goal";
 "budget.target.category" = "Single Category";
-"budget.target.group" = "Category Group";
+
 "budget.target.total" = "Total Spending";
 "budget.filter.active" = "Active";
 "budget.filter.upcoming" = "Upcoming";
 "budget.filter.past" = "Past";
 "budget.filter.all" = "All";
 "budget.target.type" = "Budget Type";
+"budget.target.specificCategories" = "Specific Categories";
+"budget.selectCategories" = "Select Categories";
 "category.noAvailable" = "No categories available";
-"categoryGroup.noAvailable" = "No category groups available";
-"categoryGroup.create" = "Create Category Group";
-"categoryGroup.select" = "Select Group";
+
 "savings.selectGoal" = "Select Goal";
 "budget.alertAt" = "Alert at %d%%";
 "budget.category" = "Budget Category";

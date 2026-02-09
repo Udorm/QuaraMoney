@@ -27,10 +27,10 @@ struct BudgetDetailView: View {
             // Check if transaction matches budget target
             if budget.isTotalBudget {
                 return true
+            } else if let categories = budget.categories, !categories.isEmpty {
+                return categories.contains { $0.id == txn.category?.id }
             } else if let categoryId = budget.category?.id {
                 return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
             }
             
             return false
@@ -51,11 +51,39 @@ struct BudgetDetailView: View {
     
     /// Budget limit converted to preferred currency
     private var budgetLimitConverted: Decimal {
-        CurrencyManager.shared.convert(
-            amount: budget.effectiveLimit,
+        let limit: Decimal
+        if case .percentOfIncome = budget.amountType {
+            let income = calculateIncome()
+            limit = budget.calculateEffectiveLimit(income: income)
+        } else {
+            limit = budget.effectiveLimit
+        }
+        
+        return CurrencyManager.shared.convert(
+            amount: limit,
             from: budget.currencyCode,
             to: preferredCurrency
         )
+    }
+    
+    /// Calculate total income for the budget period
+    private func calculateIncome() -> Decimal {
+        let periodRange = budget.periodDateRange
+        
+        let relevantIncome = transactions.filter { txn in
+            txn.type == .income &&
+            txn.date >= periodRange.start &&
+            txn.date < periodRange.end
+        }
+        
+        return relevantIncome.reduce(Decimal.zero) { total, txn in
+            let converted = CurrencyManager.shared.convert(
+                amount: txn.amount,
+                from: txn.currencyCode,
+                to: budget.currencyCode
+            )
+            return total + converted
+        }
     }
     
     /// Remaining amount
@@ -104,8 +132,6 @@ struct BudgetDetailView: View {
     private var budgetIcon: String {
         if let category = budget.category {
             return category.icon
-        } else if let group = budget.categoryGroup {
-            return group.iconName
         } else {
             return "sum"
         }
@@ -352,7 +378,7 @@ struct BudgetDetailView: View {
                                 .cornerRadius(4)
                         }
                         if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
-                            Text(L10n.CategoryGroup.none) // L10n.CategoryGroup.none is "None". Good.
+                            Text("None")
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }

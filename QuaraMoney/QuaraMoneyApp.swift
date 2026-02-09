@@ -27,8 +27,7 @@ struct QuaraMoneyApp: App {
             RecurringRule.self,
             Transaction.self,
             Budget.self,
-            SavingsGoal.self,
-            CategoryGroup.self
+
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

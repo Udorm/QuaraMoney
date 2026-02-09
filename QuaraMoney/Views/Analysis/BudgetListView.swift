@@ -8,6 +8,7 @@ struct BudgetListView: View {
     @State private var showAddBudget = false
     @State private var filterPeriod: BudgetFilterPeriod = .active
     @State private var showRecurringOnly = false
+    @State private var searchText = ""
     
     private var preferredCurrency: String {
         CurrencyManager.shared.preferredCurrencyCode
@@ -31,6 +32,24 @@ struct BudgetListView: View {
         // Filter by recurring
         if showRecurringOnly {
             result = result.filter { $0.isRecurring }
+        }
+        
+        // Filter by search text
+        if !searchText.isEmpty {
+            result = result.filter { budget in
+                if let name = budget.name, name.localizedCaseInsensitiveContains(searchText) {
+                    return true
+                }
+                if let category = budget.category, category.name.localizedCaseInsensitiveContains(searchText) {
+                    return true
+                }
+                if let categories = budget.categories {
+                    if categories.contains(where: { $0.name.localizedCaseInsensitiveContains(searchText) }) {
+                        return true
+                    }
+                }
+                return false
+            }
         }
         
         return result
@@ -73,8 +92,16 @@ struct BudgetListView: View {
             }
         }
         .navigationTitle(L10n.Budget.title)
+        .searchable(text: $searchText)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showAddBudget = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                
                 FilterSheetButton(
                     selectedPeriod: $filterPeriod,
                     selectedWallet: .constant(nil),
@@ -87,14 +114,6 @@ struct BudgetListView: View {
                     Section {
                         Toggle(L10n.Budget.recurringOnly, isOn: $showRecurringOnly)
                     }
-                }
-            }
-            
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAddBudget = true
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
@@ -125,12 +144,12 @@ struct BudgetListView: View {
             if budget.isTotalBudget {
                 // Total budget: include all expenses
                 return true
+            } else if let categories = budget.categories, !categories.isEmpty {
+                // Multi-category budget
+                return categories.contains { $0.id == txn.category?.id }
             } else if let categoryId = budget.category?.id {
                 // Single category budget
                 return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                // Category group budget
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
             }
             
             return false
@@ -149,11 +168,39 @@ struct BudgetListView: View {
     
     /// Convert budget limit to preferred currency
     private func convertBudgetLimit(for budget: Budget) -> Decimal {
+        let limit: Decimal
+        if case .percentOfIncome = budget.amountType {
+            let income = calculateIncome(for: budget)
+            limit = budget.calculateEffectiveLimit(income: income)
+        } else {
+            limit = budget.effectiveLimit
+        }
+        
         return CurrencyManager.shared.convert(
-            amount: budget.effectiveLimit,
+            amount: limit,
             from: budget.currencyCode,
             to: preferredCurrency
         )
+    }
+    
+    /// Calculate total income for the budget period
+    private func calculateIncome(for budget: Budget) -> Decimal {
+        let periodRange = budget.periodDateRange
+        
+        let relevantIncome = transactions.filter { txn in
+            txn.type == .income &&
+            txn.date >= periodRange.start &&
+            txn.date < periodRange.end
+        }
+        
+        return relevantIncome.reduce(Decimal.zero) { total, txn in
+            let converted = CurrencyManager.shared.convert(
+                amount: txn.amount,
+                from: txn.currencyCode,
+                to: budget.currencyCode
+            )
+            return total + converted
+        }
     }
     
     private func deleteBudgets(offsets: IndexSet) {
@@ -209,11 +256,39 @@ struct BudgetSummarySection: View {
     
     private var totalBudgeted: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
-            total + CurrencyManager.shared.convert(
-                amount: budget.effectiveLimit,
+            let limit: Decimal
+            if case .percentOfIncome = budget.amountType {
+                let income = calculateIncome(for: budget)
+                limit = budget.calculateEffectiveLimit(income: income)
+            } else {
+                limit = budget.effectiveLimit
+            }
+            
+            return total + CurrencyManager.shared.convert(
+                amount: limit,
                 from: budget.currencyCode,
                 to: preferredCurrency
             )
+        }
+    }
+    
+    /// Calculate total income for the budget period (Matches logic in BudgetListView)
+    private func calculateIncome(for budget: Budget) -> Decimal {
+        let periodRange = budget.periodDateRange
+        
+        let relevantIncome = transactions.filter { txn in
+            txn.type == .income &&
+            txn.date >= periodRange.start &&
+            txn.date < periodRange.end
+        }
+        
+        return relevantIncome.reduce(Decimal.zero) { total, txn in
+            let converted = CurrencyManager.shared.convert(
+                amount: txn.amount,
+                from: txn.currencyCode,
+                to: budget.currencyCode
+            )
+            return total + converted
         }
     }
     
@@ -226,12 +301,20 @@ struct BudgetSummarySection: View {
     private var onTrackCount: Int {
         budgets.filter { budget in
             let spent = calculateSpending(for: budget)
-            let limit = CurrencyManager.shared.convert(
-                amount: budget.effectiveLimit,
+            let limit: Decimal
+            if case .percentOfIncome = budget.amountType {
+                let income = calculateIncome(for: budget)
+                limit = budget.calculateEffectiveLimit(income: income)
+            } else {
+                limit = budget.effectiveLimit
+            }
+            
+            let limitConverted = CurrencyManager.shared.convert(
+                amount: limit,
                 from: budget.currencyCode,
                 to: preferredCurrency
             )
-            let progress = limit > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber) : 0
+            let progress = limitConverted > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limitConverted as NSNumber) : 0
             return progress <= 1.0 // Changed to 1.0 to consider "on track" as not over budget, or strict 0.8? Sticking to logic "over budget" count implies > 1.0 usually, but let's keep original logic loosely or refine. Original was <= 0.8. Let's use <= 1.0 for "On Track" in general sense, or strictly adhering to "Healthy". 
             // Let's stick to "On Track" meaning "Not Over Budget" for the text label "X on track, Y over".
         }.count
@@ -294,10 +377,10 @@ struct BudgetSummarySection: View {
             
             if budget.isTotalBudget {
                 return true
+            } else if let categories = budget.categories, !categories.isEmpty {
+                return categories.contains { $0.id == txn.category?.id }
             } else if let categoryId = budget.category?.id {
                 return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
             }
             
             return false
@@ -349,20 +432,26 @@ struct BudgetRowView: View {
     }
     
     private var budgetIcon: String {
-        if let category = budget.category {
+        if let categories = budget.categories, !categories.isEmpty {
+            if categories.count == 1 {
+                return categories.first?.icon ?? "folder.fill"
+            }
+            return "folder.fill" // Generic icon for multiple categories
+        } else if let category = budget.category {
             return category.icon
-        } else if let group = budget.categoryGroup {
-            return group.iconName
         } else {
             return "chart.pie.fill"
         }
     }
     
     private var iconColor: Color {
-        if let category = budget.category {
+        if let categories = budget.categories, !categories.isEmpty {
+            if categories.count == 1 {
+                return Color(hex: categories.first?.colorHex ?? "") ?? .blue
+            }
+            return .blue // Default color for multiple
+        } else if let category = budget.category {
             return Color(hex: category.colorHex) ?? .blue
-        } else if let group = budget.categoryGroup {
-            return Color(hex: group.colorHex) ?? .purple
         } else {
             return .blue
         }
@@ -461,6 +550,6 @@ struct BudgetRowView: View {
 #Preview {
     NavigationStack {
         BudgetListView()
-            .modelContainer(for: [Budget.self, Transaction.self, Category.self, CategoryGroup.self], inMemory: true)
+            .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
     }
 }

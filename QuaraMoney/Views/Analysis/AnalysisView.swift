@@ -25,6 +25,13 @@ struct AnalysisContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Filter Description
+                    Text(vm.filterDescription)
+                        .font(.app(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                    
                     // Charts (Now includes the Period Picker)
                     SpendingTrendChart(vm: vm)
                     
@@ -37,7 +44,7 @@ struct AnalysisContentView: View {
             .navigationTitle(L10n.Analysis.title)
             .background(Color(.systemGroupedBackground))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     AnalysisFilterSheetButton(
                         selectedTransactionType: $vm.selectedTransactionType,
                         selectedWallet: $vm.selectedWallet,
@@ -69,7 +76,6 @@ struct SpendingTrendChart: View {
         VStack(alignment: .leading, spacing: 20) {
             // 1. Segmented Control
             Picker("Period", selection: $vm.selectedPeriod) {
-                Text("D").tag(AnalysisPeriod.day)
                 Text("W").tag(AnalysisPeriod.week)
                 Text("M").tag(AnalysisPeriod.month)
                 Text("6M").tag(AnalysisPeriod.sixMonths)
@@ -108,9 +114,6 @@ struct SpendingTrendChart: View {
                         .font(.app(.title, weight: .bold))
                         .foregroundStyle(Color.primary)
                     
-                    Text(vm.filterDescription)
-                        .font(.app(.subheadline))
-                        .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
@@ -284,9 +287,6 @@ struct CategoryBreakdownChart: View {
                 
                 Spacer()
                 
-                Text(vm.filterDescription)
-                    .font(.app(.caption))
-                    .foregroundStyle(.secondary)
             }
             
             LazyVStack(spacing: 0) {

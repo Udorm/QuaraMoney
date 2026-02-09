@@ -6,7 +6,7 @@ struct AddBudgetView: View {
     @Environment(\.dismiss) private var dismiss
     
     @Query(sort: \Category.name) private var categories: [Category]
-    @Query(sort: \CategoryGroup.name) private var categoryGroups: [CategoryGroup]
+
     @Query(sort: \SavingsGoal.name) private var savingsGoals: [SavingsGoal]
     
     // MARK: - Form State
@@ -16,9 +16,9 @@ struct AddBudgetView: View {
     @State private var selectedCurrency: String = CurrencyManager.shared.preferredCurrencyCode
     
     // Target selection
-    @State private var targetType: BudgetTargetType = .category
-    @State private var selectedCategory: Category?
-    @State private var selectedCategoryGroup: CategoryGroup?
+    @State private var targetType: BudgetTargetType = .specificCategories
+    @State private var selectedCategories: Set<UUID> = []
+    @State private var showCategoryPicker = false
     
     // Period configuration
     @State private var periodType: BudgetPeriodType = .monthly
@@ -49,7 +49,7 @@ struct AddBudgetView: View {
     @State private var showAdvancedOptions: Bool = false
     
     private var isFormValid: Bool {
-        let hasTarget = targetType == .total || selectedCategory != nil || selectedCategoryGroup != nil
+        let hasTarget = targetType == .total || !selectedCategories.isEmpty
         let hasAmount = !amountString.isEmpty || usePercentage
         return hasTarget && hasAmount
     }
@@ -77,33 +77,40 @@ struct AddBudgetView: View {
                     .pickerStyle(.menu)
                     
                     switch targetType {
-                    case .category:
-                        if categories.isEmpty {
-                            Text(L10n.Category.noAvailable)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Picker(L10n.Category.select, selection: $selectedCategory) {
-                                Text(L10n.Category.select).tag(nil as Category?)
-                                ForEach(categories.filter { $0.type == .expense }) { category in
-                                    Label(category.name, systemImage: category.icon)
-                                        .tag(category as Category?)
+                    case .specificCategories:
+                        Button {
+                            showCategoryPicker = true
+                        } label: {
+                            HStack {
+                                Text(L10n.Budget.Target.specificCategories)
+                                Spacer()
+                                if selectedCategories.isEmpty {
+                                    Text(L10n.Common.select)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("\(selectedCategories.count)")
+                                        .foregroundStyle(.secondary)
                                 }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
                         }
                         
-                    case .categoryGroup:
-                        if categoryGroups.isEmpty {
-                            Text(L10n.CategoryGroup.noAvailable)
-                                .foregroundStyle(.secondary)
-                            Button(L10n.CategoryGroup.create) {
-                                // TODO: Navigate to create group
+                        if !selectedCategories.isEmpty {
+                            ForEach(categories.filter { selectedCategories.contains($0.id) }) { category in
+                                HStack {
+                                    Image(systemName: category.icon)
+                                        .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
+                                        .frame(width: 24)
+                                    Text(category.name)
+                                    Spacer()
+                                }
                             }
-                        } else {
-                            Picker(L10n.CategoryGroup.select, selection: $selectedCategoryGroup) {
-                                Text(L10n.CategoryGroup.select).tag(nil as CategoryGroup?)
-                                ForEach(categoryGroups) { group in
-                                    Label(group.name, systemImage: group.iconName)
-                                        .tag(group as CategoryGroup?)
+                            .onDelete { indexSet in
+                                let categoriesToDelete = categories.filter { selectedCategories.contains($0.id) }
+                                indexSet.forEach { index in
+                                    selectedCategories.remove(categoriesToDelete[index].id)
                                 }
                             }
                         }
@@ -111,9 +118,9 @@ struct AddBudgetView: View {
                     case .total:
                         HStack {
                             Image(systemName: "sum")
-                                .foregroundStyle(.blue)
+                            .foregroundStyle(.blue)
                             Text(L10n.Budget.allExpenses)
-                                .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -227,8 +234,8 @@ struct AddBudgetView: View {
                     }
                     
                     // Budget Category Type
-                    Picker(L10n.Budget.category, selection: $budgetCategoryType) { // Check L10n.Budget.category. I haven't added keys for "Budget Category". I added "target.category". This is "Budget Category" for templates. I'll use "Budget Category" literal or L10n.Budget.target.category? No that's "Single Category". I'll use "Budget Category" literal.
-                        Text(L10n.CategoryGroup.none).tag(nil as BudgetCategoryType?)
+                    Picker(L10n.Budget.category, selection: $budgetCategoryType) { 
+                        Text("None").tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)
@@ -254,16 +261,27 @@ struct AddBudgetView: View {
             .navigationTitle(L10n.Budget.new)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.save) {
+                    Button {
                         saveBudget()
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!isFormValid)
                 }
             }
+        }
+
+        .sheet(isPresented: $showCategoryPicker) {
+            MultiCategoryPicker(selectedCategories: $selectedCategories)
         }
     }
     
@@ -288,14 +306,16 @@ struct AddBudgetView: View {
             periodType: periodType,
             startDate: startDate,
             customEndDate: periodType == .custom ? customEndDate : nil,
-            category: targetType == .category ? selectedCategory : nil,
-            categoryGroup: targetType == .categoryGroup ? selectedCategoryGroup : nil,
+            category: nil,
             isRecurring: isRecurring,
             rolloverExcess: rolloverExcess,
             alertAt50: alertAt50,
             alertAt80: alertAt80,
             alertAt100: alertAt100,
-            budgetCategoryType: budgetCategoryType
+            budgetCategoryType: budgetCategoryType,
+            categories: targetType == .specificCategories 
+                ? categories.filter { selectedCategories.contains($0.id) } 
+                : nil
         )
         
         // Set amount type
@@ -314,27 +334,25 @@ struct AddBudgetView: View {
     }
 }
 
+
 // MARK: - Budget Target Type
 
 enum BudgetTargetType: String, CaseIterable, Identifiable {
-    case category
-    case categoryGroup
+    case specificCategories
     case total
     
     var id: String { rawValue }
     
     var displayName: String {
         switch self {
-        case .category: return L10n.Budget.Target.category
-        case .categoryGroup: return L10n.Budget.Target.group
+        case .specificCategories: return L10n.Budget.Target.specificCategories // "Specific Categories"
         case .total: return L10n.Budget.Target.total
         }
     }
     
     var icon: String {
         switch self {
-        case .category: return "folder"
-        case .categoryGroup: return "folder.fill.badge.gearshape"
+        case .specificCategories: return "list.bullet"
         case .total: return "sum"
         }
     }
@@ -342,5 +360,5 @@ enum BudgetTargetType: String, CaseIterable, Identifiable {
 
 #Preview {
     AddBudgetView()
-        .modelContainer(for: [Budget.self, Category.self, CategoryGroup.self, SavingsGoal.self], inMemory: true)
+        .modelContainer(for: [Budget.self, Category.self, SavingsGoal.self], inMemory: true)
 }

@@ -82,75 +82,7 @@ class BudgetSuggestionService {
         )
     }
     
-    /// Suggest budget for a category group
-    func suggestBudgetAmount(
-        for categoryGroup: CategoryGroup,
-        periodType: BudgetPeriodType = .monthly,
-        months: Int = 3,
-        bufferPercent: Double = 0.1
-    ) -> BudgetSuggestion {
-        var allTransactions: [Transaction] = []
-        
-        for category in categoryGroup.categories {
-            let transactions = fetchTransactions(for: category, months: months)
-            allTransactions.append(contentsOf: transactions)
-        }
-        
-        guard !allTransactions.isEmpty else {
-            return BudgetSuggestion(
-                suggestedAmount: nil,
-                averageSpending: 0,
-                minSpending: 0,
-                maxSpending: 0,
-                transactionCount: 0,
-                confidence: .noData,
-                periodType: periodType
-            )
-        }
-        
-        // Group by period and calculate
-        let periodicAmounts = groupTransactionsByPeriod(allTransactions, periodType: periodType)
-        
-        let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
-        
-        let amounts = periodicAmounts.map { (period, txns) -> Decimal in
-            txns.reduce(Decimal.zero) { total, txn in
-                total + CurrencyManager.shared.convert(
-                    amount: txn.amount,
-                    from: txn.currencyCode,
-                    to: targetCurrency
-                )
-            }
-        }
-        
-        guard !amounts.isEmpty else {
-            return BudgetSuggestion(
-                suggestedAmount: nil,
-                averageSpending: 0,
-                minSpending: 0,
-                maxSpending: 0,
-                transactionCount: allTransactions.count,
-                confidence: .noData,
-                periodType: periodType
-            )
-        }
-        
-        let average = amounts.reduce(Decimal.zero, +) / Decimal(amounts.count)
-        let minAmount = amounts.min() ?? 0
-        let maxAmount = amounts.max() ?? 0
-        let bufferedAmount = average * (1 + Decimal(bufferPercent))
-        let confidence = determineConfidence(amounts: amounts, transactionCount: allTransactions.count)
-        
-        return BudgetSuggestion(
-            suggestedAmount: bufferedAmount,
-            averageSpending: average,
-            minSpending: minAmount,
-            maxSpending: maxAmount,
-            transactionCount: allTransactions.count,
-            confidence: confidence,
-            periodType: periodType
-        )
-    }
+
     
     /// Suggest total budget based on all expenses
     func suggestTotalBudget(
@@ -338,8 +270,13 @@ class BudgetSuggestionService {
                 return true
             } else if let categoryId = budget.category?.id {
                 return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
+            }
+            
+            // Check if transaction category is in the budget's tracked categories using the new many-to-many relationship
+            // This handles the new multi-category budget system
+            if let transactionCategoryId = txn.category?.id {
+                let trackedIds = budget.trackedCategoryIds
+                return trackedIds.contains(transactionCategoryId)
             }
             
             return false

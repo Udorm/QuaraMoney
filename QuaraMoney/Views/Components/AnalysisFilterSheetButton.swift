@@ -12,16 +12,16 @@ struct AnalysisFilterSheetButton: View {
     
     // Check if any filter is active (non-default state)
     var isFilterActive: Bool {
-        selectedWallet != nil || showFilterSheet // Consider active if sheet is open too, or just wallet
+        selectedWallet != nil || selectedTransactionType != .expense
     }
     
     var body: some View {
         Button {
             showFilterSheet = true
         } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
+            Image(systemName: "line.3.horizontal.decrease")
                 .symbolVariant(isFilterActive ? .fill : .none)
-                .font(.app(.body)) // Match toolbar item size
+                .font(.app(.title3)) // Match toolbar item size
                 .foregroundStyle(isFilterActive ? .blue : .primary)
         }
         .sheet(isPresented: $showFilterSheet) {

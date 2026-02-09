@@ -15,7 +15,8 @@ struct WalletListView: View {
         NavigationStack {
             WalletListContent(showArchived: showArchived, walletToEdit: $walletToEdit, searchText: searchText)
                 .navigationTitle(L10n.Wallet.title)
-                .searchable(text: $searchText, isPresented: $isSearchPresented)
+                .searchable(text: $searchText)
+                .searchToolbarBehavior(.minimize)
                 .sheet(isPresented: $showingAddWallet) {
                     AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 }
@@ -31,12 +32,14 @@ struct WalletListView: View {
                 
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        //add button
                         Button {
-                            isSearchPresented = true
+                            showingAddWallet = true
                         } label: {
-                            Label(L10n.Common.search, systemImage: "magnifyingglass")
+                            Image(systemName: "plus")
                         }
-
+                        
+                        //filter button
                         Button {
                             showingFilter = true
                         } label: {
@@ -45,16 +48,6 @@ struct WalletListView: View {
                                 .font(.app(.title3))
                                 .foregroundStyle(showArchived ? .blue : .primary)
                         }
-                    }
-
-                    ToolbarItem(placement: .primaryAction) {
-                        Button {
-                            showingAddWallet = true
-                        } label: {
-                            Image(systemName: "plus")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
                     }
                 }
         }

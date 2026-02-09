@@ -66,14 +66,7 @@ struct MoreView: View {
                         }
                     }
                     
-                    NavigationLink(destination: CategoryGroupListView()) {
-                        Label {
-                            Text(L10n.CategoryGroup.title)
-                        } icon: {
-                            Image(systemName: "folder.fill.badge.gearshape")
-                                .foregroundStyle(.cyan)
-                        }
-                    }
+
                 } header: {
                     Text("more.management".localized)
                 }

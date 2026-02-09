@@ -8,7 +8,7 @@ struct EditBudgetView: View {
     @Bindable var budget: Budget
     
     @Query(sort: \Category.name) private var categories: [Category]
-    @Query(sort: \CategoryGroup.name) private var categoryGroups: [CategoryGroup]
+
     @Query(sort: \SavingsGoal.name) private var savingsGoals: [SavingsGoal]
     
     // MARK: - Form State (initialized from budget)
@@ -18,9 +18,9 @@ struct EditBudgetView: View {
     @State private var selectedCurrency: String = ""
     
     // Target selection
-    @State private var targetType: BudgetTargetType = .category
-    @State private var selectedCategory: Category?
-    @State private var selectedCategoryGroup: CategoryGroup?
+    @State private var targetType: BudgetTargetType = .specificCategories
+    @State private var selectedCategories: Set<UUID> = []
+    @State private var showCategoryPicker = false
     
     // Period configuration
     @State private var periodType: BudgetPeriodType = .monthly
@@ -59,12 +59,12 @@ struct EditBudgetView: View {
         _selectedCurrency = State(initialValue: budget.currencyCode)
         
         // Target type
-        if budget.category != nil {
-            _targetType = State(initialValue: .category)
-            _selectedCategory = State(initialValue: budget.category)
-        } else if budget.categoryGroup != nil {
-            _targetType = State(initialValue: .categoryGroup)
-            _selectedCategoryGroup = State(initialValue: budget.categoryGroup)
+        if let categories = budget.categories, !categories.isEmpty {
+            _targetType = State(initialValue: .specificCategories)
+            _selectedCategories = State(initialValue: Set(categories.map { $0.id }))
+        } else if let category = budget.category {
+            _targetType = State(initialValue: .specificCategories)
+            _selectedCategories = State(initialValue: [category.id])
         } else {
             _targetType = State(initialValue: .total)
         }
@@ -98,7 +98,7 @@ struct EditBudgetView: View {
     }
     
     private var isFormValid: Bool {
-        let hasTarget = targetType == .total || selectedCategory != nil || selectedCategoryGroup != nil
+        let hasTarget = targetType == .total || !selectedCategories.isEmpty
         let hasAmount = !amountString.isEmpty || usePercentage
         return hasTarget && hasAmount
     }
@@ -126,30 +126,40 @@ struct EditBudgetView: View {
                     .pickerStyle(.menu)
                     
                     switch targetType {
-                    case .category:
-                        if categories.isEmpty {
-                            Text(L10n.Category.noAvailable)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Picker(L10n.Budget.category, selection: $selectedCategory) {
-                                Text(L10n.Category.select).tag(nil as Category?)
-                                ForEach(categories.filter { $0.type == .expense }) { category in
-                                    Label(category.name, systemImage: category.icon)
-                                        .tag(category as Category?)
+                    case .specificCategories:
+                        Button {
+                            showCategoryPicker = true
+                        } label: {
+                            HStack {
+                                Text(L10n.Budget.Target.specificCategories)
+                                Spacer()
+                                if selectedCategories.isEmpty {
+                                    Text(L10n.Common.select)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("\(selectedCategories.count)")
+                                        .foregroundStyle(.secondary)
                                 }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
                         }
                         
-                    case .categoryGroup:
-                        if categoryGroups.isEmpty {
-                            Text(L10n.CategoryGroup.noAvailable)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Picker(L10n.CategoryGroup.select, selection: $selectedCategoryGroup) {
-                                Text(L10n.CategoryGroup.select).tag(nil as CategoryGroup?)
-                                ForEach(categoryGroups) { group in
-                                    Label(group.name, systemImage: group.iconName)
-                                        .tag(group as CategoryGroup?)
+                        if !selectedCategories.isEmpty {
+                            ForEach(categories.filter { selectedCategories.contains($0.id) }) { category in
+                                HStack {
+                                    Image(systemName: category.icon)
+                                        .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
+                                        .frame(width: 24)
+                                    Text(category.name)
+                                    Spacer()
+                                }
+                            }
+                            .onDelete { indexSet in
+                                let categoriesToDelete = categories.filter { selectedCategories.contains($0.id) }
+                                indexSet.forEach { index in
+                                    selectedCategories.remove(categoriesToDelete[index].id)
                                 }
                             }
                         }
@@ -263,7 +273,7 @@ struct EditBudgetView: View {
                     
                     // Budget Category Type
                     Picker(L10n.Budget.category, selection: $budgetCategoryType) {
-                        Text(L10n.CategoryGroup.none).tag(nil as BudgetCategoryType?)
+                        Text("None").tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)
@@ -302,16 +312,27 @@ struct EditBudgetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.save) {
+                    Button {
                         saveBudget()
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!isFormValid)
                 }
+
             }
+        }
+        .sheet(isPresented: $showCategoryPicker) {
+            MultiCategoryPicker(selectedCategories: $selectedCategories)
         }
     }
     
@@ -324,15 +345,12 @@ struct EditBudgetView: View {
         
         // Update target
         switch targetType {
-        case .category:
-            budget.category = selectedCategory
-            budget.categoryGroup = nil
-        case .categoryGroup:
+        case .specificCategories:
+            budget.categories = categories.filter { selectedCategories.contains($0.id) }
             budget.category = nil
-            budget.categoryGroup = selectedCategoryGroup
         case .total:
+            budget.categories = nil
             budget.category = nil
-            budget.categoryGroup = nil
         }
         
         // Update period
@@ -379,5 +397,5 @@ struct EditBudgetView: View {
     @Previewable @State var budget = Budget(amountLimit: 500, currencyCode: "USD", category: nil, month: 2, year: 2026)
     
     EditBudgetView(budget: budget)
-        .modelContainer(for: [Budget.self, Category.self, CategoryGroup.self, SavingsGoal.self], inMemory: true)
+        .modelContainer(for: [Budget.self, Category.self, SavingsGoal.self], inMemory: true)
 }

@@ -20,6 +20,7 @@ struct AddTransactionView: View {
     @State private var categorySearchText = ""
     @State private var walletSearchText = ""
     @State private var eventSearchText = ""
+    @State private var suggestedEvent: Event? // Hold the suggestion
     @FocusState private var isNoteFieldFocused: Bool
     
     // Configuration
@@ -109,7 +110,6 @@ struct AddTransactionView: View {
                         // MARK: - Transaction Type Selector
                         transactionTypeSelector
                         
-
                         
                         // MARK: - Wallet Selector
                         walletSelector
@@ -147,14 +147,21 @@ struct AddTransactionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(viewModel.isEditing ? L10n.Common.save : L10n.Common.add) {
+                    Button {
                         viewModel.saveTransaction()
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
-                    .fontWeight(.semibold)
+                    .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
                 }
             }
@@ -166,9 +173,42 @@ struct AddTransactionView: View {
                 }
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction
+                
+                // Smart suggestion: Check but valid event but DO NOT auto-select
+                if isNewTransaction && viewModel.selectedEvent == nil {
+                    checkForActiveEvent()
+                }
+            }
+            .onChange(of: viewModel.date) { _, _ in
+                // Check on date change too
+                if isNewTransaction && viewModel.selectedEvent == nil {
+                    checkForActiveEvent()
+                }
             }
         }
         .background(Color(.systemGroupedBackground))
+    }
+    
+    private func checkForActiveEvent() {
+        let date = viewModel.date
+        
+        // Don't suggest if one is already selected
+        guard viewModel.selectedEvent == nil else { 
+            suggestedEvent = nil
+            return 
+        }
+
+        let activeEvent = events.first { event in
+            if let end = event.endDate {
+                return date >= event.startDate && date <= end
+            } else {
+                return Calendar.current.isDate(date, inSameDayAs: event.startDate)
+            }
+        }
+        
+        withAnimation {
+            suggestedEvent = activeEvent
+        }
     }
     
     private func dismissKeyboard() {
@@ -497,6 +537,49 @@ struct AddTransactionView: View {
             .cornerRadius(10)
             
             // Event Row
+            if let suggested = suggestedEvent {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Suggested Event")
+                            .font(.app(.caption2))
+                            .foregroundStyle(.secondary)
+                        Text(suggested.title)
+                            .font(.app(.subheadline, weight: .semibold))
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Apply") {
+                        withAnimation {
+                            viewModel.selectedEvent = suggested
+                            suggestedEvent = nil
+                        }
+                    }
+                    .font(.app(.caption, weight: .bold))
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                    
+                    Button {
+                        withAnimation {
+                            suggestedEvent = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.app(.caption))
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
             Button {
                 showEventPicker.toggle()
             } label: {

@@ -21,6 +21,9 @@
 "common.error" = "បញ្ហា";
 "common.advancedOptions" = "ជម្រើសកម្រិតខ្ពស់";
 "common.search" = "ស្វែងរក";
+"common.select" = "ជ្រើសរើស";
+"common.selectAll" = "ជ្រើសរើសទាំងអស់";
+"common.deselectAll" = "ដកការជ្រើសរើសទាំងអស់";
 
 // MARK: - Tab Bar (របារផ្ទាំង)
 "tab.home" = "ទំព័រដើម";
@@ -109,29 +112,6 @@
 "category.education" = "ការអប់រំ";
 "category.tech" = "បច្ចេកវិទ្យា";
 
-// MARK: - Category Groups (ក្រុមប្រភេទ)
-"categoryGroup.title" = "ក្រុមប្រភេទ";
-"categoryGroup.new" = "ក្រុមប្រភេទថ្មី";
-"categoryGroup.details" = "ព័ត៌មានលម្អិតក្រុម";
-"categoryGroup.edit" = "កែសម្រួលក្រុម";
-"categoryGroup.addCategories" = "បន្ថែមប្រភេទ";
-"categoryGroup.name" = "ឈ្មោះក្រុម";
-"categoryGroup.description" = "ការពិពណ៌នា (ជម្រើស)";
-"categoryGroup.emptyState" = "គ្មានក្រុមប្រភេទ";
-"categoryGroup.emptyDescription" = "បង្កើតក្រុមដើម្បីរៀបចំប្រភេទដែលទាក់ទងគ្នាសម្រាប់ការរៀបចំថវិកាកាន់តែងាយស្រួល";
-"categoryGroup.count" = "%d ប្រភេទ";
-"categoryGroup.none" = "គ្មាន";
-"categoryGroup.categorization" = "ការបែងចែកប្រភេទ";
-"categoryGroup.categorizationFooter" = "ជួយរៀបចំក្រុមសម្រាប់ការរៀបចំថវិកាផ្អែកលើគំរូ";
-"categoryGroup.noExpenseCategories" = "គ្មានប្រភេទចំណាយដែលបើប្រើបាន";
-"categoryGroup.selectedCount" = "ប្រភេទ (%d បានជ្រើសរើស)";
-"categoryGroup.quickTemplates" = "គំរូសង្ខេប";
-"categoryGroup.groupInfo" = "ព័ត៌មានក្រុម";
-"categoryGroup.appearance" = "រូបរាង";
-"categoryGroup.linkedBudgets" = "ថវិកាភ្ជាប់គ្នា";
-"categoryGroup.noCategoriesInGroup" = "គ្មានប្រភេទក្នុងក្រុមនេះ";
-"categoryGroup.allAdded" = "ប្រភេទទាំងអស់ត្រូវបានបន្ថែម";
-"categoryGroup.allAddedDescription" = "ប្រភេទចំណាយទាំងអស់មាននៅក្នុងក្រុមនេះហើយ";
 
 // MARK: - Budget (ថវិកា)
 "budget.title" = "ថវិកា";
@@ -140,7 +120,7 @@
 "budget.details" = "ព័ត៌មានលម្អិតថវិកា";
 "budget.insights" = "ការយល់ដឹងថវិកា";
 "budget.name" = "ឈ្មោះថវិកា";
-"budget.createCategoryGroup" = "បង្កើតក្រុមប្រភេទ";
+
 "budget.notifications" = "ការជូនដំណឹង";
 "budget.rollover" = "ផ្ទេរសល់";
 "budget.dailyAverage" = "មធ្យមភាគប្រចាំថ្ងៃ";
@@ -172,17 +152,17 @@
 "budget.resetDescription" = "ថវិកានឹងកំណត់ឡើងវិញទៅដែនកំណត់រៀងរាល់វគ្គ";
 "budget.linkSavings" = "ភ្ជាប់ទៅគោលដៅសន្សំ";
 "budget.target.category" = "ប្រភេទតែមួយ";
-"budget.target.group" = "ក្រុមប្រភេទ";
+
 "budget.target.total" = "ការចំណាយសរុប";
 "budget.filter.active" = "សកម្ម";
 "budget.filter.upcoming" = "នឹងមកដល់";
 "budget.filter.past" = "អតីតកាល";
 "budget.filter.all" = "ទាំងអស់";
 "budget.target.type" = "ប្រភេទថវិកា";
+"budget.target.specificCategories" = "ប្រភេទជាក់លាក់";
+"budget.selectCategories" = "ជ្រើសរើសប្រភេទ";
 "category.noAvailable" = "គ្មានប្រភេទ";
-"categoryGroup.noAvailable" = "គ្មានក្រុមប្រភេទ";
-"categoryGroup.create" = "បង្កើតក្រុមប្រភេទ";
-"categoryGroup.select" = "ជ្រើសរើសក្រុម";
+
 "savings.selectGoal" = "ជ្រើសរើសគោលដៅ";
 "budget.alertAt" = "ជូនដំណឹងនៅ %d%%";
 "budget.category" = "ប្រភេទថវិកា";

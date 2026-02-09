@@ -43,5 +43,5 @@ struct BudgetTabView: View {
 
 #Preview {
     BudgetTabView()
-        .modelContainer(for: [Budget.self, SavingsGoal.self, Transaction.self, Category.self, CategoryGroup.self, Wallet.self], inMemory: true)
+        .modelContainer(for: [Budget.self, SavingsGoal.self, Transaction.self, Category.self, Wallet.self], inMemory: true)
 }

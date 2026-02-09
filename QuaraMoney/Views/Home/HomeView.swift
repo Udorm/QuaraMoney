@@ -66,7 +66,8 @@ struct HomeView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle(L10n.Home.title)
-            .searchable(text: $viewModel.searchText, isPresented: $isSearchPresented)
+            .searchable(text: $viewModel.searchText)
+            .searchToolbarBehavior(.minimize)
             .onAppear {
                 viewModel.refreshData()
             }
@@ -88,11 +89,10 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    // Search Button
                     Button {
-                        isSearchPresented = true
+                        showingAddTransaction = true
                     } label: {
-                        Label("Search", systemImage: "magnifyingglass")
+                        Image(systemName: "plus")
                     }
 
                     FilterSheetButton(
@@ -103,15 +103,8 @@ struct HomeView: View {
                         wallets: wallets,
                         defaultPeriod: .thisMonth
                     )
-                    
-                    Button {
-                        showingAddTransaction = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
                 }
+                
             }
         }
     }

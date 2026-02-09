@@ -95,14 +95,15 @@ struct WalletDetailView: View {
             }
         }
         .navigationTitle(viewModel.wallet.name)
-        .searchable(text: $viewModel.searchText, isPresented: $isSearchPresented)
+        .searchable(text: $viewModel.searchText)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                // Search Button (Discoverability)
+                // Add Button (Top Right / Prominent)
                 Button {
-                    isSearchPresented = true
+                    showingAddTransaction = true
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass")
+                    Image(systemName: "plus")
                 }
                 
                 // Edit Button
@@ -123,14 +124,7 @@ struct WalletDetailView: View {
                     showWalletFilter: false
                 )
                 
-                // Add Button (Top Right / Prominent)
-                Button {
-                    showingAddTransaction = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                
             }
         }
         .sheet(isPresented: $showingEditWallet) {

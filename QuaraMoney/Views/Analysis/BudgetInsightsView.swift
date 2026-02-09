@@ -211,10 +211,9 @@ struct BudgetInsightsView: View {
             
             if budget.isTotalBudget {
                 return true
-            } else if let categoryId = budget.category?.id {
-                return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
+            } else if !budget.trackedCategoryIds.isEmpty {
+                let categoryIds = budget.trackedCategoryIds
+                return categoryIds.contains(txn.category?.id ?? UUID())
             }
             
             return false
@@ -605,10 +604,9 @@ struct ActiveBudgetsSummary: View {
             
             if budget.isTotalBudget {
                 return true
-            } else if let categoryId = budget.category?.id {
-                return txn.category?.id == categoryId
-            } else if let group = budget.categoryGroup {
-                return group.categoryIds.contains(txn.category?.id ?? UUID())
+            } else if !budget.trackedCategoryIds.isEmpty {
+                let categoryIds = budget.trackedCategoryIds
+                return categoryIds.contains(txn.category?.id ?? UUID())
             }
             
             return false

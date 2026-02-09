@@ -10,7 +10,7 @@ class AnalysisViewModel: ObservableObject {
     
     // MARK: - Filters
     
-    @Published var selectedPeriod: AnalysisPeriod = .day {
+    @Published var selectedPeriod: AnalysisPeriod = .week {
         didSet {
             // Reset reference date to now when changing period
             currentReferenceDate = Date()

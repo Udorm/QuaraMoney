@@ -7,13 +7,18 @@ struct SavingsGoalListView: View {
     
     @State private var showAddGoal = false
     @State private var showCompletedGoals = false
+    @State private var searchText = ""
     
     private var activeGoals: [SavingsGoal] {
-        goals.filter { !$0.isCompleted }
+        let filtered = goals.filter { !$0.isCompleted }
+        if searchText.isEmpty { return filtered }
+        return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
     private var completedGoals: [SavingsGoal] {
-        goals.filter { $0.isCompleted }
+        let filtered = goals.filter { $0.isCompleted }
+        if searchText.isEmpty { return filtered }
+        return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
     
     private var totalSaved: Decimal {
@@ -131,6 +136,8 @@ struct SavingsGoalListView: View {
             }
         }
         .navigationTitle(L10n.Savings.title)
+        .searchable(text: $searchText)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -337,7 +344,7 @@ struct AddSavingsGoalView: View {
                 }
                 
                 // Appearance
-                Section(L10n.CategoryGroup.appearance) {
+                Section("Appearance") {
                     Button {
                         showIconPicker = true
                     } label: {
@@ -365,7 +372,7 @@ struct AddSavingsGoalView: View {
                 if !wallets.isEmpty {
                     Section {
                         Picker(L10n.Savings.wallet, selection: $linkedWallet) {
-                            Text(L10n.CategoryGroup.none).tag(nil as Wallet?)
+                            Text("None").tag(nil as Wallet?)
                             ForEach(wallets) { wallet in
                                 Text(wallet.name).tag(wallet as Wallet?)
                             }

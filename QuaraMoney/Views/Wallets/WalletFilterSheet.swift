@@ -44,17 +44,22 @@ struct WalletFilterSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) {
+                    Button {
                         isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.done) {
+                    Button {
                         showArchived = pendingShowArchived
                         isPresented = false
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
-                    .fontWeight(.semibold)
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .presentationDetents([.medium])
@@ -97,3 +102,4 @@ private struct FilterOptionRow: View {
         }
     }
 }
+

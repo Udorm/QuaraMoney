@@ -91,18 +91,9 @@ class BudgetRolloverService {
                     txn.sourceWallet?.isArchived != true
                 }
             )
-        } else if let categoryId = budget.category?.id {
-            // Single category budget (excluding archived wallets)
-            descriptor = FetchDescriptor<Transaction>(
-                predicate: #Predicate<Transaction> { txn in
-                    txn.type == expenseType &&
-                    txn.date >= start && txn.date < end &&
-                    txn.category?.id == categoryId &&
-                    txn.sourceWallet?.isArchived != true
-                }
-            )
-        } else if let group = budget.categoryGroup {
-            // Category group budget - fetch all and filter (excluding archived wallets)
+        } else if !budget.trackedCategoryIds.isEmpty {
+            // Category budget (single or multiple) - fetch all and filter
+            let categoryIds = budget.trackedCategoryIds
             let baseDescriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
@@ -114,8 +105,8 @@ class BudgetRolloverService {
             do {
                 let allTransactions = try modelContext.fetch(baseDescriptor)
                 return allTransactions.filter { txn in
-                    guard let categoryId = txn.category?.id else { return false }
-                    return group.categoryIds.contains(categoryId)
+                    guard let txnCategoryId = txn.category?.id else { return false }
+                    return categoryIds.contains(txnCategoryId)
                 }
             } catch {
                 return []

@@ -136,16 +136,21 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) {
+                    Button {
                         isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.done) {
+                    Button {
                         applyChanges()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
-                    .fontWeight(.semibold)
+                    .buttonStyle(.borderedProminent)
                 }
             }
         }

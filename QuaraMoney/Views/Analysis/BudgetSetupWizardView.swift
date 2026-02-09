@@ -526,22 +526,6 @@ struct BudgetSetupWizardView: View {
             
             guard amount > 0 else { continue }
             
-            // Create category group if categories were assigned
-            var categoryGroup: CategoryGroup?
-            if let assignedCategories = selectedCategories[type], !assignedCategories.isEmpty {
-                let group = CategoryGroup(
-                    name: type.displayName,
-                    iconName: type.icon,
-                    colorHex: type.color,
-                    budgetCategoryType: type
-                )
-                for category in assignedCategories {
-                    group.addCategory(category)
-                }
-                modelContext.insert(group)
-                categoryGroup = group
-            }
-            
             // Create budget
             let budget = Budget(
                 name: type.displayName,
@@ -549,13 +533,13 @@ struct BudgetSetupWizardView: View {
                 currencyCode: CurrencyManager.shared.preferredCurrencyCode,
                 periodType: .monthly,
                 startDate: Date(),
-                categoryGroup: categoryGroup,
                 isRecurring: true,
                 rolloverExcess: false,
                 alertAt50: false,
                 alertAt80: true,
                 alertAt100: true,
-                budgetCategoryType: type
+                budgetCategoryType: type,
+                categories: selectedCategories[type]
             )
             
             modelContext.insert(budget)
@@ -739,5 +723,5 @@ struct BudgetDraft {
 
 #Preview {
     BudgetSetupWizardView()
-        .modelContainer(for: [Budget.self, Category.self, CategoryGroup.self], inMemory: true)
+        .modelContainer(for: [Budget.self, Category.self], inMemory: true)
 }

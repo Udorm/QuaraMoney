@@ -143,13 +143,20 @@ struct AddWalletView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(viewModel.isEditing ? L10n.Common.save : L10n.Common.add) {
+                    Button {
                         viewModel.saveWallet()
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
                 }
             }

@@ -2,9 +2,7 @@ import Foundation
 import SwiftData
 import SwiftUI // For Notification
 
-extension Notification.Name {
-    static let dataDidUpdate = Notification.Name("dataDidUpdate")
-}
+
 
 @MainActor
 final class SampleDataService {
@@ -78,6 +76,9 @@ final class SampleDataService {
                 transaction.sourceWallet = bankWallet
                 transaction.destinationWallet = creditCardWallet
                 transaction.note = "Pay Credit Card"
+            case .adjustment:
+                transaction.sourceWallet = bankWallet
+                transaction.note = "Balance Adjustment"
             }
             
             modelContext.insert(transaction)

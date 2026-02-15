@@ -8,6 +8,7 @@ struct WalletDetailView: View {
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var showingEditWallet = false
+    @State private var showingAdjustBalance = false
     @State private var isSearchPresented = false
     
     init(wallet: Wallet, modelContext: ModelContext) {
@@ -117,11 +118,21 @@ struct WalletDetailView: View {
                     Image(systemName: "plus")
                 }
                 
-                // Edit Button
-                Button {
-                    showingEditWallet = true
+                // More Options Menu
+                Menu {
+                    Button {
+                        showingAdjustBalance = true
+                    } label: {
+                        Label("Adjust Balance", systemImage: "dollarsign.circle")
+                    }
+                    
+                    Button {
+                        showingEditWallet = true
+                    } label: {
+                        Label(L10n.Common.edit, systemImage: "pencil")
+                    }
                 } label: {
-                    Label(L10n.Common.edit, systemImage: "pencil")
+                    Image(systemName: "ellipsis.circle")
                 }
                 
                 // Filter Button
@@ -144,6 +155,12 @@ struct WalletDetailView: View {
                     initialWallet: viewModel.wallet
                 ),
                 isNewTransaction: true
+            )
+        }
+        .sheet(isPresented: $showingAdjustBalance) {
+            AdjustBalanceView(
+                wallet: viewModel.wallet,
+                dataService: SwiftDataService(modelContext: modelContext)
             )
         }
         .sheet(item: $transactionToEdit) { txn in

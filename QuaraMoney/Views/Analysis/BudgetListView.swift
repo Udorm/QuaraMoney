@@ -130,7 +130,8 @@ struct BudgetListView: View {
         
         // Filter transactions within the budget period
         let relevantTransactions = transactions.filter { txn in
-            guard txn.type == .expense,
+            guard !txn.excludeFromReports,
+                  txn.type == .expense,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }
@@ -365,7 +366,8 @@ struct BudgetSummarySection: View {
         let periodRange = budget.periodDateRange
         
         let relevantTransactions = transactions.filter { txn in
-            guard txn.type == .expense,
+            guard !txn.excludeFromReports,
+                  txn.type == .expense,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }

@@ -101,9 +101,11 @@ struct AddTransactionView: View {
                                 exchangeRateInfo: exchangeRateString
                             )
                             .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showKeyboard = true
-                                    isNoteFieldFocused = false
+                                if viewModel.type != .adjustment {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showKeyboard = true
+                                        isNoteFieldFocused = false
+                                    }
                                 }
                             }
                         
@@ -117,7 +119,7 @@ struct AddTransactionView: View {
                         // MARK: - Category/Destination Section
                         if viewModel.type == .transfer {
                             destinationWalletSection
-                        } else {
+                        } else if viewModel.type != .adjustment {
                             categorySection
                         }
                         
@@ -230,15 +232,33 @@ struct AddTransactionView: View {
     
     // MARK: - Transaction Type Selector
     private var transactionTypeSelector: some View {
-        Picker("transaction.type".localized, selection: $viewModel.type) {
-            Text(L10n.Transaction.TransactionType.expense).tag(TransactionType.expense)
-            Text(L10n.Transaction.TransactionType.income).tag(TransactionType.income)
-            Text(L10n.Transaction.TransactionType.transfer).tag(TransactionType.transfer)
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: viewModel.type) { _, newType in
-            if newType != .transfer {
-                viewModel.selectedCategory = nil
+        Group {
+            if viewModel.type == .adjustment {
+                HStack {
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundStyle(.orange)
+                    Text("Balance Adjustment")
+                        .font(.app(.headline))
+                    Spacer()
+                    Image(systemName: "lock.fill")
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(10)
+            } else {
+                Picker("transaction.type".localized, selection: $viewModel.type) {
+                    Text(L10n.Transaction.TransactionType.expense).tag(TransactionType.expense)
+                    Text(L10n.Transaction.TransactionType.income).tag(TransactionType.income)
+                    Text(L10n.Transaction.TransactionType.transfer).tag(TransactionType.transfer)
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: viewModel.type) { _, newType in
+                    if newType != .transfer {
+                        viewModel.selectedCategory = nil
+                    }
+                }
             }
         }
     }
@@ -286,6 +306,15 @@ struct AddTransactionView: View {
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
+        .overlay(
+            Group {
+                if viewModel.type == .adjustment {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.black.opacity(0.05))
+                        .allowsHitTesting(true) // Blocks touches
+                }
+            }
+        )
         .sheet(isPresented: $showAllWallets) {
             walletPickerSheet
         }
@@ -522,6 +551,8 @@ struct AddTransactionView: View {
             .padding(.vertical, 8)
             .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(10)
+            .disabled(viewModel.type == .adjustment)
+            .opacity(viewModel.type == .adjustment ? 0.6 : 1.0)
             
             // Note Field
             HStack {
@@ -537,72 +568,83 @@ struct AddTransactionView: View {
             .cornerRadius(10)
             
             // Event Row
-            if let suggested = suggestedEvent {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Suggested Event")
-                            .font(.app(.caption2))
-                            .foregroundStyle(.secondary)
-                        Text(suggested.title)
-                            .font(.app(.subheadline, weight: .semibold))
-                    }
-                    
-                    Spacer()
-                    
-                    Button("Apply") {
-                        withAnimation {
-                            viewModel.selectedEvent = suggested
-                            suggestedEvent = nil
+            // Event Row
+            if viewModel.type != .adjustment {
+                if let suggested = suggestedEvent {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Suggested Event")
+                                .font(.app(.caption2))
+                                .foregroundStyle(.secondary)
+                            Text(suggested.title)
+                                .font(.app(.subheadline, weight: .semibold))
+                        }
+                        
+                        Spacer()
+                        
+                        Button("Apply") {
+                            withAnimation {
+                                viewModel.selectedEvent = suggested
+                                suggestedEvent = nil
+                            }
+                        }
+                        .font(.app(.caption, weight: .bold))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                        
+                        Button {
+                            withAnimation {
+                                suggestedEvent = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.app(.caption))
+                                .foregroundStyle(.secondary)
+                                .padding(8)
                         }
                     }
-                    .font(.app(.caption, weight: .bold))
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
-                    
-                    Button {
-                        withAnimation {
-                            suggestedEvent = nil
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .cornerRadius(10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                
+                Button {
+                    showEventPicker.toggle()
+                } label: {
+                    HStack {
+                        Image(systemName: "flag.fill")
+                            .foregroundStyle(.orange)
+                            .frame(width: 24)
+                        Text(viewModel.selectedEvent?.title ?? "Event (optional)")
+                            .foregroundStyle(viewModel.selectedEvent != nil ? .primary : .secondary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
                             .font(.app(.caption))
                             .foregroundStyle(.secondary)
-                            .padding(8)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .cornerRadius(10)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(10)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .buttonStyle(.plain)
+                .sheet(isPresented: $showEventPicker) {
+                    eventPickerSheet
+                }
             }
             
-            Button {
-                showEventPicker.toggle()
-            } label: {
-                HStack {
-                    Image(systemName: "flag.fill")
-                        .foregroundStyle(.orange)
-                        .frame(width: 24)
-                    Text(viewModel.selectedEvent?.title ?? "Event (optional)")
-                        .foregroundStyle(viewModel.selectedEvent != nil ? .primary : .secondary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.app(.caption))
-                        .foregroundStyle(.secondary)
-                }
+            // Exclude Toggle
+            Toggle("Exclude from Reports", isOn: $viewModel.excludeFromReports)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 12)
                 .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(10)
-            }
-            .buttonStyle(.plain)
-            .sheet(isPresented: $showEventPicker) {
-                eventPickerSheet
-            }
+
         }
     }
     

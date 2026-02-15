@@ -205,7 +205,7 @@ struct QuaraMoneyApp: App {
             let context = ModelContext(container)
             
             // Check recurring transactions
-            RecurringRuleService.checkAndGenerateTransactions(modelContext: context)
+            await RecurringRuleService.checkAndGenerateTransactions(modelContext: context)
             
             // Check budget rollovers
             BudgetRolloverService.checkAndProcessBudgetRollovers(

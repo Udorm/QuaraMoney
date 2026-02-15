@@ -16,6 +16,7 @@ class AddTransactionViewModel: BaseViewModel {
     @Published var destinationWallet: Wallet?
     @Published var selectedWallet: Wallet?
     @Published var selectedEvent: Event?
+    @Published var excludeFromReports: Bool = false
     
     @Published var exchangeRate: Double = 1.0
     
@@ -45,6 +46,7 @@ class AddTransactionViewModel: BaseViewModel {
             self.note = txn.note ?? ""
             self.selectedWallet = txn.sourceWallet
             self.selectedEvent = txn.event
+            self.excludeFromReports = txn.excludeFromReports
             self.selectedCurrencyCode = txn.currencyCode
             self.exchangeRate = NSDecimalNumber(decimal: txn.exchangeRate).doubleValue
             
@@ -168,6 +170,7 @@ class AddTransactionViewModel: BaseViewModel {
             transaction.exchangeRate = Decimal(exchangeRate)
         }
         
+        transaction.excludeFromReports = excludeFromReports
         transaction.event = selectedEvent
         
         if existingTransaction == nil {

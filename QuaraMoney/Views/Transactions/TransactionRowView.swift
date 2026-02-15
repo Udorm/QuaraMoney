@@ -27,6 +27,10 @@ struct TransactionRowView: View {
             // Otherwise (Source or Global), treat as outgoing/neutral
             return false
         }
+        if transaction.type == .adjustment {
+            // Adjustments are positive if amount > 0
+            return transaction.amount >= 0
+        }
         return false
     }
     
@@ -38,13 +42,13 @@ struct TransactionRowView: View {
                     .fill(Color(hex: transaction.category?.colorHex ?? "#8E8E93")?.opacity(0.1) ?? .gray.opacity(0.1))
                     .frame(width: 40, height: 40)
                 
-                Image(systemName: transaction.category?.icon ?? (transaction.type == .income ? "arrow.down.circle.fill" : (transaction.type == .transfer ? "arrow.left.arrow.right" : "arrow.up.circle.fill")))
+                Image(systemName: transaction.category?.icon ?? (transaction.type == .income ? "arrow.down.circle.fill" : (transaction.type == .transfer ? "arrow.left.arrow.right" : (transaction.type == .adjustment ? "slider.horizontal.3" : "arrow.up.circle.fill"))))
                     .font(.app(.body))
-                    .foregroundStyle(Color(hex: transaction.category?.colorHex ?? "#8E8E93") ?? .gray)
+                    .foregroundStyle(Color(hex: transaction.category?.colorHex ?? (transaction.type == .adjustment ? "#FF9500" : "#8E8E93")) ?? .gray)
             }
             
             VStack(alignment: .leading) {
-                Text(transaction.category?.name ?? (transaction.type == .transfer ? "Transfer" : (transaction.note ?? "Uncategorized")))
+                Text(transaction.category?.name ?? (transaction.type == .transfer ? "Transfer" : (transaction.type == .adjustment ? "Balance Adjustment" : (transaction.note ?? "Uncategorized"))))
                     .font(.app(.body, weight: .medium))
                 
                 if let note = transaction.note, !note.isEmpty {

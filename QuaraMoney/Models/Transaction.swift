@@ -10,6 +10,9 @@ final class Transaction {
     var date: Date
     var note: String?
     
+    // Feature: Exclude from reports
+    var excludeFromReports: Bool = false
+    
     // Financials
     var amount: Decimal // Raw amount in original currency
     var currencyCode: String // Currency of the transaction

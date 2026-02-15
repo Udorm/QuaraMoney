@@ -53,12 +53,15 @@ struct TransactionProcessor {
     /// Calculates daily net flow (income positive, expense negative)
     nonisolated private static func calculateDailyFlow(_ transactions: [Transaction], rates: [String: Double], targetCurrency: String) -> Decimal {
         transactions.reduce(Decimal.zero) { result, txn in
+            if txn.excludeFromReports { return result }
+            
             let amount = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
             
             switch txn.type {
             case .income: return result + amount
             case .expense: return result - amount
             case .transfer: return result  // Neutral for flow
+            case .adjustment: return result + amount // Adjustments affect flow unless excluded
             }
         }
     }
@@ -75,12 +78,20 @@ struct TransactionProcessor {
         var expense: Decimal = 0
         
         for txn in transactions {
+            if txn.excludeFromReports { continue }
+            
             let amount = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
             
             switch txn.type {
             case .income: income += amount
             case .expense: expense += amount
             case .transfer: break
+            case .adjustment:
+                if amount >= 0 {
+                    income += amount
+                } else {
+                    expense += abs(amount)
+                }
             }
         }
         

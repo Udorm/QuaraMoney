@@ -80,6 +80,9 @@ extension Wallet {
                     total -= convertedAmount
                 case .transfer:
                     total -= convertedAmount
+                case .adjustment:
+                    // Adjustments directly affect balance (can be positive or negative)
+                    total += convertedAmount
                 }
             }
         }

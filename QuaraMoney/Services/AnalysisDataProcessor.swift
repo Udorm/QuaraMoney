@@ -62,6 +62,8 @@ struct AnalysisDataProcessor {
             let calendar = Calendar.current
             
             for txn in transactions {
+                if txn.excludeFromReports { continue }
+                
                 // Convert Amount
                 let amount = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
                 

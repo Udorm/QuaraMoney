@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 struct RecurringRuleService {
-    nonisolated static func checkAndGenerateTransactions(modelContext: ModelContext) {
+    nonisolated static func checkAndGenerateTransactions(modelContext: ModelContext) async {
         // Fetch all active rules
         let descriptor = FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.isActive })
         
@@ -16,7 +16,9 @@ struct RecurringRuleService {
             
             try modelContext.save()
             // Notify UI of changes
-            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            await MainActor.run {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            }
         } catch {
             #if DEBUG
             print("Failed to fetch or process rules: \(error)")

@@ -1,15 +1,8 @@
 import Foundation
 import SwiftData
 
-@MainActor
-class RecurringRuleService {
-    let modelContext: ModelContext
-    
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
-    }
-    
-    func checkAndGenerateTransactions() {
+struct RecurringRuleService {
+    nonisolated static func checkAndGenerateTransactions(modelContext: ModelContext) {
         // Fetch all active rules
         let descriptor = FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.isActive })
         
@@ -18,10 +11,12 @@ class RecurringRuleService {
             let today = Date()
             
             for rule in rules {
-                processRule(rule, until: today)
+                processRule(rule, until: today, modelContext: modelContext)
             }
             
             try modelContext.save()
+            // Notify UI of changes
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
         } catch {
             #if DEBUG
             print("Failed to fetch or process rules: \(error)")
@@ -29,7 +24,7 @@ class RecurringRuleService {
         }
     }
     
-    private func processRule(_ rule: RecurringRule, until targetDate: Date) {
+    nonisolated private static func processRule(_ rule: RecurringRule, until targetDate: Date, modelContext: ModelContext) {
         // While the next due date is in the past or today
         while rule.nextDueDate <= targetDate {
             // Create Transaction
@@ -37,7 +32,7 @@ class RecurringRuleService {
                 amount: rule.amount,
                 currencyCode: rule.currencyCode,
                 date: rule.nextDueDate,
-                type: .expense // Defaulting to expense as most recurrings are bills. Logic could be improved to support Income recurrings.
+                type: .expense // Defaulting to expense as most recurrings are bills.
             )
             transaction.note = "Generated from \(rule.name)"
             transaction.sourceWallet = rule.wallet
@@ -56,7 +51,7 @@ class RecurringRuleService {
         }
     }
     
-    private func calculateNextDate(from date: Date, frequency: Frequency) -> Date? {
+    nonisolated private static func calculateNextDate(from date: Date, frequency: Frequency) -> Date? {
         let calendar = Calendar.current
         switch frequency {
         case .daily:

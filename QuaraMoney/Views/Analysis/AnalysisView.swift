@@ -110,7 +110,7 @@ struct SpendingTrendChart: View {
                         .foregroundStyle(.secondary)
                     
                     let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
-                    Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                    Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                         .font(.app(.title, weight: .bold))
                         .foregroundStyle(Color.primary)
                     
@@ -293,13 +293,13 @@ struct CategoryBreakdownChart: View {
                 ForEach(vm.categoryStats.prefix(5)) { stat in
                     VStack(spacing: 12) {
                         HStack {
-                            Image(systemName: stat.category.icon.isEmpty ? "circle.fill" : stat.category.icon)
+                            Image(systemName: stat.icon.isEmpty ? "circle.fill" : stat.icon)
                                 .appFont(.title3)
                                 .foregroundStyle(Color(hex: stat.colorHex) ?? .blue)
                                 .frame(width: 30)
                                 
                             VStack(alignment: .leading) {
-                                Text(stat.category.name)
+                                Text(stat.name)
                                     .font(.app(.subheadline, weight: .medium))
                                 
                                 GeometryReader { geo in
@@ -320,7 +320,7 @@ struct CategoryBreakdownChart: View {
                             Spacer()
                             
                             VStack(alignment: .trailing) {
-                                Text(stat.amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                                Text(stat.amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                                     .font(.app(.callout))
                                     .monospacedDigit()
                                 

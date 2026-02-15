@@ -31,11 +31,6 @@ class AnalysisViewModel: ObservableObject {
         didSet { refreshData() }
     }
     
-    enum TransactionTypeFilter: String, CaseIterable {
-        case expense = "Expense"
-        case income = "Income"
-    }
-    
     @Published var selectedTransactionType: TransactionTypeFilter = .expense {
         didSet { refreshData() }
     }
@@ -128,7 +123,57 @@ class AnalysisViewModel: ObservableObject {
     
     func refreshData() {
         fetchNetWorth()
-        fetchTransactionsAndComputeStats()
+        
+        // Capture values for background task
+        let start = self.startDate
+        let end = self.endDate
+        let walletId = selectedWallet?.id
+        let periodGrouping = self.grouping
+        let method = selectedTransactionType // "expense" or "income"
+        
+        let container = modelContext?.container
+        let rates = CurrencyManager.shared.rates
+        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
+        
+        guard let container = container else { return }
+        
+        Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            
+            let result = AnalysisDataProcessor.processTransactions(
+                context: context,
+                startDate: start,
+                endDate: end,
+                walletId: walletId,
+                grouping: periodGrouping,
+                transactionType: method,
+                rates: rates,
+                targetCurrency: preferredCurrency
+            )
+            
+            await self.applyAnalysisResult(result)
+        }
+    }
+    
+    private func applyAnalysisResult(_ result: AnalysisDataProcessor.AnalysisResult) {
+        self.totalIncome = result.totalIncome
+        self.totalExpense = result.totalExpense
+        self.savingsRate = result.savingsRate
+        
+        // Map to UI models
+        self.dailyStats = result.dailyStats.map { data in
+            DailyStat(date: data.date, income: data.income, expense: data.expense)
+        }
+        
+        self.categoryStats = result.categoryStats.map { data in
+            CategoryStat(
+                id: data.id,
+                name: data.name,
+                icon: data.icon,
+                colorHex: data.colorHex,
+                amount: data.amount
+            )
+        }
     }
     
     private func fetchNetWorth() {
@@ -158,109 +203,7 @@ class AnalysisViewModel: ObservableObject {
         }
     }
     
-    private func fetchTransactionsAndComputeStats() {
-        let start = self.startDate
-        let end = self.endDate
-        let walletId = selectedWallet?.id
-        
-        // Use centralized TransactionProcessor for consistent archived wallet filtering
-        let descriptor = TransactionProcessor.makeDescriptor(
-            startDate: start,
-            endDate: end,
-            walletId: walletId,
-            sortDescending: false  // We sort after processing anyway
-        )
-        
-        guard let modelContext = modelContext else { return }
-        
-        do {
-            let transactions = try modelContext.fetch(descriptor)
-            
-            var inc: Decimal = 0
-            var exp: Decimal = 0
-            let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
-            
-            var rawChartData: [Date: (income: Decimal, expense: Decimal)] = [:]
-            var rawExpenseCategoryData: [Category: Decimal] = [:]
-            var rawIncomeCategoryData: [Category: Decimal] = [:] 
-            
-            let calendar = Calendar.current
-            
-            for txn in transactions {
-                // Convert Amount
-                let amount = CurrencyManager.shared.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency)
-                
-                // Grouping Logic
-                let chartDate: Date
-                switch grouping {
-                case .hour:
-                    // Group by hour
-                    chartDate = calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
-                case .day:
-                    chartDate = calendar.startOfDay(for: txn.date)
-                case .week:
-                    // Group by start of week. 
-                    // Note: This relies on user's calendar preferences (e.g. Sunday vs Monday start)
-                    let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: txn.date)
-                    chartDate = calendar.date(from: components) ?? calendar.startOfDay(for: txn.date)
-                case .month:
-                    chartDate = calendar.date(from: calendar.dateComponents([.year, .month], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
-                case .year:
-                    chartDate = calendar.date(from: calendar.dateComponents([.year], from: txn.date)) ?? calendar.startOfDay(for: txn.date)
-                }
-                
-                if txn.type == .income {
-                    inc += amount
-                    
-                    var current = rawChartData[chartDate] ?? (0, 0)
-                    current.income += amount
-                    rawChartData[chartDate] = current
-                    
-                    // Track income categories
-                    if let cat = txn.category {
-                        rawIncomeCategoryData[cat, default: 0] += amount
-                    }
-                    
-                } else if txn.type == .expense {
-                    exp += amount
-                    
-                    var current = rawChartData[chartDate] ?? (0, 0)
-                    current.expense += amount
-                    rawChartData[chartDate] = current
-                    
-                    // Track expense categories
-                    if let cat = txn.category {
-                        rawExpenseCategoryData[cat, default: 0] += amount
-                    }
-                }
-            }
-            
-            self.totalIncome = inc
-            self.totalExpense = exp
-            
-            if inc > 0 {
-                let savings = inc - exp
-                self.savingsRate = Double(truncating: savings as NSNumber) / Double(truncating: inc as NSNumber)
-            } else {
-                self.savingsRate = 0
-            }
-            
-            self.dailyStats = rawChartData.map { (date, values) in
-                DailyStat(date: date, income: values.income, expense: values.expense)
-            }.sorted { $0.date < $1.date }
-            
-            // Use the appropriate category data based on selected transaction type
-            let categoryData = selectedTransactionType == .expense ? rawExpenseCategoryData : rawIncomeCategoryData
-            self.categoryStats = categoryData.map { (cat, amount) in
-                CategoryStat(category: cat, amount: amount, colorHex: cat.colorHex)
-            }.sorted { $0.amount > $1.amount }
-            
-        } catch {
-            #if DEBUG
-            print("Error fetching transactions for Analysis: \(error)")
-            #endif
-        }
-    }
+    // Removed old fetchTransactionsAndComputeStats as it is replaced by refreshData + background processor
 }
 
 // MARK: - Stats with Stable IDs for Chart Performance
@@ -273,8 +216,14 @@ struct DailyStat: Identifiable {
 }
 
 struct CategoryStat: Identifiable {
-    var id: UUID { category.id }
-    let category: Category
-    let amount: Decimal
+    let id: UUID
+    let name: String
+    let icon: String // SF Symbol name
     let colorHex: String
+    let amount: Decimal
+}
+
+enum TransactionTypeFilter: String, CaseIterable, Sendable {
+    case expense = "Expense"
+    case income = "Income"
 }

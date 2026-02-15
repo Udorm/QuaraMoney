@@ -16,7 +16,7 @@ struct FinancialSummaryCards: View {
                     Text(L10n.Analysis.net)
                         .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
-                    Text(net.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                    Text(net.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                         .font(.app(.title2, weight: .bold))
                         .foregroundStyle(net >= 0 ? Color.primary : .red)
                 }
@@ -46,7 +46,7 @@ struct FinancialSummaryCards: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Text(income.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                    Text(income.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                         .font(.app(.headline))
                         .foregroundStyle(ThemeManager.shared.incomeColor)
                 }
@@ -67,7 +67,7 @@ struct FinancialSummaryCards: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Text(expense.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                    Text(expense.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                         .font(.app(.headline))
                         .foregroundStyle(ThemeManager.shared.expenseColor)
                 }

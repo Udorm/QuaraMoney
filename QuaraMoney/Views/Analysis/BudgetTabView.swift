@@ -18,7 +18,15 @@ struct BudgetTabView: View {
     
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                Picker("Section", selection: $selectedSection) {
+                    ForEach(BudgetSection.allCases, id: \.self) { section in
+                        Text(section.displayName).tag(section)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+                
                 switch selectedSection {
                 case .budgets:
                     BudgetListView()
@@ -26,17 +34,7 @@ struct BudgetTabView: View {
                     SavingsGoalListView()
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("Section", selection: $selectedSection) {
-                        ForEach(BudgetSection.allCases, id: \.self) { section in
-                            Text(section.displayName).tag(section)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-                }
-            }
+            .navigationTitle(selectedSection.displayName)
         }
     }
 }

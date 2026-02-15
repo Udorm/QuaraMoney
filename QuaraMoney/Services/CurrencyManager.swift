@@ -9,6 +9,12 @@ class CurrencyManager: ObservableObject {
     @Published var preferredCurrencyCode: String {
         didSet {
             UserDefaults.standard.set(preferredCurrencyCode, forKey: "preferredCurrencyCode")
+            // Fetch rates if we switched to a non-USD currency and don't have recent data
+             if preferredCurrencyCode != "USD" {
+                 Task {
+                     await fetchRates()
+                 }
+             }
         }
     }
     
@@ -23,20 +29,41 @@ class CurrencyManager: ObservableObject {
     }
     private let ratesCacheKey = "cachedRates"
     
+    private let recentCurrenciesKey = "recentCurrencies"
+    
     private init() {
         self.preferredCurrencyCode = UserDefaults.standard.string(forKey: "preferredCurrencyCode") ?? "USD"
+        self.recentCurrencies = UserDefaults.standard.stringArray(forKey: "recentCurrencies") ?? []
         
         loadCachedRates()
-        // Auto-fetch if stale (> 24 hours) or empty
-        if rates.count <= 1 || Date().timeIntervalSince1970 - lastRatesFetchDate > 86400 {
-            Task {
-                await fetchRates()
-            }
+        // Removed auto-fetch on launch to save resources as requested
+    }
+    
+    @Published var recentCurrencies: [String] = [] {
+        didSet {
+            UserDefaults.standard.set(recentCurrencies, forKey: recentCurrenciesKey)
         }
     }
     
-    // Currencies we support for now (add more as needed)
-    let availableCurrencies = ["USD", "KHR", "EUR", "THB", "SGD", "JPY"]
+    func addToRecent(currencyCode: String) {
+        // Remove if exists to move to top
+        if let index = recentCurrencies.firstIndex(of: currencyCode) {
+            recentCurrencies.remove(at: index)
+        }
+        
+        // Insert at beginning
+        recentCurrencies.insert(currencyCode, at: 0)
+        
+        // Limit to 5
+        if recentCurrencies.count > 5 {
+            recentCurrencies = Array(recentCurrencies.prefix(5))
+        }
+    }
+    
+    // Support all common ISO currencies
+    var availableCurrencies: [String] {
+        Locale.commonISOCurrencyCodes.sorted()
+    }
     
     func convert(amount: Decimal, from sourceCurrency: String, to targetCurrency: String) -> Decimal {
         guard let sourceRate = rates[sourceCurrency], let targetRate = rates[targetCurrency] else {
@@ -58,6 +85,14 @@ class CurrencyManager: ObservableObject {
     }
     
     func fetchRates() async {
+        // We only really need to fetch if it's been a while, or if we are forced.
+        // For now, let's respect a simple cache duration of 24 hours to avoid spamming the API
+        // even if the user switches currencies back and forth.
+        let now = Date().timeIntervalSince1970
+        if rates.count > 1 && now - lastRatesFetchDate < 86400 {
+            return
+        }
+
         // Free API: open.er-api.com
         guard let url = URL(string: "https://open.er-api.com/v6/latest/USD") else { return }
         

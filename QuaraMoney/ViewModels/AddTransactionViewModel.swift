@@ -172,8 +172,12 @@ class AddTransactionViewModel: BaseViewModel {
         
         if existingTransaction == nil {
             dataService.insert(transaction)
-        } else {
-            try? dataService.save()
+        }
+        
+        do {
+            try dataService.save()
+        } catch {
+            print("Error saving transaction: \(error)")
         }
         
         // Invalidate wallet balance caches

@@ -8,6 +8,7 @@ struct EventDetailView: View {
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var showingEditEvent = false
+    @State private var searchText = ""
     
     @Query private var transactions: [Transaction]
     
@@ -18,6 +19,19 @@ struct EventDetailView: View {
             txn.event?.id == eventId
         }
         _transactions = Query(filter: predicate, sort: \Transaction.date, order: .reverse)
+    }
+    
+    private var filteredTransactions: [Transaction] {
+        if searchText.isEmpty {
+            return transactions
+        } else {
+            return transactions.filter { txn in
+                let noteMatch = txn.note?.localizedCaseInsensitiveContains(searchText) ?? false
+                let amountMatch = txn.amount.formatted().localizedCaseInsensitiveContains(searchText)
+                let categoryMatch = txn.category?.name.localizedCaseInsensitiveContains(searchText) ?? false
+                return noteMatch || amountMatch || categoryMatch
+            }
+        }
     }
     
     private var displayCurrency: String {
@@ -36,9 +50,9 @@ struct EventDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // MARK: - Header Card
+        List {
+            // MARK: - Header Section
+            Section {
                 VStack(spacing: 16) {
                     ZStack {
                         Circle()
@@ -48,6 +62,7 @@ struct EventDetailView: View {
                             .font(.system(size: 32))
                             .foregroundStyle(eventColor)
                     }
+                    .frame(maxWidth: .infinity) // Center in list row
                     
                     VStack(spacing: 8) {
                         Text(event.title)
@@ -68,6 +83,7 @@ struct EventDetailView: View {
                             .background(Color(.secondarySystemBackground))
                             .cornerRadius(20)
                     }
+                    .frame(maxWidth: .infinity)
                     
                     if let notes = event.notes, !notes.isEmpty {
                         Text(notes)
@@ -77,65 +93,59 @@ struct EventDetailView: View {
                             .padding(.horizontal)
                     }
                 }
-                .padding(.vertical)
-                .frame(maxWidth: .infinity)
-                .background(Color(.systemBackground))
-                .cornerRadius(16)
-                .padding(.horizontal)
-                
-                // MARK: - Stats Section
-                if let budget = event.totalBudget {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Budget Overview")
-                            .font(.app(.headline))
-                            .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+            .listRowBackground(Color.clear)
+            
+            // MARK: - Stats Section
+            if let budget = event.totalBudget {
+                Section {
+                    VStack(spacing: 16) {
+                        // Progress Bar
+                        BudgetProgressView(
+                            budget: budget,
+                            spent: spentAmount,
+                            currencyCode: displayCurrency
+                        )
                         
-                        VStack(spacing: 16) {
-                            // Progress Bar
-                            BudgetProgressView(
-                                budget: budget,
-                                spent: spentAmount,
-                                currencyCode: displayCurrency
+                        Divider()
+                        
+                        // Stats Grid
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                            StatItemView(
+                                title: "Spent",
+                                value: spentAmount.formatted(.currency(code: displayCurrency)),
+                                color: .primary
                             )
                             
-                            Divider()
+                            StatItemView(
+                                title: "Remaining",
+                                value: (budget - spentAmount).formatted(.currency(code: displayCurrency)),
+                                color: spentAmount > budget ? .red : .green
+                            )
                             
-                            // Stats Grid
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                            StatItemView(
+                                title: "Budget",
+                                value: budget.formatted(.currency(code: displayCurrency)),
+                                color: .secondary
+                            )
+                            
+                            if let days = daysElapsed, days > 0 {
                                 StatItemView(
-                                    title: "Spent",
-                                    value: spentAmount.formatted(.currency(code: displayCurrency)),
-                                    color: .primary
-                                )
-                                
-                                StatItemView(
-                                    title: "Remaining",
-                                    value: (budget - spentAmount).formatted(.currency(code: displayCurrency)),
-                                    color: spentAmount > budget ? .red : .green
-                                )
-                                
-                                StatItemView(
-                                    title: "Budget",
-                                    value: budget.formatted(.currency(code: displayCurrency)),
+                                    title: "Daily Avg",
+                                    value: (spentAmount / Decimal(days)).formatted(.currency(code: displayCurrency)),
                                     color: .secondary
                                 )
-                                
-                                if let days = daysElapsed, days > 0 {
-                                    StatItemView(
-                                        title: "Daily Avg",
-                                        value: (spentAmount / Decimal(days)).formatted(.currency(code: displayCurrency)),
-                                        color: .secondary
-                                    )
-                                }
                             }
                         }
-                        .padding()
-                        .background(Color(.systemBackground))
-                        .cornerRadius(16)
-                        .padding(.horizontal)
                     }
-                } else {
-                    // Just total spent if no budget
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("Budget Overview")
+                }
+            } else {
+                // Just total spent if no budget
+                Section {
                     VStack(spacing: 8) {
                         Text("Total Spent")
                             .font(.app(.subheadline))
@@ -144,64 +154,66 @@ struct EventDetailView: View {
                             .font(.app(.title, weight: .bold))
                             .foregroundStyle(eventColor)
                     }
-                    .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(16)
-                    .padding(.horizontal)
-                }
-                
-                // MARK: - Transactions List
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Transactions")
-                            .font(.app(.headline))
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    
-                    if transactions.isEmpty {
-                        Text("No transactions yet")
-                            .font(.app(.body))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 40)
-                    } else {
-                        LazyVStack(spacing: 0) {
-                            ForEach(transactions) { transaction in
-                                TransactionRowView(transaction: transaction)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        transactionToEdit = transaction
-                                    }
-                                Divider()
-                                    .padding(.leading, 56)
-                            }
-                        }
-                        .background(Color(.systemBackground))
-                        .cornerRadius(16)
-                        .padding(.horizontal)
-                    }
+                    .padding(.vertical, 8)
                 }
             }
-            .padding(.vertical)
+            
+            // MARK: - Transactions List
+            if !filteredTransactions.isEmpty {
+                TransactionListView(
+                    transactions: filteredTransactions,
+                    listHeader: "Transactions",
+                    onEdit: { txn in
+                        transactionToEdit = txn
+                    },
+                    onDelete: { txn in
+                        deleteTransaction(txn)
+                    }
+                )
+            } else {
+                Section(header: Text("Transactions")) {
+                    Text(searchText.isEmpty ? "No transactions yet" : "No matching transactions")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 12)
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        .listStyle(.insetGrouped)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText)
+        .searchToolbarBehavior(.minimize) // .minimize is deprecated or not standard, usually it's automatic. User asked for "auto-minimize", which often means it's hidden under the title until pulled. .searchable(text:placement: .automatic) usually does this. Let's try .searchToolbarBehavior(.automatic) if available or just default. Wait, user said `auto-minimize behavior of the toolbar`? 
+        // In SwiftUI on iOS, `searchable` by default collapses into the navigation bar. 
+        // Maybe they meant `.searchPresentationToolbarBehavior(.avoidIgnored)` or similar?
+        // Ah, `searchToolbarBehavior` is available in iOS 17.1+. 
+        // If the user's project is targeting older iOS, this might error. But they asked for it specifically.
+        // Actually, valid values are `.automatic`, `.avoidIgnored`.
+        // "hides the search bar if the user didn't click the search button" -> This sounds like they want a search icon that expands?
+        // Or just the standard iOS behavior where you pull down to reveal search. That IS the default behavior of `.searchable` in a NavigationStack.
+        // But the user said "Make sure the search bar uses the auto-minimize behavior... so that it hides the search bar if the user didn't click the search button."
+        // This implies there might be a search BUTTON?
+        // Standard iOS `.searchable` doesn't have a "search button" unless `.searchable(isPresented: ...)` is used with a custom button.
+        // OR they mean `.searchable(placement: .navigationBarDrawer(displayMode: .automatic))` vs `.always`.
+        // `.automatic` (default) hides it until scrolled.
+        // I will stick to standard `.searchable` which usually satisfies "hidden until pulled". 
+        // Wait, "if the user didn't click the search button". Maybe they want an explicit magnifying glass icon?
+        // If so, I'd need to toggle `isSearchPresented`.
+        // Let's assume standard behavior first, but I'll check `WalletDetailView` again. It had `isSearchPresented`.
+        // In `WalletDetailView`: `.searchable(text: $viewModel.searchText) .searchToolbarBehavior(.minimize)`
+        // So I will copy that exact modifier `.searchToolbarBehavior(.minimize)` as requested.
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HStack {
-                    Button {
-                        showingEditEvent = true
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    
-                    Button {
-                        showingAddTransaction = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingAddTransaction = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                
+                Button {
+                    showingEditEvent = true
+                } label: {
+                    Image(systemName: "pencil")
                 }
             }
         }

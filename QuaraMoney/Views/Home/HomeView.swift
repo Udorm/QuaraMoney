@@ -15,56 +15,45 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            List {
-                // Summary Section
-                Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
-                    FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
-                }
-
+            VStack(spacing: 0) {
+                // Month Selection Tab Bar
+                MonthSelectionView(
+                    selectedDate: $viewModel.selectedMonth,
+                    months: viewModel.availableMonths
+                )
+                .padding(.bottom, 8)
+                .background(Color(uiColor: .systemBackground))
                 
-                // Daily Transactions
-                ForEach(viewModel.dailySections) { section in
-                    Section(header: DailyHeader(section: section)) {
-                        ForEach(section.transactions) { txn in
-                            Button {
-                                transactionToEdit = txn
-                            } label: {
-                                TransactionRowView(transaction: txn)
+                List {
+                    // Summary Section
+                    // Removed filterDescription header as date is obvious. 
+                    // Showing wallet if filtered?
+                    if viewModel.selectedWallet != nil {
+                        Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
+                            FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                        }
+                    } else {
+                        Section {
+                             FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                        }
+                    }
+
+                    
+                    // Daily Transactions
+                    ForEach(viewModel.dailySections) { section in
+                        Section(header: DailyHeader(section: section)) {
+                            ForEach(section.transactions) { txn in
+                                HomeTransactionRow(
+                                    transaction: txn,
+                                    onEdit: { transactionToEdit = txn },
+                                    onDelete: { viewModel.deleteTransaction(txn) }
+                                )
                             }
-                            .buttonStyle(.plain)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        viewModel.deleteTransaction(txn)
-                                    } label: {
-                                        Label(L10n.Common.delete, systemImage: "trash")
-                                    }
-                                    
-                                    Button {
-                                        transactionToEdit = txn
-                                    } label: {
-                                        Label(L10n.Common.edit, systemImage: "pencil")
-                                    }
-                                    .tint(.blue)
-                                }
-                                .contextMenu {
-                                    Button {
-                                        transactionToEdit = txn
-                                    } label: {
-                                        Label(L10n.Common.edit, systemImage: "pencil")
-                                            .font(.app(.body))
-                                    }
-                                    Button(role: .destructive) {
-                                        viewModel.deleteTransaction(txn)
-                                    } label: {
-                                        Label(L10n.Common.delete, systemImage: "trash")
-                                            .font(.app(.body))
-                                    }
-                                }
                         }
                     }
                 }
+                .listStyle(.insetGrouped)
             }
-            .listStyle(.insetGrouped)
             .navigationTitle(L10n.Home.title)
             .searchable(text: $viewModel.searchText)
             .searchToolbarBehavior(.minimize)
@@ -101,7 +90,8 @@ struct HomeView: View {
                         customStartDate: $viewModel.customStartDate,
                         customEndDate: $viewModel.customEndDate,
                         wallets: wallets,
-                        defaultPeriod: .thisMonth
+                        defaultPeriod: .thisMonth,
+                        showPeriodFilter: false
                     )
                 }
                 
@@ -110,8 +100,39 @@ struct HomeView: View {
     }
 }
 
-
-
+// Subview for Transaction Row to reduce complexity
+struct HomeTransactionRow: View {
+    let transaction: Transaction
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        Button(action: onEdit) {
+            TransactionRowView(transaction: transaction)
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive, action: onDelete) {
+                Label(L10n.Common.delete, systemImage: "trash")
+            }
+            
+            Button(action: onEdit) {
+                Label(L10n.Common.edit, systemImage: "pencil")
+            }
+            .tint(.blue)
+        }
+        .contextMenu {
+            Button(action: onEdit) {
+                Label(L10n.Common.edit, systemImage: "pencil")
+                    .font(.app(.body))
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label(L10n.Common.delete, systemImage: "trash")
+                    .font(.app(.body))
+            }
+        }
+    }
+}
 
 // Wrapper to handle ViewModel creation
 struct AddTransactionContainer: View {
@@ -145,7 +166,7 @@ struct DailyHeader: View {
             Spacer()
             // Here we want to see the daily total in the DASHBOARD currency, likely.
             // The view model already calculated dailyTotal in the preferred currency.
-            Text(section.dailyTotal.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+            Text(section.dailyTotal.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }

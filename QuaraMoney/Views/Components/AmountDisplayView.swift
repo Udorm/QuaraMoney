@@ -100,16 +100,14 @@ struct AmountDisplayView: View {
         return expression.rangeOfCharacter(from: operators) != nil
     }
     
+    @State private var showCurrencyPicker = false
+    
     var body: some View {
         VStack(spacing: 8) {
             // Currency Selection & Rate
             HStack(spacing: 8) {
-                Menu {
-                    ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
-                        Button(code) {
-                            currencyCode = code
-                        }
-                    }
+                Button {
+                    showCurrencyPicker = true
                 } label: {
                     HStack(spacing: 4) {
                         Text(currencyCode)
@@ -123,6 +121,12 @@ struct AmountDisplayView: View {
                     .background(Color(.secondarySystemBackground))
                     .foregroundColor(.primary)
                     .clipShape(Capsule())
+                }
+                .sheet(isPresented: $showCurrencyPicker) {
+                    NavigationStack {
+                        CurrencySelectionView(selection: $currencyCode)
+                    }
+                    .presentationDetents([.medium, .large])
                 }
                 
                 if let info = exchangeRateInfo {

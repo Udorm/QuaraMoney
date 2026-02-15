@@ -2,7 +2,7 @@ import Foundation
 
 /// Shared filter period enum used across ViewModels.
 /// Consolidates duplicate Period enums from HomeViewModel, AnalysisViewModel, WalletDetailViewModel.
-enum FilterPeriod: String, CaseIterable, Identifiable {
+enum FilterPeriod: String, CaseIterable, Identifiable, Sendable {
     case thisMonth
     case lastMonth
     case thisYear
@@ -82,7 +82,7 @@ enum FilterPeriod: String, CaseIterable, Identifiable {
 // MARK: - Analysis Period (for AnalysisView with navigation support)
 
 /// Period enum specifically for AnalysisView with time-based navigation
-enum AnalysisPeriod: String, CaseIterable, Identifiable {
+enum AnalysisPeriod: String, CaseIterable, Identifiable, Sendable {
     case day
     case week
     case month
@@ -258,7 +258,7 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable {
 
 // MARK: - Time Grouping
 
-enum TimeGrouping {
+enum TimeGrouping: Sendable {
     case hour
     case day
     case week

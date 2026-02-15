@@ -17,7 +17,6 @@ struct BudgetListView: View {
     private var filteredBudgets: [Budget] {
         var result = budgets
         
-        // Filter by period
         switch filterPeriod {
         case .active:
             result = result.filter { $0.isActive }
@@ -29,12 +28,10 @@ struct BudgetListView: View {
             break
         }
         
-        // Filter by recurring
         if showRecurringOnly {
             result = result.filter { $0.isRecurring }
         }
         
-        // Filter by search text
         if !searchText.isEmpty {
             result = result.filter { budget in
                 if let name = budget.name, name.localizedCaseInsensitiveContains(searchText) {
@@ -65,7 +62,6 @@ struct BudgetListView: View {
                 )
             } else {
                 List {
-                    // Summary section in its own card (for consistency with SavingsGoalListView)
                     if filterPeriod == .active || filterPeriod == .all {
                         Section {
                             BudgetSummarySection(
@@ -75,7 +71,6 @@ struct BudgetListView: View {
                         }
                     }
                     
-                    // Budget list section
                     Section(header: Text(headerTitle).font(.app(.subheadline)).textCase(nil)) {
                         ForEach(filteredBudgets) { budget in
                             NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
@@ -328,7 +323,7 @@ struct BudgetSummarySection: View {
                     Text(L10n.Budget.totalSpent)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
-                    Text(totalSpent.formatted(.currency(code: preferredCurrency)))
+                    Text(totalSpent.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
                         .font(.app(.title2, weight: .bold))
                 }
                 
@@ -338,7 +333,7 @@ struct BudgetSummarySection: View {
                     Text(L10n.Budget.totalBudgeted)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
-                    Text(totalBudgeted.formatted(.currency(code: preferredCurrency)))
+                    Text(totalBudgeted.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
                         .font(.app(.title2, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
@@ -483,11 +478,11 @@ struct BudgetRowView: View {
                     // Primary Value: Remaining or Spent based on preference/context
                     // Here we focus on "Amount Left" as it's usually what users care about
                     if isOverBudget {
-                        Text(spent.formatted(.currency(code: preferredCurrency)))
+                        Text(spent.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
                             .font(.app(.body, weight: .bold))
                             .foregroundStyle(.red)
                     } else {
-                        Text(remaining.formatted(.currency(code: preferredCurrency)))
+                        Text(remaining.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
                             .font(.app(.body, weight: .bold))
                             .foregroundStyle(Color.primary)
                     }
@@ -518,11 +513,11 @@ struct BudgetRowView: View {
                         }
                         
                         if isOverBudget {
-                             Text(L10n.Budget.overBy((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency))))
+                             Text(L10n.Budget.overBy((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency).presentation(.narrow))))
                                 .font(.app(.caption))
                                 .foregroundStyle(.red)
                         } else {
-                            Text(L10n.Budget.leftOf(budgetLimitConverted.formatted(.currency(code: preferredCurrency))))
+                            Text(L10n.Budget.leftOf(budgetLimitConverted.formatted(.currency(code: preferredCurrency).presentation(.narrow))))
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }

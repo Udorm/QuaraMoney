@@ -3,19 +3,17 @@ import SwiftData
 
 /// Shared utility for processing transactions efficiently.
 /// Consolidates duplicate logic from HomeViewModel, AnalysisViewModel, and TransactionListView.
-@MainActor
 struct TransactionProcessor {
     
     // MARK: - Daily Grouping
     
     /// Groups transactions by day and calculates daily flow (income - expense).
-    /// This replaces duplicate logic in HomeViewModel, AnalysisViewModel, and TransactionListView.
-    static func groupByDay(
+    /// Returns lightweight data with PersistentIdentifiers for background processing.
+    nonisolated static func groupByDay(
         _ transactions: [Transaction],
-        currency: String? = nil
-    ) -> [DailyTransactionSection] {
-        let targetCurrency = currency ?? CurrencyManager.shared.preferredCurrencyCode
-        
+        rates: [String: Double],
+        targetCurrency: String
+    ) -> [DailySectionData] {
         // Group by start of day
         let grouped = Dictionary(grouping: transactions) { txn -> Date in
             Calendar.current.startOfDay(for: txn.date)
@@ -25,19 +23,37 @@ struct TransactionProcessor {
         
         return sortedKeys.map { date in
             let txns = grouped[date] ?? []
-            let dailyFlow = calculateDailyFlow(txns, currency: targetCurrency)
+            let dailyFlow = calculateDailyFlow(txns, rates: rates, targetCurrency: targetCurrency)
+            let ids = txns.map { $0.persistentModelID }
+            return DailySectionData(date: date, transactionIds: ids, dailyTotal: dailyFlow)
+        }
+    }
+    
+    /// Groups transactions by day and returns UI-ready sections with objects.
+    /// Used by TransactionListView and other MainActor UI components.
+    nonisolated static func groupByDayObjects(
+        _ transactions: [Transaction],
+        rates: [String: Double],
+        targetCurrency: String
+    ) -> [DailyTransactionSection] {
+        // Group by start of day
+        let grouped = Dictionary(grouping: transactions) { txn -> Date in
+            Calendar.current.startOfDay(for: txn.date)
+        }
+        
+        let sortedKeys = grouped.keys.sorted(by: >)
+        
+        return sortedKeys.map { date in
+            let txns = grouped[date] ?? []
+            let dailyFlow = calculateDailyFlow(txns, rates: rates, targetCurrency: targetCurrency)
             return DailyTransactionSection(date: date, transactions: txns, dailyTotal: dailyFlow)
         }
     }
     
     /// Calculates daily net flow (income positive, expense negative)
-    private static func calculateDailyFlow(_ transactions: [Transaction], currency: String) -> Decimal {
+    nonisolated private static func calculateDailyFlow(_ transactions: [Transaction], rates: [String: Double], targetCurrency: String) -> Decimal {
         transactions.reduce(Decimal.zero) { result, txn in
-            let amount = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: currency
-            )
+            let amount = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
             
             switch txn.type {
             case .income: return result + amount
@@ -50,21 +66,16 @@ struct TransactionProcessor {
     // MARK: - Summary Calculations
     
     /// Calculates income and expense totals from transactions.
-    /// Replaces duplicate logic in HomeViewModel.fetchSummary() and AnalysisViewModel.
-    static func calculateTotals(
+    nonisolated static func calculateTotals(
         _ transactions: [Transaction],
-        currency: String? = nil
+        rates: [String: Double],
+        targetCurrency: String
     ) -> (income: Decimal, expense: Decimal) {
-        let targetCurrency = currency ?? CurrencyManager.shared.preferredCurrencyCode
         var income: Decimal = 0
         var expense: Decimal = 0
         
         for txn in transactions {
-            let amount = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: targetCurrency
-            )
+            let amount = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
             
             switch txn.type {
             case .income: income += amount
@@ -76,17 +87,24 @@ struct TransactionProcessor {
         return (income, expense)
     }
     
+    /// Helper for currency conversion
+    nonisolated private static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
+        guard let sourceRate = rates[source], let targetRate = rates[target] else {
+            // Fallback for KHR/USD typical case if rates missing
+            if source == "USD" && target == "KHR" { return amount * 4000 }
+            if source == "KHR" && target == "USD" { return amount / 4000 }
+            if source == target { return amount }
+            return amount
+        }
+        
+        // Convert to Base (USD) then to Target
+        let amountUSD = amount / Decimal(sourceRate)
+        let amountTarget = amountUSD * Decimal(targetRate)
+        return amountTarget
+    }
+    
     /// Creates a FetchDescriptor for transactions within a date range.
-    /// Consolidates duplicate predicate building from multiple ViewModels.
-    /// - Parameters:
-    ///   - startDate: Start of date range (inclusive)
-    ///   - endDate: End of date range (exclusive)
-    ///   - walletId: Optional specific wallet to filter by. When provided, shows all transactions for that wallet regardless of archived status.
-    ///   - sortDescending: Sort order by date
-    ///   - limit: Optional fetch limit for pagination
-    ///   - offset: Offset for pagination
-    ///   - excludeArchivedWallets: When true and walletId is nil, excludes transactions from archived wallets. Defaults to true.
-    static func makeDescriptor(
+    nonisolated static func makeDescriptor(
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
@@ -98,7 +116,6 @@ struct TransactionProcessor {
         let start = startDate
         let end = endDate
         
-        // Pre-compute sort descriptors to simplify predicate expressions
         let sortDescriptors: [SortDescriptor<Transaction>] = sortDescending 
             ? [SortDescriptor(\.date, order: .reverse)] 
             : [SortDescriptor(\.date)]
@@ -106,7 +123,6 @@ struct TransactionProcessor {
         var descriptor: FetchDescriptor<Transaction>
         
         if let walletId = walletId {
-            // Specific wallet query
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end &&
@@ -115,7 +131,6 @@ struct TransactionProcessor {
                 sortBy: sortDescriptors
             )
         } else if excludeArchivedWallets {
-            // Exclude archived wallets
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end &&
@@ -124,7 +139,6 @@ struct TransactionProcessor {
                 sortBy: sortDescriptors
             )
         } else {
-            // All wallets
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end
@@ -133,7 +147,6 @@ struct TransactionProcessor {
             )
         }
         
-        // Apply pagination if specified
         if let limit = limit {
             descriptor.fetchLimit = limit
             descriptor.fetchOffset = offset
@@ -143,17 +156,16 @@ struct TransactionProcessor {
     }
     
     /// Fetches transactions and computes all derived data in a single pass.
-    /// Eliminates duplicate fetches for summary + daily sections.
-    /// Search filtering is performed in-memory to avoid complex SwiftData predicate expressions.
-    static func fetchAndProcess(
+    /// Runs on a background context and returns Sendable data.
+    nonisolated static func fetchAndProcess(
         context: ModelContext,
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
-        currency: String? = nil,
+        rates: [String: Double],
+        targetCurrency: String,
         searchText: String? = nil
-    ) -> ProcessedTransactionData {
-        let targetCurrency = currency ?? CurrencyManager.shared.preferredCurrencyCode
+    ) -> ProcessedTransactionDataID {
         
         let descriptor = makeDescriptor(
             startDate: startDate,
@@ -164,7 +176,7 @@ struct TransactionProcessor {
         do {
             var transactions = try context.fetch(descriptor)
             
-            // Apply search filter in-memory (SwiftData predicates can't handle complex string operations)
+            // Apply search filter in-memory
             if let searchText = searchText?.trimmingCharacters(in: .whitespacesAndNewlines), !searchText.isEmpty {
                 transactions = transactions.filter { txn in
                     let noteMatch = txn.note?.localizedCaseInsensitiveContains(searchText) ?? false
@@ -173,85 +185,44 @@ struct TransactionProcessor {
                 }
             }
             
-            let totals = calculateTotals(transactions, currency: targetCurrency)
-            let sections = groupByDay(transactions, currency: targetCurrency)
+            let totals = calculateTotals(transactions, rates: rates, targetCurrency: targetCurrency)
+            let sections = groupByDay(transactions, rates: rates, targetCurrency: targetCurrency)
             
-            return ProcessedTransactionData(
-                transactions: transactions,
+            return ProcessedTransactionDataID(
                 incomeTotal: totals.income,
                 expenseTotal: totals.expense,
                 dailySections: sections
             )
         } catch {
-            #if DEBUG
-            print("TransactionProcessor fetch error: \(error)")
-            #endif
-            return ProcessedTransactionData(
-                transactions: [],
+            return ProcessedTransactionDataID(
                 incomeTotal: 0,
                 expenseTotal: 0,
                 dailySections: []
             )
         }
     }
-    
-    // MARK: - Pagination Support
-    
-    /// Default page size for paginated fetches
-    nonisolated static let defaultPageSize = 50
-    
-    /// Fetches a page of transactions for infinite scroll implementation.
-    /// Returns transactions and a flag indicating if more data is available.
-    static func fetchPaginated(
-        context: ModelContext,
-        startDate: Date,
-        endDate: Date,
-        walletId: UUID? = nil,
-        page: Int = 0,
-        pageSize: Int = defaultPageSize
-    ) -> (transactions: [Transaction], hasMore: Bool) {
-        let descriptor = makeDescriptor(
-            startDate: startDate,
-            endDate: endDate,
-            walletId: walletId,
-            limit: pageSize + 1,  // Fetch one extra to check if more exist
-            offset: page * pageSize
-        )
-        
-        do {
-            var transactions = try context.fetch(descriptor)
-            let hasMore = transactions.count > pageSize
-            
-            // Remove the extra item we fetched for checking
-            if hasMore {
-                transactions.removeLast()
-            }
-            
-            return (transactions, hasMore)
-        } catch {
-            #if DEBUG
-            print("TransactionProcessor paginated fetch error: \(error)")
-            #endif
-            return ([], false)
-        }
-    }
 }
 
 // MARK: - Supporting Types
 
-/// Represents a group of transactions for a single day with aggregate total
+/// Lightweight daily section data for background transfer
+struct DailySectionData: Sendable {
+    let date: Date
+    let transactionIds: [PersistentIdentifier]
+    let dailyTotal: Decimal
+}
+
+/// Result of fetchAndProcess with IDs
+struct ProcessedTransactionDataID: Sendable {
+    let incomeTotal: Decimal
+    let expenseTotal: Decimal
+    let dailySections: [DailySectionData]
+}
+
+/// Helper struct for MainActor UI
 struct DailyTransactionSection: Identifiable {
     var id: Date { date }
     let date: Date
     let transactions: [Transaction]
     let dailyTotal: Decimal
 }
-
-/// Result of fetchAndProcess - contains all computed data from a single fetch
-struct ProcessedTransactionData {
-    let transactions: [Transaction]
-    let incomeTotal: Decimal
-    let expenseTotal: Decimal
-    let dailySections: [DailyTransactionSection]
-}
-

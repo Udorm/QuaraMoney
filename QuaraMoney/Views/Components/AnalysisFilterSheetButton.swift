@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AnalysisFilterSheetButton: View {
-    @Binding var selectedTransactionType: AnalysisViewModel.TransactionTypeFilter
+    @Binding var selectedTransactionType: TransactionTypeFilter
     @Binding var selectedWallet: Wallet?
     @Binding var customStartDate: Date
     @Binding var customEndDate: Date
@@ -33,13 +33,13 @@ struct AnalysisFilterSheetButton: View {
                 wallets: wallets,
                 isPresented: $showFilterSheet
             )
-            .presentationDetents([.large])
+            .presentationDetents([.height(500), .large])
         }
     }
 }
 
 struct AnalysisFilterSheetView: View {
-    @Binding var selectedTransactionType: AnalysisViewModel.TransactionTypeFilter
+    @Binding var selectedTransactionType: TransactionTypeFilter
     @Binding var selectedWallet: Wallet?
     @Binding var customStartDate: Date
     @Binding var customEndDate: Date
@@ -47,12 +47,12 @@ struct AnalysisFilterSheetView: View {
     var wallets: [Wallet]
     @Binding var isPresented: Bool
     
-    @State private var pendingTransactionType: AnalysisViewModel.TransactionTypeFilter
+    @State private var pendingTransactionType: TransactionTypeFilter
     @State private var pendingWallet: Wallet?
     @State private var pendingStartDate: Date
     @State private var pendingEndDate: Date
     
-    init(selectedTransactionType: Binding<AnalysisViewModel.TransactionTypeFilter>,
+    init(selectedTransactionType: Binding<TransactionTypeFilter>,
          selectedWallet: Binding<Wallet?>,
          customStartDate: Binding<Date>,
          customEndDate: Binding<Date>,
@@ -77,8 +77,8 @@ struct AnalysisFilterSheetView: View {
             Form {
                 Section("analysis.transactionType".localized) {
                     Picker("analysis.transactionType".localized, selection: $pendingTransactionType) {
-                        Text(L10n.Transaction.TransactionType.expense).tag(AnalysisViewModel.TransactionTypeFilter.expense)
-                        Text(L10n.Transaction.TransactionType.income).tag(AnalysisViewModel.TransactionTypeFilter.income)
+                        Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
+                        Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
                     }
                     .pickerStyle(.segmented)
                 }
@@ -108,16 +108,6 @@ struct AnalysisFilterSheetView: View {
                         }
                     }
                 }
-                
-                // Note: Analysis view has its own period picker in the chart, but we might want custom date range here if "Custom" period is selected elsewhere? 
-                // However, the original AnalysisView had a separate sheet for custom date. 
-                // Let's integrate custom date range here but only show it if needed or as an option?
-                // Actually, for AnalysisView, the Start/End date are driven by the AnalysisPeriod. 
-                // If we want to allow overriding specific dates, it usually happens when "Custom" period is active.
-                // But the Period selection is on the main screen. 
-                // Let's keep it simple and focus on Transaction Type and Wallet for now, as that was what the Menu did.
-                // Wait, the original code had a separate sheet for Custom Date.
-                // We should expose the Custom Date pickers here too, effectively merging the functionality.
                 
                 Section(L10n.Period.custom) {
                    DatePicker("analysis.startDate".localized, selection: $pendingStartDate, displayedComponents: .date)

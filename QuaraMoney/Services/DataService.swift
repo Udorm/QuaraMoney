@@ -17,6 +17,7 @@ final class SwiftDataService: DataService {
     
     func save() throws {
         try modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
     
     func insert<T: PersistentModel>(_ model: T) {

@@ -2,23 +2,20 @@ import Foundation
 import SwiftData
 
 /// Service for handling budget period transitions and rollovers
-@MainActor
-class BudgetRolloverService {
-    private let modelContext: ModelContext
-    
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
-    }
-    
+struct BudgetRolloverService {
     // MARK: - Period Checking
     
     /// Check all budgets and process any that have ended their period
-    func checkAndProcessBudgetRollovers() {
-        let budgets = fetchAllBudgets()
+    nonisolated static func checkAndProcessBudgetRollovers(
+        modelContext: ModelContext,
+        rates: [String: Double],
+        preferredCurrency: String
+    ) {
+        let budgets = fetchAllBudgets(modelContext: modelContext)
         
         for budget in budgets {
             if shouldProcessRollover(for: budget) {
-                processBudgetRollover(budget)
+                processBudgetRollover(budget, modelContext: modelContext, rates: rates, preferredCurrency: preferredCurrency)
             }
         }
         
@@ -27,7 +24,7 @@ class BudgetRolloverService {
     }
     
     /// Check if a budget needs rollover processing
-    private func shouldProcessRollover(for budget: Budget) -> Bool {
+    nonisolated private static func shouldProcessRollover(for budget: Budget) -> Bool {
         // Only process recurring budgets that have ended
         guard budget.isRecurring && budget.isPeriodEnded else {
             return false
@@ -36,15 +33,18 @@ class BudgetRolloverService {
         return true
     }
     
-    // MARK: - Rollover Processing
-    
     /// Process rollover for a single budget
-    func processBudgetRollover(_ budget: Budget) {
+    nonisolated private static func processBudgetRollover(
+        _ budget: Budget,
+        modelContext: ModelContext,
+        rates: [String: Double],
+        preferredCurrency: String
+    ) {
         // Calculate spending for the ended period
-        let spent = calculateSpending(for: budget)
+        let spent = calculateSpending(for: budget, modelContext: modelContext, rates: rates, preferredCurrency: preferredCurrency)
         let unusedAmount = max(budget.effectiveLimit - spent, 0)
         
-        // Log the rollover (for debugging/analytics)
+        // Log the rollover
         logRollover(budget: budget, spent: spent, unused: unusedAmount)
         
         // Perform the rollover
@@ -58,32 +58,46 @@ class BudgetRolloverService {
     
     // MARK: - Spending Calculation
     
-    private func calculateSpending(for budget: Budget) -> Decimal {
+    nonisolated private static func calculateSpending(
+        for budget: Budget,
+        modelContext: ModelContext,
+        rates: [String: Double],
+        preferredCurrency: String
+    ) -> Decimal {
         let periodRange = budget.periodDateRange
-        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         
         // Fetch transactions for this budget's period
-        let transactions = fetchTransactions(for: budget, in: periodRange)
+        let transactions = fetchTransactions(for: budget, in: periodRange, modelContext: modelContext)
         
         return transactions.reduce(Decimal.zero) { total, txn in
-            total + CurrencyManager.shared.convert(
+            total + convert(
                 amount: txn.amount,
                 from: txn.currencyCode,
-                to: preferredCurrency
+                to: preferredCurrency,
+                rates: rates
             )
         }
     }
     
-    private func fetchTransactions(for budget: Budget, in range: (start: Date, end: Date)) -> [Transaction] {
+    nonisolated private static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
+        guard let sourceRate = rates[source], let targetRate = rates[target] else {
+            if source == "USD" && target == "KHR" { return amount * 4000 }
+            if source == "KHR" && target == "USD" { return amount / 4000 }
+            if source == target { return amount }
+            return amount
+        }
+        let amountUSD = amount / Decimal(sourceRate)
+        return amountUSD * Decimal(targetRate)
+    }
+    
+    nonisolated private static func fetchTransactions(for budget: Budget, in range: (start: Date, end: Date), modelContext: ModelContext) -> [Transaction] {
         let start = range.start
         let end = range.end
         
-        let descriptor: FetchDescriptor<Transaction>
-        
         let expenseType = TransactionType.expense
         
+        let descriptor: FetchDescriptor<Transaction>
         if budget.isTotalBudget {
-            // Total budget - all expenses (excluding archived wallets)
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
@@ -91,32 +105,28 @@ class BudgetRolloverService {
                     txn.sourceWallet?.isArchived != true
                 }
             )
-        } else if !budget.trackedCategoryIds.isEmpty {
-            // Category budget (single or multiple) - fetch all and filter
-            let categoryIds = budget.trackedCategoryIds
-            let baseDescriptor = FetchDescriptor<Transaction>(
+        } else {
+            // Category budget
+            descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
                     txn.date >= start && txn.date < end &&
                     txn.sourceWallet?.isArchived != true
                 }
             )
-            
-            do {
-                let allTransactions = try modelContext.fetch(baseDescriptor)
+        }
+        
+        do {
+            let allTransactions = try modelContext.fetch(descriptor)
+            if budget.isTotalBudget {
+                return allTransactions
+            } else {
+                let categoryIds = budget.trackedCategoryIds
                 return allTransactions.filter { txn in
                     guard let txnCategoryId = txn.category?.id else { return false }
                     return categoryIds.contains(txnCategoryId)
                 }
-            } catch {
-                return []
             }
-        } else {
-            return []
-        }
-        
-        do {
-            return try modelContext.fetch(descriptor)
         } catch {
             return []
         }
@@ -124,9 +134,8 @@ class BudgetRolloverService {
     
     // MARK: - Data Fetching
     
-    private func fetchAllBudgets() -> [Budget] {
+    nonisolated private static func fetchAllBudgets(modelContext: ModelContext) -> [Budget] {
         let descriptor = FetchDescriptor<Budget>()
-        
         do {
             return try modelContext.fetch(descriptor)
         } catch {
@@ -136,16 +145,14 @@ class BudgetRolloverService {
     
     // MARK: - Notifications
     
-    private func notifyRollover(budget: Budget, amount: Decimal) {
-        // Schedule rollover notification
+    nonisolated private static func notifyRollover(budget: Budget, amount: Decimal) {
         Task {
             await scheduleRolloverNotification(budget: budget, amount: amount)
         }
     }
     
-    private func scheduleRolloverNotification(budget: Budget, amount: Decimal) async {
+    nonisolated private static func scheduleRolloverNotification(budget: Budget, amount: Decimal) async {
         let center = UNUserNotificationCenter.current()
-        
         let content = UNMutableNotificationContent()
         content.title = "Budget Rolled Over"
         content.body = "Your \(budget.displayName) budget has \(amount.formatted(.currency(code: budget.currencyCode))) carried over to the new period."
@@ -156,63 +163,15 @@ class BudgetRolloverService {
             content: content,
             trigger: nil
         )
-        
         try? await center.add(request)
     }
     
     // MARK: - Logging
     
-    private func logRollover(budget: Budget, spent: Decimal, unused: Decimal) {
+    nonisolated private static func logRollover(budget: Budget, spent: Decimal, unused: Decimal) {
         #if DEBUG
-        print("""
-        [BudgetRollover] Processing rollover for budget: \(budget.displayName)
-          - Period: \(budget.periodDisplayString)
-          - Limit: \(budget.effectiveLimit)
-          - Spent: \(spent)
-          - Unused: \(unused)
-          - Rollover enabled: \(budget.rolloverExcess)
-        """)
+        print("[BudgetRollover] Processing rollover for budget: \(budget.displayName)")
         #endif
-    }
-    
-    // MARK: - Manual Rollover
-    
-    /// Manually trigger rollover for a specific budget (useful for testing or admin)
-    func manualRollover(for budget: Budget) {
-        guard budget.isRecurring else { return }
-        
-        processBudgetRollover(budget)
-        try? modelContext.save()
-    }
-    
-    /// Reset rollover amount for a budget
-    func resetRollover(for budget: Budget) {
-        budget.rolloverAmount = 0
-        try? modelContext.save()
-    }
-    
-    // MARK: - Batch Operations
-    
-    /// Process all pending rollovers
-    func processAllPendingRollovers() -> Int {
-        let budgets = fetchAllBudgets()
-        var processedCount = 0
-        
-        for budget in budgets {
-            if shouldProcessRollover(for: budget) {
-                processBudgetRollover(budget)
-                processedCount += 1
-            }
-        }
-        
-        try? modelContext.save()
-        return processedCount
-    }
-    
-    /// Get budgets that are due for rollover
-    func getBudgetsDueForRollover() -> [Budget] {
-        let budgets = fetchAllBudgets()
-        return budgets.filter { shouldProcessRollover(for: $0) }
     }
 }
 

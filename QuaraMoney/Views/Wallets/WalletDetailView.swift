@@ -15,7 +15,16 @@ struct WalletDetailView: View {
     }
     
     var body: some View {
-        List {
+        VStack(spacing: 0) {
+            // Month Selection
+            MonthSelectionView(
+                selectedDate: $viewModel.selectedMonth,
+                months: viewModel.availableMonths
+            )
+            .padding(.bottom, 8)
+            .background(Color(uiColor: .systemBackground))
+            
+            List {
             // Header Section (Balance)
             // Header Section (Hero)
             Section {
@@ -93,7 +102,9 @@ struct WalletDetailView: View {
                     }
                 )
             }
+            }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle(viewModel.wallet.name)
         .searchable(text: $viewModel.searchText)
         .searchToolbarBehavior(.minimize)
@@ -114,15 +125,8 @@ struct WalletDetailView: View {
                 }
                 
                 // Filter Button
-                FilterSheetButton(
-                    selectedPeriod: $viewModel.selectedPeriod,
-                    selectedWallet: .constant(nil),
-                    customStartDate: $viewModel.customStartDate,
-                    customEndDate: $viewModel.customEndDate,
-                    wallets: [],
-                    defaultPeriod: .thisMonth,
-                    showWalletFilter: false
-                )
+                // Filter Button Removed - using MonthSelectionView
+
                 
                 
             }

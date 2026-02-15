@@ -11,7 +11,11 @@ struct TransactionListView: View {
     
     /// Groups transactions by date using shared TransactionProcessor
     private var dailySections: [DailyTransactionSection] {
-        TransactionProcessor.groupByDay(transactions)
+        TransactionProcessor.groupByDayObjects(
+            transactions,
+            rates: CurrencyManager.shared.rates,
+            targetCurrency: CurrencyManager.shared.preferredCurrencyCode
+        )
     }
     
     var body: some View {

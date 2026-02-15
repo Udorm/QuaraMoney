@@ -7,6 +7,9 @@ struct SettingsView: View {
     @ObservedObject private var currencyManager = CurrencyManager.shared
     @ObservedObject private var languageManager = LanguageManager.shared
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
+    @AppStorage("appTheme") private var selectedTheme: QuaraMoneyApp.AppTheme = .system
+    @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var securityManager = SecurityManager.shared
     @State private var showPopulateConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isPopulating = false
@@ -24,12 +27,6 @@ struct SettingsView: View {
                 )) {
                     ForEach(LanguageManager.Language.allCases) { language in
                         Text(language.displayName).tag(language)
-                    }
-                }
-                
-                Picker(L10n.Settings.defaultCurrency, selection: $currencyManager.preferredCurrencyCode) {
-                    ForEach(currencyManager.availableCurrencies, id: \.self) { code in
-                        Text(code).tag(code)
                     }
                 }
                 
@@ -57,25 +54,66 @@ struct SettingsView: View {
                 }
             }
             
-            Section(L10n.Settings.exchangeRates) {
-                Button(L10n.Settings.refreshRates) {
-                    Task {
-                        await currencyManager.fetchRates()
+            Section("Appearance") {
+                Picker("App Theme", selection: $selectedTheme) {
+                    ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
+                        Label(theme.rawValue, systemImage: theme.icon)
+                            .tag(theme)
+                    }
+                }
+            }
+            
+            Section("Currency") {
+                NavigationLink(destination: CurrencySelectionView()) {
+                    HStack {
+                        Text(L10n.Settings.defaultCurrency)
+                        Spacer()
+                        Text(currencyManager.preferredCurrencyCode)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 
-                List {
-                    ForEach(currencyManager.availableCurrencies, id: \.self) { code in
-                        if code != "USD" { // USD is 1.0
-                            HStack {
-                                Text(code)
-                                Spacer()
-                                Text((currencyManager.rates[code] ?? 0.0).formatted(.number.precision(.fractionLength(2))))
-                                    .foregroundStyle(.secondary)
-                            }
+                if currencyManager.preferredCurrencyCode != "USD" {
+                    HStack {
+                        Text("Exchange Rate")
+                        Spacer()
+                        if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
+                            Text("1 USD ≈ \(rate.formatted(.number.precision(.fractionLength(2)))) \(currencyManager.preferredCurrencyCode)")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Fetching...")
+                                .foregroundStyle(.secondary)
+                                .task {
+                                    await currencyManager.fetchRates()
+                                }
                         }
                     }
                 }
+            }
+            
+            Section("Notifications") {
+                Toggle("Daily Reminder", isOn: $notificationManager.isDailyReminderEnabled)
+                    .onChange(of: notificationManager.isDailyReminderEnabled) { _, newValue in
+                        if newValue {
+                            notificationManager.requestPermission()
+                        }
+                    }
+                
+                if notificationManager.isDailyReminderEnabled {
+                    DatePicker("Time", selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute)
+                }
+            }
+            
+
+            
+            Section("Security") {
+                Toggle("App Lock", isOn: $securityManager.isAppLockEnabled)
+                    .onChange(of: securityManager.isAppLockEnabled) { _, newValue in
+                        // If enabling, require auth to confirm
+                        if newValue {
+                             // This is a simplified check. In production, you might want to force an auth check *before* allowing the toggle to stick isAppLockEnabled = true.
+                        }
+                    }
             }
             
             Section(L10n.Settings.dataManagement) {

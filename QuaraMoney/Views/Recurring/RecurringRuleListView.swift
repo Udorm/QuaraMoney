@@ -42,8 +42,8 @@ struct RecurringRuleListView: View {
                             .font(.app(.caption, weight: .bold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.orange.opacity(0.2))
-                            .foregroundStyle(.orange)
+                            .background(Color.accentColor.opacity(0.1))
+                            .foregroundStyle(Color.accentColor)
                             .clipShape(Capsule())
                         
                         Button(action: { showingAddRule = true }) {

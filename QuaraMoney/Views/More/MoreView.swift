@@ -1,96 +1,51 @@
+
 import SwiftUI
 
 struct MoreView: View {
     @State private var showBudgetWizard = false
-    @State private var showNotifications = false
     
     var body: some View {
         NavigationStack {
             List {
-                // MARK: - Planning Tools Section
-                Section {
+                Section(L10n.More.planningTools) {
                     NavigationLink(destination: BudgetInsightsView()) {
-                        Label {
-                            Text(L10n.Budget.insights)
-                        } icon: {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .foregroundStyle(.purple)
-                        }
+                        Label(L10n.Budget.insights, systemImage: "chart.line.uptrend.xyaxis")
                     }
                     
                     Button {
                         showBudgetWizard = true
                     } label: {
-                        Label {
-                            Text("more.budgetWizard".localized)
-                        } icon: {
-                            Image(systemName: "wand.and.stars")
-                                .foregroundStyle(.pink)
-                        }
+                        Label(L10n.More.budgetWizard, systemImage: "wand.and.stars")
                     }
-                } header: {
-                    Text("more.planningTools".localized)
                 }
                 
-                // MARK: - Features Section
-                Section {
-                    NavigationLink(destination: RecurringRuleListView()) {
-                        Label {
-                            Text(L10n.Recurring.title)
-                        } icon: {
-                            Image(systemName: "calendar.badge.clock")
-                                .foregroundStyle(.blue)
-                        }
-                    }
-                    
+                Section(L10n.More.features) {
                     NavigationLink(destination: EventListView()) {
-                        Label {
-                            Text(L10n.Event.title)
-                        } icon: {
-                            Image(systemName: "party.popper")
-                                .foregroundStyle(.purple)
-                        }
-                    }
-                } header: {
-                    Text("more.features".localized)
-                }
-                
-                // MARK: - Management Section
-                Section {
-                    NavigationLink(destination: CategoryListView()) {
-                        Label {
-                            Text(L10n.Category.title)
-                        } icon: {
-                            Image(systemName: "tag.fill")
-                                .foregroundStyle(.orange)
-                        }
+                        Label(L10n.Event.title, systemImage: "party.popper")
                     }
                     
-
-                } header: {
-                    Text("more.management".localized)
+                    NavigationLink(destination: RecurringRuleListView()) {
+                        Label(L10n.More.recurringRules, systemImage: "repeat")
+                    }
                 }
                 
-                // MARK: - App Section
-                Section {
-                    NavigationLink(destination: SettingsView()) {
-                        Label {
-                            Text(L10n.Settings.title)
-                        } icon: {
-                            Image(systemName: "gear")
-                                .foregroundStyle(.gray)
-                        }
+                Section(L10n.More.management) {
+                    NavigationLink(destination: DebtListView()) {
+                        Label(L10n.Debt.title, systemImage: "person.2.crop.square.stack")
                     }
-                } header: {
-                    Text("more.app".localized)
+                    
+                    NavigationLink(destination: CategoryListView()) {
+                        Label(L10n.More.categories, systemImage: "list.bullet")
+                    }
+                }
+                
+                Section(L10n.More.app) {
+                    NavigationLink(destination: SettingsView()) {
+                        Label(L10n.Settings.title, systemImage: "gear")
+                    }
                 }
             }
             .navigationTitle(L10n.More.title)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NotificationBellButton()
-                }
-            }
             .sheet(isPresented: $showBudgetWizard) {
                 BudgetSetupWizardView()
             }

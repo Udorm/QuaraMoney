@@ -17,6 +17,7 @@ class AddTransactionViewModel: BaseViewModel {
     @Published var selectedWallet: Wallet?
     @Published var selectedEvent: Event?
     @Published var excludeFromReports: Bool = false
+    @Published var debt: Debt?
     
     @Published var exchangeRate: Double = 1.0
     
@@ -48,7 +49,11 @@ class AddTransactionViewModel: BaseViewModel {
             self.selectedEvent = txn.event
             self.excludeFromReports = txn.excludeFromReports
             self.selectedCurrencyCode = txn.currencyCode
+            
+            // Handle legacy exchangeRate (Decimal) -> Double
             self.exchangeRate = NSDecimalNumber(decimal: txn.exchangeRate).doubleValue
+            
+            self.debt = txn.debt
             
             if txn.type == .transfer {
                 self.destinationWallet = txn.destinationWallet
@@ -179,12 +184,64 @@ class AddTransactionViewModel: BaseViewModel {
         
         do {
             try dataService.save()
+            HapticManager.shared.notification(type: .success)
         } catch {
             print("Error saving transaction: \(error)")
+            HapticManager.shared.notification(type: .error)
         }
         
         // Invalidate wallet balance caches
         wallet.invalidateBalanceCache()
         destinationWallet?.invalidateBalanceCache()
+    }
+    // MARK: - OCR / Receipt Scanning
+    func scanReceipt(image: UIImage, availableWallets: [Wallet] = []) async {
+        do {
+            let walletNames = availableWallets.map { $0.name }
+            let parsedData = try await OCRService.shared.scanReceipt(from: image, availableWallets: walletNames)
+            
+            if let amount = parsedData.amount {
+                self.evaluatedAmount = amount
+                self.expression = formatDecimalForExpression(amount)
+            }
+            
+            if let date = parsedData.date {
+                self.date = date
+            }
+            
+            if let merchant = parsedData.merchantName {
+                // Determine if we should append or replace
+                if self.note.isEmpty {
+                    self.note = merchant
+                } else {
+                    self.note = "\(merchant) - \(self.note)"
+                }
+            }
+            
+            // Handle Currency
+            if let currencyCode = parsedData.currencyCode, !currencyCode.isEmpty {
+                self.selectedCurrencyCode = currencyCode.uppercased()
+            }
+            
+            // Handle Wallet Suggestion
+            if let suggestedName = parsedData.suggestedWalletName {
+                if let match = availableWallets.first(where: { $0.name.localizedCaseInsensitiveContains(suggestedName) }) {
+                    self.selectedWallet = match
+                    
+                    // If no currency was detected, sync to the suggested wallet's currency
+                    if parsedData.currencyCode == nil {
+                        self.syncCurrencyToWallet()
+                    }
+                }
+            }
+            
+            // Ensure exchange rate is updated if we have a wallet and a currency (potentially different)
+            self.updateTransactionCurrencyExchangeRate()
+            
+            HapticManager.shared.notification(type: .success)
+        } catch {
+            print("OCR Error: \(error)")
+            HapticManager.shared.notification(type: .error)
+        }
     }
 }

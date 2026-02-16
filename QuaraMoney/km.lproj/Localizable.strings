@@ -24,6 +24,8 @@
 "common.select" = "ជ្រើសរើស";
 "common.selectAll" = "ជ្រើសរើសទាំងអស់";
 "common.deselectAll" = "ដកការជ្រើសរើសទាំងអស់";
+"common.next" = "បន្ទាប់";
+"common.more" = "បន្ថែមទៀត";
 
 // MARK: - Tab Bar (របារផ្ទាំង)
 "tab.home" = "ទំព័រដើម";
@@ -72,18 +74,18 @@
 "transaction.note" = "បន្ថែមកំណត់ចំណាំ...";
 "transaction.rate" = "អត្រា";
 "transaction.type" = "ប្រភេទ";
+"transaction.date" = "កាលបរិច្ឆេទ";
 "transaction.fromWallet" = "ពីកាបូប";
 "transaction.toWallet" = "ទៅកាន់កាបូប";
 "transaction.searchWallets" = "ស្វែងរកកាបូប";
 "transaction.noOtherWallets" = "គ្មានកាបូបផ្សេងទៀតទេ";
-"transaction.date" = "កាលបរិច្ឆេទ";
 "transaction.noCategoriesForType" = "គ្មានប្រភេទសម្រាប់ %@";
 "transaction.type.income" = "ចំណូល";
 "transaction.type.expense" = "ចំណាយ";
 "transaction.type.transfer" = "ផ្ទេរ";
+"transaction.category" = "ប្រភេទ";
+"transaction.scanReceipt" = "ស្កេនវិក្កយបត្រ";
 "transaction.currency" = "រូបិយប័ណ្ណ";
-
-"common.more" = "បន្ថែមទៀត";
 
 // MARK: - Categories (ប្រភេទ)
 "category.title" = "ប្រភេទ";
@@ -92,6 +94,7 @@
 "category.name" = "ឈ្មោះប្រភេទ";
 "category.selectColor" = "ជ្រើសរើសពណ៌";
 "category.selectIcon" = "ជ្រើសរើសរូបតំណាង";
+"category.noAvailable" = "មិនមានប្រភេទ";
 
 // Predefined Categories (ប្រភេទកំណត់ជាមុន)
 "category.foodAndDrink" = "អាហារ និងភេសជ្ជៈ";
@@ -111,7 +114,7 @@
 "category.leisure" = "ការកម្សាន្ត";
 "category.education" = "ការអប់រំ";
 "category.tech" = "បច្ចេកវិទ្យា";
-
+"category.debtAndLoans" = "បំណុល និង កម្ចី";
 
 // MARK: - Budget (ថវិកា)
 "budget.title" = "ថវិកា";
@@ -161,7 +164,6 @@
 "budget.target.type" = "ប្រភេទថវិកា";
 "budget.target.specificCategories" = "ប្រភេទជាក់លាក់";
 "budget.selectCategories" = "ជ្រើសរើសប្រភេទ";
-"category.noAvailable" = "គ្មានប្រភេទ";
 
 "savings.selectGoal" = "ជ្រើសរើសគោលដៅ";
 "budget.alertAt" = "ជូនដំណឹងនៅ %d%%";
@@ -180,6 +182,11 @@
 "budget.noTransactions" = "មិនទាន់មានប្រតិបត្តិការទេ";
 "budget.currentPeriod" = "រយៈពេលបច្ចុប្បន្ន";
 "budget.rolloverAmountLabel" = "ចំនួនទឹកប្រាក់ផ្ទេរសល់";
+
+"alert.budget.info50" = "អ្នកបានចំណាយ ៥០%% នៃថវិកា %@ របស់អ្នកហើយ";
+"alert.budget.warning80" = "ព្រមាន៖ ៨០%% នៃថវិកា %@ របស់អ្នកត្រូវបានចំណាយ";
+"alert.budget.exceeded" = "អ្នកបានចំណាយលើសថវិកា %@ របស់អ្នកហើយ!";
+"alert.budget.projectedOverspend" = "ក្នុងអត្រានេះ អ្នកនឹងចំណាយលើសថវិកា %@ របស់អ្នក";
 
 // MARK: - Budget Category Types
 "budget.type.needs.title" = "តម្រូវការចាំបាច់";
@@ -263,6 +270,10 @@
 "filter.sixMonths" = "៦ ខែ";
 "filter.year" = "ឆ្នាំ";
 "filter.lastYear" = "ឆ្នាំមុន";
+"filter.title" = "តម្រង";
+"filter.period" = "រយៈពេល";
+"filter.wallet" = "កាបូប";
+"filter.allWallets" = "កាបូបទាំងអស់";
 
 // MARK: - Analysis (ការវិភាគ)
 "analysis.title" = "ការវិភាគ";
@@ -275,10 +286,7 @@
 "analysis.noTransactionsForPeriod" = "រកមិនឃើញប្រតិបត្តិការសម្រាប់រយៈពេលនេះ";
 "analysis.topSpendingCategories" = "ប្រភេទចំណាយខ្ពស់";
 "analysis.topIncomeCategories" = "ប្រភេទចំណូលខ្ពស់";
-"filter.title" = "តម្រង";
-"filter.period" = "រយៈពេល";
-"filter.wallet" = "កាបូប";
-"filter.allWallets" = "កាបូបទាំងអស់";
+"analysis.net" = "លុយលស់";
 
 // MARK: - Events (ព្រឹត្តិការណ៍)
 "event.title" = "ព្រឹត្តិការណ៍";
@@ -317,18 +325,18 @@
 "savings.markActive" = "សម្គាល់ថាសកម្ម";
 "savings.emptyState" = "បង្កើតគោលដៅសន្សំដើម្បីចាប់ផ្ដើមតាមដានការរីកចម្រើនរបស់អ្នកឆ្ពោះទៅគោលដៅហិរញ្ញវត្ថុ";
 
-// MARK: - Recurring / Subscriptions (ការជាវ)
-"recurring.title" = "ការជាវ";
-"recurring.new" = "ការជាវថ្មី";
-"recurring.add" = "បន្ថែមការជាវ";
-"recurring.name" = "ឈ្មោះ (ឧ. Netflix)";
-"recurring.next" = "បន្ទាប់៖ %@";
-"recurring.emptyState" = "បន្ថែមវិក្កយបត្រដែលកើតឡើងម្តងហើយម្តងទៀតដើម្បីតាមដានដោយស្វ័យប្រវត្តិ";
-"recurring.createWalletFirst" = "បង្កើតកាបូបមុនដើម្បីបន្ថែមការជាវ";
+// MARK: - Recurring Rules
+"recurring.title" = "ច្បាប់វិលជុំ";
+"recurring.new" = "ច្បាប់ថ្មី";
+"recurring.add" = "បន្ថែមច្បាប់";
+"recurring.name" = "ឈ្មោះច្បាប់";
+"recurring.emptyState" = "មិនទាន់មានច្បាប់វិលជុំនៅឡើយ។";
+"recurring.createWalletFirst" = "សូមបង្កើតកាបូបជាមុនសិន។";
+"recurring.next" = "បន្ទាប់: %@";
 "recurring.frequency" = "ភាពញឹកញាប់";
 "recurring.assignments" = "ការចាត់តាំង";
 "recurring.preview" = "មើលជាមុន";
-"recurring.emptyTitle" = "គ្មានការជាវ";
+"recurring.emptyTitle" = "គ្មានច្បាប់វិលជុំ";
 
 // MARK: - Frequencies (ភាពញឹកញាប់)
 "frequency.daily" = "ប្រចាំថ្ងៃ";
@@ -384,6 +392,13 @@
 "notifications.markAllRead" = "សម្គាល់ទាំងអស់ថាអានហើយ";
 "notifications.clearAll" = "សម្អាតទាំងអស់";
 "notifications.read" = "អាន";
+"notifications.emptyTitle" = "គ្មានការជូនដំណឹង";
+"notifications.emptyDescription" = "ការជូនដំណឹងថវិកានឹងបង្ហាញនៅទីនេះ";
+"notifications.dailySummaryTitle" = "សង្ខេបថវិកាប្រចាំថ្ងៃ";
+"notifications.dailySummaryBody" = "ពិនិត្យមើលវឌ្ឍនភាពចំណាយថ្ងៃនេះ";
+"notifications.viewBudget" = "មើលថវិកា";
+"notifications.viewAnalysis" = "មើលការវិភាគ";
+"notifications.dismiss" = "បិទ";
 
 // MARK: - Onboarding (ការណែនាំ)
 "onboarding.welcome" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
@@ -394,6 +409,13 @@
 "onboarding.colorDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូល និងចំណាយរបស់អ្នក";
 "onboarding.allSet" = "អ្នករួចរាល់ហើយ!";
 "onboarding.getStarted" = "តោះបង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្ដើម";
+"onboarding.welcomeTitle" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
+"onboarding.welcomeDescription" = "គ្រប់គ្រងហិរញ្ញវត្ថុរបស់អ្នក\nតាមដានការចំណាយ និងសន្សំ";
+"onboarding.themeDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូលនិងចំណាយរបស់អ្នក";
+"onboarding.incomeColor" = "ពណ៌ចំណូល";
+"onboarding.expenseColor" = "ពណ៌ចំណាយ";
+"onboarding.finalTitle" = "រួចរាល់ហើយ!";
+"onboarding.finalDescription" = "បង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្តើម";
 
 // MARK: - Status Messages (សារស្ថានភាព)
 "status.deleting" = "កំពុងលុប...";
@@ -453,37 +475,19 @@
 "savings.status.weeksLeft" = "នៅសល់ %d សប្តាហ៍";
 "savings.status.monthsLeft" = "នៅសល់ %d ខែ";
 
-// MARK: - Onboarding (ការចាប់ផ្តើម)
-"onboarding.getStarted" = "ចាប់ផ្តើម";
-"onboarding.welcomeTitle" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
-"onboarding.welcomeDescription" = "គ្រប់គ្រងហិរញ្ញវត្ថុរបស់អ្នក\nតាមដានការចំណាយ និងសន្សំ";
-"onboarding.selectCurrency" = "ជ្រើសរើសរូបិយប័ណ្ណ";
-"onboarding.currencyDescription" = "ជ្រើសរើសរូបិយប័ណ្ណលំនាំដើមរបស់អ្នក\nអ្នកអាចប្តូរវានៅពេលក្រោយ";
-"onboarding.personalizeColors" = "ប្ដូរពណ៌តាមចិត្ត";
-"onboarding.themeDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូលនិងចំណាយរបស់អ្នក";
-"onboarding.incomeColor" = "ពណ៌ចំណូល";
-"onboarding.expenseColor" = "ពណ៌ចំណាយ";
-"onboarding.finalTitle" = "រួចរាល់ហើយ!";
-"onboarding.finalDescription" = "បង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្តើម";
-
-// MARK: - Notifications (ការជូនដំណឹង)
-"notifications.title" = "ការជូនដំណឹង";
-"notifications.emptyTitle" = "គ្មានការជូនដំណឹង";
-"notifications.emptyDescription" = "ការជូនដំណឹងថវិកានឹងបង្ហាញនៅទីនេះ";
-"notifications.read" = "អាន";
-"notifications.markAllRead" = "សម្គាល់ថាបានអានទាំងអស់";
-"notifications.clearAll" = "សម្អាតទាំងអស់";
-"notifications.dailySummaryTitle" = "សង្ខេបថវិកាប្រចាំថ្ងៃ";
-"notifications.dailySummaryBody" = "ពិនិត្យមើលវឌ្ឍនភាពចំណាយថ្ងៃនេះ";
-"notifications.viewBudget" = "មើលថវិកា";
-"notifications.viewAnalysis" = "មើលការវិភាគ";
-"notifications.dismiss" = "បិទ";
-
-"alert.budget.info50" = "អ្នកបានចំណាយ ៥០%% នៃថវិកា %@ របស់អ្នកហើយ";
-"alert.budget.warning80" = "ព្រមាន៖ ៨០%% នៃថវិកា %@ របស់អ្នកត្រូវបានចំណាយ";
-"alert.budget.exceeded" = "អ្នកបានចំណាយលើសថវិកា %@ របស់អ្នកហើយ!";
-"alert.budget.projectedOverspend" = "ក្នុងអត្រានេះ អ្នកនឹងចំណាយលើសថវិកា %@ របស់អ្នក";
-
-"common.next" = "បន្ទាប់";
-"analysis.net" = "លុយលស់";
-
+// MARK: - Debt
+"debt.title" = "បំណុល និង កម្ចី";
+"debt.owedToMe" = "គេជំពាក់ខ្ញុំ";
+"debt.iOwe" = "ខ្ញុំជំពាក់គេ";
+"debt.add" = "បន្ថែមបំណុល";
+"debt.recordPayment" = "កត់ត្រាការសង";
+"debt.markCompleted" = "សម្គាល់ថាបានបញ្ចប់";
+"debt.partialPayments" = "ការសងមួយផ្នែក";
+"debt.remaining" = "នៅសល់";
+"debt.paid" = "បានសង";
+"debt.total" = "សរុប";
+"debt.personName" = "ឈ្មោះ";
+"debt.dueDate" = "កាលបរិច្ឆេទកំណត់";
+"debt.history" = "ប្រវត្តិ";
+"debt.recordInitialTransaction" = "កត់ត្រាប្រតិបត្តិការដំបូង";
+"debt.initialTransactionHelp" = "វានឹងធ្វើបច្ចុប្បន្នភាពសមតុល្យកាបូបរបស់អ្នក។";

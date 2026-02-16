@@ -181,7 +181,7 @@ struct CSVImportView: View {
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(viewModel.canProceedToPreview ? Color.accentColor : Color.gray)
+                    .background(viewModel.canProceedToPreview ? Color.accentColor : Color(.systemGray))
                     .foregroundStyle(.white)
                     .cornerRadius(12)
             }
@@ -291,7 +291,7 @@ struct CSVImportView: View {
                         .font(.app(.headline))
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(viewModel.canImport ? Color.accentColor : Color.gray)
+                        .background(viewModel.canImport ? Color.accentColor : Color(.systemGray))
                         .foregroundStyle(.white)
                         .cornerRadius(12)
                 }

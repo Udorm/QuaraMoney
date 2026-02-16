@@ -21,15 +21,18 @@ struct AddTransactionView: View {
     @State private var walletSearchText = ""
     @State private var eventSearchText = ""
     @State private var suggestedEvent: Event? // Hold the suggestion
+    @State private var showScanner = false
+
     @FocusState private var isNoteFieldFocused: Bool
     
     // Configuration
     private let maxQuickCategories = 3 // Show 3 categories + "More" to keep strictly to one row (4 items)
     private let maxQuickWallets = 4
     
-    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
+    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true, initialShowScanner: Bool = false) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
+        self._showScanner = State(initialValue: initialShowScanner)
     }
     
     private var filteredCategories: [Category] {
@@ -109,6 +112,28 @@ struct AddTransactionView: View {
                                 }
                             }
                         
+                        // MARK: - Linked Debt Indicator
+                        if let debt = viewModel.debt {
+                            HStack {
+                                Image(systemName: debt.type == .owedToMe ? "arrow.up.right.circle.fill" : "arrow.down.left.circle.fill")
+                                    .foregroundStyle(debt.type == .owedToMe ? .red : .green)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(debt.type == .owedToMe ? "Linked to Debt" : "Linked to Loan")
+                                        .font(.app(.caption2))
+                                        .foregroundStyle(.secondary)
+                                    Text(debt.personName)
+                                        .font(.app(.subheadline, weight: .semibold))
+                                }
+                                Spacer()
+                                Image(systemName: "lock.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(12)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .cornerRadius(12)
+                        }
+                        
                         // MARK: - Transaction Type Selector
                         transactionTypeSelector
                         
@@ -165,6 +190,28 @@ struct AddTransactionView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
+                }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showScanner = true
+                    } label: {
+                        Image(systemName: "doc.text.viewfinder")
+                    }
+                }
+            }
+            .sheet(isPresented: $showScanner) {
+                ScannerView(isPresented: $showScanner) { result in
+                    switch result {
+                    case .success(let images):
+                        if let firstImage = images.first {
+                            Task {
+                                await viewModel.scanReceipt(image: firstImage, availableWallets: wallets)
+                            }
+                        }
+                    case .failure(let error):
+                        print("Scanner failed: \(error)")
+                    }
                 }
             }
             .onAppear {
@@ -310,7 +357,7 @@ struct AddTransactionView: View {
             Group {
                 if viewModel.type == .adjustment {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.black.opacity(0.05))
+                        .fill(Color(.secondarySystemFill))
                         .allowsHitTesting(true) // Blocks touches
                 }
             }
@@ -592,7 +639,7 @@ struct AddTransactionView: View {
                         .foregroundStyle(.blue)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color.accentColor.opacity(0.1))
                         .cornerRadius(8)
                         
                         Button {
@@ -718,7 +765,7 @@ struct WalletChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.blue : Color(.secondarySystemGroupedBackground))
+            .background(isSelected ? Color.accentColor : Color(.secondarySystemGroupedBackground))
             .foregroundColor(isSelected ? .white : .primary)
             .cornerRadius(16)
         }

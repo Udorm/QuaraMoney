@@ -167,7 +167,7 @@ struct CalculatorKeyboardView: View {
         .padding(8) // Slightly more padding container
         .background(CalcColors.background)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) // Rounded top corners
-        .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: -5) // Floating shadow
+        .shadow(color: Color.primary.opacity(0.15), radius: 15, x: 0, y: -5) // Floating shadow
         .padding(.horizontal, 8) // Float slightly from edges
         .padding(.bottom, 2) // Float from bottom
     }

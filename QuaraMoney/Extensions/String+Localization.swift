@@ -206,6 +206,11 @@ enum L10n {
         static var amount: String { "transaction.amount".localized }
         static var note: String { "transaction.note".localized }
         static var rate: String { "transaction.rate".localized }
+        static var date: String { "transaction.date".localized }
+        static var type: String { "transaction.type".localized }
+        static var category: String { "transaction.category".localized }
+        static var scanReceipt: String { "transaction.scanReceipt".localized }
+        
         
         enum TransactionType {
             static var income: String { "transaction.type.income".localized }
@@ -243,6 +248,7 @@ enum L10n {
         static var leisure: String { "category.leisure".localized }
         static var education: String { "category.education".localized }
         static var tech: String { "category.tech".localized }
+        static var debtAndLoans: String { "category.debtAndLoans".localized }
     }
     
 
@@ -593,6 +599,33 @@ enum L10n {
     // MARK: - More
     enum More {
         static var title: String { "more.title".localized }
+        static var planningTools: String { "more.planningTools".localized }
+        static var features: String { "more.features".localized }
+        static var management: String { "more.management".localized }
+        static var app: String { "more.app".localized }
+        static var budgetWizard: String { "more.budgetWizard".localized }
+        
+        static var categories: String { "category.title".localized }
+        static var recurringRules: String { "recurring.title".localized }
+    }
+    
+    // MARK: - Debt
+    enum Debt {
+        static var title: String { "debt.title".localized }
+        static var owedToMe: String { "debt.owedToMe".localized }
+        static var iOwe: String { "debt.iOwe".localized }
+        static var add: String { "debt.add".localized }
+        static var recordPayment: String { "debt.recordPayment".localized }
+        static var markCompleted: String { "debt.markCompleted".localized }
+        static var remaining: String { "debt.remaining".localized }
+        static var paid: String { "debt.paid".localized }
+        static var total: String { "debt.total".localized }
+        static var personName: String { "debt.personName".localized }
+        static var dueDate: String { "debt.dueDate".localized }
+        static var history: String { "debt.history".localized }
+        static var recordInitialTransaction: String { "debt.recordInitialTransaction".localized }
+        static var initialTransactionHelp: String { "debt.initialTransactionHelp".localized }
+        static var partialPayments: String { "debt.partialPayments".localized }
     }
     
 

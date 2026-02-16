@@ -66,8 +66,7 @@ class NotificationManager: ObservableObject {
         content.sound = .default
         
         // Convert double (seconds from midnight) to DateComponents
-        let date = Date(timeIntervalSinceReferenceDate: reminderTime)
-        let calendar = Calendar.current
+        // Convert double (seconds from midnight) to DateComponents
         let hour = Int(reminderTime) / 3600
         let minute = (Int(reminderTime) % 3600) / 60
         

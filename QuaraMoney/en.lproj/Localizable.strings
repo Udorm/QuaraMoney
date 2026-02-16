@@ -24,6 +24,8 @@
 "common.select" = "Select";
 "common.selectAll" = "Select All";
 "common.deselectAll" = "Deselect All";
+"common.next" = "Next";
+"common.more" = "More";
 
 // MARK: - Tab Bar
 "tab.home" = "Home";
@@ -32,7 +34,7 @@
 "tab.more" = "More";
 
 // MARK: - Home
-"home.title" = "Home";
+"home.title" = "Overview";
 "home.noTransactions" = "No transactions in this period.";
 
 // MARK: - Wallets
@@ -41,7 +43,7 @@
 "wallet.totalBalance" = "Total Balance";
 "wallet.netWorth" = "Total Net Worth";
 "wallet.selectWallet" = "Select Wallet";
-"wallet.name" = "Name";
+"wallet.name" = "Wallet Name";
 "wallet.currency" = "Currency";
 "wallet.color" = "Color";
 "wallet.icon" = "Icon";
@@ -72,18 +74,18 @@
 "transaction.note" = "Add note...";
 "transaction.rate" = "Rate";
 "transaction.type" = "Type";
+"transaction.date" = "Date";
 "transaction.fromWallet" = "From Wallet";
 "transaction.toWallet" = "To Wallet";
 "transaction.searchWallets" = "Search wallets";
 "transaction.noOtherWallets" = "No other wallets available";
-"transaction.date" = "Date";
 "transaction.noCategoriesForType" = "No categories for %@";
 "transaction.type.income" = "Income";
 "transaction.type.expense" = "Expense";
 "transaction.type.transfer" = "Transfer"; 
+"transaction.category" = "Category";
+"transaction.scanReceipt" = "Scan Receipt";
 "transaction.currency" = "Currency";
-
-"common.more" = "More";
 
 // MARK: - Categories
 "category.title" = "Categories";
@@ -92,6 +94,7 @@
 "category.name" = "Category Name";
 "category.selectColor" = "Select Color";
 "category.selectIcon" = "Select Icon";
+"category.noAvailable" = "No categories available";
 
 // Predefined Categories
 "category.foodAndDrink" = "Food and drink";
@@ -111,7 +114,7 @@
 "category.leisure" = "Leisure";
 "category.education" = "Education";
 "category.tech" = "Tech";
-
+"category.debtAndLoans" = "Debts & Loans";
 
 // MARK: - Budget
 "budget.title" = "Budgets";
@@ -161,7 +164,6 @@
 "budget.target.type" = "Budget Type";
 "budget.target.specificCategories" = "Specific Categories";
 "budget.selectCategories" = "Select Categories";
-"category.noAvailable" = "No categories available";
 
 "savings.selectGoal" = "Select Goal";
 "budget.alertAt" = "Alert at %d%%";
@@ -180,6 +182,11 @@
 "budget.noTransactions" = "No transactions yet";
 "budget.currentPeriod" = "Current Period";
 "budget.rolloverAmountLabel" = "Rollover Amount";
+
+"alert.budget.info50" = "You've spent 50%% of your %@ budget";
+"alert.budget.warning80" = "Warning: 80%% of your %@ budget is spent";
+"alert.budget.exceeded" = "You've exceeded your %@ budget!";
+"alert.budget.projectedOverspend" = "At this rate, you'll exceed your %@ budget";
 
 // MARK: - Budget Category Types
 "budget.type.needs.title" = "Needs";
@@ -263,6 +270,10 @@
 "filter.sixMonths" = "6 Months";
 "filter.year" = "Year";
 "filter.lastYear" = "Last Year";
+"filter.title" = "Filter";
+"filter.period" = "Period";
+"filter.wallet" = "Wallet";
+"filter.allWallets" = "All Wallets";
 
 // MARK: - Analysis
 "analysis.title" = "Analysis";
@@ -276,12 +287,6 @@
 "analysis.topSpendingCategories" = "Top Spending Categories";
 "analysis.topIncomeCategories" = "Top Income Categories";
 "analysis.net" = "Net";
-"analysis.topSpendingCategories" = "Top Spending Categories";
-"analysis.topIncomeCategories" = "Top Income Categories";
-"filter.title" = "Filter";
-"filter.period" = "Period";
-"filter.wallet" = "Wallet";
-"filter.allWallets" = "All Wallets";
 
 // MARK: - Events
 "event.title" = "Events";
@@ -320,18 +325,18 @@
 "savings.markActive" = "Mark as Active";
 "savings.emptyState" = "Create a savings goal to start tracking your progress toward financial targets.";
 
-// MARK: - Recurring / Subscriptions
-"recurring.title" = "Subscriptions";
-"recurring.new" = "New Subscription";
-"recurring.add" = "Add Subscription";
-"recurring.name" = "Name (e.g., Netflix)";
+// MARK: - Recurring Rules
+"recurring.title" = "Recurring Rules";
+"recurring.new" = "New Rule";
+"recurring.add" = "Add Rule";
+"recurring.name" = "Rule Name";
+"recurring.emptyState" = "No recurring rules yet.";
+"recurring.createWalletFirst" = "Please create a wallet first.";
 "recurring.next" = "Next: %@";
-"recurring.emptyState" = "Add recurring bills to track them automatically.";
-"recurring.createWalletFirst" = "Create a Wallet first to add subscriptions.";
 "recurring.frequency" = "Frequency";
 "recurring.assignments" = "Assignments";
 "recurring.preview" = "Preview";
-"recurring.emptyTitle" = "No Subscriptions";
+"recurring.emptyTitle" = "No Recurring Rules";
 
 // MARK: - Frequencies
 "frequency.daily" = "Daily";
@@ -387,6 +392,13 @@
 "notifications.markAllRead" = "Mark All Read";
 "notifications.clearAll" = "Clear All";
 "notifications.read" = "Read";
+"notifications.emptyTitle" = "No Notifications";
+"notifications.emptyDescription" = "Budget alerts will appear here";
+"notifications.dailySummaryTitle" = "Daily Budget Summary";
+"notifications.dailySummaryBody" = "Check your daily spending progress";
+"notifications.viewBudget" = "View Budget";
+"notifications.viewAnalysis" = "View Analysis";
+"notifications.dismiss" = "Dismiss";
 
 // MARK: - Onboarding
 "onboarding.welcome" = "Welcome to QuaraMoney";
@@ -397,6 +409,13 @@
 "onboarding.colorDescription" = "Choose colors for your income and expenses.";
 "onboarding.allSet" = "You're All Set!";
 "onboarding.getStarted" = "Let's create your first wallet to get started.";
+"onboarding.welcomeTitle" = "Welcome to QuaraMoney";
+"onboarding.welcomeDescription" = "Take control of your finances.\nTrack expenses, budget smarter, and save more.";
+"onboarding.themeDescription" = "Choose colors for your income and expenses.";
+"onboarding.incomeColor" = "Income Color";
+"onboarding.expenseColor" = "Expense Color";
+"onboarding.finalTitle" = "You're All Set!";
+"onboarding.finalDescription" = "Let's create your first wallet to get started.";
 
 // MARK: - Status Messages
 "status.deleting" = "Deleting...";
@@ -455,35 +474,20 @@
 "savings.status.daysLeft" = "%d days left";
 "savings.status.weeksLeft" = "%d weeks left";
 "savings.status.monthsLeft" = "%d months left";
-// MARK: - Onboarding
-"onboarding.getStarted" = "Get Started";
-"onboarding.welcomeTitle" = "Welcome to QuaraMoney";
-"onboarding.welcomeDescription" = "Take control of your finances.\nTrack expenses, budget smarter, and save more.";
-"onboarding.selectCurrency" = "Select Currency";
-"onboarding.currencyDescription" = "Choose your default currency for reporting.\nYou can change this later.";
-"onboarding.personalizeColors" = "Personalize Colors";
-"onboarding.themeDescription" = "Choose colors for your income and expenses.";
-"onboarding.incomeColor" = "Income Color";
-"onboarding.expenseColor" = "Expense Color";
-"onboarding.finalTitle" = "You're All Set!";
-"onboarding.finalDescription" = "Let's create your first wallet to get started.";
 
-// MARK: - Notifications
-"notifications.title" = "Notifications";
-"notifications.emptyTitle" = "No Notifications";
-"notifications.emptyDescription" = "Budget alerts will appear here";
-"notifications.read" = "Read";
-"notifications.markAllRead" = "Mark All Read";
-"notifications.clearAll" = "Clear All";
-"notifications.dailySummaryTitle" = "Daily Budget Summary";
-"notifications.dailySummaryBody" = "Check your daily spending progress";
-"notifications.viewBudget" = "View Budget";
-"notifications.viewAnalysis" = "View Analysis";
-"notifications.dismiss" = "Dismiss";
-
-"common.next" = "Next";
-
-"alert.budget.info50" = "You've spent 50%% of your %@ budget";
-"alert.budget.warning80" = "Warning: 80%% of your %@ budget is spent";
-"alert.budget.exceeded" = "You've exceeded your %@ budget!";
-"alert.budget.projectedOverspend" = "At this rate, you'll exceed your %@ budget";
+// MARK: - Debt
+"debt.title" = "Debts & Loans";
+"debt.owedToMe" = "Owed To Me";
+"debt.iOwe" = "I Owe";
+"debt.add" = "Add Debt";
+"debt.recordPayment" = "Record Payment";
+"debt.markCompleted" = "Mark as Completed";
+"debt.partialPayments" = "Partial Payments";
+"debt.remaining" = "Remaining";
+"debt.paid" = "Paid";
+"debt.total" = "Total";
+"debt.personName" = "Person Name";
+"debt.dueDate" = "Due Date";
+"debt.history" = "History";
+"debt.recordInitialTransaction" = "Record Initial Transaction";
+"debt.initialTransactionHelp" = "This will update your wallet balance.";

@@ -386,7 +386,7 @@ struct BudgetSetupWizardView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(Color.blue.opacity(0.1))
+                .background(Color.accentColor.opacity(0.1))
                 .cornerRadius(16)
             }
         }
@@ -566,7 +566,7 @@ struct FeatureRow: View {
                 .font(.app(.title2))
                 .foregroundStyle(.blue)
                 .frame(width: 44, height: 44)
-                .background(Color.blue.opacity(0.1))
+                .background(Color.accentColor.opacity(0.1))
                 .cornerRadius(12)
             
             VStack(alignment: .leading, spacing: 2) {
@@ -595,7 +595,7 @@ struct TemplateCard: View {
                         .font(.app(.title2))
                         .foregroundStyle(isSelected ? .white : .blue)
                         .frame(width: 44, height: 44)
-                        .background(isSelected ? Color.blue : Color.blue.opacity(0.1))
+                        .background(isSelected ? Color.accentColor : Color.accentColor.opacity(0.1))
                         .cornerRadius(12)
                     
                     VStack(alignment: .leading, spacing: 2) {
@@ -625,7 +625,7 @@ struct TemplateCard: View {
                                 .font(.app(.caption2))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(isSelected ? Color.white.opacity(0.2) : Color(hex: type.color)?.opacity(0.15))
+                                .background(isSelected ? Color(.systemBackground).opacity(0.2) : Color(hex: type.color)?.opacity(0.15))
                                 .foregroundStyle(isSelected ? .white : Color(hex: type.color) ?? .gray)
                                 .cornerRadius(8)
                         }
@@ -633,11 +633,11 @@ struct TemplateCard: View {
                 }
             }
             .padding()
-            .background(isSelected ? Color.blue : Color(.secondarySystemGroupedBackground))
+            .background(isSelected ? Color.accentColor : Color(.secondarySystemGroupedBackground))
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
         }
         .buttonStyle(.plain)

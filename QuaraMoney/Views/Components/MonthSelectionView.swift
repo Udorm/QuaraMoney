@@ -75,13 +75,13 @@ struct MonthTab: View {
                 .padding(.horizontal, 16)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+                        .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
                 )
                 .overlay(
                     Capsule()
-                        .strokeBorder(isSelected ? Color.blue : Color.gray.opacity(0.3), lineWidth: 1)
+                        .strokeBorder(isSelected ? Color.accentColor : Color(.separator), lineWidth: 1)
                 )
-                .foregroundStyle(isSelected ? Color.blue : Color.primary)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
         }
         .buttonStyle(.plain)
     }

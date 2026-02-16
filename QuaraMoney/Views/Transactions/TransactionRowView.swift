@@ -56,6 +56,19 @@ struct TransactionRowView: View {
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
+                
+                if let debt = transaction.debt {
+                    HStack(spacing: 4) {
+                        Image(systemName: debt.type == .owedToMe ? "arrow.up.right" : "arrow.down.left")
+                        Text(debt.personName)
+                    }
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(4)
+                    .foregroundStyle(.secondary)
+                }
             }
             
             Spacer()

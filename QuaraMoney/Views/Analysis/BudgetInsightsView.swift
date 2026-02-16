@@ -161,7 +161,7 @@ struct BudgetInsightsView: View {
                         title: "Active Budgets",
                         value: "\(activeBudgets.count)",
                         subtitle: budgets.filter { $0.isRecurring }.count > 0 ? "\(budgets.filter { $0.isRecurring }.count) recurring" : "No recurring",
-                        color: .blue
+                        color: .accentColor
                     )
                 }
                 .padding(.horizontal)
@@ -284,7 +284,7 @@ enum SpendingTrend {
         switch self {
         case .increasing: return .red
         case .decreasing: return .green
-        case .stable: return .blue
+        case .stable: return .accentColor
         }
     }
     
@@ -419,7 +419,7 @@ struct MonthlyTrendChart: View {
                         x: .value("Month", stat.month, unit: .month),
                         y: .value("Budgeted", stat.budgeted)
                     )
-                    .foregroundStyle(Color.blue.opacity(0.3))
+                    .foregroundStyle(Color.accentColor.opacity(0.3))
                     .cornerRadius(4)
                     
                     BarMark(
@@ -442,7 +442,7 @@ struct MonthlyTrendChart: View {
             HStack(spacing: 20) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.blue.opacity(0.3))
+                        .fill(Color.accentColor.opacity(0.3))
                         .frame(width: 10, height: 10)
                     Text("Budgeted")
                         .font(.app(.caption))
@@ -537,7 +537,7 @@ struct OverspendingCategoriesCard: View {
             }
         }
         .padding()
-        .background(Color.orange.opacity(0.1))
+        .background(Color.orange.opacity(0.1)) // Keep semantic warning color for overspending
         .cornerRadius(16)
     }
 }
@@ -671,7 +671,7 @@ struct BudgetTipsCard: View {
             ForEach(tips.prefix(3), id: \.title) { tip in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: tip.icon)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 24)
                     
                     VStack(alignment: .leading, spacing: 2) {

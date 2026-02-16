@@ -45,10 +45,6 @@ struct SettingsView: View {
                     }
                 }
                 
-                NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
-                    Label(L10n.Settings.importCSV, systemImage: "square.and.arrow.down")
-                }
-                
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     Toggle(L10n.Settings.useSidebarOniPad, isOn: $useSidebarOniPad)
                 }
@@ -111,12 +107,39 @@ struct SettingsView: View {
                     .onChange(of: securityManager.isAppLockEnabled) { _, newValue in
                         // If enabling, require auth to confirm
                         if newValue {
-                             // This is a simplified check. In production, you might want to force an auth check *before* allowing the toggle to stick isAppLockEnabled = true.
+                             // This is a simplified check. In production, you might want to confirm auth first
                         }
                     }
             }
             
+            Section("AI Scanning") {
+                SecureField("Gemini API Key", text: Binding(
+                    get: { securityManager.getAPIKey() ?? "" },
+                    set: { newValue in
+                        if newValue.isEmpty {
+                            securityManager.deleteAPIKey()
+                        } else {
+                            _ = securityManager.saveAPIKey(newValue)
+                        }
+                    }
+                ))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                
+                Text("Enter your Gemini API Key to enable smart receipt scanning. If left empty, the app will use standard on-device OCR.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
             Section(L10n.Settings.dataManagement) {
+                NavigationLink(destination: ExportOptionsView()) {
+                    Label("Export Transactions", systemImage: "square.and.arrow.up")
+                }
+                
+                NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
+                    Label(L10n.Settings.importCSV, systemImage: "square.and.arrow.down")
+                }
+                
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {

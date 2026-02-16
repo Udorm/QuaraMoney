@@ -44,6 +44,7 @@ struct TransactionListView: View {
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
+                                HapticManager.shared.impact(style: .medium)
                                 onDelete(txn)
                             } label: {
                                 Label(L10n.Common.delete, systemImage: "trash")
@@ -64,6 +65,7 @@ struct TransactionListView: View {
                                     .font(.app(.body))
                             }
                             Button(role: .destructive) {
+                                HapticManager.shared.impact(style: .medium)
                                 onDelete(txn)
                             } label: {
                                 Label(L10n.Common.delete, systemImage: "trash")

@@ -25,9 +25,9 @@ struct FinancialSummaryCards: View {
                 
                 Image(systemName: "leaf.fill")
                     .font(.app(.title2))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
                     .padding(10)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color.accentColor.opacity(0.1))
                     .clipShape(Circle())
             }
             

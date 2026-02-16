@@ -17,7 +17,7 @@ struct OnboardingView: View {
     
     var body: some View {
         ZStack {
-            Color(UIColor.systemBackground)
+            Color(.systemBackground)
                 .ignoresSafeArea()
             
             VStack {
@@ -25,7 +25,7 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     ForEach(OnboardingStep.allCases, id: \.self) { step in
                         Capsule()
-                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.gray.opacity(0.3))
+                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color(.systemGray4))
                             .frame(width: step == currentStep ? 24 : 8, height: 8)
                             .animation(.spring(), value: currentStep)
                     }
@@ -148,7 +148,7 @@ struct OnboardingView: View {
                             .padding(.vertical, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(currencyManager.preferredCurrencyCode == currency ? Color.accentColor : Color(UIColor.secondarySystemBackground))
+                                    .fill(currencyManager.preferredCurrencyCode == currency ? Color.accentColor : Color(.secondarySystemBackground))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)

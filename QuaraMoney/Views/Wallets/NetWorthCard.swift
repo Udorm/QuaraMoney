@@ -18,9 +18,9 @@ struct NetWorthCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "chart.line.uptrend.xyaxis")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.accentColor)
                     .padding(8)
-                    .background(Color.blue.opacity(0.1))
+                    .background(Color.accentColor.opacity(0.1))
                     .clipShape(Circle())
                 
                 Text(L10n.Wallet.netWorth)
@@ -36,9 +36,9 @@ struct NetWorthCard: View {
                 .foregroundStyle(totalNetWorth >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
         }
         .padding(20)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .shadow(color: Color.primary.opacity(0.05), radius: 5, x: 0, y: 2)
         .padding(.vertical, 8)
     }
 }

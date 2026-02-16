@@ -66,9 +66,11 @@ struct CategoryListView: View {
     private func deleteCategory(at offsets: IndexSet, from list: [Category]) {
         for index in offsets {
             let category = list[index]
-            // Optional: Check if used? Schema says deleteRule: .deny. 
-            // So if used, it might crash or throw error?
-            // Ideally we handle error. For MVP, we let SwiftData handle it (it won't delete if constraint violation).
+            
+            if category.isSystem {
+                continue // System categories cannot be deleted
+            }
+            
             modelContext.delete(category)
         }
     }

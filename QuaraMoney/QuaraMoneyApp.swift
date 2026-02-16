@@ -27,7 +27,7 @@ struct QuaraMoneyApp: App {
             RecurringRule.self,
             Transaction.self,
             Budget.self,
-
+            Debt.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -80,17 +80,15 @@ struct QuaraMoneyApp: App {
                         .blur(radius: 10)
                         .disabled(true)
                     
-                    Color.black.ignoresSafeArea()
+                    Color(.systemBackground).ignoresSafeArea()
                     
                     VStack(spacing: 20) {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 64))
-                            .foregroundStyle(.white)
                         
                         Text("QuaraMoney Locked")
                             .font(.title2)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.white)
                         
                         Button {
                             securityManager.authenticate()
@@ -98,7 +96,7 @@ struct QuaraMoneyApp: App {
                             Label("Unlock", systemImage: "faceid")
                                 .font(.headline)
                                 .padding()
-                                .background(Color.blue)
+                                .background(Color.accentColor)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                         }
@@ -181,6 +179,7 @@ struct QuaraMoneyApp: App {
             DefaultCategoryData(name: L10n.Category.salary, icon: "dollarsign.circle", colorHex: "#4CAF50", type: .income),
             DefaultCategoryData(name: L10n.Category.investments, icon: "chart.line.uptrend.xyaxis", colorHex: "#2196F3", type: .income),
             DefaultCategoryData(name: L10n.Category.others, icon: "gift", colorHex: "#FFC107", type: .income),
+            DefaultCategoryData(name: L10n.Category.debtAndLoans, icon: "banknote", colorHex: "#795548", type: .income),
             
             // Expense
             DefaultCategoryData(name: L10n.Category.foodAndDrink, icon: "fork.knife", colorHex: "#FF5722", type: .expense),
@@ -193,12 +192,15 @@ struct QuaraMoneyApp: App {
             DefaultCategoryData(name: L10n.Category.leisure, icon: "gamecontroller", colorHex: "#673AB7", type: .expense),
             DefaultCategoryData(name: L10n.Category.subscriptions, icon: "arrow.triangle.2.circlepath", colorHex: "#3F51B5", type: .expense),
             DefaultCategoryData(name: L10n.Category.financial, icon: "building.columns", colorHex: "#009688", type: .expense),
+            DefaultCategoryData(name: L10n.Category.debtAndLoans, icon: "banknote", colorHex: "#795548", type: .expense),
             
             // Bills
             DefaultCategoryData(name: L10n.Category.electricityBill, icon: "bolt", colorHex: "#FFEB3B", type: .expense),
             DefaultCategoryData(name: L10n.Category.waterBill, icon: "drop", colorHex: "#2196F3", type: .expense),
             DefaultCategoryData(name: L10n.Category.internetBill, icon: "wifi", colorHex: "#00BCD4", type: .expense)
         ]
+        
+        let debtCategoryName = L10n.Category.debtAndLoans
         
         // Perform heavy database operations in background
         Task.detached(priority: .userInitiated) {
@@ -216,6 +218,60 @@ struct QuaraMoneyApp: App {
             
             // Seed default categories if needed
             DefaultDataService.seedDefaultCategories(modelContext: context, data: defaultCategories)
+            
+            // Ensure System Categories for Debt & Loan
+            // 1. Debt (Lending out money) - Expense
+            DefaultDataService.ensureSystemCategoryExists(
+                modelContext: context,
+                name: "Debt", // TODO: Localize
+                icon: "arrow.up.right",
+                colorHex: "#FF3B30",
+                type: .expense
+            )
+            
+            // 2. Debt Collection (Receiving money back) - Income
+            DefaultDataService.ensureSystemCategoryExists(
+                modelContext: context,
+                name: "Debt Collection", // TODO: Localize
+                icon: "tray.and.arrow.down.fill",
+                colorHex: "#34C759",
+                type: .income
+            )
+            
+            // 3. Loan (Borrowing money) - Income
+            DefaultDataService.ensureSystemCategoryExists(
+                modelContext: context,
+                name: "Loan", // TODO: Localize
+                icon: "arrow.down.left",
+                colorHex: "#34C759",
+                type: .income
+            )
+            
+            // 4. Loan Repayment (Paying back money) - Expense
+            DefaultDataService.ensureSystemCategoryExists(
+                modelContext: context,
+                name: "Loan Repayment", // TODO: Localize
+                icon: "tray.and.arrow.up.fill",
+                colorHex: "#007AFF",
+                type: .expense
+            )
+            
+            // Maintain compatibility for "Debts & Loans" (Legacy)
+            DefaultDataService.ensureCategoryExists(
+                modelContext: context,
+                name: debtCategoryName,
+                icon: "banknote",
+                colorHex: "#795548",
+                type: .income
+            )
+            
+            DefaultDataService.ensureCategoryExists(
+                modelContext: context,
+                name: debtCategoryName,
+                icon: "banknote",
+                colorHex: "#795548",
+                type: .expense
+            )
         }
         
         // Setup notification service on main thread as it deals with UI/State

@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: HomeViewModel
     @State private var showingAddTransaction = false
+    @State private var showingScanner = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -26,8 +27,6 @@ struct HomeView: View {
                 
                 List {
                     // Summary Section
-                    // Removed filterDescription header as date is obvious. 
-                    // Showing wallet if filtered?
                     if viewModel.selectedWallet != nil {
                         Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
                             FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
@@ -38,6 +37,15 @@ struct HomeView: View {
                         }
                     }
 
+                    // Quick Actions Section
+                    Section {
+                        QuickActionsView(
+                            onAdd: { showingAddTransaction = true },
+                            onScan: { showingScanner = true }
+                        )
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
                     
                     // Daily Transactions
                     ForEach(viewModel.dailySections) { section in
@@ -61,10 +69,13 @@ struct HomeView: View {
                 viewModel.refreshData()
             }
             .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionContainer(transaction: nil, isNewTransaction: true)
+                AddTransactionContainer(transaction: nil, isNewTransaction: true, showScanner: false)
+            }
+            .sheet(isPresented: $showingScanner) {
+                AddTransactionContainer(transaction: nil, isNewTransaction: true, showScanner: true)
             }
             .sheet(item: $transactionToEdit) { txn in
-                AddTransactionContainer(transaction: txn, isNewTransaction: false)
+                AddTransactionContainer(transaction: txn, isNewTransaction: false, showScanner: false)
             }
             .onChange(of: showingAddTransaction) { oldValue, newValue in
                 if !newValue {
@@ -139,10 +150,12 @@ struct AddTransactionContainer: View {
     @Environment(\.modelContext) private var modelContext
     let transaction: Transaction?
     let isNewTransaction: Bool
+    let showScanner: Bool
     
-    init(transaction: Transaction? = nil, isNewTransaction: Bool = true) {
+    init(transaction: Transaction? = nil, isNewTransaction: Bool = true, showScanner: Bool = false) {
         self.transaction = transaction
         self.isNewTransaction = isNewTransaction
+        self.showScanner = showScanner
     }
     
     var body: some View {
@@ -152,7 +165,8 @@ struct AddTransactionContainer: View {
                 initialWallet: nil,
                 transaction: transaction
             ),
-            isNewTransaction: isNewTransaction
+            isNewTransaction: isNewTransaction,
+            initialShowScanner: showScanner
         )
     }
 }
@@ -171,6 +185,69 @@ struct DailyHeader: View {
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct QuickActionsView: View {
+    let onAdd: () -> Void
+    let onScan: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            QuickActionButton(
+                title: L10n.Common.add,
+                icon: "plus",
+                color: ThemeManager.shared.incomeColor,
+                action: onAdd
+            )
+            
+            QuickActionButton(
+                title: L10n.Transaction.scanReceipt,
+                icon: "doc.text.viewfinder",
+                color: .blue,
+                action: onScan
+            )
+            
+            // Placeholder for potential future "Transfer" button
+            QuickActionButton(
+                title: "Report",
+                icon: "chart.pie.fill",
+                color: .orange,
+                action: { } // Navigate to analysis?
+            )
+            .opacity(0.6) // Not implemented yet
+        }
+        .padding(.horizontal)
+    }
+}
+
+struct QuickActionButton: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.app(.title3))
+                    .frame(width: 50, height: 50)
+                    .background(color.opacity(0.1))
+                    .foregroundStyle(color)
+                    .clipShape(Circle())
+                
+                Text(title)
+                    .font(.app(.caption))
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemGroupedBackground))
+            .cornerRadius(12)
+            .shadow(color: Color.primary.opacity(0.05), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
     }
 }
 // Reusing TransactionRow if it exists, otherwise defining a simple one.

@@ -152,7 +152,7 @@ struct BudgetDetailView: View {
                                 // Badges
                                 if budget.isRecurring {
                                     Image(systemName: "repeat.circle.fill")
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(Color.accentColor)
                                 }
                             }
                             
@@ -315,7 +315,7 @@ struct BudgetDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: goal.iconName)
-                                .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
+                                .foregroundStyle(Color(hex: goal.colorHex) ?? .accentColor)
                                 .frame(width: 30)
                             
                             VStack(alignment: .leading, spacing: 4) {
@@ -323,7 +323,7 @@ struct BudgetDetailView: View {
                                     .font(.app(.headline))
                                 
                                 ProgressView(value: goal.progress)
-                                    .tint(Color(hex: goal.colorHex) ?? .blue)
+                                    .tint(Color(hex: goal.colorHex) ?? .accentColor)
                                 
                                 Text("\(goal.progressPercent) of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
                                     .font(.app(.caption))
@@ -355,8 +355,8 @@ struct BudgetDetailView: View {
                                 .font(.app(.caption))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.2))
-                                .foregroundStyle(.blue)
+                                .background(Color.accentColor.opacity(0.2))
+                                .foregroundStyle(Color.accentColor)
                                 .cornerRadius(4)
                         }
                         if budget.alertAt80 {
@@ -391,7 +391,7 @@ struct BudgetDetailView: View {
                         Spacer()
                         HStack(spacing: 4) {
                             Image(systemName: "repeat")
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(Color.accentColor)
                             Text(budget.periodType.displayName)
                                 .foregroundStyle(.secondary)
                         }

@@ -82,12 +82,12 @@ struct NotificationRowView: View {
             // Alert type icon
             ZStack {
                 Circle()
-                    .fill(Color(hex: notification.alertType.color)?.opacity(0.15) ?? Color.gray.opacity(0.15))
+                    .fill(Color(hex: notification.alertType.color)?.opacity(0.15) ?? Color(.secondarySystemBackground))
                     .frame(width: 44, height: 44)
                 
                 Image(systemName: notification.alertType.icon)
                     .font(.app(.title3))
-                    .foregroundStyle(Color(hex: notification.alertType.color) ?? .gray)
+                    .foregroundStyle(Color(hex: notification.alertType.color) ?? Color(.systemGray))
             }
             
             VStack(alignment: .leading, spacing: 4) {

@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		A6E7B2CF2F420A1F00B59DFF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A617A7282F2F13E900B1BE7A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A617A72F2F2F13E900B1BE7A;
+			remoteInfo = QuaraMoney;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		A617A7302F2F13E900B1BE7A /* QuaraMoney.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuaraMoney.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A6E7B2CB2F420A1F00B59DFF /* QuaraMoneyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = QuaraMoneyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = QuaraMoney;
 			sourceTree = "<group>";
 		};
+		A6E7B2CC2F420A1F00B59DFF /* QuaraMoneyTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = QuaraMoneyTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A617A72D2F2F13E900B1BE7A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A6E7B2C82F420A1F00B59DFF /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				A617A7322F2F13E900B1BE7A /* QuaraMoney */,
+				A6E7B2CC2F420A1F00B59DFF /* QuaraMoneyTests */,
 				A617A7312F2F13E900B1BE7A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				A617A7302F2F13E900B1BE7A /* QuaraMoney.app */,
+				A6E7B2CB2F420A1F00B59DFF /* QuaraMoneyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = A617A7302F2F13E900B1BE7A /* QuaraMoney.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A6E7B2CA2F420A1F00B59DFF /* QuaraMoneyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A6E7B2D12F420A1F00B59DFF /* Build configuration list for PBXNativeTarget "QuaraMoneyTests" */;
+			buildPhases = (
+				A6E7B2C72F420A1F00B59DFF /* Sources */,
+				A6E7B2C82F420A1F00B59DFF /* Frameworks */,
+				A6E7B2C92F420A1F00B59DFF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A6E7B2D02F420A1F00B59DFF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A6E7B2CC2F420A1F00B59DFF /* QuaraMoneyTests */,
+			);
+			name = QuaraMoneyTests;
+			packageProductDependencies = (
+			);
+			productName = QuaraMoneyTests;
+			productReference = A6E7B2CB2F420A1F00B59DFF /* QuaraMoneyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					A617A72F2F2F13E900B1BE7A = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					A6E7B2CA2F420A1F00B59DFF = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = A617A72F2F2F13E900B1BE7A;
 					};
 				};
 			};
@@ -101,12 +153,20 @@
 			projectRoot = "";
 			targets = (
 				A617A72F2F2F13E900B1BE7A /* QuaraMoney */,
+				A6E7B2CA2F420A1F00B59DFF /* QuaraMoneyTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A617A72E2F2F13E900B1BE7A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A6E7B2C92F420A1F00B59DFF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -123,7 +183,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A6E7B2C72F420A1F00B59DFF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A6E7B2D02F420A1F00B59DFF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A617A72F2F2F13E900B1BE7A /* QuaraMoney */;
+			targetProxy = A6E7B2CF2F420A1F00B59DFF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A617A7392F2F13EA00B1BE7A /* Debug */ = {
@@ -332,6 +407,53 @@
 			};
 			name = Release;
 		};
+		A6E7B2D22F420A1F00B59DFF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 852VUPUNPH;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.dormmy.QuaraMoneyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/QuaraMoney.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/QuaraMoney";
+			};
+			name = Debug;
+		};
+		A6E7B2D32F420A1F00B59DFF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 852VUPUNPH;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.dormmy.QuaraMoneyTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/QuaraMoney.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/QuaraMoney";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -349,6 +471,15 @@
 			buildConfigurations = (
 				A617A73C2F2F13EA00B1BE7A /* Debug */,
 				A617A73D2F2F13EA00B1BE7A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A6E7B2D12F420A1F00B59DFF /* Build configuration list for PBXNativeTarget "QuaraMoneyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A6E7B2D22F420A1F00B59DFF /* Debug */,
+				A6E7B2D32F420A1F00B59DFF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

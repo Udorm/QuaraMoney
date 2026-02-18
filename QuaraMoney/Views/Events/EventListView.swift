@@ -115,87 +115,74 @@ struct EventRowView: View {
     var body: some View {
         NavigationLink(destination: EventDetailViewV2(event: event)) {
             HStack(spacing: 12) {
-                // Icon
+                // Leading Icon
                 ZStack {
                     Circle()
-                        .fill(eventColor.opacity(0.1))
-                        .frame(width: 40, height: 40)
+                        .fill(eventColor.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    
                     Image(systemName: event.icon)
+                        .font(.system(size: 20))
                         .foregroundStyle(eventColor)
                 }
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(event.title)
                         .font(.app(.headline))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
                     
-                    HStack {
-                        if let location = event.location {
-                            Label(location, systemImage: "mappin.and.ellipse")
-                                .font(.app(.caption2))
-                        }
-                        
+                    VStack(alignment: .leading, spacing: 0) {
                         Text(formatDateRange(start: event.startDate, end: event.endDate))
-                            .font(.app(.caption2))
+                            .font(.app(.subheadline))
+                        
+                        if let location = event.location, !location.isEmpty {
+                            Text(location)
+                                .font(.app(.subheadline))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                     .foregroundStyle(.secondary)
                 }
                 
                 Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    if event.ledgerMode == .isolatedV1 {
-                        EventListStatusBadge(status: event.settlementStatus)
-                    }
-                    
-                    if let budget = event.totalBudget {
-                        Text(budget.formatted(.currency(code: event.currencyCode)))
-                            .font(.app(.caption, weight: .bold))
-                            .foregroundStyle(eventColor)
-                    }
-                }
             }
             .padding(.vertical, 4)
         }
     }
     
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        return formatter
+    }()
+    
+    private static let yearDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter
+    }()
+    
     private func formatDateRange(start: Date, end: Date?) -> String {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let startYear = Calendar.current.component(.year, from: start)
+        
+        let startFormatter = startYear == currentYear ? Self.shortDateFormatter : Self.yearDateFormatter
+        let startStr = startFormatter.string(from: start)
+        
         if let end = end {
             if Calendar.current.isDate(start, inSameDayAs: end) {
-                return start.formatted(date: .abbreviated, time: .shortened) + " - " + end.formatted(date: .omitted, time: .shortened)
+                return startStr
             } else {
-                return start.formatted(date: .abbreviated, time: .omitted) + " - " + end.formatted(date: .abbreviated, time: .omitted)
+                let endYear = Calendar.current.component(.year, from: end)
+                let endFormatter = endYear == currentYear ? Self.shortDateFormatter : Self.yearDateFormatter
+                let endStr = endFormatter.string(from: end)
+                
+                return "\(startStr) – \(endStr)"
             }
         }
-        return start.formatted(date: .abbreviated, time: .shortened)
-    }
-}
-
-private struct EventListStatusBadge: View {
-    let status: EventSettlementStatus
-    
-    private var text: String {
-        switch status {
-        case .active: return "Active"
-        case .readyToSettle: return "Ready"
-        case .settled: return "Settled"
-        }
-    }
-    
-    private var color: Color {
-        switch status {
-        case .active: return .secondary
-        case .readyToSettle: return .orange
-        case .settled: return .green
-        }
-    }
-    
-    var body: some View {
-        Text(text)
-            .font(.app(.caption2, weight: .semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.12))
-            .clipShape(Capsule())
+        
+        return startStr
     }
 }

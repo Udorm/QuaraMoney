@@ -20,81 +20,58 @@ struct EventSummaryCard: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                // Background
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(eventColor.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .strokeBorder(eventColor.opacity(0.2), lineWidth: 1)
-                    )
+        VStack(alignment: .leading, spacing: 16) {
+            // Top Row: Status + Remaining Pool
+            HStack {
+                EventSettlementStatusBadge(status: settlementStatus)
                 
-                // Decorative Icon
-                Image(systemName: event.icon)
-                    .font(.system(size: 100))
-                    .foregroundStyle(eventColor.opacity(0.08))
-                    .offset(x: 200, y: 10)
-                    .clipped()
+                Spacer()
                 
-                VStack(alignment: .leading, spacing: 16) {
-                    // Top Row: Status + Remaining Pool
-                    HStack {
-                        EventSettlementStatusBadge(status: settlementStatus)
-                        
-                        Spacer()
-                        
-                        if remainingPool != 0 {
-                            HStack(spacing: 4) {
-                                Text("Pool:")
-                                    .font(.app(.caption))
-                                    .foregroundStyle(.secondary)
-                                Text(formatMinor(remainingPool))
-                                    .font(.app(.caption, weight: .medium))
-                                    .foregroundStyle(remainingPool >= 0 ? Color.green : Color.red)
-                            }
-                        }
-                    }
-                    
-                    // Main Stats: Total Cost
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Total Cost")
-                            .font(.app(.subheadline, weight: .medium))
+                if remainingPool != 0 {
+                    HStack(spacing: 4) {
+                        Text("Pool:")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                        
-                        Text(formatMinor(totalCost))
-                            .font(.system(.largeTitle, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundStyle(.primary)
-                    }
-                    
-                    Spacer(minLength: 0)
-                    
-                    // Integrated Buttons
-                    HStack(spacing: 12) {
-                        Button(action: onAddExpense) {
-                            Label("Add Expense", systemImage: "plus")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(eventColor)
-                        .controlSize(.regular)
-                        
-                        if settlementStatus != .active {
-                            Button(action: onSettle) {
-                                Label("Settle", systemImage: "arrow.left.arrow.right")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
-                        }
+                        Text(formatMinor(remainingPool))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(remainingPool >= 0 ? Color.green : Color.red)
                     }
                 }
-                .padding(20)
+            }
+            
+            // Main Stats: Total Cost
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Total Cost")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                
+                Text(formatMinor(totalCost))
+                    .font(.system(.largeTitle, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+            }
+            
+            // Integrated Buttons
+            HStack(spacing: 12) {
+                Button(action: onAddExpense) {
+                    Text("Add Expense")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(eventColor)
+                .controlSize(.regular)
+                
+                if settlementStatus != .active {
+                    Button(action: onSettle) {
+                        Text("Settle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
             }
         }
-        .frame(height: 190)
     }
 }
 
@@ -120,7 +97,7 @@ private struct EventSettlementStatusBadge: View {
     
     var body: some View {
         Text(label)
-            .font(.app(.caption, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)

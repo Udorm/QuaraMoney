@@ -7,7 +7,7 @@ struct EventDetailViewV2: View {
     @Environment(\.modelContext) private var modelContext
     
     // -- Query Data --
-    @Query(sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)]) private var allMembers: [EventMember]
+    @Query(sort: [SortDescriptor(\EventMember.name), SortDescriptor(\EventMember.sortOrder)]) private var allMembers: [EventMember]
     @Query(sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
     @Query(sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
     
@@ -110,9 +110,6 @@ struct EventDetailViewV2: View {
                     onSettle: { showingSettlement = true }
                 )
             }
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
             
             Section {
                 EventMemberSnapshotRow(

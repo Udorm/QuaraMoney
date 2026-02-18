@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 struct EventLocationPickerView: View {
     @Environment(\.dismiss) private var dismiss
@@ -91,14 +92,15 @@ struct EventLocationPickerView: View {
     
     private func updateLocationName(for coordinate: CLLocationCoordinate2D) {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let request = MKReverseGeocodingRequest(location: location)
-        request?.getMapItems { mapItems, error in
-            if let mapItem = mapItems?.first {
-                let placemark = mapItem.placemark
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let placemark = placemarks?.first {
                 let name = [placemark.name, placemark.locality, placemark.country]
                     .compactMap { $0 }
                     .joined(separator: ", ")
-                locationName = name
+                DispatchQueue.main.async {
+                    locationName = name
+                }
             }
         }
     }

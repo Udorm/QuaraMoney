@@ -93,14 +93,20 @@ struct EventLocationPickerView: View {
     private func updateLocationName(for coordinate: CLLocationCoordinate2D) {
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let geocoder = CLGeocoder()
-        geocoder.reverseGeocodeLocation(location) { placemarks, error in
-            if let placemark = placemarks?.first {
-                let name = [placemark.name, placemark.locality, placemark.country]
-                    .compactMap { $0 }
-                    .joined(separator: ", ")
-                DispatchQueue.main.async {
-                    locationName = name
+        
+        Task {
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(location)
+                if let placemark = placemarks.first {
+                    let name = [placemark.name, placemark.locality, placemark.country]
+                        .compactMap { $0 }
+                        .joined(separator: ", ")
+                    await MainActor.run {
+                        locationName = name
+                    }
                 }
+            } catch {
+                print("Geocoding failed: \(error)")
             }
         }
     }

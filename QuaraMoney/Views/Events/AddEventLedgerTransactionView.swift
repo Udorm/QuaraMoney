@@ -21,208 +21,209 @@ struct AddEventLedgerTransactionView: View {
     
     var body: some View {
         NavigationStack {
-                List {
-                    // MARK: - Amount Display (Top Priority)
-                    Section {
-                        VStack(spacing: 16) {
-                            AmountDisplayView(
-                                amount: viewModel.resolvedAmount,
-                                currencyCode: .constant(viewModel.event.currencyCode),
-                                expression: viewModel.expression,
-                                isEditing: showKeyboard
-                            )
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showKeyboard = true
-                                    isNoteFocused = false
-                                }
-                            }
-                            
-                            // MARK: - Entry Type Selector
-                            Picker("Entry Type", selection: $viewModel.transactionKind) {
-                                Text("Expense").tag(EventLedgerTransactionKind.expense)
-                                Text("Contribution").tag(EventLedgerTransactionKind.contribution)
-                            }
-                            .pickerStyle(.segmented)
+            List {
+                // MARK: - Amount Display & Type (Fluid row)
+                Section {
+                    VStack(spacing: 16) {
+                        // MARK: - Entry Type Selector
+                        Picker("Entry Type", selection: $viewModel.transactionKind) {
+                            Text("Expense").tag(EventLedgerTransactionKind.expense)
+                            Text("Contribution").tag(EventLedgerTransactionKind.contribution)
                         }
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
-                    
-                    if viewModel.transactionKind == .expense {
-                        // MARK: - Category
-                        Section("Category") {
-                            if viewModel.expenseCategories.isEmpty {
-                                Text("No expense categories available")
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                LazyVGrid(columns: gridColumns, spacing: 10) {
-                                    ForEach(viewModel.frequentCategories) { category in
-                                        CategoryGridItem(
-                                            category: category,
-                                            isSelected: viewModel.selectedCategoryId == category.id
-                                        ) {
-                                            withAnimation {
-                                                viewModel.selectedCategoryId = category.id
-                                            }
-                                        }
-                                    }
-                                    
-                                    if viewModel.expenseCategories.count > 4 {
-                                        Button {
-                                            showAllCategories = true
-                                        } label: {
-                                            VStack(spacing: 4) {
-                                                Image(systemName: "ellipsis.circle.fill")
-                                                    .font(.app(.title3))
-                                                    .foregroundColor(.secondary)
-                                                    .frame(width: 40, height: 40)
-                                                    .background(Color(.tertiarySystemGroupedBackground))
-                                                    .clipShape(Circle())
-                                                
-                                                Text("common.more".localized)
-                                                    .font(.app(.caption2))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.vertical, 8)
+                        .pickerStyle(.segmented)
+                        
+                        AmountDisplayView(
+                            amount: viewModel.resolvedAmount,
+                            currencyCode: .constant(viewModel.event.currencyCode),
+                            expression: viewModel.expression,
+                            isEditing: showKeyboard
+                        )
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showKeyboard = true
+                                isNoteFocused = false
                             }
                         }
                         
-                        // MARK: - Payment & Splitting
-                        Section("Payment & Splitting") {
-                            // Paid Source
-                            Toggle("Use Event Wallet", isOn: $viewModel.useEventWallet.animation(.default))
-                            
-                            if !viewModel.useEventWallet {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Select Payer")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    
-                                    if viewModel.selectablePayers.isEmpty {
-                                        Text("No members available")
-                                            .foregroundStyle(.secondary)
-                                    } else {
-                                        LazyVGrid(columns: gridColumns, spacing: 16) {
-                                            ForEach(viewModel.selectablePayers) { member in
-                                                MemberGridItem(
-                                                    member: member,
-                                                    isSelected: viewModel.selectedPayerMemberId == member.id
-                                                ) {
-                                                    withAnimation {
-                                                        viewModel.selectedPayerMemberId = member.id
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                            
-                            // Split
-                            Toggle("Split equally with everyone", isOn: Binding(
-                                get: { !viewModel.isCustomSplit },
-                                set: { viewModel.isCustomSplit = !$0 }
-                            ).animation(.default))
-                            
-                            if viewModel.isCustomSplit {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Select Participants")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    
-                                    if viewModel.participantMembers.isEmpty {
-                                        Text("No members available")
-                                            .foregroundStyle(.secondary)
-                                    } else {
-                                        LazyVGrid(columns: gridColumns, spacing: 16) {
-                                            ForEach(viewModel.selectableMembers) { member in
-                                                MemberGridItem(
-                                                    member: member,
-                                                    isSelected: viewModel.selectedParticipantIds.contains(member.id)
-                                                ) {
-                                                    withAnimation {
-                                                        viewModel.toggleParticipant(member.id)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                    } else {
-                        // MARK: - Contribution
-                        Section("Contributor") {
-                            if viewModel.selectablePayers.isEmpty {
-                                Text("No members available")
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                LazyVGrid(columns: gridColumns, spacing: 16) {
-                                    ForEach(viewModel.selectablePayers) { member in
-                                        MemberGridItem(
-                                            member: member,
-                                            isSelected: viewModel.selectedPayerMemberId == member.id
-                                        ) {
-                                            withAnimation {
-                                                viewModel.selectedPayerMemberId = member.id
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 8)
-                            }
-                            
-                            Text("Contribution increases Event Wallet balance.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    // MARK: - Optional Fields
-                    Section {
-                        DatePicker(
-                            selection: $viewModel.date,
-                            displayedComponents: [.date, .hourAndMinute]
-                        ) {
-                            HStack {
-                                Image(systemName: "calendar")
-                                    .foregroundStyle(.blue)
-                                    .frame(width: 24)
-                                Text("Date")
-                            }
-                        }
                         
-                        HStack {
-                            Image(systemName: "note.text")
-                                .foregroundStyle(.blue)
-                                .frame(width: 24)
-                            TextField("Note (optional)", text: $viewModel.note)
-                                .focused($isNoteFocused)
-                                .onTapGesture {
-                                    showKeyboard = false
-                                }
-                                .submitLabel(.done)
-                        }
-                    }
-                    
-                    if let errorMessage = viewModel.errorMessage {
-                        Section {
-                            Text(errorMessage)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
                     }
                 }
-                .listStyle(.insetGrouped)
+                .listRowInsets(EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 0))
+                .listRowBackground(Color.clear)
+                
+                if viewModel.transactionKind == .expense {
+                    // MARK: - Category
+                    Section("Category") {
+                        if viewModel.expenseCategories.isEmpty {
+                            Text("No expense categories available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            LazyVGrid(columns: gridColumns, spacing: 10) {
+                                ForEach(viewModel.frequentCategories) { category in
+                                    CategoryGridItem(
+                                        category: category,
+                                        isSelected: viewModel.selectedCategoryId == category.id
+                                    ) {
+                                        withAnimation {
+                                            viewModel.selectedCategoryId = category.id
+                                        }
+                                    }
+                                }
+                                
+                                if viewModel.expenseCategories.count > 4 {
+                                    Button {
+                                        showAllCategories = true
+                                    } label: {
+                                        VStack(spacing: 4) {
+                                            Image(systemName: "ellipsis.circle.fill")
+                                                .font(.app(.title3))
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 40, height: 40)
+                                                .background(Color(.tertiarySystemGroupedBackground))
+                                                .clipShape(Circle())
+                                            
+                                            Text("common.more".localized)
+                                                .font(.app(.caption2))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                    
+                    // MARK: - Payment & Splitting
+                    Section("Payment & Splitting") {
+                        Toggle("Use Event Wallet", isOn: $viewModel.useEventWallet.animation(.default))
+                        
+                        if !viewModel.useEventWallet {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Select Payer")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                
+                                if viewModel.selectablePayers.isEmpty {
+                                    Text("No members available")
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                                        ForEach(viewModel.selectablePayers) { member in
+                                            MemberGridItem(
+                                                member: member,
+                                                isSelected: viewModel.selectedPayerMemberId == member.id
+                                            ) {
+                                                withAnimation {
+                                                    viewModel.selectedPayerMemberId = member.id
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        
+                        // Split
+                        Toggle("Split equally with everyone", isOn: Binding(
+                            get: { !viewModel.isCustomSplit },
+                            set: { viewModel.isCustomSplit = !$0 }
+                        ).animation(.default))
+                        
+                        if viewModel.isCustomSplit {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Select Participants")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                
+                                if viewModel.participantMembers.isEmpty {
+                                    Text("No members available")
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                                        ForEach(viewModel.selectableMembers) { member in
+                                            MemberGridItem(
+                                                member: member,
+                                                isSelected: viewModel.selectedParticipantIds.contains(member.id)
+                                            ) {
+                                                withAnimation {
+                                                    viewModel.toggleParticipant(member.id)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                } else {
+                    // MARK: - Contribution
+                    Section("Contributor") {
+                        if viewModel.selectablePayers.isEmpty {
+                            Text("No members available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            LazyVGrid(columns: gridColumns, spacing: 16) {
+                                ForEach(viewModel.selectablePayers) { member in
+                                    MemberGridItem(
+                                        member: member,
+                                        isSelected: viewModel.selectedPayerMemberId == member.id
+                                    ) {
+                                        withAnimation {
+                                            viewModel.selectedPayerMemberId = member.id
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                        
+                        Text("Contribution increases Event Wallet balance.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // MARK: - Optional Fields
+                Section {
+                    DatePicker(
+                        selection: $viewModel.date,
+                        displayedComponents: [.date, .hourAndMinute]
+                    ) {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
+                            Text("Date")
+                        }
+                    }
+                    
+                    HStack {
+                        Image(systemName: "note.text")
+                            .foregroundStyle(.blue)
+                            .frame(width: 24)
+                        TextField("Note (optional)", text: $viewModel.note)
+                            .focused($isNoteFocused)
+                            .onTapGesture {
+                                showKeyboard = false
+                            }
+                            .submitLabel(.done)
+                    }
+                }
+                
+                if let errorMessage = viewModel.errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+            }
+            .listStyle(.insetGrouped)
 
             .background(Color(.systemGroupedBackground))
             .scrollDismissesKeyboard(.interactively)

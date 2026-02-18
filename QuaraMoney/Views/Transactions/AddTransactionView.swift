@@ -88,69 +88,83 @@ struct AddTransactionView: View {
                         dismissKeyboard()
                     }
                 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // MARK: - Amount Display (Top Priority)
-                            AmountDisplayView(
-                                amount: viewModel.evaluatedAmount,
-                                currencyCode: $viewModel.selectedCurrencyCode,
-                                expression: viewModel.expression,
-                                isEditing: showKeyboard,
-                                exchangeRateInfo: exchangeRateString
-                            )
-                            .onTapGesture {
-                                if viewModel.type != .adjustment {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        showKeyboard = true
-                                        isNoteFieldFocused = false
+                VStack(spacing: 16) {
+                    List {
+                        
+
+                        // MARK: - Amount & Type (Fluid row)
+                        Section {
+                            VStack(spacing: 0) {
+                                transactionTypeSelector
+                                
+                                AmountDisplayView(
+                                    amount: viewModel.evaluatedAmount,
+                                    currencyCode: $viewModel.selectedCurrencyCode,
+                                    expression: viewModel.expression,
+                                    isEditing: showKeyboard,
+                                    exchangeRateInfo: exchangeRateString
+                                )
+                                .onTapGesture {
+                                    if viewModel.type != .adjustment {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            showKeyboard = true
+                                            isNoteFieldFocused = false
+                                        }
                                     }
                                 }
+ 
                             }
+                        }
+                        // .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                        .listRowBackground(Color.clear)                        
+                        .listRowInsets(EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 0))
                         
+
                         // MARK: - Linked Debt Indicator
                         if let debt = viewModel.debt {
-                            HStack {
-                                Image(systemName: debt.type == .owedToMe ? "arrow.up.right.circle.fill" : "arrow.down.left.circle.fill")
-                                    .foregroundStyle(debt.type == .owedToMe ? .red : .green)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(debt.type == .owedToMe ? "Linked to Debt" : "Linked to Loan")
-                                        .font(.app(.caption2))
+                            Section {
+                                HStack {
+                                    Image(systemName: debt.type == .owedToMe ? "arrow.up.right.circle.fill" : "arrow.down.left.circle.fill")
+                                        .foregroundStyle(debt.type == .owedToMe ? .red : .green)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(debt.type == .owedToMe ? "Linked to Debt" : "Linked to Loan")
+                                            .font(.app(.caption2))
+                                            .foregroundStyle(.secondary)
+                                        Text(debt.personName)
+                                            .font(.app(.subheadline, weight: .semibold))
+                                    }
+                                    Spacer()
+                                    Image(systemName: "lock.fill")
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
-                                    Text(debt.personName)
-                                        .font(.app(.subheadline, weight: .semibold))
                                 }
-                                Spacer()
-                                Image(systemName: "lock.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
-                            .padding(12)
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .cornerRadius(12)
                         }
                         
-                        // MARK: - Transaction Type Selector
-                        transactionTypeSelector
-                        
-                        
                         // MARK: - Wallet Selector
-                        walletSelector
+                        Section("transaction.fromWallet".localized) {
+                            walletSelector
+                        }
                         
                         // MARK: - Category/Destination Section
                         if viewModel.type == .transfer {
-                            destinationWalletSection
+                            Section("transaction.toWallet".localized) {
+                                destinationWalletSection
+                            }
                         } else if viewModel.type != .adjustment {
-                            categorySection
+                            Section(L10n.Category.title) {
+                                categorySection
+                            }
                         }
                         
-                        // MARK: - Optional Fields (Collapsed)
-                        optionalFieldsSection
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
+                        // MARK: - Optional Fields
+                        Section {
+                            optionalFieldsSection
+                        }
+                    .listStyle(.insetGrouped)
                 }
-                
+            } // Close ZStack
+            .safeAreaInset(edge: .bottom) {
                 // MARK: - Calculator Keyboard (Dismissible)
                 if showKeyboard && !isNoteFieldFocused {
                     CalculatorKeyboardView(
@@ -163,7 +177,7 @@ struct AddTransactionView: View {
                         }
                     )
                     .transition(.move(edge: .bottom))
-                }
+                    .background(Color(.systemGroupedBackground))
                 }
             }
             .navigationTitle(viewModel.isEditing ? L10n.Common.edit : L10n.Transaction.add)
@@ -210,6 +224,7 @@ struct AddTransactionView: View {
                     }
                 }
             }
+            }
             .onAppear {
                 // Preselect the most used wallet (by transaction count)
                 if viewModel.selectedWallet == nil, let wallet = mostUsedWallet ?? wallets.first {
@@ -219,8 +234,8 @@ struct AddTransactionView: View {
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction
             }
+            .background(Color(.systemGroupedBackground))
         }
-        .background(Color(.systemGroupedBackground))
     }
     
     private func dismissKeyboard() {
@@ -284,20 +299,7 @@ struct AddTransactionView: View {
     
     // MARK: - Wallet Selector
     private var walletSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("transaction.fromWallet".localized)
-                    .font(.app(.caption))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if wallets.count > maxQuickWallets {
-                    Button(L10n.Common.seeAll) {
-                        showAllWallets = true
-                    }
-                    .font(.app(.caption))
-                }
-            }
-            
+        VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(frequentWallets) { wallet in
@@ -312,16 +314,28 @@ struct AddTransactionView: View {
                     }
                 }
             }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            
+            if wallets.count > maxQuickWallets {
+                Button {
+                    showAllWallets = true
+                } label: {
+                    HStack {
+                        Image(systemName: "checklist")
+                        Text(L10n.Common.seeAll)
+                    }
+                    .font(.app(.subheadline))
+                    .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
+        .padding(.vertical, 4)
         .overlay(
             Group {
                 if viewModel.type == .adjustment {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.secondarySystemFill))
-                        .allowsHitTesting(true) // Blocks touches
+                    Color(.secondarySystemFill)
+                        .allowsHitTesting(true)
                 }
             }
         )
@@ -380,18 +394,11 @@ struct AddTransactionView: View {
     private var destinationWalletSection: some View {
         let availableWallets = wallets.filter { $0.id != viewModel.selectedWallet?.id }
         
-        VStack(alignment: .leading, spacing: 8) {
-            Text("transaction.toWallet".localized)
-                .font(.app(.caption))
-                .foregroundStyle(.secondary)
-            
+        VStack(alignment: .leading, spacing: 12) {
             if availableWallets.isEmpty {
                 Text("transaction.noOtherWallets".localized)
                     .foregroundStyle(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .cornerRadius(8)
+                    .padding(.vertical, 8)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -406,61 +413,44 @@ struct AddTransactionView: View {
                         }
                     }
                 }
+                .padding(.vertical, 4)
             }
             
             // Exchange rate if different currencies
             if let source = viewModel.selectedWallet,
                let dest = viewModel.destinationWallet,
                source.currencyCode != dest.currencyCode {
-                exchangeRateSection(source: source, destination: dest)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("1 \(source.currencyCode) =")
+                            .font(.app(.subheadline))
+                            .foregroundStyle(.secondary)
+                        TextField(L10n.Transaction.rate, value: $viewModel.exchangeRate, format: .number)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                        Text(dest.currencyCode)
+                            .font(.app(.subheadline, weight: .semibold))
+                    }
+                    
+                    let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
+                    Text("≈ \(convertedAmount.formatted(.currency(code: dest.currencyCode)))")
+                        .font(.app(.caption))
+                        .foregroundStyle(.blue)
+                }
+                .padding(.top, 4)
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
-    }
-    
-    private func exchangeRateSection(source: Wallet, destination: Wallet) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("1 \(source.currencyCode) =")
-                    .font(.app(.subheadline))
-                    .foregroundStyle(.secondary)
-                TextField(L10n.Transaction.rate, value: $viewModel.exchangeRate, format: .number)
-                    .keyboardType(.decimalPad)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 100)
-                Text(destination.currencyCode)
-                    .font(.app(.subheadline, weight: .semibold))
-            }
-            
-            let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
-            Text("≈ \(convertedAmount.formatted(.currency(code: destination.currencyCode)))")
-                .font(.app(.caption))
-                .foregroundStyle(.blue)
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
+        .padding(.vertical, 4)
     }
     
     // MARK: - Category Section (Smart Selection)
     private var categorySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L10n.Category.title)
-                    .font(.app(.caption))
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            
+        VStack(alignment: .leading, spacing: 10) {
             if filteredCategories.isEmpty {
                 Text("transaction.noCategoriesForType".localized(with: viewModel.type.title))
                     .foregroundStyle(.secondary)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .cornerRadius(8)
+                    .padding(.vertical, 8)
             } else {
                 // Show frequent categories in grid
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
@@ -494,11 +484,9 @@ struct AddTransactionView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(.vertical, 8)
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemGroupedBackground))
-        .cornerRadius(12)
         .sheet(isPresented: $showAllCategories) {
             categoryPickerSheet
         }
@@ -544,7 +532,7 @@ struct AddTransactionView: View {
     
     // MARK: - Optional Fields Section
     private var optionalFieldsSection: some View {
-        VStack(spacing: 10) {
+        Group {
             // Date Row - using native DatePicker inline
             DatePicker(
                 selection: $viewModel.date,
@@ -557,10 +545,6 @@ struct AddTransactionView: View {
                     Text("transaction.date".localized)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(10)
             .disabled(viewModel.type == .adjustment)
             .opacity(viewModel.type == .adjustment ? 0.6 : 1.0)
             
@@ -572,21 +556,11 @@ struct AddTransactionView: View {
                 TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(10)
             
             // Exclude Toggle
             Toggle("Exclude from Reports", isOn: $viewModel.excludeFromReports)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(10)
-
         }
     }
-    
 }
 
 // MARK: - Wallet Chip Component

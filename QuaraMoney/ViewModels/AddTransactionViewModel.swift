@@ -176,7 +176,9 @@ class AddTransactionViewModel: BaseViewModel {
         }
         
         transaction.excludeFromReports = excludeFromReports
-        transaction.event = selectedEvent
+        // Event entries are now isolated in EventLedgerTransaction.
+        // Keep wallet transactions detached from events to avoid double-accounting.
+        transaction.event = nil
         
         if existingTransaction == nil {
             dataService.insert(transaction)

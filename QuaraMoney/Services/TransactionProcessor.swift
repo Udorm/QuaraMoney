@@ -137,6 +137,7 @@ struct TransactionProcessor {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end &&
+                    txn.event == nil &&
                     (txn.sourceWallet?.id == walletId || txn.destinationWallet?.id == walletId)
                 },
                 sortBy: sortDescriptors
@@ -145,6 +146,7 @@ struct TransactionProcessor {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
                     txn.date >= start && txn.date < end &&
+                    txn.event == nil &&
                     txn.sourceWallet?.isArchived != true
                 },
                 sortBy: sortDescriptors
@@ -152,7 +154,8 @@ struct TransactionProcessor {
         } else {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
-                    txn.date >= start && txn.date < end
+                    txn.date >= start && txn.date < end &&
+                    txn.event == nil
                 },
                 sortBy: sortDescriptors
             )

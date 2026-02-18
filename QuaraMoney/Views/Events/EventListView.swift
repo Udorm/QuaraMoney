@@ -113,7 +113,7 @@ struct EventRowView: View {
     }
     
     var body: some View {
-        NavigationLink(destination: EventDetailView(event: event)) {
+        NavigationLink(destination: EventDetailViewV2(event: event)) {
             HStack(spacing: 12) {
                 // Icon
                 ZStack {
@@ -142,15 +142,15 @@ struct EventRowView: View {
                 
                 Spacer()
                 
-                if let budget = event.totalBudget {
-                    VStack(alignment: .trailing) {
-                        Text(budget.formatted(.currency(code: "USD"))) // Using default for now
+                VStack(alignment: .trailing, spacing: 4) {
+                    if event.ledgerMode == .isolatedV1 {
+                        EventListStatusBadge(status: event.settlementStatus)
+                    }
+                    
+                    if let budget = event.totalBudget {
+                        Text(budget.formatted(.currency(code: event.currencyCode)))
                             .font(.app(.caption, weight: .bold))
                             .foregroundStyle(eventColor)
-                        
-                        Text("Budget")
-                            .font(.app(.caption2))
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -167,5 +167,35 @@ struct EventRowView: View {
             }
         }
         return start.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+private struct EventListStatusBadge: View {
+    let status: EventSettlementStatus
+    
+    private var text: String {
+        switch status {
+        case .active: return "Active"
+        case .readyToSettle: return "Ready"
+        case .settled: return "Settled"
+        }
+    }
+    
+    private var color: Color {
+        switch status {
+        case .active: return .secondary
+        case .readyToSettle: return .orange
+        case .settled: return .green
+        }
+    }
+    
+    var body: some View {
+        Text(text)
+            .font(.app(.caption2, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
     }
 }

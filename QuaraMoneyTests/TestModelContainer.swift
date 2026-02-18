@@ -9,9 +9,16 @@ class TestModelContainer {
             Wallet.self,
             Category.self,
             Event.self,
+            EventMember.self,
+            EventLedgerTransaction.self,
+            EventLedgerParticipant.self,
+            EventSettlementSnapshot.self,
+            EventSettlementTransfer.self,
+            EventWalletExportRecord.self,
             RecurringRule.self,
             Transaction.self,
             Budget.self,
+            Debt.self
         ]
         let schema = Schema(modelTypes)
         

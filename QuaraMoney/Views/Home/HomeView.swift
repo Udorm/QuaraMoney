@@ -37,16 +37,7 @@ struct HomeView: View {
                         }
                     }
 
-                    // Quick Actions Section
-                    Section {
-                        QuickActionsView(
-                            onAdd: { showingAddTransaction = true },
-                            onScan: { showingScanner = true }
-                        )
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    
+
                     // Daily Transactions
                     ForEach(viewModel.dailySections) { section in
                         Section(header: DailyHeader(section: section)) {
@@ -188,68 +179,7 @@ struct DailyHeader: View {
     }
 }
 
-struct QuickActionsView: View {
-    let onAdd: () -> Void
-    let onScan: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            QuickActionButton(
-                title: L10n.Common.add,
-                icon: "plus",
-                color: ThemeManager.shared.incomeColor,
-                action: onAdd
-            )
-            
-            QuickActionButton(
-                title: L10n.Transaction.scanReceipt,
-                icon: "doc.text.viewfinder",
-                color: .blue,
-                action: onScan
-            )
-            
-            // Placeholder for potential future "Transfer" button
-            QuickActionButton(
-                title: "Report",
-                icon: "chart.pie.fill",
-                color: .orange,
-                action: { } // Navigate to analysis?
-            )
-            .opacity(0.6) // Not implemented yet
-        }
-        .padding(.horizontal)
-    }
-}
 
-struct QuickActionButton: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.app(.title3))
-                    .frame(width: 50, height: 50)
-                    .background(color.opacity(0.1))
-                    .foregroundStyle(color)
-                    .clipShape(Circle())
-                
-                Text(title)
-                    .font(.app(.caption))
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.primary.opacity(0.05), radius: 5, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-    }
-}
 // Reusing TransactionRow if it exists, otherwise defining a simple one.
 // I think we defined TransactionRow in WalletDetailView?
 // I should likely move it to a shared file or redefine it here.

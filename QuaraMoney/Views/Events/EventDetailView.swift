@@ -3,46 +3,109 @@ import SwiftData
 
 struct EventDetailView: View {
     let event: Event
+    
     @Environment(\.modelContext) private var modelContext
     
+    @State private var showingAddMember = false
+    @State private var memberToEdit: EventMember?
     @State private var showingAddTransaction = false
-    @State private var transactionToEdit: Transaction?
+    @State private var transactionToEdit: EventLedgerTransaction?
     @State private var showingEditEvent = false
-    @State private var searchText = ""
+    @State private var showingSettlement = false
+    @State private var errorMessage: String?
     
-    @Query private var transactions: [Transaction]
+    @Query(sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)]) private var allMembers: [EventMember]
+    @Query(sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
+    @Query(sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
     
-    init(event: Event) {
-        self.event = event
-        let eventId = event.id
-        let predicate = #Predicate<Transaction> { txn in
-            txn.event?.id == eventId
+    private var service: EventLedgerService {
+        EventLedgerService(modelContext: modelContext)
+    }
+    
+    private var members: [EventMember] {
+        allMembers.filter { $0.event?.id == event.id }
+    }
+    
+    private var budgetPoolMemberIds: Set<UUID> {
+        Set(members.filter(\.isBudgetPool).map(\.id))
+    }
+    
+    private var settlementMembers: [EventMember] {
+        members.filter { !budgetPoolMemberIds.contains($0.id) }
+    }
+    
+    private var ledgerTransactions: [EventLedgerTransaction] {
+        allLedgerTransactions.filter { $0.event?.id == event.id }
+    }
+    
+    private var participantLinks: [EventLedgerParticipant] {
+        allParticipantLinks.filter { $0.transaction?.event?.id == event.id }
+    }
+    
+    private var activeTransactions: [EventLedgerTransaction] {
+        ledgerTransactions.filter { !$0.isDeleted }
+    }
+    
+    private var linksByTransactionId: [UUID: [EventLedgerParticipant]] {
+        var map: [UUID: [EventLedgerParticipant]] = [:]
+        for link in participantLinks {
+            guard let transactionId = link.transaction?.id else { continue }
+            map[transactionId, default: []].append(link)
         }
-        _transactions = Query(filter: predicate, sort: \Transaction.date, order: .reverse)
+        return map
     }
     
-    private var filteredTransactions: [Transaction] {
-        if searchText.isEmpty {
-            return transactions
-        } else {
-            return transactions.filter { txn in
-                let noteMatch = txn.note?.localizedCaseInsensitiveContains(searchText) ?? false
-                let amountMatch = txn.amount.formatted().localizedCaseInsensitiveContains(searchText)
-                let categoryMatch = txn.category?.name.localizedCaseInsensitiveContains(searchText) ?? false
-                return noteMatch || amountMatch || categoryMatch
-            }
-        }
-    }
-    
-    private var displayCurrency: String {
-        CurrencyManager.shared.preferredCurrencyCode
-    }
-    
-    private var spentAmount: Decimal {
-        CurrencyManager.shared.calculateTotal(
-            transactions: transactions,
-            targetCurrency: displayCurrency
+    private var settlementResult: EventSettlementResult {
+        EventSettlementEngine.compute(
+            memberIds: settlementMembers.map(\.id),
+            transactions: activeTransactions,
+            participantLinks: linksByTransactionId,
+            budgetPoolMemberIds: budgetPoolMemberIds
         )
+    }
+    
+    private var balanceByMemberId: [UUID: EventMemberLedgerBalance] {
+        Dictionary(uniqueKeysWithValues: settlementResult.balances.map { ($0.memberId, $0) })
+    }
+    
+    private var memberById: [UUID: EventMember] {
+        Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+    }
+    
+    private var totalCostMinor: Int64 {
+        settlementResult.totalCostMinor
+    }
+    
+    private var totalContributionMinor: Int64 {
+        settlementResult.totalContributionMinor
+    }
+    
+    private var walletRemainingMinor: Int64 {
+        settlementResult.walletRemainingMinor
+    }
+    
+    private var perPersonShareMinor: Int64 {
+        guard !settlementMembers.isEmpty else { return 0 }
+        return totalCostMinor / Int64(settlementMembers.count)
+    }
+    
+    private var localMember: EventMember? {
+        settlementMembers.first(where: { $0.isLocalUser })
+    }
+    
+    private var localNetMinor: Int64 {
+        guard let localMember else { return 0 }
+        return balanceByMemberId[localMember.id]?.netMinor ?? 0
+    }
+    
+    private var settlementStatus: EventSettlementStatus {
+        guard totalCostMinor > 0 else {
+            return .active
+        }
+        if event.confirmedSettlementRevision == event.ledgerRevision {
+            return .settled
+        }
+        return .readyToSettle
     }
     
     private var eventColor: Color {
@@ -51,23 +114,20 @@ struct EventDetailView: View {
     
     var body: some View {
         List {
-            // MARK: - Header Section
             Section {
                 VStack(spacing: 16) {
                     ZStack {
                         Circle()
-                            .fill(eventColor.opacity(0.1))
-                            .frame(width: 80, height: 80)
+                            .fill(eventColor.opacity(0.12))
+                            .frame(width: 72, height: 72)
                         Image(systemName: event.icon)
-                            .font(.system(size: 32))
+                            .font(.system(size: 28))
                             .foregroundStyle(eventColor)
                     }
-                    .frame(maxWidth: .infinity) // Center in list row
                     
-                    VStack(spacing: 8) {
+                    VStack(spacing: 6) {
                         Text(event.title)
                             .font(.app(.title2, weight: .bold))
-                            .multilineTextAlignment(.center)
                         
                         if let location = event.location {
                             Label(location, systemImage: "mappin.and.ellipse")
@@ -78,138 +138,170 @@ struct EventDetailView: View {
                         Text(formatDateRange(start: event.startDate, end: event.endDate))
                             .font(.app(.caption))
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(20)
-                    }
-                    .frame(maxWidth: .infinity)
-                    
-                    if let notes = event.notes, !notes.isEmpty {
-                        Text(notes)
-                            .font(.app(.body))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
             }
             .listRowBackground(Color.clear)
             
-            // MARK: - Stats Section
-            if let budget = event.totalBudget {
-                Section {
-                    VStack(spacing: 16) {
-                        // Progress Bar
-                        BudgetProgressView(
-                            budget: budget,
-                            spent: spentAmount,
-                            currencyCode: displayCurrency
-                        )
-                        
-                        Divider()
-                        
-                        // Stats Grid
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                            StatItemView(
-                                title: "Spent",
-                                value: spentAmount.formatted(.currency(code: displayCurrency)),
-                                color: .primary
-                            )
-                            
-                            StatItemView(
-                                title: "Remaining",
-                                value: (budget - spentAmount).formatted(.currency(code: displayCurrency)),
-                                color: spentAmount > budget ? .red : .green
-                            )
-                            
-                            StatItemView(
-                                title: "Budget",
-                                value: budget.formatted(.currency(code: displayCurrency)),
-                                color: .secondary
-                            )
-                            
-                            if let days = daysElapsed, days > 0 {
-                                StatItemView(
-                                    title: "Daily Avg",
-                                    value: (spentAmount / Decimal(days)).formatted(.currency(code: displayCurrency)),
-                                    color: .secondary
-                                )
-                            }
-                        }
-                    }
-                    .padding(.vertical, 8)
-                } header: {
-                    Text("Budget Overview")
+            Section("Summary") {
+                HStack {
+                    Text("Status")
+                    Spacer()
+                    EventSettlementStatusBadge(status: settlementStatus)
                 }
-            } else {
-                // Just total spent if no budget
-                Section {
-                    VStack(spacing: 8) {
-                        Text("Total Spent")
-                            .font(.app(.subheadline))
-                            .foregroundStyle(.secondary)
-                        Text(spentAmount.formatted(.currency(code: displayCurrency)))
-                            .font(.app(.title, weight: .bold))
-                            .foregroundStyle(eventColor)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                
+                HStack {
+                    Text("Total Cost")
+                    Spacer()
+                    Text(formatMinor(totalCostMinor))
+                        .foregroundStyle(.secondary)
+                }
+                
+                HStack {
+                    Text("Total Contribution")
+                    Spacer()
+                    Text(formatMinor(totalContributionMinor))
+                        .foregroundStyle(.secondary)
+                }
+                
+                HStack {
+                    Text("Remaining Pool")
+                    Spacer()
+                    Text(formatMinor(walletRemainingMinor))
+                        .foregroundStyle(walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                }
+                
+                HStack {
+                    Text("Per-person Share")
+                    Spacer()
+                    Text(formatMinor(perPersonShareMinor))
+                        .foregroundStyle(.secondary)
+                }
+                
+                HStack {
+                    Text(localMember?.name ?? "You")
+                    Spacer()
+                    Text(localNetLabel(for: localNetMinor))
+                        .foregroundStyle(netColor(for: localNetMinor))
+                }
+                
+                if let confirmedRevision = event.confirmedSettlementRevision,
+                   confirmedRevision != event.ledgerRevision {
+                    Text("Settlement is outdated because transactions changed after confirmation.")
+                        .font(.app(.caption))
+                        .foregroundStyle(.orange)
                 }
             }
             
-            // MARK: - Transactions List
-            if !filteredTransactions.isEmpty {
-                TransactionListView(
-                    transactions: filteredTransactions,
-                    listHeader: "Transactions",
-                    onEdit: { txn in
-                        transactionToEdit = txn
-                    },
-                    onDelete: { txn in
-                        deleteTransaction(txn)
+            Section {
+                ForEach(settlementMembers) { member in
+                    EventMemberRow(
+                        member: member,
+                        balance: balanceByMemberId[member.id],
+                        currencyCode: event.currencyCode
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            memberToEdit = member
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                        
+                        Button(role: .destructive) {
+                            removeMember(member)
+                        } label: {
+                            Label(member.isArchived ? "Remove" : "Archive", systemImage: "person.crop.circle.badge.xmark")
+                        }
                     }
-                )
-            } else {
-                Section(header: Text("Transactions")) {
-                    Text(searchText.isEmpty ? "No transactions yet" : "No matching transactions")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 12)
                 }
+                
+                Button {
+                    showingAddMember = true
+                } label: {
+                    Label("Add Member", systemImage: "person.badge.plus")
+                }
+            } header: {
+                Text("Members")
+            }
+            
+            Section {
+                if activeTransactions.isEmpty {
+                    Text("No event transactions yet")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(activeTransactions) { transaction in
+                        TransactionRowView(
+                            eventTransaction: transaction,
+                            paidByName: paidByName(for: transaction),
+                            participantCount: linksByTransactionId[transaction.id]?.count ?? 0,
+                            currencyCode: event.currencyCode
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            transactionToEdit = transaction
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                transactionToEdit = transaction
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                            
+                            Button(role: .destructive) {
+                                deleteTransaction(transaction)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            Button {
+                                transactionToEdit = transaction
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                deleteTransaction(transaction)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                
+                Button {
+                    showingAddTransaction = true
+                } label: {
+                    Label("Add Event Entry", systemImage: "plus")
+                }
+                .disabled(settlementMembers.filter { !$0.isArchived }.isEmpty)
+            } header: {
+                Text("Entries")
+            }
+            
+            Section {
+                Button {
+                    showingSettlement = true
+                } label: {
+                    HStack {
+                        Text("Settle Up")
+                        Spacer()
+                        if settlementStatus == .settled {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                }
+                .disabled(settlementStatus == .active)
             }
         }
         .listStyle(.insetGrouped)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText)
-        .searchToolbarBehavior(.minimize) // .minimize is deprecated or not standard, usually it's automatic. User asked for "auto-minimize", which often means it's hidden under the title until pulled. .searchable(text:placement: .automatic) usually does this. Let's try .searchToolbarBehavior(.automatic) if available or just default. Wait, user said `auto-minimize behavior of the toolbar`? 
-        // In SwiftUI on iOS, `searchable` by default collapses into the navigation bar. 
-        // Maybe they meant `.searchPresentationToolbarBehavior(.avoidIgnored)` or similar?
-        // Ah, `searchToolbarBehavior` is available in iOS 17.1+. 
-        // If the user's project is targeting older iOS, this might error. But they asked for it specifically.
-        // Actually, valid values are `.automatic`, `.avoidIgnored`.
-        // "hides the search bar if the user didn't click the search button" -> This sounds like they want a search icon that expands?
-        // Or just the standard iOS behavior where you pull down to reveal search. That IS the default behavior of `.searchable` in a NavigationStack.
-        // But the user said "Make sure the search bar uses the auto-minimize behavior... so that it hides the search bar if the user didn't click the search button."
-        // This implies there might be a search BUTTON?
-        // Standard iOS `.searchable` doesn't have a "search button" unless `.searchable(isPresented: ...)` is used with a custom button.
-        // OR they mean `.searchable(placement: .navigationBarDrawer(displayMode: .automatic))` vs `.always`.
-        // `.automatic` (default) hides it until scrolled.
-        // I will stick to standard `.searchable` which usually satisfies "hidden until pulled". 
-        // Wait, "if the user didn't click the search button". Maybe they want an explicit magnifying glass icon?
-        // If so, I'd need to toggle `isSearchPresented`.
-        // Let's assume standard behavior first, but I'll check `WalletDetailView` again. It had `isSearchPresented`.
-        // In `WalletDetailView`: `.searchable(text: $viewModel.searchText) .searchToolbarBehavior(.minimize)`
-        // So I will copy that exact modifier `.searchToolbarBehavior(.minimize)` as requested.
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    showingAddTransaction = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingEditEvent = true
                 } label: {
@@ -220,110 +312,232 @@ struct EventDetailView: View {
         .sheet(isPresented: $showingEditEvent) {
             AddEventView(eventToEdit: event)
         }
-        .sheet(isPresented: $showingAddTransaction) {
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    initialEvent: event
-                ),
-                isNewTransaction: true
-            )
+        .sheet(isPresented: $showingAddMember) {
+            AddEventMemberView(event: event, memberToEdit: nil)
         }
-        .sheet(item: $transactionToEdit) { txn in
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    initialEvent: event,
-                    transaction: txn
-                ),
-                isNewTransaction: false
-            )
+        .sheet(item: $memberToEdit) { member in
+            AddEventMemberView(event: event, memberToEdit: member)
+        }
+        .sheet(isPresented: $showingAddTransaction) {
+            AddEventLedgerTransactionView(event: event)
+        }
+        .sheet(item: $transactionToEdit) { transaction in
+            AddEventLedgerTransactionView(event: event, transactionToEdit: transaction)
+        }
+        .sheet(isPresented: $showingSettlement) {
+            EventSettlementView(event: event)
+        }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
+        .onAppear {
+            prepareEventContext()
         }
     }
     
-    private func deleteTransaction(_ transaction: Transaction) {
-        modelContext.delete(transaction)
+    private func prepareEventContext() {
+        do {
+            if event.ledgerMode != .isolatedV1 {
+                event.ledgerMode = .isolatedV1
+            }
+            if event.currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                event.currencyCode = CurrencyManager.shared.preferredCurrencyCode
+            }
+            _ = try service.ensureLocalMemberExists(for: event)
+            try modelContext.save()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func deleteTransaction(_ transaction: EventLedgerTransaction) {
+        do {
+            try service.deleteTransaction(transaction)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+    
+    private func removeMember(_ member: EventMember) {
+        do {
+            try service.removeOrArchiveMember(member)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
     
     private func formatDateRange(start: Date, end: Date?) -> String {
-        if let end = end {
+        if let end {
             if Calendar.current.isDate(start, inSameDayAs: end) {
                 return start.formatted(date: .long, time: .shortened) + " - " + end.formatted(date: .omitted, time: .shortened)
-            } else {
-                return start.formatted(date: .abbreviated, time: .omitted) + " - " + end.formatted(date: .abbreviated, time: .omitted)
             }
+            return start.formatted(date: .abbreviated, time: .omitted) + " - " + end.formatted(date: .abbreviated, time: .omitted)
         }
         return start.formatted(date: .long, time: .shortened)
     }
     
-    private var daysElapsed: Int? {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: event.startDate)
-        let end = event.endDate ?? Date() // If active, calculate till today
-        let components = calendar.dateComponents([.day], from: start, to: end)
-        return max(1, components.day ?? 1)
+    private func formatMinor(_ value: Int64) -> String {
+        MoneyMinorUnitConverter
+            .fromMinorUnits(value, currencyCode: event.currencyCode)
+            .formatted(.currency(code: event.currencyCode))
+    }
+    
+    private func localNetLabel(for value: Int64) -> String {
+        if value > 0 {
+            return "Receive \(formatMinor(value))"
+        }
+        if value < 0 {
+            return "Pay \(formatMinor(abs(value)))"
+        }
+        return "Settled"
+    }
+    
+    private func netColor(for value: Int64) -> Color {
+        if value > 0 { return ThemeManager.shared.incomeColor }
+        if value < 0 { return ThemeManager.shared.expenseColor }
+        return .secondary
+    }
+    
+    private func paidByName(for transaction: EventLedgerTransaction) -> String {
+        if transaction.kind == .contribution {
+            guard let payerId = transaction.paidByMemberId else { return "Unknown" }
+            return memberById[payerId]?.name ?? "Unknown"
+        }
+        
+        let payerIsBudgetPool = transaction.paidByMemberId.map { budgetPoolMemberIds.contains($0) } ?? false
+        if transaction.paidSource == .eventWallet || transaction.paidByMemberId == nil || payerIsBudgetPool {
+            return "Event Wallet"
+        }
+        
+        guard let payerId = transaction.paidByMemberId else { return "Unknown" }
+        return memberById[payerId]?.name ?? "Unknown"
     }
 }
 
-struct StatItemView: View {
-    let title: String
-    let value: String
-    let color: Color
+private struct EventSettlementStatusBadge: View {
+    let status: EventSettlementStatus
+    
+    private var label: String {
+        switch status {
+        case .active: return "Active"
+        case .readyToSettle: return "Ready to Settle"
+        case .settled: return "Settled"
+        }
+    }
+    
+    private var color: Color {
+        switch status {
+        case .active: return .secondary
+        case .readyToSettle: return .orange
+        case .settled: return .green
+        }
+    }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.app(.caption))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.app(.subheadline, weight: .semibold))
-                .foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(label)
+            .font(.app(.caption, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12))
+            .clipShape(Capsule())
     }
 }
 
-// Reuse BudgetProgressView but make sure it fits the new style
-struct BudgetProgressView: View {
-    let budget: Decimal
-    let spent: Decimal
+private struct EventMemberRow: View {
+    let member: EventMember
+    let balance: EventMemberLedgerBalance?
     let currencyCode: String
     
-    private var progress: Double {
-        guard budget > 0 else { return 0 }
-        return Double(truncating: spent as NSNumber) / Double(truncating: budget as NSNumber)
+    private var balanceText: String {
+        MoneyMinorUnitConverter
+            .fromMinorUnits(balance?.netMinor ?? 0, currencyCode: currencyCode)
+            .formatted(.currency(code: currencyCode))
     }
     
-    private var progressColor: Color {
-        if progress > 1.0 { return .red }
-        if progress > 0.9 { return .orange }
-        return .green
+    private var balanceColor: Color {
+        let net = balance?.netMinor ?? 0
+        if net > 0 { return ThemeManager.shared.incomeColor }
+        if net < 0 { return ThemeManager.shared.expenseColor }
+        return .secondary
+    }
+    
+    private func money(_ value: Int64) -> String {
+        MoneyMinorUnitConverter
+            .fromMinorUnits(value, currencyCode: currencyCode)
+            .formatted(.currency(code: currencyCode))
     }
     
     var body: some View {
-        VStack(spacing: 8) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(height: 12)
-                    
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(progressColor)
-                        .frame(width: min(CGFloat(progress) * geometry.size.width, geometry.size.width), height: 12)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color(.secondarySystemFill))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: member.isLocalUser ? "person.fill.checkmark" : "person.fill")
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
                 }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(member.name)
+                            .font(.app(.body, weight: .medium))
+                        
+                        if member.isArchived {
+                            Text("Archived")
+                                .font(.app(.caption2))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color(.secondarySystemFill))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    
+                    if member.isLocalUser {
+                        Text("You")
+                            .font(.app(.caption2))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Text(balanceText)
+                    .font(.app(.body, weight: .semibold))
+                    .foregroundStyle(balanceColor)
             }
-            .frame(height: 12)
             
             HStack {
-                Text(L10n.Event.spent(Int(min(progress, 1.0) * 100)))
-                    .font(.app(.caption))
+                Text("Deposited")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(Int(progress * 100))%")
-                    .font(.app(.caption, weight: .bold))
-                    .foregroundStyle(progressColor)
+                Text(money(balance?.contributionMinor ?? 0))
             }
+            .font(.app(.caption))
+            
+            HStack {
+                Text("Paid personally")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(money(balance?.personalPaidMinor ?? 0))
+            }
+            .font(.app(.caption))
+            
+            HStack {
+                Text("Share")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(money(balance?.shareMinor ?? 0))
+            }
+            .font(.app(.caption))
         }
     }
 }

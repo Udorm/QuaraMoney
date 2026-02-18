@@ -102,6 +102,7 @@ struct BudgetRolloverService {
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
                     txn.date >= start && txn.date < end &&
+                    txn.event == nil &&
                     txn.sourceWallet?.isArchived != true &&
                     !txn.excludeFromReports
                 }
@@ -112,6 +113,7 @@ struct BudgetRolloverService {
                 predicate: #Predicate<Transaction> { txn in
                     txn.type == expenseType &&
                     txn.date >= start && txn.date < end &&
+                    txn.event == nil &&
                     txn.sourceWallet?.isArchived != true &&
                     !txn.excludeFromReports
                 }

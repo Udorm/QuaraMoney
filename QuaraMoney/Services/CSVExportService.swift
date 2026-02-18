@@ -56,7 +56,7 @@ class CSVExportService {
             let descriptor = FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let allTransactions = try modelContext.fetch(descriptor)
             
-            var filtered = allTransactions
+            var filtered = allTransactions.filter { $0.event == nil }
             
             // Filter by Wallet
             if !wallets.isEmpty {

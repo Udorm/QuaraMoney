@@ -14,8 +14,12 @@ struct AddEventView: View {
     @State private var budgetString: String = ""
     @State private var notes: String = ""
     @State private var location: String = ""
+    @State private var latitude: Double?
+    @State private var longitude: Double?
+    @State private var showingLocationPicker = false
     @State private var selectedIcon: String = "party.popper"
     @State private var selectedColorHex: String = "007AFF"
+    @State private var currencyCode: String = CurrencyManager.shared.preferredCurrencyCode
     
     // Predefined colors
     let colors: [String] = [
@@ -37,7 +41,22 @@ struct AddEventView: View {
             Form {
                 Section(L10n.Event.details) {
                     TextField(L10n.Event.name, text: $title)
-                    TextField("Location (Optional)", text: $location)
+                    
+                    HStack {
+                        TextField("Location (Optional)", text: $location)
+                        Button {
+                            showingLocationPicker = true
+                        } label: {
+                            Image(systemName: "map")
+                        }
+                    }
+                    
+                    Picker("Currency", selection: $currencyCode) {
+                        ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
+                            Text(code).tag(code)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
                 
                 Section("Appearance") {
@@ -131,9 +150,15 @@ struct AddEventView: View {
                     }
                     notes = event.notes ?? ""
                     location = event.location ?? ""
+                    latitude = event.latitude
+                    longitude = event.longitude
                     selectedIcon = event.icon
                     selectedColorHex = event.colorHex
+                    currencyCode = event.currencyCode
                 }
+            }
+            .sheet(isPresented: $showingLocationPicker) {
+                EventLocationPickerView(latitude: $latitude, longitude: $longitude, locationName: $location)
             }
         }
     }
@@ -151,8 +176,14 @@ struct AddEventView: View {
             event.totalBudget = budget
             event.notes = notes.isEmpty ? nil : notes
             event.location = location.isEmpty ? nil : location
+            event.latitude = latitude
+            event.longitude = longitude
             event.icon = selectedIcon
             event.colorHex = selectedColorHex
+            event.currencyCode = currencyCode
+            if event.ledgerMode != .isolatedV1 {
+                event.ledgerMode = .isolatedV1
+            }
             // No need to insert, just save context automatically via SwiftData autosave or manual save if needed
         } else {
             let event = Event(
@@ -162,7 +193,11 @@ struct AddEventView: View {
                 icon: selectedIcon,
                 colorHex: selectedColorHex,
                 location: location.isEmpty ? nil : location,
-                totalBudget: budget
+                totalBudget: budget,
+                currencyCode: currencyCode,
+                ledgerMode: .isolatedV1,
+                latitude: latitude,
+                longitude: longitude
             )
             event.notes = notes.isEmpty ? nil : notes
             modelContext.insert(event)

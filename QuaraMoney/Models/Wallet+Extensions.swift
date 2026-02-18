@@ -63,6 +63,9 @@ extension Wallet {
         // 1. Process Outgoing Transactions (Income, Expense, Transfer OUT)
         if let outgoing = self.outgoingTransactions {
             for txn in outgoing {
+                // Legacy event-linked wallet transactions are excluded from personal balance.
+                if txn.event != nil { continue }
+                
                 // For multi-currency transactions (income/expense), use stored exchange rate if available
                 let convertedAmount: Decimal
                 if txn.currencyCode != walletCurrency && txn.exchangeRate > 0 && txn.exchangeRate != 1.0 {
@@ -90,6 +93,9 @@ extension Wallet {
         // 2. Process Incoming Transactions (Transfer IN)
         if let incoming = self.incomingTransactions {
             for txn in incoming {
+                // Legacy event-linked wallet transactions are excluded from personal balance.
+                if txn.event != nil { continue }
+                
                 if txn.type == .transfer {
                     // For transfers, use exchange rate if set (user-provided rate for cross-currency transfers)
                     // Otherwise convert from transaction currency to wallet currency

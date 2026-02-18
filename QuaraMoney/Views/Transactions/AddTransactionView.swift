@@ -9,18 +9,14 @@ struct AddTransactionView: View {
     // Query data
     @Query(sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
     
     // UI State
     @State private var showDatePicker = false
-    @State private var showEventPicker = false
     @State private var showAllCategories = false
     @State private var showAllWallets = false
     @State private var showKeyboard = true
     @State private var categorySearchText = ""
     @State private var walletSearchText = ""
-    @State private var eventSearchText = ""
-    @State private var suggestedEvent: Event? // Hold the suggestion
     @State private var showScanner = false
 
     @FocusState private var isNoteFieldFocused: Bool
@@ -222,42 +218,9 @@ struct AddTransactionView: View {
                 }
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction
-                
-                // Smart suggestion: Check but valid event but DO NOT auto-select
-                if isNewTransaction && viewModel.selectedEvent == nil {
-                    checkForActiveEvent()
-                }
-            }
-            .onChange(of: viewModel.date) { _, _ in
-                // Check on date change too
-                if isNewTransaction && viewModel.selectedEvent == nil {
-                    checkForActiveEvent()
-                }
             }
         }
         .background(Color(.systemGroupedBackground))
-    }
-    
-    private func checkForActiveEvent() {
-        let date = viewModel.date
-        
-        // Don't suggest if one is already selected
-        guard viewModel.selectedEvent == nil else { 
-            suggestedEvent = nil
-            return 
-        }
-
-        let activeEvent = events.first { event in
-            if let end = event.endDate {
-                return date >= event.startDate && date <= end
-            } else {
-                return Calendar.current.isDate(date, inSameDayAs: event.startDate)
-            }
-        }
-        
-        withAnimation {
-            suggestedEvent = activeEvent
-        }
     }
     
     private func dismissKeyboard() {
@@ -614,77 +577,6 @@ struct AddTransactionView: View {
             .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(10)
             
-            // Event Row
-            // Event Row
-            if viewModel.type != .adjustment {
-                if let suggested = suggestedEvent {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Suggested Event")
-                                .font(.app(.caption2))
-                                .foregroundStyle(.secondary)
-                            Text(suggested.title)
-                                .font(.app(.subheadline, weight: .semibold))
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Apply") {
-                            withAnimation {
-                                viewModel.selectedEvent = suggested
-                                suggestedEvent = nil
-                            }
-                        }
-                        .font(.app(.caption, weight: .bold))
-                        .foregroundStyle(.blue)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.accentColor.opacity(0.1))
-                        .cornerRadius(8)
-                        
-                        Button {
-                            withAnimation {
-                                suggestedEvent = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.app(.caption))
-                                .foregroundStyle(.secondary)
-                                .padding(8)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(10)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
-                
-                Button {
-                    showEventPicker.toggle()
-                } label: {
-                    HStack {
-                        Image(systemName: "flag.fill")
-                            .foregroundStyle(.orange)
-                            .frame(width: 24)
-                        Text(viewModel.selectedEvent?.title ?? "Event (optional)")
-                            .foregroundStyle(viewModel.selectedEvent != nil ? .primary : .secondary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.app(.caption))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 12)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $showEventPicker) {
-                    eventPickerSheet
-                }
-            }
-            
             // Exclude Toggle
             Toggle("Exclude from Reports", isOn: $viewModel.excludeFromReports)
                 .padding(.horizontal, 12)
@@ -695,58 +587,6 @@ struct AddTransactionView: View {
         }
     }
     
-    // MARK: - Event Picker Sheet
-    private var eventPickerSheet: some View {
-        let displayEvents = eventSearchText.isEmpty ? events : events.filter { $0.title.localizedCaseInsensitiveContains(eventSearchText) }
-        
-        return NavigationStack {
-            List {
-                Button {
-                    viewModel.selectedEvent = nil
-                    showEventPicker = false
-                } label: {
-                    HStack {
-                        Text("event.noEvent".localized)
-                        Spacer()
-                        if viewModel.selectedEvent == nil {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
-                        }
-                    }
-                }
-                
-                ForEach(displayEvents) { event in
-                    Button {
-                        viewModel.selectedEvent = event
-                        showEventPicker = false
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(event.title)
-                                Text(event.startDate.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.app(.caption))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if viewModel.selectedEvent?.id == event.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Select Event")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $eventSearchText, prompt: "Search events")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showEventPicker = false }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
 }
 
 // MARK: - Wallet Chip Component
@@ -816,5 +656,3 @@ struct CategoryGridItem: View {
         .buttonStyle(.plain)
     }
 }
-
-

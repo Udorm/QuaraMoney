@@ -153,6 +153,24 @@ final class SampleDataService {
         let transactions = try modelContext.fetch(FetchDescriptor<Transaction>())
         for transaction in transactions { modelContext.delete(transaction) }
         
+        let eventParticipants = try modelContext.fetch(FetchDescriptor<EventLedgerParticipant>())
+        for participant in eventParticipants { modelContext.delete(participant) }
+        
+        let eventLedgerTransactions = try modelContext.fetch(FetchDescriptor<EventLedgerTransaction>())
+        for ledgerTransaction in eventLedgerTransactions { modelContext.delete(ledgerTransaction) }
+        
+        let eventMembers = try modelContext.fetch(FetchDescriptor<EventMember>())
+        for member in eventMembers { modelContext.delete(member) }
+        
+        let settlementTransfers = try modelContext.fetch(FetchDescriptor<EventSettlementTransfer>())
+        for transfer in settlementTransfers { modelContext.delete(transfer) }
+        
+        let settlementSnapshots = try modelContext.fetch(FetchDescriptor<EventSettlementSnapshot>())
+        for snapshot in settlementSnapshots { modelContext.delete(snapshot) }
+        
+        let eventExportRecords = try modelContext.fetch(FetchDescriptor<EventWalletExportRecord>())
+        for record in eventExportRecords { modelContext.delete(record) }
+        
         let budgets = try modelContext.fetch(FetchDescriptor<Budget>())
         for budget in budgets { modelContext.delete(budget) }
         

@@ -203,6 +203,7 @@ class BudgetSuggestionService {
             predicate: #Predicate<Transaction> { txn in
                 txn.type == expenseType &&
                 txn.date >= startDate && txn.date <= endDate &&
+                txn.event == nil &&
                 txn.category?.id == categoryId &&
                 txn.sourceWallet?.isArchived != true
             },
@@ -231,6 +232,7 @@ class BudgetSuggestionService {
             predicate: #Predicate<Transaction> { txn in
                 txn.type == expenseType &&
                 txn.date >= startDate && txn.date <= endDate &&
+                txn.event == nil &&
                 txn.sourceWallet?.isArchived != true
             },
             sortBy: [SortDescriptor(\Transaction.date)]
@@ -262,6 +264,7 @@ class BudgetSuggestionService {
         
         let relevantTransactions = transactions.filter { txn in
             guard txn.type == .expense,
+                  txn.event == nil,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }

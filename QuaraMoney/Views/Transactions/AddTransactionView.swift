@@ -102,16 +102,16 @@ struct AddTransactionView: View {
                                     currencyCode: $viewModel.selectedCurrencyCode,
                                     expression: viewModel.expression,
                                     isEditing: showKeyboard,
-                                    exchangeRateInfo: exchangeRateString
-                                )
-                                .onTapGesture {
-                                    if viewModel.type != .adjustment {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            showKeyboard = true
-                                            isNoteFieldFocused = false
+                                    exchangeRateInfo: exchangeRateString,
+                                    onTap: {
+                                        if viewModel.type != .adjustment {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                showKeyboard = true
+                                                isNoteFieldFocused = false
+                                            }
                                         }
                                     }
-                                }
+                                )
  
                             }
                         }

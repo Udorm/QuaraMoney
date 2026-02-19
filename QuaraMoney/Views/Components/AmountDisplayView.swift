@@ -6,13 +6,15 @@ struct AmountDisplayView: View {
     let expression: String
     let isEditing: Bool
     var exchangeRateInfo: String? = nil
+    var onTap: (() -> Void)? = nil
     
-    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, exchangeRateInfo: String? = nil) {
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, exchangeRateInfo: String? = nil, onTap: (() -> Void)? = nil) {
         self.amount = amount
         self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
         self.exchangeRateInfo = exchangeRateInfo
+        self.onTap = onTap
     }
     
     /// Display the raw expression when editing, formatted amount when finalized
@@ -136,32 +138,38 @@ struct AmountDisplayView: View {
                 }
             }
             
-            // Main amount/expression display
-            HStack(alignment: .center, spacing: 4) {
-                Text(displayText)
-                    .font(.app(size: 48, weight: .bold))
-                    .minimumScaleFactor(0.4)
-                    .lineLimit(1)
-                    // Use ternary for color based on amount/expression
-                    .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.1), value: displayText)
+            // Main amount/expression display & calculation preview
+            VStack(spacing: 4) {
+                HStack(alignment: .center, spacing: 4) {
+                    Text(displayText)
+                        .font(.app(size: 48, weight: .bold))
+                        .minimumScaleFactor(0.4)
+                        .lineLimit(1)
+                        // Use ternary for color based on amount/expression
+                        .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.1), value: displayText)
+                    
+                    // Blinking cursor when editing
+                    if isEditing {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(width: 2, height: 32)
+                            .opacity(1)
+                    }
+                }
                 
-                // Blinking cursor when editing
-                if isEditing {
-                    Rectangle()
-                        .fill(Color.accentColor)
-                        .frame(width: 2, height: 32)
-                        .opacity(1)
+                // Calculation preview when operators present
+                if hasOperators && amount > 0 {
+                    Text("= \(formatAmount(amount))")
+                        .font(.app(.callout))
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
                 }
             }
-            
-            // Calculation preview when operators present
-            if hasOperators && amount > 0 {
-                Text("= \(formatAmount(amount))")
-                    .font(.app(.callout))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onTap?()
             }
         }
         .padding(.vertical, 12)

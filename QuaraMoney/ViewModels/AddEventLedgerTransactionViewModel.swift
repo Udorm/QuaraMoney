@@ -18,6 +18,7 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
     @Published var selectedParticipantIds: Set<UUID> = []
     @Published var date: Date = Date()
     @Published var note: String = ""
+    @Published var selectedCurrencyCode: String = "USD"
     @Published var errorMessage: String?
     
     private var modelContext: ModelContext?
@@ -25,6 +26,7 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
     init(event: Event, transactionToEdit: EventLedgerTransaction? = nil) {
         self.event = event
         self.transactionToEdit = transactionToEdit
+        self.selectedCurrencyCode = event.currencyCode
         
         if let transaction = transactionToEdit {
             self.expression = "\(Decimal(transaction.amountMinor) / 100)"

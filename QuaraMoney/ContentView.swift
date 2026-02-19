@@ -54,6 +54,17 @@ struct iOS18ContentView: View {
                         }
                     }
                     
+                    Tab(value: 3) {
+                        WalletListView()
+                    } label: {
+                        VStack {
+                            Image(systemName: "wallet.pass.fill")
+                            Text(L10n.Wallet.title)
+                                .appFont(.caption2)
+                        }
+                    }
+
+                    
 
                     
                     Tab(value: 4) {
@@ -80,6 +91,11 @@ struct iOS18ContentView: View {
                     Tab(L10n.Budget.title, systemImage: "dollarsign.circle.fill", value: 2) {
                         BudgetTabView()
                     }
+                    
+                    Tab(L10n.Wallet.title, systemImage: "wallet.pass.fill", value: 3) {
+                        WalletListView()
+                    }
+
                     
 
                     

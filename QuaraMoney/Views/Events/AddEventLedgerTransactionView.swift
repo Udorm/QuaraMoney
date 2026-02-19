@@ -21,35 +21,31 @@ struct AddEventLedgerTransactionView: View {
     
     var body: some View {
         NavigationStack {
+            
             List {
                 // MARK: - Amount Display & Type (Fluid row)
                 Section {
-                    VStack(spacing: 16) {
-                        // MARK: - Entry Type Selector
-                        Picker("Entry Type", selection: $viewModel.transactionKind) {
-                            Text("Expense").tag(EventLedgerTransactionKind.expense)
-                            Text("Contribution").tag(EventLedgerTransactionKind.contribution)
-                        }
-                        .pickerStyle(.segmented)
-                        
-                        AmountDisplayView(
-                            amount: viewModel.resolvedAmount,
-                            currencyCode: .constant(viewModel.event.currencyCode),
-                            expression: viewModel.expression,
-                            isEditing: showKeyboard
-                        )
-                        .onTapGesture {
+                    AmountDisplayView(
+                        amount: viewModel.resolvedAmount,
+                        currencyCode: $viewModel.selectedCurrencyCode,
+                        expression: viewModel.expression,
+                        isEditing: showKeyboard,
+                        onTap: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 showKeyboard = true
                                 isNoteFocused = false
                             }
                         }
-                        
-                        
-                    }
+                    )
                 }
-                .listRowInsets(EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 0))
-                .listRowBackground(Color.clear)
+                .listRowBackground(
+                    (viewModel.transactionKind == .expense 
+                        ? ThemeManager.shared.expenseColor 
+                        : ThemeManager.shared.incomeColor)
+                    .opacity(0.15)
+                )
+                .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                // .listRowBackground(Color.clear)
                 
                 if viewModel.transactionKind == .expense {
                     // MARK: - Category
@@ -224,12 +220,18 @@ struct AddEventLedgerTransactionView: View {
                 }
             }
             .listStyle(.insetGrouped)
-
             .background(Color(.systemGroupedBackground))
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(viewModel.transactionToEdit == nil ? "Add Event Entry" : "Edit Event Entry")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Picker("Entry Type", selection: $viewModel.transactionKind) {
+                        Text("Expense").tag(EventLedgerTransactionKind.expense)
+                        Text("Contribution").tag(EventLedgerTransactionKind.contribution)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200) // Give it a fixed width to look good in the title area
+                }
+                
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()

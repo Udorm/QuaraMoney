@@ -46,11 +46,16 @@ struct EventDetailView: View {
         ledgerTransactions.filter { !$0.isDeleted }
     }
     
-    private var linksByTransactionId: [UUID: [EventLedgerParticipant]] {
-        var map: [UUID: [EventLedgerParticipant]] = [:]
+    private var linksByTransactionId: [UUID: [UUID]] {
+        var map: [UUID: [UUID]] = [:]
         for link in participantLinks {
             guard let transactionId = link.transaction?.id else { continue }
-            map[transactionId, default: []].append(link)
+            map[transactionId, default: []].append(link.memberId)
+        }
+        // For isSplitAll transactions, override with all current non-archived settlement members
+        let activeMemberIds = settlementMembers.filter { !$0.isArchived }.map(\.id)
+        for transaction in activeTransactions where transaction.isSplitAll {
+            map[transaction.id] = activeMemberIds
         }
         return map
     }
@@ -65,11 +70,19 @@ struct EventDetailView: View {
     }
     
     private var balanceByMemberId: [UUID: EventMemberLedgerBalance] {
-        Dictionary(uniqueKeysWithValues: settlementResult.balances.map { ($0.memberId, $0) })
+        var map: [UUID: EventMemberLedgerBalance] = [:]
+        for balance in settlementResult.balances {
+            map[balance.memberId] = balance
+        }
+        return map
     }
     
     private var memberById: [UUID: EventMember] {
-        Dictionary(uniqueKeysWithValues: members.map { ($0.id, $0) })
+        var map: [UUID: EventMember] = [:]
+        for member in members {
+            map[member.id] = member
+        }
+        return map
     }
     
     private var totalCostMinor: Int64 {
@@ -113,6 +126,11 @@ struct EventDetailView: View {
     }
     
     var body: some View {
+        let currentSettlement = settlementResult
+        let balances = balanceByMemberId
+        let status = settlementStatus
+        let localNet = localNetMinor
+        
         List {
             Section {
                 VStack(spacing: 16) {
@@ -149,28 +167,28 @@ struct EventDetailView: View {
                 HStack {
                     Text("Status")
                     Spacer()
-                    EventSettlementStatusBadge(status: settlementStatus)
+                    EventSettlementStatusBadge(status: status)
                 }
                 
                 HStack {
                     Text("Total Cost")
                     Spacer()
-                    Text(formatMinor(totalCostMinor))
+                    Text(formatMinor(currentSettlement.totalCostMinor))
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack {
                     Text("Total Contribution")
                     Spacer()
-                    Text(formatMinor(totalContributionMinor))
+                    Text(formatMinor(currentSettlement.totalContributionMinor))
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack {
                     Text("Remaining Pool")
                     Spacer()
-                    Text(formatMinor(walletRemainingMinor))
-                        .foregroundStyle(walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                    Text(formatMinor(currentSettlement.walletRemainingMinor))
+                    .foregroundStyle(currentSettlement.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                 }
                 
                 HStack {
@@ -183,8 +201,8 @@ struct EventDetailView: View {
                 HStack {
                     Text(localMember?.name ?? "You")
                     Spacer()
-                    Text(localNetLabel(for: localNetMinor))
-                        .foregroundStyle(netColor(for: localNetMinor))
+                    Text(localNetLabel(for: localNet))
+                        .foregroundStyle(netColor(for: localNet))
                 }
                 
                 if let confirmedRevision = event.confirmedSettlementRevision,
@@ -199,7 +217,7 @@ struct EventDetailView: View {
                 ForEach(settlementMembers) { member in
                     EventMemberRow(
                         member: member,
-                        balance: balanceByMemberId[member.id],
+                        balance: balances[member.id],
                         currencyCode: event.currencyCode
                     )
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -289,13 +307,13 @@ struct EventDetailView: View {
                     HStack {
                         Text("Settle Up")
                         Spacer()
-                        if settlementStatus == .settled {
+                        if status == .settled {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                         }
                     }
                 }
-                .disabled(settlementStatus == .active)
+                .disabled(status == .active)
             }
         }
         .listStyle(.insetGrouped)

@@ -36,6 +36,7 @@ final class EventLedgerTransaction {
     var categoryName: String?
     var categoryIcon: String?
     var categoryColorHex: String?
+    var isSplitAll: Bool = false
     var isDeleted: Bool = false
     var createdAt: Date
     var updatedAt: Date

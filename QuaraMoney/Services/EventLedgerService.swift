@@ -9,6 +9,7 @@ enum EventLedgerServiceError: LocalizedError {
     case missingPayer
     case missingLocalMember
     case alreadyExported
+    case alreadyExportedSpending
     case invalidSnapshotRevision
     case insufficientEventWalletBalance
     
@@ -28,6 +29,8 @@ enum EventLedgerServiceError: LocalizedError {
             return "No local member found for this event."
         case .alreadyExported:
             return "This settlement has already been exported for the selected member."
+        case .alreadyExportedSpending:
+            return "Spending has already been exported for this event."
         case .invalidSnapshotRevision:
             return "Settlement snapshot is outdated for this event revision."
         case .insufficientEventWalletBalance:
@@ -559,6 +562,107 @@ final class EventLedgerService {
         return transaction
     }
     
+    // MARK: - Export Spending
+    
+    @discardableResult
+    func exportSpendingToWallet(
+        for event: Event,
+        member: EventMember,
+        wallet: Wallet,
+        exportDate: Date = Date()
+    ) throws -> Transaction? {
+        // Check for existing spending export
+        let existingRecords = try fetchExportRecords(eventId: event.id)
+        if existingRecords.contains(where: { $0.exportType == .spending && $0.memberId == member.id }) {
+            throw EventLedgerServiceError.alreadyExportedSpending
+        }
+        
+        // Compute the member's total share of expenses
+        let transactions = try fetchLedgerTransactions(eventId: event.id).filter { !$0.isDeleted && $0.kind == .expense }
+        let linksByTransaction = try participantLinksByTransaction(eventId: event.id)
+        
+        var totalShareMinor: Int64 = 0
+        
+        for transaction in transactions {
+            guard let participantIds = linksByTransaction[transaction.id] else { continue }
+            guard participantIds.contains(member.id) else { continue }
+            
+            let count = Int64(participantIds.count)
+            guard count > 0 else { continue }
+            
+            let baseShare = transaction.amountMinor / count
+            let remainder = transaction.amountMinor % count
+            
+            // Match the engine's rounding: earlier participants get +1 for remainder
+            let memberIndex = participantIds.firstIndex(of: member.id) ?? 0
+            let extra: Int64 = Int64(memberIndex) < remainder ? 1 : 0
+            totalShareMinor += baseShare + extra
+        }
+        
+        guard totalShareMinor > 0 else {
+            return nil
+        }
+        
+        let amount = MoneyMinorUnitConverter.fromMinorUnits(totalShareMinor, currencyCode: event.currencyCode)
+        
+        let walletTransaction = Transaction(
+            amount: amount,
+            currencyCode: event.currencyCode,
+            date: exportDate,
+            type: .expense
+        )
+        walletTransaction.note = "Event: \(event.title)"
+        walletTransaction.sourceWallet = wallet
+        walletTransaction.exchangeRate = exchangeRate(from: event.currencyCode, to: wallet.currencyCode)
+        walletTransaction.excludeFromReports = false
+        walletTransaction.category = try fetchOrCreateEventExpenseCategory()
+        walletTransaction.event = nil
+        modelContext.insert(walletTransaction)
+        
+        let record = EventWalletExportRecord(
+            memberId: member.id,
+            walletTransactionId: walletTransaction.id,
+            amountMinor: totalShareMinor,
+            direction: .expense,
+            exportType: .spending,
+            event: event,
+            snapshot: nil
+        )
+        modelContext.insert(record)
+        
+        wallet.invalidateBalanceCache()
+        try save()
+        return walletTransaction
+    }
+    
+    func hasExportedSpending(for event: Event, memberId: UUID) throws -> Bool {
+        let records = try fetchExportRecords(eventId: event.id)
+        return records.contains(where: { $0.exportType == .spending && $0.memberId == memberId })
+    }
+    
+    func spendingShareMinor(for event: Event, memberId: UUID) throws -> Int64 {
+        let transactions = try fetchLedgerTransactions(eventId: event.id).filter { !$0.isDeleted && $0.kind == .expense }
+        let linksByTransaction = try participantLinksByTransaction(eventId: event.id)
+        
+        var totalShareMinor: Int64 = 0
+        
+        for transaction in transactions {
+            guard let participantIds = linksByTransaction[transaction.id] else { continue }
+            guard participantIds.contains(memberId) else { continue }
+            
+            let count = Int64(participantIds.count)
+            guard count > 0 else { continue }
+            
+            let baseShare = transaction.amountMinor / count
+            let remainder = transaction.amountMinor % count
+            let memberIndex = participantIds.firstIndex(of: memberId) ?? 0
+            let extra: Int64 = Int64(memberIndex) < remainder ? 1 : 0
+            totalShareMinor += baseShare + extra
+        }
+        
+        return totalShareMinor
+    }
+    
     func latestSnapshot(for event: Event) throws -> EventSettlementSnapshot? {
         let snapshots = try fetchSettlementSnapshots(eventId: event.id)
         return snapshots.sorted { $0.createdAt > $1.createdAt }.first
@@ -621,12 +725,20 @@ final class EventLedgerService {
         return try modelContext.fetch(descriptor).filter { $0.transaction?.event?.id == eventId }
     }
     
-    private func participantLinksByTransaction(eventId: UUID) throws -> [UUID: [EventLedgerParticipant]] {
+    private func participantLinksByTransaction(eventId: UUID) throws -> [UUID: [UUID]] {
         let links = try fetchParticipantLinks(eventId: eventId)
-        var linksByTransaction: [UUID: [EventLedgerParticipant]] = [:]
+        var linksByTransaction: [UUID: [UUID]] = [:]
         for link in links {
             guard let transactionId = link.transaction?.id else { continue }
-            linksByTransaction[transactionId, default: []].append(link)
+            linksByTransaction[transactionId, default: []].append(link.memberId)
+        }
+        // For isSplitAll transactions, override with all current non-archived members (excluding budget pool)
+        let allMembers = try fetchMembers(eventId: eventId)
+        let budgetPoolIds = Set(allMembers.filter(\.isBudgetPool).map(\.id))
+        let activeMemberIds = allMembers.filter { !$0.isArchived && !budgetPoolIds.contains($0.id) }.map(\.id)
+        let transactions = try fetchLedgerTransactions(eventId: eventId)
+        for transaction in transactions where transaction.isSplitAll && !transaction.isDeleted {
+            linksByTransaction[transaction.id] = activeMemberIds
         }
         return linksByTransaction
     }
@@ -666,6 +778,28 @@ final class EventLedgerService {
             icon: "person.3.sequence.fill",
             colorHex: "#5E5CE6",
             type: type,
+            isSystem: true
+        )
+        modelContext.insert(category)
+        return category
+    }
+    
+    private func fetchOrCreateEventExpenseCategory() throws -> Category {
+        let allCategories = try modelContext.fetch(FetchDescriptor<Category>())
+        if let existing = allCategories.first(where: { $0.isSystem && $0.type == .expense && $0.name == "Event Expense" }) {
+            return existing
+        }
+        
+        if let existingLoose = allCategories.first(where: { $0.type == .expense && $0.name == "Event Expense" }) {
+            existingLoose.isSystem = true
+            return existingLoose
+        }
+        
+        let category = Category(
+            name: "Event Expense",
+            icon: "airplane",
+            colorHex: "#FF9500",
+            type: .expense,
             isSystem: true
         )
         modelContext.insert(category)

@@ -51,11 +51,16 @@ struct EventSettlementView: View {
         ledgerTransactions.filter { !$0.isDeleted }
     }
     
-    private var linksByTransactionId: [UUID: [EventLedgerParticipant]] {
-        var map: [UUID: [EventLedgerParticipant]] = [:]
+    private var linksByTransactionId: [UUID: [UUID]] {
+        var map: [UUID: [UUID]] = [:]
         for link in participantLinks {
             guard let transactionId = link.transaction?.id else { continue }
-            map[transactionId, default: []].append(link)
+            map[transactionId, default: []].append(link.memberId)
+        }
+        // For isSplitAll transactions, override with all current non-archived settlement members
+        let activeMemberIds = settlementMembers.filter { !$0.isArchived }.map(\.id)
+        for transaction in activeTransactions where transaction.isSplitAll {
+            map[transaction.id] = activeMemberIds
         }
         return map
     }
@@ -71,7 +76,11 @@ struct EventSettlementView: View {
     }
     
     private var memberById: [UUID: EventMember] {
-        Dictionary(uniqueKeysWithValues: settlementMembers.map { ($0.id, $0) })
+        var map: [UUID: EventMember] = [:]
+        for member in settlementMembers {
+            map[member.id] = member
+        }
+        return map
     }
     
     private var localMember: EventMember? {
@@ -114,28 +123,30 @@ struct EventSettlementView: View {
     }
     
     var body: some View {
+        let currentSettlement = settlementResult
+        
         NavigationStack {
             List {
                 Section("Summary") {
                     HStack {
                         Text("Total Cost")
                         Spacer()
-                        Text(formatMinor(settlementResult.totalCostMinor))
+                        Text(formatMinor(currentSettlement.totalCostMinor))
                             .foregroundStyle(.secondary)
                     }
                     
                     HStack {
                         Text("Total Contribution")
                         Spacer()
-                        Text(formatMinor(settlementResult.totalContributionMinor))
+                        Text(formatMinor(currentSettlement.totalContributionMinor))
                             .foregroundStyle(.secondary)
                     }
                     
                     HStack {
                         Text("Remaining Pool")
                         Spacer()
-                        Text(formatMinor(settlementResult.walletRemainingMinor))
-                            .foregroundStyle(settlementResult.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                        Text(formatMinor(currentSettlement.walletRemainingMinor))
+                            .foregroundStyle(currentSettlement.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                     }
                     
                     if let localMember {
@@ -202,11 +213,11 @@ struct EventSettlementView: View {
                 }
                 
                 Section("Member Transfers") {
-                    if settlementResult.instructions.isEmpty {
+                    if currentSettlement.instructions.isEmpty {
                         Text("No member-to-member transfer needed.")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(settlementResult.instructions.sorted(by: { $0.sequence < $1.sequence })) { instruction in
+                        ForEach(currentSettlement.instructions.sorted(by: { $0.sequence < $1.sequence })) { instruction in
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(memberName(for: instruction.fromMemberId)) pays \(memberName(for: instruction.toMemberId))")
                                     .font(.app(.body, weight: .medium))
@@ -220,7 +231,7 @@ struct EventSettlementView: View {
                 }
                 
                 Section("Balances") {
-                    ForEach(settlementResult.balances) { balance in
+                    ForEach(currentSettlement.balances) { balance in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(memberName(for: balance.memberId))
@@ -283,7 +294,7 @@ struct EventSettlementView: View {
                     }
                     .disabled(
                         isProcessing
-                        || settlementResult.totalCostMinor == 0
+                        || currentSettlement.totalCostMinor == 0
                         || (exportToWallet && selectedWallet == nil)
                         || (useSingleCoordinator && effectiveCoordinatorMemberId == nil)
                     )

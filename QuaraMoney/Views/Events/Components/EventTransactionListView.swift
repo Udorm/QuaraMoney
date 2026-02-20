@@ -2,7 +2,7 @@ import SwiftUI
 
 struct EventTransactionListView: View {
     let transactions: [EventLedgerTransaction]
-    let linksByTransactionId: [UUID: [EventLedgerParticipant]]
+    let linksByTransactionId: [UUID: [UUID]]
     let memberById: [UUID: EventMember]
     let event: Event
     let onSelect: (EventLedgerTransaction) -> Void

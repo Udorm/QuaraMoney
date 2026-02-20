@@ -5,7 +5,6 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: HomeViewModel
     @State private var showingAddTransaction = false
-    @State private var showingScanner = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -60,13 +59,10 @@ struct HomeView: View {
                 viewModel.refreshData()
             }
             .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionContainer(transaction: nil, isNewTransaction: true, showScanner: false)
-            }
-            .sheet(isPresented: $showingScanner) {
-                AddTransactionContainer(transaction: nil, isNewTransaction: true, showScanner: true)
+                AddTransactionContainer(transaction: nil, isNewTransaction: true)
             }
             .sheet(item: $transactionToEdit) { txn in
-                AddTransactionContainer(transaction: txn, isNewTransaction: false, showScanner: false)
+                AddTransactionContainer(transaction: txn, isNewTransaction: false)
             }
             .onChange(of: showingAddTransaction) { oldValue, newValue in
                 if !newValue {
@@ -141,12 +137,10 @@ struct AddTransactionContainer: View {
     @Environment(\.modelContext) private var modelContext
     let transaction: Transaction?
     let isNewTransaction: Bool
-    let showScanner: Bool
     
-    init(transaction: Transaction? = nil, isNewTransaction: Bool = true, showScanner: Bool = false) {
+    init(transaction: Transaction? = nil, isNewTransaction: Bool = true) {
         self.transaction = transaction
         self.isNewTransaction = isNewTransaction
-        self.showScanner = showScanner
     }
     
     var body: some View {
@@ -156,8 +150,7 @@ struct AddTransactionContainer: View {
                 initialWallet: nil,
                 transaction: transaction
             ),
-            isNewTransaction: isNewTransaction,
-            initialShowScanner: showScanner
+            isNewTransaction: isNewTransaction
         )
     }
 }

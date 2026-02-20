@@ -74,14 +74,20 @@ enum EventSettlementEngine {
     static func compute(
         memberIds: [UUID],
         transactions: [EventLedgerTransaction],
-        participantLinks: [UUID: [EventLedgerParticipant]],
+        participantLinks: [UUID: [UUID]],
         budgetPoolMemberIds: Set<UUID> = [],
         options: EventSettlementOptions = .default
     ) -> EventSettlementResult {
         let memberIdSet = Set(memberIds)
-        var contributionMap: [UUID: Int64] = Dictionary(uniqueKeysWithValues: memberIds.map { ($0, 0) })
-        var personalPaidMap: [UUID: Int64] = Dictionary(uniqueKeysWithValues: memberIds.map { ($0, 0) })
-        var shareMap: [UUID: Int64] = Dictionary(uniqueKeysWithValues: memberIds.map { ($0, 0) })
+        var contributionMap: [UUID: Int64] = [:]
+        var personalPaidMap: [UUID: Int64] = [:]
+        var shareMap: [UUID: Int64] = [:]
+        
+        for id in memberIds {
+            contributionMap[id] = 0
+            personalPaidMap[id] = 0
+            shareMap[id] = 0
+        }
         
         var totalCostMinor: Int64 = 0
         var totalContributionMinor: Int64 = 0
@@ -90,8 +96,7 @@ enum EventSettlementEngine {
         for transaction in transactions where !transaction.isDeleted {
             guard transaction.amountMinor > 0 else { continue }
             
-            let rawParticipants = sortedParticipants(for: transaction.id, in: participantLinks)
-            let rawParticipantIds = uniqueOrdered(rawParticipants.map(\.memberId))
+            let rawParticipantIds = uniqueOrdered(participantLinks[transaction.id] ?? [])
             let payerId = transaction.paidByMemberId
             let payerIsBudgetPool = payerId.map { budgetPoolMemberIds.contains($0) } ?? false
             
@@ -122,8 +127,8 @@ enum EventSettlementEngine {
             }
             
             let mappedParticipants = uniqueOrdered(
-                rawParticipants
-                    .map { options.memberIdSubstitutions[$0.memberId] ?? $0.memberId }
+                rawParticipantIds
+                    .map { options.memberIdSubstitutions[$0] ?? $0 }
                     .filter { memberIdSet.contains($0) }
             )
             
@@ -415,21 +420,5 @@ enum EventSettlementEngine {
             ordered.append(id)
         }
         return ordered
-    }
-    
-    private static func sortedParticipants(
-        for transactionId: UUID,
-        in participantLinks: [UUID: [EventLedgerParticipant]]
-    ) -> [EventLedgerParticipant] {
-        guard let participants = participantLinks[transactionId], !participants.isEmpty else {
-            return []
-        }
-        
-        return participants.sorted {
-            if $0.orderIndex == $1.orderIndex {
-                return $0.memberId.uuidString < $1.memberId.uuidString
-            }
-            return $0.orderIndex < $1.orderIndex
-        }
     }
 }

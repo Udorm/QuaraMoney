@@ -11,7 +11,8 @@ struct AddTransactionView: View {
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     // UI State
-    @State private var showDatePicker = false
+    @State private var isDateExpanded = false
+    @State private var isTimeExpanded = false
     @State private var showAllCategories = false
     @State private var showAllWallets = false
     @State private var showKeyboard = true
@@ -25,10 +26,9 @@ struct AddTransactionView: View {
     private let maxQuickCategories = 3 // Show 3 categories + "More" to keep strictly to one row (4 items)
     private let maxQuickWallets = 4
     
-    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true, initialShowScanner: Bool = false) {
+    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
-        self._showScanner = State(initialValue: initialShowScanner)
     }
     
     private var filteredCategories: [Category] {
@@ -80,7 +80,7 @@ struct AddTransactionView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottomTrailing) {
                 // Tap to dismiss keyboard
                 Color.clear
                     .contentShape(Rectangle())
@@ -94,32 +94,49 @@ struct AddTransactionView: View {
 
                         // MARK: - Amount & Type (Fluid row)
                         Section {
-                            VStack(spacing: 0) {
-                                transactionTypeSelector
-                                
-                                AmountDisplayView(
-                                    amount: viewModel.evaluatedAmount,
-                                    currencyCode: $viewModel.selectedCurrencyCode,
-                                    expression: viewModel.expression,
-                                    isEditing: showKeyboard,
-                                    exchangeRateInfo: exchangeRateString,
-                                    onTap: {
-                                        if viewModel.type != .adjustment {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                showKeyboard = true
-                                                isNoteFieldFocused = false
-                                            }
-                                        }
+                            AmountDisplayView(
+                                amount: viewModel.evaluatedAmount,
+                                currencyCode: $viewModel.selectedCurrencyCode,
+                                expression: viewModel.expression,
+                                isEditing: showKeyboard,
+                                exchangeRateInfo: exchangeRateString,
+                                onTap: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showKeyboard = true
+                                        isNoteFieldFocused = false
                                     }
-                                )
- 
+                                }
+                            )
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowBackground(
+                                Group {
+                                    if viewModel.type == .expense {
+                                        ThemeManager.shared.expenseColor.opacity(0.15)
+                                    } else if viewModel.type == .income {
+                                        ThemeManager.shared.incomeColor.opacity(0.15)
+                                    } else if viewModel.type == .transfer {
+                                        Color.blue.opacity(0.1)
+                                    } else {
+                                        Color(.secondarySystemGroupedBackground)
+                                    }
+                                }
+                            )
+                        }
+                        
+                        if let exchangeRateStr = exchangeRateString {
+                            Section {
+                                HStack {
+                                    Text(exchangeRateStr)
+                                        .font(.app(.subheadline, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Image(systemName: "lock.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
-                        // .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
-                        .listRowBackground(Color.clear)                        
-                        .listRowInsets(EdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 0))
                         
-
                         // MARK: - Linked Debt Indicator
                         if let debt = viewModel.debt {
                             Section {
@@ -161,9 +178,12 @@ struct AddTransactionView: View {
                         Section {
                             optionalFieldsSection
                         }
+
+                        reportingSection
+                    }
                     .listStyle(.insetGrouped)
                 }
-            } // Close ZStack
+            }
             .safeAreaInset(edge: .bottom) {
                 // MARK: - Calculator Keyboard (Dismissible)
                 if showKeyboard && !isNoteFieldFocused {
@@ -180,9 +200,12 @@ struct AddTransactionView: View {
                     .background(Color(.systemGroupedBackground))
                 }
             }
-            .navigationTitle(viewModel.isEditing ? L10n.Common.edit : L10n.Transaction.add)
-            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    transactionTypeSelector
+                }
+                
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()
@@ -202,13 +225,7 @@ struct AddTransactionView: View {
                     .disabled(!viewModel.isValid)
                 }
                 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showScanner = true
-                    } label: {
-                        Image(systemName: "doc.text.viewfinder")
-                    }
-                }
+                // Moved scan button to FAB
             }
             .sheet(isPresented: $showScanner) {
                 ScannerView(isPresented: $showScanner) { result in
@@ -223,7 +240,6 @@ struct AddTransactionView: View {
                         print("Scanner failed: \(error)")
                     }
                 }
-            }
             }
             .onAppear {
                 // Preselect the most used wallet (by transaction count)
@@ -279,6 +295,7 @@ struct AddTransactionView: View {
                     Text(L10n.Transaction.TransactionType.transfer).tag(TransactionType.transfer)
                 }
                 .pickerStyle(.segmented)
+                .frame(width: 250)
                 .onChange(of: viewModel.type) { _, newType in
                     if newType != .transfer {
                         viewModel.selectedCategory = nil
@@ -533,20 +550,78 @@ struct AddTransactionView: View {
     // MARK: - Optional Fields Section
     private var optionalFieldsSection: some View {
         Group {
-            // Date Row - using native DatePicker inline
-            DatePicker(
-                selection: $viewModel.date,
-                displayedComponents: [.date, .hourAndMinute]
-            ) {
+            // Date Selection Row
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isDateExpanded.toggle()
+                    if isDateExpanded {
+                        isTimeExpanded = false
+                        showKeyboard = false
+                    }
+                }
+            } label: {
                 HStack {
                     Image(systemName: "calendar")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
                     Text("transaction.date".localized)
+                    Spacer()
+                    Text(viewModel.date.formatted(date: .long, time: .omitted))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isDateExpanded ? 90 : 0))
                 }
             }
-            .disabled(viewModel.type == .adjustment)
-            .opacity(viewModel.type == .adjustment ? 0.6 : 1.0)
+            .buttonStyle(.plain)
+            
+            if isDateExpanded {
+                DatePicker(
+                    "",
+                    selection: $viewModel.date,
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.graphical)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            
+            // Time Selection Row
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isTimeExpanded.toggle()
+                    if isTimeExpanded {
+                        isDateExpanded = false
+                        showKeyboard = false
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "clock")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+                    Text("Time")
+                    Spacer()
+                    Text(viewModel.date.formatted(date: .omitted, time: .shortened))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isTimeExpanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            if isTimeExpanded {
+                DatePicker(
+                    "",
+                    selection: $viewModel.date,
+                    displayedComponents: [.hourAndMinute]
+                )
+                .datePickerStyle(.wheel)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             
             // Note Field
             HStack {
@@ -556,7 +631,11 @@ struct AddTransactionView: View {
                 TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
             }
-            
+        }
+    }
+    
+    private var reportingSection: some View {
+        Section {
             // Exclude Toggle
             Toggle("Exclude from Reports", isOn: $viewModel.excludeFromReports)
         }
@@ -579,9 +658,13 @@ struct WalletChip: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.accentColor : Color(.secondarySystemGroupedBackground))
+            .background(isSelected ? Color.accentColor : Color(.tertiarySystemGroupedBackground))
             .foregroundColor(isSelected ? .white : .primary)
             .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: isSelected ? 0 : 1)
+            )
         }
         .buttonStyle(.plain)
     }

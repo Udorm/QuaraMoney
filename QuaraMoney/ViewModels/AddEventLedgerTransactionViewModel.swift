@@ -41,6 +41,7 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
             if let participants = transaction.participants {
                 self.selectedParticipantIds = Set(participants.map { $0.memberId })
             }
+            self.isCustomSplit = !transaction.isSplitAll
         } else {
             // Defaults for new transaction
             self.transactionKind = .expense
@@ -75,7 +76,10 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
     var isValid: Bool {
         guard evaluatedAmount > 0 else { return false }
         if transactionKind == .expense {
-            return selectedCategoryId != nil && (useEventWallet || selectedPayerMemberId != nil) && !selectedParticipantIds.isEmpty
+            let hasParticipants = isCustomSplit
+                ? !selectedParticipantIds.isEmpty
+                : !(event.members?.filter { !$0.isArchived }.isEmpty ?? true)
+            return selectedCategoryId != nil && (useEventWallet || selectedPayerMemberId != nil) && hasParticipants
         } else {
             return selectedPayerMemberId != nil
         }
@@ -129,6 +133,12 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
         }
     }
     
+    func selectAllParticipants() {
+        if let members = event.members {
+            selectedParticipantIds = Set(members.filter { !$0.isArchived }.map { $0.id })
+        }
+    }
+    
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
         fetchCategories()
@@ -154,6 +164,19 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
         
         let amountMinor = Int64((evaluatedAmount as NSDecimalNumber).doubleValue * 100)
         
+        // Resolve participants: when isSplitAll, use current event members
+        let isSplitAll = !isCustomSplit
+        let resolvedParticipantIds: Set<UUID>
+        if isSplitAll {
+            resolvedParticipantIds = Set(
+                (event.members?.filter { !$0.isArchived } ?? []).map { $0.id }
+            )
+        } else {
+            resolvedParticipantIds = selectedParticipantIds
+        }
+        
+        let selectedCategory = expenseCategories.first(where: { $0.id == selectedCategoryId })
+        
         if let transaction = transactionToEdit {
             transaction.kind = transactionKind
             transaction.amountMinor = amountMinor
@@ -162,10 +185,14 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
             transaction.date = date
             transaction.note = note
             transaction.categoryId = selectedCategoryId
+            transaction.categoryName = selectedCategory?.name
+            transaction.categoryIcon = selectedCategory?.icon
+            transaction.categoryColorHex = selectedCategory?.colorHex
+            transaction.isSplitAll = isSplitAll
             
             // Update participants
             transaction.participants?.forEach { modelContext.delete($0) }
-            transaction.participants = selectedParticipantIds.enumerated().map { index, id in
+            transaction.participants = resolvedParticipantIds.enumerated().map { index, id in
                 EventLedgerParticipant(memberId: id, orderIndex: index, transaction: transaction, member: event.members?.first(where: { $0.id == id }))
             }
         } else {
@@ -179,11 +206,15 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
                 date: date,
                 note: note,
                 categoryId: selectedCategoryId,
+                categoryName: selectedCategory?.name,
+                categoryIcon: selectedCategory?.icon,
+                categoryColorHex: selectedCategory?.colorHex,
                 event: event
             )
+            newTransaction.isSplitAll = isSplitAll
             modelContext.insert(newTransaction)
             
-            newTransaction.participants = selectedParticipantIds.enumerated().map { index, id in
+            newTransaction.participants = resolvedParticipantIds.enumerated().map { index, id in
                 EventLedgerParticipant(memberId: id, orderIndex: index, transaction: newTransaction, member: event.members?.first(where: { $0.id == id }))
             }
         }

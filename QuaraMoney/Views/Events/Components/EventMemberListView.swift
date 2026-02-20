@@ -7,6 +7,7 @@ struct EventMemberListView: View {
     let balances: [UUID: EventMemberLedgerBalance]
     let onAddMember: () -> Void
     let onSelectMember: (EventMember) -> Void
+    let onDeleteMember: (EventMember) -> Void
     
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -27,6 +28,13 @@ struct EventMemberListView: View {
                     currencyCode: event.currencyCode,
                     onSelect: { onSelectMember(member) }
                 )
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        onDeleteMember(member)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
         }
         .navigationTitle("\(event.title) Members")
@@ -54,10 +62,7 @@ private struct MemberRow: View {
     private var balanceText: String {
         guard let balance = balance else { return "" }
         let amount = MoneyMinorUnitConverter.fromMinorUnits(balance.netMinor, currencyCode: currencyCode)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = currencyCode
-        return formatter.string(from: amount as NSDecimalNumber) ?? ""
+        return amount.formatted(.currency(code: currencyCode))
     }
     
     private var balanceColor: Color {

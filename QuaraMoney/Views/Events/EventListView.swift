@@ -113,7 +113,7 @@ struct EventRowView: View {
     }
     
     var body: some View {
-        NavigationLink(destination: EventDetailViewV2(event: event)) {
+        NavigationLink(destination: LazyView(EventDetailViewV2(event: event))) {
             HStack(spacing: 12) {
                 // Leading Icon
                 ZStack {

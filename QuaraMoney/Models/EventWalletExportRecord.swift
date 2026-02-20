@@ -8,6 +8,13 @@ enum EventWalletExportDirection: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum EventWalletExportType: String, Codable, CaseIterable, Identifiable {
+    case spending
+    case settlement
+    
+    var id: String { rawValue }
+}
+
 @Model
 final class EventWalletExportRecord {
     @Attribute(.unique) var id: UUID
@@ -15,6 +22,7 @@ final class EventWalletExportRecord {
     var walletTransactionId: UUID
     var amountMinor: Int64
     var direction: EventWalletExportDirection
+    var exportType: EventWalletExportType
     var createdAt: Date
     
     // Relationships
@@ -26,6 +34,7 @@ final class EventWalletExportRecord {
         walletTransactionId: UUID,
         amountMinor: Int64,
         direction: EventWalletExportDirection,
+        exportType: EventWalletExportType = .settlement,
         event: Event?,
         snapshot: EventSettlementSnapshot?
     ) {
@@ -34,6 +43,7 @@ final class EventWalletExportRecord {
         self.walletTransactionId = walletTransactionId
         self.amountMinor = amountMinor
         self.direction = direction
+        self.exportType = exportType
         self.event = event
         self.snapshot = snapshot
         self.createdAt = Date()

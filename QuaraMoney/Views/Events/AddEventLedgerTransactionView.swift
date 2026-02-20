@@ -7,6 +7,8 @@ struct AddEventLedgerTransactionView: View {
     
     @StateObject private var viewModel: AddEventLedgerTransactionViewModel
     
+    @State private var isDateExpanded = false
+    @State private var isTimeExpanded = false
     @State private var showKeyboard = true
     @State private var showAllCategories = false
     @State private var categorySearchText = ""
@@ -124,7 +126,12 @@ struct AddEventLedgerTransactionView: View {
                         // Split
                         Toggle("Split equally with everyone", isOn: Binding(
                             get: { !viewModel.isCustomSplit },
-                            set: { viewModel.isCustomSplit = !$0 }
+                            set: {
+                                viewModel.isCustomSplit = !$0
+                                if !viewModel.isCustomSplit {
+                                    viewModel.selectAllParticipants()
+                                }
+                            }
                         ).animation(.default))
                         
                         if viewModel.isCustomSplit {
@@ -184,18 +191,80 @@ struct AddEventLedgerTransactionView: View {
                 
                 // MARK: - Optional Fields
                 Section {
-                    DatePicker(
-                        selection: $viewModel.date,
-                        displayedComponents: [.date, .hourAndMinute]
-                    ) {
+                    // Date Selection Row
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            isDateExpanded.toggle()
+                            if isDateExpanded {
+                                isTimeExpanded = false
+                                showKeyboard = false
+                            }
+                        }
+                    } label: {
                         HStack {
                             Image(systemName: "calendar")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
                             Text("Date")
+                            Spacer()
+                            Text(viewModel.date.formatted(date: .long, time: .omitted))
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isDateExpanded ? 90 : 0))
                         }
                     }
+                    .buttonStyle(.plain)
                     
+                    if isDateExpanded {
+                        DatePicker(
+                            "",
+                            selection: $viewModel.date,
+                            displayedComponents: [.date]
+                        )
+                        .datePickerStyle(.graphical)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
+                    // Time Selection Row
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            isTimeExpanded.toggle()
+                            if isTimeExpanded {
+                                isDateExpanded = false
+                                showKeyboard = false
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
+                            Text("Time")
+                            Spacer()
+                            Text(viewModel.date.formatted(date: .omitted, time: .shortened))
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isTimeExpanded ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if isTimeExpanded {
+                        DatePicker(
+                            "",
+                            selection: $viewModel.date,
+                            displayedComponents: [.hourAndMinute]
+                        )
+                        .datePickerStyle(.wheel)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                    
+                    // Note Field
                     HStack {
                         Image(systemName: "note.text")
                             .foregroundStyle(.blue)
@@ -361,7 +430,7 @@ struct MemberGridItem: View {
                     }
                     
                     if member.isLocalUser {
-                         Image(systemName: "checkmark.circle.fill")
+                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 12))
                             .foregroundColor(.blue)
                             .background(Circle().fill(.white))

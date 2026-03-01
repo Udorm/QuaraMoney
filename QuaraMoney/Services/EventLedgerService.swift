@@ -698,9 +698,10 @@ final class EventLedgerService {
     
     private func fetchMembers(eventId: UUID) throws -> [EventMember] {
         let descriptor = FetchDescriptor<EventMember>(
+            predicate: #Predicate { $0.event?.id == eventId },
             sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]
         )
-        return try modelContext.fetch(descriptor).filter { $0.event?.id == eventId }
+        return try modelContext.fetch(descriptor)
     }
     
     private func fetchMember(by id: UUID) throws -> EventMember? {
@@ -713,16 +714,18 @@ final class EventLedgerService {
     
     private func fetchLedgerTransactions(eventId: UUID) throws -> [EventLedgerTransaction] {
         let descriptor = FetchDescriptor<EventLedgerTransaction>(
+            predicate: #Predicate { $0.event?.id == eventId },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
-        return try modelContext.fetch(descriptor).filter { $0.event?.id == eventId }
+        return try modelContext.fetch(descriptor)
     }
     
     private func fetchParticipantLinks(eventId: UUID) throws -> [EventLedgerParticipant] {
         let descriptor = FetchDescriptor<EventLedgerParticipant>(
+            predicate: #Predicate { $0.transaction?.event?.id == eventId },
             sortBy: [SortDescriptor(\.orderIndex)]
         )
-        return try modelContext.fetch(descriptor).filter { $0.transaction?.event?.id == eventId }
+        return try modelContext.fetch(descriptor)
     }
     
     private func participantLinksByTransaction(eventId: UUID) throws -> [UUID: [UUID]] {
@@ -745,21 +748,25 @@ final class EventLedgerService {
     
     private func fetchSettlementSnapshots(eventId: UUID) throws -> [EventSettlementSnapshot] {
         let descriptor = FetchDescriptor<EventSettlementSnapshot>(
+            predicate: #Predicate { $0.event?.id == eventId },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        return try modelContext.fetch(descriptor).filter { $0.event?.id == eventId }
+        return try modelContext.fetch(descriptor)
     }
     
     private func fetchSettlementTransfers(snapshotId: UUID) throws -> [EventSettlementTransfer] {
         let descriptor = FetchDescriptor<EventSettlementTransfer>(
+            predicate: #Predicate { $0.snapshot?.id == snapshotId },
             sortBy: [SortDescriptor(\.sequence)]
         )
-        return try modelContext.fetch(descriptor).filter { $0.snapshot?.id == snapshotId }
+        return try modelContext.fetch(descriptor)
     }
     
     private func fetchExportRecords(eventId: UUID) throws -> [EventWalletExportRecord] {
-        let descriptor = FetchDescriptor<EventWalletExportRecord>()
-        return try modelContext.fetch(descriptor).filter { $0.event?.id == eventId }
+        let descriptor = FetchDescriptor<EventWalletExportRecord>(
+            predicate: #Predicate { $0.event?.id == eventId }
+        )
+        return try modelContext.fetch(descriptor)
     }
     
     private func fetchOrCreateSettlementCategory(type: TransactionType) throws -> Category {

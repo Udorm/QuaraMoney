@@ -61,7 +61,7 @@ struct SavingsGoalListView: View {
                                     Text(L10n.Savings.totalSaved)
                                         .font(.app(.caption))
                                         .foregroundStyle(.secondary)
-                                    Text(totalSaved.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
+                                    Text(totalSaved.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                                         .font(.app(.title2, weight: .bold))
                                 }
                                 
@@ -71,7 +71,7 @@ struct SavingsGoalListView: View {
                                     Text(L10n.Savings.totalTarget)
                                         .font(.app(.caption))
                                         .foregroundStyle(.secondary)
-                                    Text(totalTarget.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
+                                    Text(totalTarget.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                                         .font(.app(.title2, weight: .bold))
                                         .foregroundStyle(.secondary)
                                 }
@@ -197,7 +197,7 @@ struct SavingsGoalRowView: View {
                     Spacer()
                     
                     // Primary Value: Current Saved Amount
-                     Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))
+                     Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
                         .font(.app(.body, weight: .bold))
                         .foregroundStyle(Color(hex: goal.colorHex) ?? .blue)
                 }
@@ -229,7 +229,7 @@ struct SavingsGoalRowView: View {
                         .foregroundStyle(.secondary)
                         
                     // Right: Target info
-                    Text(L10n.Budget.leftOf(goal.targetAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))) // Reusing leftOf "of $100"
+                    Text(L10n.Budget.leftOf(goal.targetAmount.formattedAmount(for: goal.currencyCode))) // Reusing leftOf "of $100"
                          .font(.app(.caption))
                          .foregroundStyle(.secondary)
 
@@ -330,7 +330,7 @@ struct AddSavingsGoalView: View {
                             HStack {
                                 Text(L10n.Savings.suggestedMonthly)
                                 Spacer()
-                                Text(suggested.formatted(.currency(code: selectedCurrency)))
+                                Text(suggested.formattedAmount(for: selectedCurrency))
                                     .foregroundStyle(.blue)
                             }
                         }
@@ -344,7 +344,7 @@ struct AddSavingsGoalView: View {
                 }
                 
                 // Appearance
-                Section("Appearance") {
+                Section("category.appearance".localized) {
                     Button {
                         showIconPicker = true
                     } label: {
@@ -372,7 +372,7 @@ struct AddSavingsGoalView: View {
                 if !wallets.isEmpty {
                     Section {
                         Picker(L10n.Savings.wallet, selection: $linkedWallet) {
-                            Text("None").tag(nil as Wallet?)
+                            Text("budget.threshold.none".localized).tag(nil as Wallet?)
                             ForEach(wallets) { wallet in
                                 Text(wallet.name).tag(wallet as Wallet?)
                             }
@@ -553,10 +553,10 @@ struct SavingsGoalDetailView: View {
                     
                     // Amount Progress
                     VStack(spacing: 8) {
-                        Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))
+                        Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
                             .font(.app(.title, weight: .bold))
                         
-                        Text(L10n.Budget.leftOf(goal.targetAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow))))
+                        Text(L10n.Budget.leftOf(goal.targetAmount.formattedAmount(for: goal.currencyCode)))
                             .foregroundStyle(.secondary)
                     }
                     
@@ -601,7 +601,7 @@ struct SavingsGoalDetailView: View {
                 HStack {
                     Label(L10n.Savings.remaining, systemImage: "arrow.up.right")
                     Spacer()
-                    Text(goal.remainingAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))
+                    Text(goal.remainingAmount.formattedAmount(for: goal.currencyCode))
                         .foregroundStyle(.secondary)
                 }
                 
@@ -609,7 +609,7 @@ struct SavingsGoalDetailView: View {
                     HStack {
                         Label(L10n.Savings.monthlyNeeded, systemImage: "calendar.badge.clock")
                         Spacer()
-                        Text(suggested.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))
+                        Text(suggested.formattedAmount(for: goal.currencyCode))
                             .foregroundStyle(.blue)
                     }
                 }
@@ -628,7 +628,7 @@ struct SavingsGoalDetailView: View {
                     HStack {
                         Label(L10n.Transaction.amount, systemImage: "repeat")
                         Spacer()
-                        Text("\(amount.formatted(.currency(code: goal.currencyCode).presentation(.narrow))) / \(goal.autoContributePeriod?.displayName ?? "month")")
+                        Text("\(amount.formattedAmount(for: goal.currencyCode)) / \(goal.autoContributePeriod?.displayName ?? "month")")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -642,7 +642,7 @@ struct SavingsGoalDetailView: View {
                             .foregroundStyle(Color(hex: wallet.colorHex) ?? .blue)
                         Text(wallet.name)
                         Spacer()
-                        Text(wallet.balance.formatted(.currency(code: wallet.currencyCode).presentation(.narrow)))
+                        Text(wallet.balance.formattedAmount(for: wallet.currencyCode))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -736,7 +736,7 @@ struct EditSavingsGoalView: View {
                     HStack {
                         Text(L10n.Budget.currentPeriod) // Reusing Current Period or similar
                         Spacer()
-                        Text(goal.currentAmount.formatted(.currency(code: goal.currencyCode).presentation(.narrow)))
+                        Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
                             .foregroundStyle(.secondary)
                     }
                 }

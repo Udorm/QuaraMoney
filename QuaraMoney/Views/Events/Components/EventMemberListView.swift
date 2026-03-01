@@ -32,14 +32,14 @@ struct EventMemberListView: View {
                     Button(role: .destructive) {
                         onDeleteMember(member)
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Label(L10n.Common.delete, systemImage: "trash")
                     }
                 }
             }
         }
-        .navigationTitle("\(event.title) Members")
+        .navigationTitle("\(event.title) \(L10n.EventDetail.members)")
 //        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Search members")
+        .searchable(text: $searchText, prompt: L10n.EventAdditional.memberListSearch)
         .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -62,7 +62,7 @@ private struct MemberRow: View {
     private var balanceText: String {
         guard let balance = balance else { return "" }
         let amount = MoneyMinorUnitConverter.fromMinorUnits(balance.netMinor, currencyCode: currencyCode)
-        return amount.formatted(.currency(code: currencyCode))
+        return amount.formattedAmount(for: currencyCode)
     }
     
     private var balanceColor: Color {
@@ -110,7 +110,7 @@ private struct MemberRow: View {
                         .foregroundStyle(.primary)
                     
                     if member.isLocalUser {
-                        Text("You")
+                        Text(L10n.EventAdditional.memberListYou)
                             .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }

@@ -82,7 +82,8 @@
 "transaction.noCategoriesForType" = "No categories for %@";
 "transaction.type.income" = "Income";
 "transaction.type.expense" = "Expense";
-"transaction.type.transfer" = "Transfer"; 
+"transaction.type.transfer" = "Transfer";
+"transaction.type.adjustment" = "Adjustment";
 "transaction.category" = "Category";
 "transaction.scanReceipt" = "Scan Receipt";
 "transaction.currency" = "Currency";
@@ -491,3 +492,185 @@
 "debt.history" = "History";
 "debt.recordInitialTransaction" = "Record Initial Transaction";
 "debt.initialTransactionHelp" = "This will update your wallet balance.";
+"debt.systemCategory.debt" = "Debt";
+"debt.systemCategory.debtCollection" = "Debt Collection";
+"debt.systemCategory.loan" = "Loan";
+"debt.systemCategory.loanRepayment" = "Loan Repayment";
+
+// MARK: - Event Additions
+"event.settlement.summary" = "Summary";
+"event.settlement.mode" = "Settlement Mode";
+"event.settlement.fromWallet" = "From Event Wallet";
+"event.settlement.memberTransfers" = "Member Transfers";
+"event.settlement.balances" = "Balances";
+"event.settlement.exportToWallet" = "Export to Wallet";
+"event.settlement.totalCost" = "Total Cost";
+"event.settlement.totalContribution" = "Total Contribution";
+"event.settlement.remainingPool" = "Remaining Pool";
+"event.settlement.walletPays" = "Event Wallet pays";
+"event.settlement.wallet" = "Event Wallet";
+"event.settlement.settleEvent" = "Settle Event";
+"event.settlement.saving" = "Saving...";
+"event.settlement.confirm" = "Confirm";
+
+"event.transaction.paymentAndSplitting" = "Payment & Splitting";
+"event.transaction.contributor" = "Contributor";
+"event.transaction.selectPayer" = "Select Payer";
+"event.transaction.selectParticipants" = "Select Participants";
+"event.transaction.noMembers" = "No members available";
+"event.transaction.noCategories" = "No expense categories available";
+"event.transaction.tabExpense" = "Expense";
+"event.transaction.tabContribution" = "Contribution";
+
+"event.detail.members" = "Members";
+"event.detail.showAll" = "Show All";
+"event.detail.yourSpending" = "Your Spending";
+"event.detail.exporting" = "Exporting...";
+"event.detail.export" = "Export";
+"event.detail.unknownError" = "Unknown error";
+
+"event.member.details" = "Details";
+"event.member.color" = "Color";
+"event.member.changeIcon" = "Change Icon";
+"event.member.removeImage" = "Remove Image";
+"event.member.addMember" = "Add Member";
+"event.member.editMember" = "Edit Member";
+
+"event.appearance" = "Appearance";
+"event.dateTime" = "Date & Time";
+
+"event.list.ongoing" = "Ongoing";
+"event.list.upcoming" = "Upcoming";
+"event.list.past" = "Past";
+
+"event.summary.addExpense" = "Add Expense";
+"event.summary.settle" = "Settle";
+
+"event.location.selected" = "Selected Location";
+"event.location.confirm" = "Confirm Location";
+"event.location.pick" = "Pick Location";
+
+"event.memberList.search" = "Search members";
+"event.memberList.you" = "You";
+
+// MARK: - Debt Additions
+"debt.details" = "Details";
+"debt.initialTransaction" = "Initial Transaction";
+"debt.noneTrackOnly" = "None (Track Only)";
+"debt.initialTransactionHelpText" = "A transaction will be recorded to track this debt, but no wallet balance will be affected.";
+"debt.amountFixedWarning" = "Amount and type are fixed after creation.";
+"debt.filterAll" = "All";
+"debt.filterActive" = "Active";
+"debt.filterCompleted" = "Completed";
+"debt.noDebts" = "No Debts";
+"debt.noDebtsDescription" = "Track money you owe or are owed.";
+"debt.noTransactions" = "No transactions recorded yet.";
+"debt.none" = "None";
+
+// MARK: - Transaction Additions
+"transaction.balanceAdjustment" = "Balance Adjustment";
+"transaction.time" = "Time";
+"transaction.selectCategory" = "Select Category";
+"transaction.searchCategories" = "Search categories";
+"transaction.linkedToDebt" = "Linked to Debt";
+"transaction.linkedToLoan" = "Linked to Loan";
+
+// MARK: - Budget Analysis Additions
+"budget.performance" = "Budget Performance";
+"budget.successRate" = "Success Rate";
+"budget.monthlyUtilization" = "Monthly Budget Utilization";
+"budget.budgeted" = "Budgeted";
+"budget.underBudget" = "Under Budget";
+"budget.overBudget" = "Over Budget";
+"budget.attentionCategories" = "Categories That Need Attention";
+"budget.activeBudgetsStatus" = "Active Budgets Status";
+"budget.tips" = "Tips & Recommendations";
+"budget.budgetsMet" = "Budgets Met";
+"budget.activeBudgets" = "Active Budgets";
+"budget.tip.increase" = "Consider increasing budgets";
+"budget.tip.increaseDesc" = "Your budgets might be too strict. Try increasing limits by 10-15%.";
+"budget.tip.review" = "Review %@ spending";
+"budget.tip.reviewDesc" = "This category exceeds budget %@ of the time.";
+"budget.tip.greatJob" = "Great job!";
+"budget.tip.greatJobDesc" = "You're staying within budget most of the time. Keep it up!";
+"budget.tip.checkWeekly" = "Check budgets weekly";
+"budget.tip.checkWeeklyDesc" = "Regular reviews help catch overspending early.";
+"budget.threshold.none" = "None";
+
+// MARK: - Import/Export Additions
+"csv.importing" = "Importing Transactions...";
+"csv.pleaseWait" = "Please wait. Large files may take a moment.";
+"csv.importComplete" = "Import Complete!";
+"csv.importedCount" = "%d transactions imported successfully";
+"csv.skippedCount" = "%d rows skipped";
+"csv.processing" = "Processing...";
+"csv.valid" = "Valid";
+"csv.skipped" = "Skipped";
+"csv.preview" = "Transactions Preview";
+"csv.adjustMapping" = "Adjust Mapping";
+"csv.noCategory" = "No Category";
+"csv.defaultWallet" = "Default";
+"csv.selectWallet" = "Select Wallet";
+"csv.importAll" = "Import All %d Rows";
+"csv.rowError" = "Row %d";
+"csv.notMapped" = "Not Mapped";
+
+"export.dataSelection" = "Data Selection";
+"export.wallets" = "Wallets";
+"export.allWallets" = "All Wallets";
+"export.selectedCount" = "%d Selected";
+"export.generating" = "Generating CSV...";
+"export.exportToCSV" = "Export to CSV";
+"export.exportData" = "Export Data";
+"export.selectWallets" = "Select Wallets";
+
+// MARK: - Category Additions
+"category.details" = "Details";
+"category.appearance" = "Appearance";
+"category.expense" = "Expense";
+"category.income" = "Income";
+"category.preview" = "Preview";
+"category.color" = "Color";
+"category.icon" = "Icon";
+"category.editCategory" = "Edit Category";
+"category.newCategory" = "New Category";
+
+// MARK: - Analysis Additions
+"analysis.period.w" = "W";
+"analysis.period.m" = "M";
+"analysis.period.6m" = "6M";
+"analysis.period.y" = "Y";
+"analysis.period.ly" = "LY";
+"analysis.timePeriod" = "Time Period";
+"analysis.total" = "Total";
+
+/* Export Options */
+"export.dataSelection" = "Data Selection";
+"export.wallets" = "Wallets";
+"export.allWallets" = "All Wallets";
+"export.selectedCount" = "%d Selected";
+"export.generating" = "Generating CSV...";
+"export.exportToCSV" = "Export to CSV";
+"export.description" = "Exported file includes date, time, amount, currency, category, type, note, and wallet information.";
+"export.exportData" = "Export Data";
+"export.selectWallets" = "Select Wallets";
+"export.failed" = "Export Failed";
+"export.errorGeneration" = "Could not generate CSV file.";
+
+/* Settings */
+"settings.incomeColor" = "Income Color";
+"settings.expenseColor" = "Expense Color";
+"settings.currentColor" = "Current Color";
+"settings.resetDefaults" = "Reset to Defaults";
+"settings.themeTitle" = "Theme & Colors";
+
+/* Analysis */
+"analysis.period.w" = "W";
+"analysis.period.m" = "M";
+"analysis.period.6m" = "6M";
+"analysis.period.y" = "Y";
+"analysis.period.ly" = "LY";
+
+/* Common missing */
+"common.of" = "of";
+

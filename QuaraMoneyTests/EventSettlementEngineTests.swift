@@ -28,7 +28,7 @@ final class EventSettlementEngineTests: XCTestCase {
         let result = EventSettlementEngine.compute(
             memberIds: [memberA, memberB, memberC],
             transactions: [transaction],
-            participantLinks: [transaction.id: links]
+            participantLinks: [transaction.id: links.map(\.memberId)]
         )
         
         XCTAssertTrue(result.walletInstructions.isEmpty)
@@ -64,7 +64,7 @@ final class EventSettlementEngineTests: XCTestCase {
         let result = EventSettlementEngine.compute(
             memberIds: [memberA, memberB, memberC],
             transactions: [transaction],
-            participantLinks: [transaction.id: links]
+            participantLinks: [transaction.id: links.map(\.memberId)]
         )
         
         let balances = Dictionary(uniqueKeysWithValues: result.balances.map { ($0.memberId, $0.netMinor) })
@@ -107,9 +107,7 @@ final class EventSettlementEngineTests: XCTestCase {
             memberIds: [memberA, memberB],
             transactions: [contribution, expense],
             participantLinks: [
-                expense.id: [
-                    EventLedgerParticipant(memberId: memberB, orderIndex: 0, transaction: expense, member: nil)
-                ]
+                expense.id: [memberB]
             ]
         )
         
@@ -185,8 +183,8 @@ final class EventSettlementEngineTests: XCTestCase {
             memberIds: [memberA, memberB, memberC],
             transactions: [contributionA, expenseWallet, expensePersonal],
             participantLinks: [
-                expenseWallet.id: participantsAll,
-                expensePersonal.id: participantsAB
+                expenseWallet.id: participantsAll.map(\.memberId),
+                expensePersonal.id: participantsAB.map(\.memberId)
             ]
         )
         
@@ -219,7 +217,7 @@ final class EventSettlementEngineTests: XCTestCase {
         let result = EventSettlementEngine.compute(
             memberIds: [memberA, memberB, memberC],
             transactions: [transaction],
-            participantLinks: [transaction.id: links],
+            participantLinks: [transaction.id: links.map(\.memberId)],
             options: EventSettlementOptions(strategy: .singleCoordinator(coordinatorMemberId: memberB))
         )
         

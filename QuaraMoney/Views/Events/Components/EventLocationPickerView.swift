@@ -37,7 +37,7 @@ struct EventLocationPickerView: View {
                 MapReader { proxy in
                     Map(position: $position) {
                         if let coordinate = selectedCoordinate {
-                            Marker("Selected Location", coordinate: coordinate)
+                            Marker(L10n.EventAdditional.locationSelected, coordinate: coordinate)
                         }
                     }
                     .onTapGesture { screenPoint in
@@ -52,7 +52,7 @@ struct EventLocationPickerView: View {
                     Spacer()
                     if let coordinate = selectedCoordinate {
                         VStack(spacing: 12) {
-                            Text(locationName.isEmpty ? "Selected Location" : locationName)
+                            Text(locationName.isEmpty ? L10n.EventAdditional.locationSelected : locationName)
                                 .font(.app(.headline))
                                 .lineLimit(1)
                             
@@ -61,7 +61,7 @@ struct EventLocationPickerView: View {
                                 longitude = coordinate.longitude
                                 dismiss()
                             } label: {
-                                Text("Confirm Location")
+                                Text(L10n.EventAdditional.locationConfirm)
                                     .font(.app(.body, weight: .bold))
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -78,11 +78,11 @@ struct EventLocationPickerView: View {
                     }
                 }
             }
-            .navigationTitle("Pick Location")
+            .navigationTitle(L10n.EventAdditional.locationPick)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }

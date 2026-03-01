@@ -26,17 +26,17 @@ struct AddCategoryView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Details") {
-                    TextField("Category Name", text: $name)
+                Section("category.details".localized) {
+                    TextField("category.name".localized, text: $name)
                     
                     Picker("Type", selection: $selectedType) {
-                        Text("Expense").tag(TransactionType.expense)
-                        Text("Income").tag(TransactionType.income)
+                        Text("category.expense".localized).tag(TransactionType.expense)
+                        Text("category.income".localized).tag(TransactionType.income)
                     }
                     .pickerStyle(.segmented)
                 }
                 
-                Section("Appearance") {
+                Section("category.appearance".localized) {
                     // Visual Preview
                     HStack {
                         Spacer()
@@ -52,7 +52,7 @@ struct AddCategoryView: View {
                                     .foregroundColor(.white)
                             }
                             
-                                Text("Preview")
+                                Text("category.preview".localized)
                                     .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                         }
@@ -63,10 +63,10 @@ struct AddCategoryView: View {
                     
                     NavigationLink {
                         ColorPickerView(selectedColorHex: $selectedColorHex)
-                            .navigationTitle("Select Color")
+                            .navigationTitle("category.selectColor".localized)
                     } label: {
                         HStack {
-                            Text("Color")
+                            Text("category.color".localized)
                             Spacer()
                             Circle()
                                 .fill(Color(hex: selectedColorHex) ?? .blue)
@@ -76,10 +76,10 @@ struct AddCategoryView: View {
                     
                     NavigationLink {
                         IconPickerView(selectedIcon: $selectedIcon, selectedColorHex: $selectedColorHex)
-                            .navigationTitle("Select Icon")
+                            .navigationTitle("category.selectIcon".localized)
                     } label: {
                         HStack {
-                            Text("Icon")
+                            Text("category.icon".localized)
                             Spacer()
                             Image(systemName: selectedIcon)
                                 .foregroundColor(Color(hex: selectedColorHex) ?? .blue)
@@ -87,7 +87,7 @@ struct AddCategoryView: View {
                     }
                 }
             }
-            .navigationTitle(categoryToEdit != nil ? "Edit Category" : "New Category")
+            .navigationTitle(categoryToEdit != nil ? "category.editCategory".localized : "category.newCategory".localized)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {

@@ -23,7 +23,7 @@ struct RecurringRuleListView: View {
                         Spacer()
                         
                         VStack(alignment: .trailing) {
-                            Text(rule.amount.formatted(.currency(code: rule.currencyCode)))
+                            Text(rule.amount.formattedAmount(for: rule.currencyCode))
                                 .font(.app(.body, weight: .semibold))
                             
                             Text(L10n.Recurring.next(rule.nextDueDate.formatted(date: .numeric, time: .omitted)))

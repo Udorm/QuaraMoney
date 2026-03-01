@@ -30,7 +30,7 @@ struct WalletRowView: View {
             
             Spacer()
             
-            Text(wallet.balance.formatted(.currency(code: wallet.currencyCode)))
+            Text(wallet.balance.formattedAmount(for: wallet.currencyCode))
                 .font(.app(.body))
                 .monospacedDigit()
                 .foregroundStyle(wallet.balance >= 0 ? Color.primary : expenseColor)

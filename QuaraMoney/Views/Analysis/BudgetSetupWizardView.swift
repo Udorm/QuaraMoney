@@ -225,7 +225,7 @@ struct BudgetSetupWizardView: View {
                                 Label(type.displayName, systemImage: type.icon)
                                     .foregroundStyle(Color(hex: type.color) ?? .gray)
                                 Spacer()
-                                Text((income * Decimal(allocation)).formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                                Text((income * Decimal(allocation)).formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                                     .font(.app(.body, weight: .semibold))
                             }
                         }
@@ -304,7 +304,7 @@ struct BudgetSetupWizardView: View {
                         )
                         .tint(Color(hex: type.color) ?? .blue)
                         
-                        Text((income * Decimal(customAllocations[type, default: 0])).formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                        Text((income * Decimal(customAllocations[type, default: 0])).formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                             .font(.app(.subheadline))
                             .foregroundStyle(.secondary)
                     }
@@ -352,7 +352,7 @@ struct BudgetSetupWizardView: View {
                             Spacer()
                             
                             VStack(alignment: .trailing, spacing: 4) {
-                                Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))
+                                Text(amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                                     .font(.app(.title3, weight: .bold))
                                 
                                 Text(L10n.Budget.ofIncome)

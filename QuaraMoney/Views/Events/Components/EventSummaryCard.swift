@@ -16,7 +16,7 @@ struct EventSummaryCard: View {
     private func formatMinor(_ value: Int64) -> String {
         MoneyMinorUnitConverter
             .fromMinorUnits(value, currencyCode: event.currencyCode)
-            .formatted(.currency(code: event.currencyCode))
+            .formattedAmount(for: event.currencyCode)
     }
     
     var body: some View {
@@ -41,7 +41,7 @@ struct EventSummaryCard: View {
             
             // Main Stats: Total Cost
             VStack(alignment: .leading, spacing: 4) {
-                Text("Total Cost")
+                Text(L10n.EventSettlement.totalCost)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
@@ -55,7 +55,7 @@ struct EventSummaryCard: View {
             // Integrated Buttons
             HStack(spacing: 12) {
                 Button(action: onAddExpense) {
-                    Text("Add Expense")
+                    Text(L10n.EventAdditional.summaryAddExpense)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -64,7 +64,7 @@ struct EventSummaryCard: View {
                 
                 if settlementStatus != .active {
                     Button(action: onSettle) {
-                        Text("Settle")
+                        Text(L10n.EventAdditional.summarySettle)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)

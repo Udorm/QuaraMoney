@@ -42,7 +42,7 @@ struct EventListView: View {
         NavigationStack {
             List {
                 if !ongoingEvents.isEmpty {
-                    Section("Ongoing") {
+                    Section(L10n.EventAdditional.listOngoing) {
                         ForEach(ongoingEvents) { event in
                             EventRowView(event: event)
                         }
@@ -53,7 +53,7 @@ struct EventListView: View {
                 }
                 
                 if !upcomingEvents.isEmpty {
-                    Section("Upcoming") {
+                    Section(L10n.EventAdditional.listUpcoming) {
                         ForEach(upcomingEvents) { event in
                             EventRowView(event: event)
                         }
@@ -64,7 +64,7 @@ struct EventListView: View {
                 }
                 
                 if !pastEvents.isEmpty {
-                    Section("Past") {
+                    Section(L10n.EventAdditional.listPast) {
                         ForEach(pastEvents) { event in
                             EventRowView(event: event)
                         }

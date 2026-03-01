@@ -216,6 +216,7 @@ enum L10n {
             static var income: String { "transaction.type.income".localized }
             static var expense: String { "transaction.type.expense".localized }
             static var transfer: String { "transaction.type.transfer".localized }
+            static var adjustment: String { "transaction.type.adjustment".localized }
         }
     }
     
@@ -626,6 +627,13 @@ enum L10n {
         static var recordInitialTransaction: String { "debt.recordInitialTransaction".localized }
         static var initialTransactionHelp: String { "debt.initialTransactionHelp".localized }
         static var partialPayments: String { "debt.partialPayments".localized }
+        
+        enum SystemCategory {
+            static var debt: String { "debt.systemCategory.debt".localized }
+            static var debtCollection: String { "debt.systemCategory.debtCollection".localized }
+            static var loan: String { "debt.systemCategory.loan".localized }
+            static var loanRepayment: String { "debt.systemCategory.loanRepayment".localized }
+        }
     }
     
 
@@ -747,5 +755,166 @@ enum L10n {
             static var title: String { "budget.type.savings.title".localized }
             static var desc: String { "budget.type.savings.desc".localized }
         }
+    }
+    
+    // MARK: - Event Additions
+    enum EventSettlement {
+        static var summary: String { "event.settlement.summary".localized }
+        static var mode: String { "event.settlement.mode".localized }
+        static var fromWallet: String { "event.settlement.fromWallet".localized }
+        static var memberTransfers: String { "event.settlement.memberTransfers".localized }
+        static var balances: String { "event.settlement.balances".localized }
+        static var exportToWallet: String { "event.settlement.exportToWallet".localized }
+        static var totalCost: String { "event.settlement.totalCost".localized }
+        static var totalContribution: String { "event.settlement.totalContribution".localized }
+        static var remainingPool: String { "event.settlement.remainingPool".localized }
+        static var walletPays: String { "event.settlement.walletPays".localized }
+        static var wallet: String { "event.settlement.wallet".localized }
+        static var settleEvent: String { "event.settlement.settleEvent".localized }
+        static var saving: String { "event.settlement.saving".localized }
+        static var confirm: String { "event.settlement.confirm".localized }
+    }
+    
+    enum EventTransaction {
+        static var paymentAndSplitting: String { "event.transaction.paymentAndSplitting".localized }
+        static var contributor: String { "event.transaction.contributor".localized }
+        static var selectPayer: String { "event.transaction.selectPayer".localized }
+        static var selectParticipants: String { "event.transaction.selectParticipants".localized }
+        static var noMembers: String { "event.transaction.noMembers".localized }
+        static var noCategories: String { "event.transaction.noCategories".localized }
+        static var tabExpense: String { "event.transaction.tabExpense".localized }
+        static var tabContribution: String { "event.transaction.tabContribution".localized }
+    }
+    
+    enum EventDetail {
+        static var members: String { "event.detail.members".localized }
+        static var showAll: String { "event.detail.showAll".localized }
+        static var yourSpending: String { "event.detail.yourSpending".localized }
+        static var exporting: String { "event.detail.exporting".localized }
+        static var export: String { "event.detail.export".localized }
+        static var unknownError: String { "event.detail.unknownError".localized }
+    }
+    
+    enum EventMember {
+        static var details: String { "event.member.details".localized }
+        static var color: String { "event.member.color".localized }
+        static var changeIcon: String { "event.member.changeIcon".localized }
+        static var removeImage: String { "event.member.removeImage".localized }
+        static var addMember: String { "event.member.addMember".localized }
+        static var editMember: String { "event.member.editMember".localized }
+    }
+    
+    enum EventAdditional {
+        static var appearance: String { "event.appearance".localized }
+        static var dateTime: String { "event.dateTime".localized }
+        static var listOngoing: String { "event.list.ongoing".localized }
+        static var listUpcoming: String { "event.list.upcoming".localized }
+        static var listPast: String { "event.list.past".localized }
+        static var summaryAddExpense: String { "event.summary.addExpense".localized }
+        static var summarySettle: String { "event.summary.settle".localized }
+        static var locationSelected: String { "event.location.selected".localized }
+        static var locationConfirm: String { "event.location.confirm".localized }
+        static var locationPick: String { "event.location.pick".localized }
+        static var memberListSearch: String { "event.memberList.search".localized }
+        static var memberListYou: String { "event.memberList.you".localized }
+    }
+    
+    enum DebtAdditional {
+        static var details: String { "debt.details".localized }
+        static var initialTransaction: String { "debt.initialTransaction".localized }
+        static var noneTrackOnly: String { "debt.noneTrackOnly".localized }
+        static var initialTransactionHelpText: String { "debt.initialTransactionHelpText".localized }
+        static var amountFixedWarning: String { "debt.amountFixedWarning".localized }
+        static var filterAll: String { "debt.filterAll".localized }
+        static var filterActive: String { "debt.filterActive".localized }
+        static var filterCompleted: String { "debt.filterCompleted".localized }
+        static var noDebts: String { "debt.noDebts".localized }
+        static var noDebtsDescription: String { "debt.noDebtsDescription".localized }
+        static var noTransactions: String { "debt.noTransactions".localized }
+        static var none: String { "debt.none".localized }
+    }
+    
+    enum TransactionAdditional {
+        static var balanceAdjustment: String { "transaction.balanceAdjustment".localized }
+        static var time: String { "transaction.time".localized }
+        static var selectCategory: String { "transaction.selectCategory".localized }
+        static var searchCategories: String { "transaction.searchCategories".localized }
+        static var linkedToDebt: String { "transaction.linkedToDebt".localized }
+        static var linkedToLoan: String { "transaction.linkedToLoan".localized }
+    }
+    
+    enum BudgetAnalysis {
+        static var performance: String { "budget.performance".localized }
+        static var successRate: String { "budget.successRate".localized }
+        static var monthlyUtilization: String { "budget.monthlyUtilization".localized }
+        static var budgeted: String { "budget.budgeted".localized }
+        static var underBudget: String { "budget.underBudget".localized }
+        static var overBudget: String { "budget.overBudget".localized }
+        static var attentionCategories: String { "budget.attentionCategories".localized }
+        static var activeBudgetsStatus: String { "budget.activeBudgetsStatus".localized }
+        static var tips: String { "budget.tips".localized }
+        static var budgetsMet: String { "budget.budgetsMet".localized }
+        static var activeBudgets: String { "budget.activeBudgets".localized }
+        static var tipIncrease: String { "budget.tip.increase".localized }
+        static var tipIncreaseDesc: String { "budget.tip.increaseDesc".localized }
+        static func tipReview(_ name: String) -> String { "budget.tip.review".localized(with: name) }
+        static func tipReviewDesc(_ amount: String) -> String { "budget.tip.reviewDesc".localized(with: amount) }
+        static var tipGreatJob: String { "budget.tip.greatJob".localized }
+        static var tipGreatJobDesc: String { "budget.tip.greatJobDesc".localized }
+        static var tipCheckWeekly: String { "budget.tip.checkWeekly".localized }
+        static var tipCheckWeeklyDesc: String { "budget.tip.checkWeeklyDesc".localized }
+        static var thresholdNone: String { "budget.threshold.none".localized }
+    }
+    
+    enum CSVAdditional {
+        static var importing: String { "csv.importing".localized }
+        static var pleaseWait: String { "csv.pleaseWait".localized }
+        static var importComplete: String { "csv.importComplete".localized }
+        static func importedCount(_ count: Int) -> String { "csv.importedCount".localized(with: count) }
+        static func skippedCount(_ count: Int) -> String { "csv.skippedCount".localized(with: count) }
+        static var processing: String { "csv.processing".localized }
+        static var valid: String { "csv.valid".localized }
+        static var skipped: String { "csv.skipped".localized }
+        static var preview: String { "csv.preview".localized }
+        static var adjustMapping: String { "csv.adjustMapping".localized }
+        static var noCategory: String { "csv.noCategory".localized }
+        static var defaultWallet: String { "csv.defaultWallet".localized }
+        static var selectWallet: String { "csv.selectWallet".localized }
+        static func importAll(_ count: Int) -> String { "csv.importAll".localized(with: count) }
+        static func rowError(_ count: Int) -> String { "csv.rowError".localized(with: count) }
+        static var notMapped: String { "csv.notMapped".localized }
+    }
+    
+    enum Export {
+        static var dataSelection: String { "export.dataSelection".localized }
+        static var wallets: String { "export.wallets".localized }
+        static var allWallets: String { "export.allWallets".localized }
+        static func selectedCount(_ count: Int) -> String { "export.selectedCount".localized(with: count) }
+        static var generating: String { "export.generating".localized }
+        static var exportToCSV: String { "export.exportToCSV".localized }
+        static var exportData: String { "export.exportData".localized }
+        static var selectWallets: String { "export.selectWallets".localized }
+    }
+    
+    enum CategoryAdditional {
+        static var details: String { "category.details".localized }
+        static var appearance: String { "category.appearance".localized }
+        static var expense: String { "category.expense".localized }
+        static var income: String { "category.income".localized }
+        static var preview: String { "category.preview".localized }
+        static var color: String { "category.color".localized }
+        static var icon: String { "category.icon".localized }
+        static var editCategory: String { "category.editCategory".localized }
+        static var newCategory: String { "category.newCategory".localized }
+    }
+
+    enum AnalysisAdditional {
+        static var periodW: String { "analysis.period.w".localized }
+        static var periodM: String { "analysis.period.m".localized }
+        static var period6M: String { "analysis.period.6m".localized }
+        static var periodY: String { "analysis.period.y".localized }
+        static var periodLY: String { "analysis.period.ly".localized }
+        static var timePeriod: String { "analysis.timePeriod".localized }
+        static var total: String { "analysis.total".localized }
     }
 }

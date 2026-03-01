@@ -64,7 +64,7 @@ struct CSVImportView: View {
                 .foregroundStyle(.secondary)
             
             VStack(spacing: 8) {
-                Text("Import from CSV")
+                Text("Import from CSV".localized)
                     .font(.app(.title2, weight: .semibold))
                 
                 Text("Select a CSV file containing your transactions to import.")
@@ -77,7 +77,7 @@ struct CSVImportView: View {
             Button {
                 showFilePicker = true
             } label: {
-                Label("Select CSV File", systemImage: "folder")
+                Label("Select CSV File".localized, systemImage: "folder")
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -142,8 +142,8 @@ struct CSVImportView: View {
             }
             
             Section("Default Wallet") {
-                Picker("Fallback Wallet", selection: $viewModel.selectedDefaultWallet) {
-                    Text("None").tag(nil as Wallet?)
+                Picker("Fallback Wallet".localized, selection: $viewModel.selectedDefaultWallet) {
+                    Text("None".localized).tag(nil as Wallet?)
                     ForEach(viewModel.wallets) { wallet in
                         Text(wallet.name).tag(wallet as Wallet?)
                     }
@@ -177,7 +177,7 @@ struct CSVImportView: View {
             Button {
                 viewModel.proceedToPreview()
             } label: {
-                Text("Preview Import")
+                Text("Preview Import".localized)
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -196,7 +196,7 @@ struct CSVImportView: View {
             get: { viewModel.getColumnIndex(for: field) },
             set: { viewModel.updateMapping(field, to: $0) }
         )) {
-            Text("Not Mapped").tag(nil as Int?)
+            Text("csv.notMapped".localized).tag(nil as Int?)
             ForEach(Array(viewModel.headers.enumerated()), id: \.offset) { index, header in
                 Text(header).tag(index as Int?)
             }
@@ -217,7 +217,7 @@ struct CSVImportView: View {
                             Text("\(viewModel.validPreviewCount)")
                                 .font(.app(.title, weight: .bold))
                                 .foregroundStyle(.green)
-                            Text("Valid")
+                            Text("csv.valid".localized)
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
@@ -228,7 +228,7 @@ struct CSVImportView: View {
                             Text("\(viewModel.invalidPreviewCount)")
                                 .font(.app(.title, weight: .bold))
                                 .foregroundStyle(viewModel.invalidPreviewCount > 0 ? .red : .secondary)
-                            Text("Skipped")
+                            Text("csv.skipped".localized)
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }
@@ -237,7 +237,7 @@ struct CSVImportView: View {
                 .padding(.vertical, 8)
             }
             
-            Section("Transactions Preview") {
+            Section("csv.preview".localized) {
                 ForEach(viewModel.parsedPreviewRows) { row in
                     if row.isValid {
                         PreviewRowView(
@@ -279,7 +279,7 @@ struct CSVImportView: View {
                 Button {
                     viewModel.goBackToMapping()
                 } label: {
-                    Text("Adjust Mapping")
+                    Text("csv.adjustMapping".localized)
                     .font(.app(.subheadline))
                     .foregroundStyle(Color.accentColor)
                 }
@@ -287,7 +287,7 @@ struct CSVImportView: View {
                 Button {
                     viewModel.executeImport()
                 } label: {
-                    Text("Import All \(viewModel.totalDetectedRows) Rows")
+                    Text(String(format: "csv.importAll".localized, viewModel.totalDetectedRows))
                         .font(.app(.headline))
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -310,10 +310,10 @@ struct CSVImportView: View {
             ProgressView()
                 .scaleEffect(1.5)
             
-            Text("Importing Transactions...")
+            Text("csv.importing".localized)
                 .font(.app(.headline))
             
-            Text("Please wait. Large files may take a moment.")
+            Text("csv.pleaseWait".localized)
                 .font(.app(.subheadline))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -333,16 +333,16 @@ struct CSVImportView: View {
                 .foregroundStyle(.green)
             
             VStack(spacing: 8) {
-                Text("Import Complete!")
+                Text("csv.importComplete".localized)
                     .font(.app(.title2, weight: .semibold))
                 
                 if let result = viewModel.importResult {
-                    Text("\(result.successCount) transactions imported successfully")
+                    Text(String(format: "csv.importedCount".localized, result.successCount))
                         .font(.app(.subheadline))
                         .foregroundStyle(.secondary)
                     
                     if result.skippedCount > 0 {
-                        Text("\(result.skippedCount) rows skipped")
+                        Text(String(format: "csv.skippedCount".localized, result.skippedCount))
                             .font(.app(.caption))
                             .foregroundStyle(.orange)
                     }
@@ -354,7 +354,7 @@ struct CSVImportView: View {
             Button {
                 dismiss()
             } label: {
-                Text("Done")
+                Text(L10n.Common.done)
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -377,7 +377,7 @@ struct CSVImportView: View {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.primary)
-                Text("Processing...")
+                Text("csv.processing".localized)
                     .font(.app(.headline))
             }
             .padding(24)
@@ -441,7 +441,7 @@ struct PreviewRowView: View {
                         } else {
                             Image(systemName: "questionmark.circle")
                                 .font(.app(.caption2))
-                            Text(row.categoryName ?? "No Category")
+                            Text(row.categoryName ?? "csv.noCategory".localized)
                                 .font(.app(.caption))
                         }
                     }
@@ -472,7 +472,7 @@ struct PreviewRowView: View {
                         } else {
                             Image(systemName: "wallet.pass")
                                 .font(.app(.caption2))
-                            Text(row.walletName ?? "Default")
+                            Text(row.walletName ?? "csv.defaultWallet".localized)
                                 .font(.app(.caption2))
                         }
                     }
@@ -524,11 +524,11 @@ struct CategoryPickerSheet: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .navigationTitle("Select Category")
+            .navigationTitle(L10n.TransactionAdditional.selectCategory)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
             }
         }
@@ -565,11 +565,11 @@ struct WalletPickerSheet: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .navigationTitle("Select Wallet")
+            .navigationTitle("csv.selectWallet".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
             }
         }

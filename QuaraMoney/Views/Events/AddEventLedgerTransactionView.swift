@@ -51,9 +51,9 @@ struct AddEventLedgerTransactionView: View {
                 
                 if viewModel.transactionKind == .expense {
                     // MARK: - Category
-                    Section("Category") {
+                    Section(L10n.Transaction.category) {
                         if viewModel.expenseCategories.isEmpty {
-                            Text("No expense categories available")
+                            Text(L10n.EventTransaction.noCategories)
                                 .foregroundStyle(.secondary)
                         } else {
                             LazyVGrid(columns: gridColumns, spacing: 10) {
@@ -93,17 +93,17 @@ struct AddEventLedgerTransactionView: View {
                     }
                     
                     // MARK: - Payment & Splitting
-                    Section("Payment & Splitting") {
+                    Section(L10n.EventTransaction.paymentAndSplitting) {
                         Toggle("Use Event Wallet", isOn: $viewModel.useEventWallet.animation(.default))
                         
                         if !viewModel.useEventWallet {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Select Payer")
+                                Text(L10n.EventTransaction.selectPayer)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 
                                 if viewModel.selectablePayers.isEmpty {
-                                    Text("No members available")
+                                    Text(L10n.EventTransaction.noMembers)
                                         .foregroundStyle(.secondary)
                                 } else {
                                     LazyVGrid(columns: gridColumns, spacing: 16) {
@@ -136,12 +136,12 @@ struct AddEventLedgerTransactionView: View {
                         
                         if viewModel.isCustomSplit {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Select Participants")
+                                Text(L10n.EventTransaction.selectParticipants)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 
                                 if viewModel.participantMembers.isEmpty {
-                                    Text("No members available")
+                                    Text(L10n.EventTransaction.noMembers)
                                         .foregroundStyle(.secondary)
                                 } else {
                                     LazyVGrid(columns: gridColumns, spacing: 16) {
@@ -163,9 +163,9 @@ struct AddEventLedgerTransactionView: View {
                     }
                 } else {
                     // MARK: - Contribution
-                    Section("Contributor") {
+                    Section(L10n.EventTransaction.contributor) {
                         if viewModel.selectablePayers.isEmpty {
-                            Text("No members available")
+                            Text(L10n.EventTransaction.noMembers)
                                 .foregroundStyle(.secondary)
                         } else {
                             LazyVGrid(columns: gridColumns, spacing: 16) {
@@ -205,7 +205,7 @@ struct AddEventLedgerTransactionView: View {
                             Image(systemName: "calendar")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
-                            Text("Date")
+                            Text(L10n.Transaction.date)
                             Spacer()
                             Text(viewModel.date.formatted(date: .long, time: .omitted))
                                 .foregroundStyle(.secondary)
@@ -241,7 +241,7 @@ struct AddEventLedgerTransactionView: View {
                             Image(systemName: "clock")
                                 .foregroundStyle(.blue)
                                 .frame(width: 24)
-                            Text("Time")
+                            Text(L10n.TransactionAdditional.time)
                             Spacer()
                             Text(viewModel.date.formatted(date: .omitted, time: .shortened))
                                 .foregroundStyle(.secondary)
@@ -294,8 +294,8 @@ struct AddEventLedgerTransactionView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Picker("Entry Type", selection: $viewModel.transactionKind) {
-                        Text("Expense").tag(EventLedgerTransactionKind.expense)
-                        Text("Contribution").tag(EventLedgerTransactionKind.contribution)
+                        Text(L10n.EventTransaction.tabExpense).tag(EventLedgerTransactionKind.expense)
+                        Text(L10n.EventTransaction.tabContribution).tag(EventLedgerTransactionKind.contribution)
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 200) // Give it a fixed width to look good in the title area
@@ -378,12 +378,12 @@ struct AddEventLedgerTransactionView: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .navigationTitle("Select Category")
+            .navigationTitle(L10n.TransactionAdditional.selectCategory)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $categorySearchText, prompt: "Search categories")
+            .searchable(text: $categorySearchText, prompt: L10n.TransactionAdditional.searchCategories)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showAllCategories = false }
+                    Button(L10n.Common.cancel) { showAllCategories = false }
                 }
             }
         }

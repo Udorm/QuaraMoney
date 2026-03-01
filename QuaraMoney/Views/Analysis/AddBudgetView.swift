@@ -235,7 +235,7 @@ struct AddBudgetView: View {
                     
                     // Budget Category Type
                     Picker(L10n.Budget.category, selection: $budgetCategoryType) { 
-                        Text("None").tag(nil as BudgetCategoryType?)
+                        Text("budget.threshold.none".localized).tag(nil as BudgetCategoryType?)
                         ForEach(BudgetCategoryType.allCases, id: \.self) { type in
                             Label(type.displayName, systemImage: type.icon)
                                 .tag(type as BudgetCategoryType?)

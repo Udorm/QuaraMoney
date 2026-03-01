@@ -36,10 +36,10 @@ struct AddDebtView: View {
                     }
                     .disabled(viewModel.isEditing)
                 } header: {
-                    Text("Details")
+                    Text(L10n.DebtAdditional.details)
                 } footer: {
                     if viewModel.isEditing {
-                        Text("Amount and type are fixed after creation.")
+                        Text(L10n.DebtAdditional.amountFixedWarning)
                     }
                 }
 
@@ -53,9 +53,9 @@ struct AddDebtView: View {
                 }
 
                 if !viewModel.isEditing {
-                    Section("Initial Transaction") {
+                    Section(L10n.DebtAdditional.initialTransaction) {
                         Picker(L10n.Wallet.selectWallet, selection: $viewModel.selectedWallet) {
-                            Text("None (Track Only)").tag(Optional<Wallet>.none)
+                            Text(L10n.DebtAdditional.noneTrackOnly).tag(Optional<Wallet>.none)
                             ForEach(wallets) { wallet in
                                 Text(wallet.name).tag(Optional(wallet))
                             }
@@ -63,12 +63,12 @@ struct AddDebtView: View {
 
                         if let wallet = viewModel.selectedWallet {
                             Text(viewModel.type == .iOwe
-                                 ? "A 'Loan' (Income) transaction of \(viewModel.amount?.formatted(.currency(code: viewModel.currencyCode)) ?? "0") will be added to \(wallet.name)."
-                                 : "A 'Debt' (Expense) transaction of \(viewModel.amount?.formatted(.currency(code: viewModel.currencyCode)) ?? "0") will be deducted from \(wallet.name).")
+                                 ? "A 'Loan' (Income) transaction of \(viewModel.amount?.formattedAmount(for: viewModel.currencyCode) ?? "0") will be added to \(wallet.name)."
+                                 : "A 'Debt' (Expense) transaction of \(viewModel.amount?.formattedAmount(for: viewModel.currencyCode) ?? "0") will be deducted from \(wallet.name).")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         } else {
-                            Text("A transaction will be recorded to track this debt, but no wallet balance will be affected.")
+                            Text(L10n.DebtAdditional.initialTransactionHelpText)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -99,8 +99,8 @@ struct AddDebtView: View {
                     .disabled(!viewModel.isValid || viewModel.isSaving)
                 }
             }
-            .alert("Error", isPresented: $viewModel.showError) {
-                Button("OK", role: .cancel) { }
+            .alert(L10n.Common.error, isPresented: $viewModel.showError) {
+                Button(L10n.Common.ok, role: .cancel) { }
             } message: {
                 Text(viewModel.errorMessage ?? "An unknown error occurred")
             }

@@ -75,12 +75,12 @@ struct SpendingTrendChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // 1. Segmented Control
-            Picker("Period", selection: $vm.selectedPeriod) {
-                Text("W").tag(AnalysisPeriod.week)
-                Text("M").tag(AnalysisPeriod.month)
-                Text("6M").tag(AnalysisPeriod.sixMonths)
-                Text("Y").tag(AnalysisPeriod.year)
-                Text("LY").tag(AnalysisPeriod.lastYear)
+            Picker(L10n.Filter.title, selection: $vm.selectedPeriod) {
+                Text("analysis.period.w".localized).tag(AnalysisPeriod.week)
+                Text("analysis.period.m".localized).tag(AnalysisPeriod.month)
+                Text("analysis.period.6m".localized).tag(AnalysisPeriod.sixMonths)
+                Text("analysis.period.y".localized).tag(AnalysisPeriod.year)
+                Text("analysis.period.ly".localized).tag(AnalysisPeriod.lastYear)
             }
             .pickerStyle(.segmented)
             
@@ -110,7 +110,7 @@ struct SpendingTrendChart: View {
                         .foregroundStyle(.secondary)
                     
                     let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
-                    Text(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
+                    Text(amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                         .font(.app(.title, weight: .bold))
                         .foregroundStyle(Color.primary)
                     
@@ -320,7 +320,7 @@ struct CategoryBreakdownChart: View {
                             Spacer()
                             
                             VStack(alignment: .trailing) {
-                                Text(stat.amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
+                                Text(stat.amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                                     .font(.app(.callout))
                                     .monospacedDigit()
                                 

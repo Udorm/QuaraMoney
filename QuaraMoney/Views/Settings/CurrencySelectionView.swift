@@ -63,7 +63,7 @@ struct CurrencySelectionView: View {
                 Spacer()
                 
                 // Display symbol/example using formatter
-                Text(Double(100).formatted(.currency(code: code).presentation(.narrow))) // Using .narrow usually gives symbol
+                Text(Double(100).formattedAmount(for: code)) // Using .narrow usually gives symbol
                     .foregroundStyle(.secondary)
                     .font(.caption)
                 

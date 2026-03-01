@@ -35,7 +35,7 @@ struct iOS18ContentView: View {
                     }
                     
                     Tab(value: 1) {
-                        AnalysisView()
+                        LazyView(AnalysisView())
                     } label: {
                         VStack {
                             Image(systemName: "chart.pie")
@@ -45,7 +45,7 @@ struct iOS18ContentView: View {
                     }
                     
                     Tab(value: 2) {
-                        BudgetTabView()
+                        LazyView(BudgetTabView())
                     } label: {
                         VStack {
                             Image(systemName: "dollarsign.circle.fill")
@@ -55,7 +55,7 @@ struct iOS18ContentView: View {
                     }
                     
                     Tab(value: 3) {
-                        WalletListView()
+                        LazyView(WalletListView())
                     } label: {
                         VStack {
                             Image(systemName: "wallet.pass.fill")
@@ -68,7 +68,7 @@ struct iOS18ContentView: View {
 
                     
                     Tab(value: 4) {
-                        MoreView()
+                        LazyView(MoreView())
                     } label: {
                         VStack {
                             Image(systemName: "ellipsis.circle")
@@ -85,22 +85,22 @@ struct iOS18ContentView: View {
                     }
                     
                     Tab(L10n.Tab.analysis, systemImage: "chart.pie", value: 1) {
-                        AnalysisView()
+                        LazyView(AnalysisView())
                     }
                     
                     Tab(L10n.Budget.title, systemImage: "dollarsign.circle.fill", value: 2) {
-                        BudgetTabView()
+                        LazyView(BudgetTabView())
                     }
                     
                     Tab(L10n.Wallet.title, systemImage: "wallet.pass.fill", value: 3) {
-                        WalletListView()
+                        LazyView(WalletListView())
                     }
 
                     
 
                     
                     Tab(L10n.Tab.more, systemImage: "ellipsis.circle", value: 4) {
-                        MoreView()
+                        LazyView(MoreView())
                     }
                 }
                 .tabViewStyle(.automatic)
@@ -170,25 +170,25 @@ struct LegacyContentView: View {
                         }
                         .tag(0)
                     
-                    AnalysisView()
+                    LazyView(AnalysisView())
                         .tabItem {
                             Label(L10n.Tab.analysis, systemImage: "chart.pie")
                         }
                         .tag(1)
                     
-                    BudgetTabView()
+                    LazyView(BudgetTabView())
                         .tabItem {
                             Label(L10n.Budget.title, systemImage: "dollarsign.circle.fill")
                         }
                         .tag(2)
                     
-                    WalletListView()
+                    LazyView(WalletListView())
                         .tabItem {
                             Label(L10n.Wallet.title, systemImage: "wallet.pass.fill")
                         }
                         .tag(3)
                     
-                    MoreView()
+                    LazyView(MoreView())
                         .tabItem {
                             Label(L10n.Tab.more, systemImage: "ellipsis.circle")
                         }
@@ -211,10 +211,10 @@ struct LegacyContentView: View {
     private func detailView(for tab: Int) -> some View {
         switch tab {
         case 0: HomeView(modelContext: modelContext)
-        case 1: AnalysisView()
-        case 2: BudgetTabView()
-        case 3: WalletListView()
-        case 4: MoreView()
+        case 1: LazyView(AnalysisView())
+        case 2: LazyView(BudgetTabView())
+        case 3: LazyView(WalletListView())
+        case 4: LazyView(MoreView())
         default: HomeView(modelContext: modelContext)
         }
     }

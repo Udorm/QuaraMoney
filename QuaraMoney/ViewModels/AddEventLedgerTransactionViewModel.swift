@@ -198,7 +198,7 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
         } else {
             let newTransaction = EventLedgerTransaction(
                 kind: transactionKind,
-                title: note.isEmpty ? (transactionKind == .expense ? "Expense" : "Contribution") : note,
+                title: note.isEmpty ? (transactionKind == .expense ? L10n.EventTransaction.tabExpense : L10n.EventTransaction.tabContribution) : note,
                 amountMinor: amountMinor,
                 paidSource: useEventWallet ? .eventWallet : .member,
                 paidByMemberId: selectedPayerMemberId,

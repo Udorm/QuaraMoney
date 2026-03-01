@@ -128,7 +128,7 @@ struct CalculatorKeyboardView: View {
             HStack(spacing: buttonSpacing) {
                 CalcButton(systemImage: "delete.backward", color: CalcColors.functionButton) { handleBackspace() }
                 CalcButton(text: "C", color: CalcColors.functionButton) { handleClear() }
-                CalcButton(text: "Done", color: CalcColors.functionButton) { finalizeAndDismiss() }
+                CalcButton(text: "common.done".localized, color: CalcColors.functionButton) { finalizeAndDismiss() }
                 CalcButton(text: "÷", color: CalcColors.operatorButton) { handleOperator("÷") }
             }
             
@@ -164,12 +164,18 @@ struct CalculatorKeyboardView: View {
                 CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
             }
         }
-        .padding(8) // Slightly more padding container
+        .padding(.horizontal, 8)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
         .background(CalcColors.background)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) // Rounded top corners
-        .shadow(color: Color.primary.opacity(0.15), radius: 15, x: 0, y: -5) // Floating shadow
-        .padding(.horizontal, 8) // Float slightly from edges
-        .padding(.bottom, 2) // Float from bottom
+        .clipShape(UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 12))
+        .background {
+            CalcColors.background
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .overlay(alignment: .top) {
+            Divider()
+        }
     }
     
 

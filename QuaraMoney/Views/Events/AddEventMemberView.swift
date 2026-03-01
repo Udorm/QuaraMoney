@@ -44,7 +44,7 @@ struct AddEventMemberView: View {
                                     )
                             }
                             
-                            Button(avatarData == nil ? "Change Icon" : "Remove Image") {
+                            Button(avatarData == nil ? L10n.EventMember.changeIcon : L10n.EventMember.removeImage) {
                                 if avatarData != nil {
                                     avatarData = nil
                                 } else {
@@ -59,12 +59,12 @@ struct AddEventMemberView: View {
                     .listRowBackground(Color.clear)
                 }
 
-                Section("Details") {
+                Section(L10n.EventMember.details) {
                     TextField("Name", text: $name)
                     Toggle("This is me", isOn: $isLocalUser)
                 }
                 
-                Section("Color") {
+                Section(L10n.EventMember.color) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(EventMember.defaultColors, id: \.self) { hex in
@@ -95,19 +95,19 @@ struct AddEventMemberView: View {
                     }
                 }
             }
-            .navigationTitle(memberToEdit == nil ? "Add Member" : "Edit Member")
+            .navigationTitle(memberToEdit == nil ? L10n.EventMember.addMember : L10n.EventMember.editMember)
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingIconPicker) {
                 MemberIconPickerView(selectedIcon: $avatarIcon, themeColor: Color(hex: colorHex) ?? .blue)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L10n.Common.save) {
                         save()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

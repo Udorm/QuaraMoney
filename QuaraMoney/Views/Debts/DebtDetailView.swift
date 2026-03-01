@@ -40,7 +40,7 @@ struct DebtDetailView: View {
                         .foregroundStyle(debt.type == .iOwe ? .red : .green)
                         .cornerRadius(6)
                     
-                    Text(debt.isCompleted ? L10n.Debt.paid : "Active")
+                    Text(debt.isCompleted ? L10n.Debt.paid : L10n.DebtAdditional.filterActive)
                         .font(.caption)
                         .foregroundStyle(debt.isCompleted ? .green : .secondary)
                     
@@ -90,7 +90,7 @@ struct DebtDetailView: View {
             
             if debtTransactions.isEmpty {
                 Section(L10n.Debt.history) {
-                    Text("No transactions recorded yet.")
+                    Text(L10n.DebtAdditional.noTransactions)
                         .foregroundStyle(.secondary)
                         .italic()
                 }
@@ -153,10 +153,10 @@ struct DebtDetailView: View {
                 isNewTransaction: false
             )
         }
-        .alert("Status Error", isPresented: $showStatusError) {
-            Button("OK", role: .cancel) { }
+        .alert(L10n.Common.error, isPresented: $showStatusError) {
+            Button(L10n.Common.ok, role: .cancel) { }
         } message: {
-            Text(statusErrorMessage ?? "Failed to update debt status.")
+            Text(statusErrorMessage ?? "Failed to update debt status.".localized)
         }
         .onAppear {
             syncStatusIfNeeded()
@@ -234,7 +234,7 @@ struct AddPaymentView: View {
                     DatePicker(L10n.Transaction.date, selection: $date)
                     
                     Picker("Wallet (Optional)", selection: $selectedWallet) {
-                        Text("None").tag(Optional<Wallet>.none)
+                        Text(L10n.DebtAdditional.none).tag(Optional<Wallet>.none)
                         ForEach(wallets) { wallet in
                             Text(wallet.name).tag(Optional(wallet))
                         }
@@ -255,7 +255,7 @@ struct AddPaymentView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.save) {
+                    Button(L10n.Common.ok) {
                         savePayment()
                     }
                     .disabled((amount ?? 0) <= 0)
@@ -267,10 +267,10 @@ struct AddPaymentView: View {
                     amount = debt.remainingAmount
                 }
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
+            .alert(L10n.Common.error, isPresented: $showError) {
+                Button(L10n.Common.ok, role: .cancel) { }
             } message: {
-                Text(errorMessage ?? "Failed to save payment.")
+                Text(errorMessage ?? "Failed to save payment.".localized)
             }
         }
     }

@@ -122,8 +122,6 @@ class AnalysisViewModel: ObservableObject {
     }
     
     func refreshData() {
-        fetchNetWorth()
-        
         // Capture values for background task
         let start = self.startDate
         let end = self.endDate
@@ -140,6 +138,8 @@ class AnalysisViewModel: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
             
+            async let nw = Self.computeNetWorth(container: container, walletId: walletId, rates: rates, targetCurrency: preferredCurrency)
+            
             let result = AnalysisDataProcessor.processTransactions(
                 context: context,
                 startDate: start,
@@ -151,6 +151,10 @@ class AnalysisViewModel: ObservableObject {
                 targetCurrency: preferredCurrency
             )
             
+            let finalNW = await nw
+            await MainActor.run {
+                self.netWorth = finalNW
+            }
             await self.applyAnalysisResult(result)
         }
     }
@@ -176,31 +180,37 @@ class AnalysisViewModel: ObservableObject {
         }
     }
     
-    private func fetchNetWorth() {
-        guard let modelContext = modelContext else { return }
-        
+    nonisolated private static func computeNetWorth(container: ModelContainer, walletId: UUID?, rates: [String: Double], targetCurrency: String) -> Decimal {
+        let context = ModelContext(container)
         do {
             let descriptor = FetchDescriptor<Wallet>()
-            let wallets = try modelContext.fetch(descriptor)
+            let wallets = try context.fetch(descriptor)
             
             var totalNW: Decimal = 0
-            let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
-            
-            let walletsToSum = selectedWallet == nil ? wallets : wallets.filter { $0.id == selectedWallet?.id }
+            let walletsToSum = walletId == nil ? wallets : wallets.filter { $0.id == walletId }
             
             for wallet in walletsToSum {
                 let balance = wallet.balance
-                let converted = CurrencyManager.shared.convert(amount: balance, from: wallet.currencyCode, to: targetCurrency)
+                let converted = Self.convert(amount: balance, from: wallet.currencyCode, to: targetCurrency, rates: rates)
                 totalNW += converted
             }
             
-            self.netWorth = totalNW
+            return totalNW
             
         } catch {
-            #if DEBUG
-            print("Error fetching wallets for Net Worth: \(error)")
-            #endif
+            return 0
         }
+    }
+    
+    nonisolated private static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
+        guard let sourceRate = rates[source], let targetRate = rates[target] else {
+            if source == "USD" && target == "KHR" { return amount * 4000 }
+            if source == "KHR" && target == "USD" { return amount / 4000 }
+            if source == target { return amount }
+            return amount
+        }
+        let amountUSD = amount / Decimal(sourceRate)
+        return amountUSD * Decimal(targetRate)
     }
     
     // Removed old fetchTransactionsAndComputeStats as it is replaced by refreshData + background processor

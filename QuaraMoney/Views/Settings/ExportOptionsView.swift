@@ -29,23 +29,33 @@ struct ExportOptionsView: View {
         case custom = "Custom Range"
         
         var id: String { rawValue }
+        
+        var localizedName: String {
+            switch self {
+            case .allTime: return "common.allTime".localized
+            case .thisMonth: return L10n.Filter.thisMonth
+            case .lastMonth: return L10n.Filter.lastMonth
+            case .thisYear: return L10n.Filter.thisYear
+            case .custom: return L10n.Period.custom
+            }
+        }
     }
     
     var body: some View {
         Form {
-            Section("Data Selection") {
+            Section("export.dataSelection".localized) {
                 // Wallet Selection
                 NavigationLink {
                     WalletSelectionList(wallets: wallets, selectedWallets: $selectedWallets)
                 } label: {
                     HStack {
-                        Text("Wallets")
+                        Text("export.wallets".localized)
                         Spacer()
                         if selectedWallets.isEmpty {
-                            Text("All Wallets")
+                            Text("export.allWallets".localized)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("\(selectedWallets.count) Selected")
+                            Text(String(format: "export.selectedCount".localized, selectedWallets.count))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -53,15 +63,15 @@ struct ExportOptionsView: View {
                 .id(selectedWallets.hashValue) // Force refresh if needed
                 
                 // Date Selection
-                Picker("Time Period", selection: $dateRange) {
+                Picker(L10n.Filter.title, selection: $dateRange) {
                     ForEach(ExportDateRange.allCases) { range in
-                        Text(range.rawValue).tag(range)
+                        Text(range.localizedName).tag(range)
                     }
                 }
                 
                 if dateRange == .custom {
-                    DatePicker("Start Date", selection: $customStartDate, displayedComponents: .date)
-                    DatePicker("End Date", selection: $customEndDate, displayedComponents: .date)
+                    DatePicker(L10n.Budget.startDate, selection: $customStartDate, displayedComponents: .date)
+                    DatePicker(L10n.Budget.endDate, selection: $customEndDate, displayedComponents: .date)
                 }
             }
             
@@ -71,28 +81,28 @@ struct ExportOptionsView: View {
                 } label: {
                     if isExporting {
                         HStack {
-                            Text("Generating CSV...")
+                            Text("export.generating".localized)
                             Spacer()
                             ProgressView()
                         }
                     } else {
-                        Text("Export to CSV")
+                        Text("export.exportToCSV".localized)
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
                 .disabled(isExporting)
             } footer: {
-               Text("Exported file includes date, time, amount, currency, category, type, note, and wallet information.")
+               Text("export.description".localized)
             }
         }
-        .navigationTitle("Export Data")
+        .navigationTitle("export.exportData".localized)
         .sheet(isPresented: $showShareSheet) {
             if let url = exportURL {
                 ShareSheet(activityItems: [url])
             }
         }
-        .alert("Export Failed", isPresented: $showError) {
-            Button("OK", role: .cancel) { }
+        .alert("export.failed".localized, isPresented: $showError) {
+            Button(L10n.Common.ok, role: .cancel) { }
         } message: {
             Text(errorMessage)
         }
@@ -114,7 +124,7 @@ struct ExportOptionsView: View {
                 exportURL = url
                 showShareSheet = true
             } else {
-                errorMessage = "Could not generate CSV file."
+                errorMessage = "export.errorGeneration".localized
                 showError = true
             }
             
@@ -162,7 +172,7 @@ struct WalletSelectionList: View {
                 }
             } label: {
                 HStack {
-                    Text("All Wallets")
+                    Text("export.allWallets".localized)
                     Spacer()
                     if selectedWallets.isEmpty {
                         Image(systemName: "checkmark")
@@ -201,6 +211,6 @@ struct WalletSelectionList: View {
                 }
             }
         }
-        .navigationTitle("Select Wallets")
+        .navigationTitle("export.selectWallets".localized)
     }
 }

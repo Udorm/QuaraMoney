@@ -5,6 +5,9 @@ import CoreText
 // Internal use only
 private let khmerFontName = "MiSans Khmer VF"
 
+// Cache for font descriptors to avoid repeated CoreText lookups
+private let fontCache = NSCache<NSString, UIFont>()
+
 // MARK: - Font Weight Mapping
 
 extension Font.Weight {
@@ -124,6 +127,11 @@ extension UIFont {
     
     /// Creates a Khmer font with proper variable font weight support
     static func khmerFont(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+        let cacheKey = "khmer-\(size)-\(weight.rawValue)" as NSString
+        if let cached = fontCache.object(forKey: cacheKey) {
+            return cached
+        }
+        
         // Try to create the variable font with weight axis
         guard let baseFont = UIFont(name: khmerFontName, size: size) else {
             // Fallback to system font if Khmer font not available
@@ -148,6 +156,7 @@ extension UIFont {
         let descriptor = baseFont.fontDescriptor.addingAttributes(variationAttributes)
         let font = UIFont(descriptor: descriptor, size: size)
         
+        fontCache.setObject(font, forKey: cacheKey)
         return font
     }
     
@@ -161,6 +170,11 @@ extension UIFont {
     /// - Latin/symbols/numbers: System font (SF Pro) - PRIMARY
     /// - Khmer characters (U+1780–U+17FF): MiSans Khmer VF - FALLBACK
     static func appWithCascade(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+        let cacheKey = "cascade-\(size)-\(weight.rawValue)" as NSString
+        if let cached = fontCache.object(forKey: cacheKey) {
+            return cached
+        }
+        
         // System font as PRIMARY for Latin characters
         let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
         
@@ -179,7 +193,9 @@ extension UIFont {
             .cascadeList: cascadeList
         ])
         
-        return UIFont(descriptor: combinedDescriptor, size: size)
+        let result = UIFont(descriptor: combinedDescriptor, size: size)
+        fontCache.setObject(result, forKey: cacheKey)
+        return result
     }
     
     /// Updates global UIKit appearance proxies for navigation bars, tab bars, etc.
@@ -232,6 +248,23 @@ extension UIFont {
         // Segmented Control
         UISegmentedControl.appearance().setTitleTextAttributes([.font: segmentFont], for: .normal)
         UISegmentedControl.appearance().setTitleTextAttributes([.font: segmentSelectedFont], for: .selected)
+    }
+    
+    /// Pre-warm the font cache on a background thread after first frame renders.
+    /// NSCache is process-scoped and empty after app termination —
+    /// this populates common sizes/weights early for smoother scrolling.
+    static func prewarmFontCache() {
+        Task.detached(priority: .background) {
+            let sizes: [CGFloat] = [11, 12, 13, 15, 17, 22, 28, 34]
+            let weights: [UIFont.Weight] = [.regular, .medium, .semibold, .bold]
+            for size in sizes {
+                for weight in weights {
+                    await MainActor.run {
+                        _ = UIFont.appWithCascade(ofSize: size, weight: weight)
+                    }
+                }
+            }
+        }
     }
 }
 

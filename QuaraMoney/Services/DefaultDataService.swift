@@ -54,7 +54,6 @@ struct DefaultDataService {
                     isSystem: false
                 )
                 modelContext.insert(category)
-                try modelContext.save()
                 print("Created missing category: \(name)")
             }
         } catch {
@@ -73,7 +72,6 @@ struct DefaultDataService {
             if let existing = try modelContext.fetch(descriptor).first {
                 if !existing.isSystem {
                     existing.isSystem = true
-                    try modelContext.save()
                     print("Marked existing category as system: \(name)")
                 }
             } else {
@@ -85,7 +83,6 @@ struct DefaultDataService {
                     isSystem: true
                 )
                 modelContext.insert(category)
-                try modelContext.save()
                 print("Created system category: \(name)")
             }
         } catch {

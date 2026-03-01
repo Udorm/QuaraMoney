@@ -117,9 +117,9 @@ struct TransactionRowView: View {
         switch source {
         case .event(let transaction, _, _, let currencyCode):
             let amount = MoneyMinorUnitConverter.fromMinorUnits(transaction.amountMinor, currencyCode: currencyCode)
-            return "\(isPositive ? "+" : "-")\(amount.formatted(.currency(code: currencyCode)))"
+            return "\(isPositive ? "+" : "-")\(amount.formattedAmount(for: currencyCode))"
         case .wallet(let transaction, _):
-            return "\(isPositive ? "+" : "-")\(transaction.amount.formatted(.currency(code: transaction.currencyCode)))"
+            return "\(isPositive ? "+" : "-")\(transaction.amount.formattedAmount(for: transaction.currencyCode))"
         }
     }
     

@@ -5,9 +5,9 @@ struct ThemeSettingsView: View {
     
     var body: some View {
         Form {
-            Section("Income Color") {
+            Section("settings.incomeColor".localized) {
                 HStack {
-                    Text("Current Color")
+                    Text("settings.currentColor".localized)
                     Spacer()
                     Circle()
                         .fill(themeManager.incomeColor)
@@ -18,9 +18,9 @@ struct ThemeSettingsView: View {
                     .frame(height: 150)
             }
             
-            Section("Expense Color") {
+            Section("settings.expenseColor".localized) {
                 HStack {
-                    Text("Current Color")
+                    Text("settings.currentColor".localized)
                     Spacer()
                     Circle()
                         .fill(themeManager.expenseColor)
@@ -32,7 +32,7 @@ struct ThemeSettingsView: View {
             }
             
             Section {
-                Button("Reset to Defaults") {
+                Button("settings.resetDefaults".localized) {
                     withAnimation {
                         themeManager.incomeColorHex = "#34C759" // Green
                         themeManager.expenseColorHex = "#FF3B30" // Red
@@ -41,7 +41,7 @@ struct ThemeSettingsView: View {
                 .foregroundStyle(.red)
             }
         }
-        .navigationTitle("Theme & Colors")
+        .navigationTitle("settings.themeTitle".localized)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

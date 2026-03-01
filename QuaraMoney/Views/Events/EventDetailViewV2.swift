@@ -139,13 +139,13 @@ struct EventDetailViewV2: View {
                 )
             } header: {
                 HStack {
-                    Text("Members")
+                    Text(L10n.EventDetail.members)
                         .font(.app(.headline))
                     Spacer()
                     Button {
                         showingAllMembers = true
                     } label: {
-                        Text("Show All")
+                        Text(L10n.EventDetail.showAll)
                             .font(.app(.subheadline, weight: .medium))
                             .foregroundStyle(.blue)
                             .textCase(nil)
@@ -183,7 +183,7 @@ struct EventDetailViewV2: View {
                     Button {
                         showingExportSpending = true
                     } label: {
-                        Label("Export to Wallet", systemImage: "square.and.arrow.up")
+                        Label(L10n.EventSettlement.exportToWallet, systemImage: "square.and.arrow.up")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -236,19 +236,19 @@ struct EventDetailViewV2: View {
             )
         }
 
-        .alert("Error", isPresented: Binding(
+        .alert(L10n.Common.error, isPresented: Binding(
             get: { errorMessage != nil },
             set: { _ in errorMessage = nil }
         )) {
-            Button("OK", role: .cancel) { errorMessage = nil }
+            Button(L10n.Common.ok, role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unknown error")
+            Text(errorMessage ?? L10n.EventDetail.unknownError)
         }
-        .alert("Exported", isPresented: Binding(
+        .alert(L10n.Common.ok, isPresented: Binding(
             get: { exportSuccessMessage != nil },
             set: { _ in exportSuccessMessage = nil }
         )) {
-            Button("OK", role: .cancel) { exportSuccessMessage = nil }
+            Button(L10n.Common.ok, role: .cancel) { exportSuccessMessage = nil }
         } message: {
             Text(exportSuccessMessage ?? "")
         }
@@ -313,7 +313,7 @@ private struct ExportSpendingSheet: View {
             List {
                 Section {
                     HStack {
-                        Text("Your Spending")
+                        Text(L10n.EventDetail.yourSpending)
                         Spacer()
                         Text(formatMinor(spendingAmount))
                             .font(.app(.headline, weight: .bold))
@@ -351,16 +351,16 @@ private struct ExportSpendingSheet: View {
                     }
                 }
             }
-            .navigationTitle("Export to Wallet")
+            .navigationTitle(L10n.EventSettlement.exportToWallet)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isExporting ? "Exporting..." : "Export") {
+                    Button(isExporting ? L10n.EventDetail.exporting : L10n.EventDetail.export) {
                         performExport()
                     }
                     .disabled(isExporting || alreadyExported || spendingAmount <= 0 || selectedWallet == nil)
@@ -413,6 +413,6 @@ private struct ExportSpendingSheet: View {
     private func formatMinor(_ value: Int64) -> String {
         MoneyMinorUnitConverter
             .fromMinorUnits(value, currencyCode: event.currencyCode)
-            .formatted(.currency(code: event.currencyCode))
+            .formattedAmount(for: event.currencyCode)
     }
 }

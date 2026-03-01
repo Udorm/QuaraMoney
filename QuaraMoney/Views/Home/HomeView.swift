@@ -55,7 +55,9 @@ struct HomeView: View {
             .navigationTitle(L10n.Home.title)
             .searchable(text: $viewModel.searchText)
             .searchToolbarBehavior(.minimize)
-            .onAppear {
+            .task {
+                // Yield briefly to let the first frame render before querying DB
+                try? await Task.sleep(for: .milliseconds(100))
                 viewModel.refreshData()
             }
             .sheet(isPresented: $showingAddTransaction) {
@@ -164,7 +166,7 @@ struct DailyHeader: View {
             Spacer()
             // Here we want to see the daily total in the DASHBOARD currency, likely.
             // The view model already calculated dailyTotal in the preferred currency.
-            Text(section.dailyTotal.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode).presentation(.narrow)))
+            Text(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }

@@ -83,6 +83,7 @@
 "transaction.type.income" = "ចំណូល";
 "transaction.type.expense" = "ចំណាយ";
 "transaction.type.transfer" = "ផ្ទេរ";
+"transaction.type.adjustment" = "ការកែតម្រូវ";
 "transaction.category" = "ប្រភេទ";
 "transaction.scanReceipt" = "ស្កេនវិក្កយបត្រ";
 "transaction.currency" = "រូបិយប័ណ្ណ";
@@ -491,3 +492,167 @@
 "debt.history" = "ប្រវត្តិ";
 "debt.recordInitialTransaction" = "កត់ត្រាប្រតិបត្តិការដំបូង";
 "debt.initialTransactionHelp" = "វានឹងធ្វើបច្ចុប្បន្នភាពសមតុល្យកាបូបរបស់អ្នក។";
+"debt.systemCategory.debt" = "បំណុល";
+"debt.systemCategory.debtCollection" = "ការប្រមូលបំណុល";
+"debt.systemCategory.loan" = "កម្ចី";
+"debt.systemCategory.loanRepayment" = "ការសងកម្ចី";
+
+// MARK: - Event Additions
+"event.settlement.summary" = "សង្ខេប";
+"event.settlement.mode" = "របៀបទូទាត់";
+"event.settlement.fromWallet" = "ពីកាបូបព្រឹត្តិការណ៍";
+"event.settlement.memberTransfers" = "ការផ្ទេរប្រាក់សមាជិក";
+"event.settlement.balances" = "សមតុល្យ";
+"event.settlement.exportToWallet" = "នាំចេញទៅកាបូប";
+"event.settlement.totalCost" = "ការចំណាយសរុប";
+"event.settlement.totalContribution" = "ការចូលរួមសរុប";
+"event.settlement.remainingPool" = "ទឹកប្រាក់នៅសល់សរុប";
+"event.settlement.walletPays" = "កាបូបព្រឹត្តិការណ៍បង់ប្រាក់";
+"event.settlement.wallet" = "កាបូបព្រឹត្តិការណ៍";
+"event.settlement.settleEvent" = "ទូទាត់ព្រឹត្តិការណ៍";
+"event.settlement.saving" = "កំពុងរក្សាទុក...";
+"event.settlement.confirm" = "បញ្ជាក់";
+
+"event.transaction.paymentAndSplitting" = "ការទូទាត់ និងការបែងចែក";
+"event.transaction.contributor" = "អ្នកចូលរួមចំណែក";
+"event.transaction.selectPayer" = "ជ្រើសរើសអ្នកបង់ប្រាក់";
+"event.transaction.selectParticipants" = "ជ្រើសរើសអ្នកចូលរួម";
+"event.transaction.noMembers" = "មិនមានសមាជិកទេ";
+"event.transaction.noCategories" = "មិនមានប្រភេទចំណាយទេ";
+"event.transaction.tabExpense" = "ចំណាយ";
+"event.transaction.tabContribution" = "ការចូលរួមចំណែក";
+
+"event.detail.members" = "សមាជិក";
+"event.detail.showAll" = "បង្ហាញទាំងអស់";
+"event.detail.yourSpending" = "ការចំណាយរបស់អ្នក";
+"event.detail.exporting" = "កំពុងនាំចេញ...";
+"event.detail.export" = "នាំចេញ";
+"event.detail.unknownError" = "មានកំហុសមិនស្គាល់";
+
+"event.member.details" = "ព័ត៌មានលម្អិត";
+"event.member.color" = "ពណ៌";
+"event.member.changeIcon" = "ប្តូររូបតំណាង";
+"event.member.removeImage" = "លុបរូបភាពចេញ";
+"event.member.addMember" = "បន្ថែមសមាជិក";
+"event.member.editMember" = "កែប្រែសមាជិក";
+
+"event.appearance" = "រូបរាង";
+"event.dateTime" = "កាលបរិច្ឆេទ & ពេលវេលា";
+
+"event.list.ongoing" = "កំពុងដំណើរការ";
+"event.list.upcoming" = "នាពេលខាងមុខ";
+"event.list.past" = "កន្លងមក";
+
+"event.summary.addExpense" = "បន្ថែមចំណាយ";
+"event.summary.settle" = "ទូទាត់";
+
+"event.location.selected" = "ទីតាំងដែលបានជ្រើសរើស";
+"event.location.confirm" = "បញ្ជាក់ទីតាំង";
+"event.location.pick" = "ជ្រើសរើសទីតាំង";
+
+"event.memberList.search" = "ស្វែងរកសមាជិក";
+"event.memberList.you" = "អ្នក";
+
+// MARK: - Debt Additions
+"debt.details" = "ព័ត៌មានលម្អិត";
+"debt.initialTransaction" = "ប្រតិបត្តិការដំបូង";
+"debt.noneTrackOnly" = "គ្មាន (គ្រាន់តែតាមដាន)";
+"debt.initialTransactionHelpText" = "ប្រតិបត្តិការមួយនឹងត្រូវបានកត់ត្រាដើម្បីតាមដានបំណុលនេះ ប៉ុន្តែនឹងមិនប៉ះពាល់ដល់សមតុល្យកាបូបឡើយ។";
+"debt.amountFixedWarning" = "ចំនួនទឹកប្រាក់និងប្រភេទមិនអាចកែប្រែបានទេបន្ទាប់ពីបង្កើតរួច។";
+"debt.filterAll" = "ទាំងអស់";
+"debt.filterActive" = "សកម្ម";
+"debt.filterCompleted" = "បានបញ្ចប់";
+"debt.noDebts" = "គ្មានបំណុល";
+"debt.noDebtsDescription" = "តាមដានប្រាក់ដែលអ្នកជំពាក់ឬគេជំពាក់។";
+"debt.noTransactions" = "មិនទាន់មានកត់ត្រាប្រតិបត្តិការទេ។";
+"debt.none" = "គ្មាន";
+
+// MARK: - Transaction Additions
+"transaction.balanceAdjustment" = "ការកែសម្រួលសមតុល្យ";
+"transaction.time" = "ពេលវេលា";
+"transaction.selectCategory" = "ជ្រើសរើសប្រភេទ";
+"transaction.searchCategories" = "ស្វែងរកប្រភេទ";
+"transaction.linkedToDebt" = "ភ្ជាប់ជាមួយបំណុល";
+"transaction.linkedToLoan" = "ភ្ជាប់ជាមួយកម្ចី";
+
+// MARK: - Budget Analysis Additions
+"budget.performance" = "ដំណើរការថវិកា";
+"budget.successRate" = "អត្រាជោគជ័យ";
+"budget.monthlyUtilization" = "ការប្រើប្រាស់ថវិកាប្រចាំខែ";
+"budget.budgeted" = "បានបែងចែក";
+"budget.underBudget" = "ក្រោមថវិកា";
+"budget.overBudget" = "លើសថវិកា";
+"budget.attentionCategories" = "ប្រភេទដែលត្រូវយកចិត្តទុកដាក់";
+"budget.activeBudgetsStatus" = "ស្ថានភាពថវិកាសកម្ម";
+"budget.tips" = "គន្លឹះ និង ការណែនាំ";
+"budget.budgetsMet" = "ថវិកាដែលសម្រេចបាន";
+"budget.activeBudgets" = "ថវិកាសកម្ម";
+"budget.tip.increase" = "ពិចារណាបង្កើនថវិកា";
+"budget.tip.increaseDesc" = "ថវិការបស់អ្នកអាចនឹងតឹងរ៉ឹងពេក។ សាកល្បងបង្កើនកម្រិតចំនួន 10-15%។";
+"budget.tip.review" = "ពិនិត្យមើលការចំណាយ %@";
+"budget.tip.reviewDesc" = "ប្រភេទនេះលើសពីថវិកាជំនួន %@ នៃពេលវេលា។";
+"budget.tip.greatJob" = "ធ្វើបានល្អណាស់!";
+"budget.tip.greatJobDesc" = "អ្នកអាចរក្សាចំណាយកម្រិតនៅក្នុងថវិកាភាគច្រើននៃពេលវេលា។ បន្តធ្វើបែបនេះ!";
+"budget.tip.checkWeekly" = "ពិនិត្យថវិកាប្រចាំសប្តាហ៍";
+"budget.tip.checkWeeklyDesc" = "ការពិនិត្យមើលជាប្រចាំជួយឆ្លើយតបការលើសចំណាយលឿន។";
+"budget.threshold.none" = "គ្មាន";
+
+// MARK: - Import/Export Additions
+"csv.importing" = "កំពុងនាំចូលប្រតិបត្តិការ...";
+"csv.pleaseWait" = "សូមរង់ចាំ។ ឯកសារធំអាចត្រូវការពេលវេលាបន្តិច។";
+"csv.importComplete" = "ការនាំចូលបានបញ្ចប់!";
+"csv.importedCount" = "%d ប្រតិបត្តិការត្រូវបាននាំចូលដោយជោគជ័យ";
+"csv.skippedCount" = "រំលង %d ជួរ";
+"csv.processing" = "កំពុងដំណើរការ...";
+"csv.valid" = "ត្រឹមត្រូវ";
+"csv.skipped" = "បានរំលង";
+"csv.preview" = "មើលការបង្ហាញប្រតិបត្តិការសាកល្បង";
+"csv.adjustMapping" = "កែសម្រួលការភ្ជាប់តារាង";
+"csv.noCategory" = "គ្មានប្រភេទ";
+"csv.defaultWallet" = "លំនាំដើម";
+"csv.selectWallet" = "ជ្រើសរើសកាបូប";
+"csv.importAll" = "នាំចូលជួរទាំង %d";
+"csv.rowError" = "ជួរ %d";
+"csv.notMapped" = "មិនបានភ្ជាប់";
+
+"export.dataSelection" = "ការជ្រើសរើសទិន្នន័យ";
+"export.wallets" = "កាបូប";
+"export.allWallets" = "កាបូបទាំងអស់";
+"export.selectedCount" = "ជ្រើសរើស %d";
+"export.generating" = "កំពុងបង្កើតជារាង CSV...";
+"export.exportToCSV" = "នាំចេញជា CSV";
+"export.exportData" = "នាំចេញទិន្នន័យ";
+"export.selectWallets" = "ជ្រើសរើសកាបូប";
+
+// MARK: - Category Additions
+"category.details" = "ព័ត៌មានលម្អិត";
+"category.appearance" = "រូបរាង";
+"category.expense" = "ចំណាយ";
+"category.income" = "ចំណូល";
+"category.preview" = "មើលសាកល្បង";
+"category.color" = "ពណ៌";
+"category.icon" = "រូបតំណាង";
+"category.editCategory" = "កែប្រែប្រភេទ";
+"category.newCategory" = "ប្រភេទថ្មី";
+
+// MARK: - Analysis Additions
+"analysis.period.w" = "ស1";
+"analysis.period.m" = "ខ1";
+"analysis.period.6m" = "ខ6";
+"analysis.period.y" = "ឆ1";
+"analysis.period.ly" = "ឆម";
+"analysis.timePeriod" = "រយៈពេល";
+"analysis.total" = "សរុប";
+
+// MARK: - Appended Configs
+"export.description" = "ឯកសារដែលបាននាំចេញរួមមានកាលបរិច្ឆេទ ពេលវេលា ចំនួនទឹកប្រាក់ រូបិយប័ណ្ណ ប្រភេទ ប្រភេទ ចំណាំ និងព័ត៌មានកាបូប។";
+"export.failed" = "បញ្ហាក្នុងការនាំចេញ";
+"export.errorGeneration" = "មិនអាចបង្កើតឯកសារ CSV ទេ។";
+
+"settings.incomeColor" = "ពណ៌ចំណូល";
+"settings.expenseColor" = "ពណ៌ចំណាយ";
+"settings.currentColor" = "ពណ៌បច្ចុប្បន្ន";
+"settings.resetDefaults" = "កំណត់ទៅដើមវិញ";
+"settings.themeTitle" = "ពណ៌ នង រចនាប័ទ្ម";
+
+"common.of" = "នៃ";

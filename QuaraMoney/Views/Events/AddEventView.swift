@@ -59,7 +59,7 @@ struct AddEventView: View {
                     .pickerStyle(.menu)
                 }
                 
-                Section("Appearance") {
+                Section(L10n.EventAdditional.appearance) {
                     // Icon Picker
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 15) {
@@ -98,7 +98,7 @@ struct AddEventView: View {
                     }
                 }
                 
-                Section("Date & Time") {
+                Section(L10n.EventAdditional.dateTime) {
                     DatePicker(L10n.Budget.startDate, selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                     
                     Toggle("End Date", isOn: $hasEndDate)

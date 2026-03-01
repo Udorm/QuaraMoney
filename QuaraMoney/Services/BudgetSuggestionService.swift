@@ -338,7 +338,7 @@ struct BudgetSuggestion {
     
     var formattedSuggestion: String {
         guard let amount = suggestedAmount else { return "Not enough data" }
-        return amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode))
+        return amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode)
     }
     
     var confidenceDescription: String {

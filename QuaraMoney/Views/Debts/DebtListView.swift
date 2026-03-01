@@ -20,7 +20,7 @@ struct DebtListView: View {
             .padding()
 
             Picker("Filter", selection: $viewModel.selectedType) {
-                Text("All").tag(Optional<DebtType>.none)
+                Text(L10n.DebtAdditional.filterAll).tag(Optional<DebtType>.none)
                 ForEach(DebtType.allCases) { type in
                     Text(type.title).tag(Optional(type))
                 }
@@ -30,7 +30,7 @@ struct DebtListView: View {
             .padding(.bottom)
 
             if viewModel.filteredDebts(allDebts).isEmpty {
-                ContentUnavailableView("No Debts", systemImage: "signature", description: Text("Track money you owe or are owed."))
+                ContentUnavailableView(L10n.DebtAdditional.noDebts, systemImage: "signature", description: Text(L10n.DebtAdditional.noDebtsDescription))
             } else {
                 List {
                     Section {
@@ -52,7 +52,7 @@ struct DebtListView: View {
                         }
                     } header: {
                         if !viewModel.activeDebts(allDebts).isEmpty {
-                            Text("Active")
+                            Text(L10n.DebtAdditional.filterActive)
                         }
                     }
 
@@ -75,7 +75,7 @@ struct DebtListView: View {
                                 viewModel.deleteDebts(viewModel.completedDebts(allDebts), at: indexSet, context: modelContext)
                             }
                         } header: {
-                            Text("Completed")
+                            Text(L10n.DebtAdditional.filterCompleted)
                         }
                     }
                 }
@@ -165,7 +165,7 @@ struct DebtRow: View {
             Spacer()
             
             VStack(alignment: .trailing) {
-                Text(debt.remainingAmount.formatted(.currency(code: debt.currencyCode)))
+                Text(debt.remainingAmount.formattedAmount(for: debt.currencyCode))
                     .font(.app(.body, weight: .semibold))
                     .foregroundStyle(debt.type == .owedToMe ? .green : .red)
 

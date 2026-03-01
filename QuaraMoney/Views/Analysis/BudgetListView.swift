@@ -327,7 +327,7 @@ struct BudgetSummarySection: View {
                     Text(L10n.Budget.totalSpent)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
-                    Text(totalSpent.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
+                    Text(totalSpent.formattedAmount(for: preferredCurrency))
                         .font(.app(.title2, weight: .bold))
                 }
                 
@@ -337,7 +337,7 @@ struct BudgetSummarySection: View {
                     Text(L10n.Budget.totalBudgeted)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
-                    Text(totalBudgeted.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
+                    Text(totalBudgeted.formattedAmount(for: preferredCurrency))
                         .font(.app(.title2, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
@@ -484,11 +484,11 @@ struct BudgetRowView: View {
                     // Primary Value: Remaining or Spent based on preference/context
                     // Here we focus on "Amount Left" as it's usually what users care about
                     if isOverBudget {
-                        Text(spent.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
+                        Text(spent.formattedAmount(for: preferredCurrency))
                             .font(.app(.body, weight: .bold))
                             .foregroundStyle(.red)
                     } else {
-                        Text(remaining.formatted(.currency(code: preferredCurrency).presentation(.narrow)))
+                        Text(remaining.formattedAmount(for: preferredCurrency))
                             .font(.app(.body, weight: .bold))
                             .foregroundStyle(Color.primary)
                     }
@@ -519,11 +519,11 @@ struct BudgetRowView: View {
                         }
                         
                         if isOverBudget {
-                             Text(L10n.Budget.overBy((spent - budgetLimitConverted).formatted(.currency(code: preferredCurrency).presentation(.narrow))))
+                             Text(L10n.Budget.overBy((spent - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
                                 .font(.app(.caption))
                                 .foregroundStyle(.red)
                         } else {
-                            Text(L10n.Budget.leftOf(budgetLimitConverted.formatted(.currency(code: preferredCurrency).presentation(.narrow))))
+                            Text(L10n.Budget.leftOf(budgetLimitConverted.formattedAmount(for: preferredCurrency)))
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }

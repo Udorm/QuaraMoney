@@ -16,7 +16,7 @@ struct AdjustBalanceView: View {
                     HStack {
                         Text("Current Balance")
                         Spacer()
-                        Text(viewModel.currentBalance.formatted(.currency(code: viewModel.wallet.currencyCode)))
+                        Text(viewModel.currentBalance.formattedAmount(for: viewModel.wallet.currencyCode))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -36,7 +36,8 @@ struct AdjustBalanceView: View {
                         HStack {
                             Text("Difference")
                             Spacer()
-                            Text(viewModel.difference.formatted(.currency(code: viewModel.wallet.currencyCode).sign(strategy: .always())))
+                            let sign = viewModel.difference >= 0 ? "+" : ""
+                            Text("\(sign)\(viewModel.difference.formattedAmount(for: viewModel.wallet.currencyCode))")
                                 .foregroundStyle(viewModel.difference >= 0 ? .green : .red)
                         }
                     }

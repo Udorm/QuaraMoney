@@ -127,23 +127,23 @@ struct EventSettlementView: View {
         
         NavigationStack {
             List {
-                Section("Summary") {
+                Section(L10n.EventSettlement.summary) {
                     HStack {
-                        Text("Total Cost")
+                        Text(L10n.EventSettlement.totalCost)
                         Spacer()
                         Text(formatMinor(currentSettlement.totalCostMinor))
                             .foregroundStyle(.secondary)
                     }
                     
                     HStack {
-                        Text("Total Contribution")
+                        Text(L10n.EventSettlement.totalContribution)
                         Spacer()
                         Text(formatMinor(currentSettlement.totalContributionMinor))
                             .foregroundStyle(.secondary)
                     }
                     
                     HStack {
-                        Text("Remaining Pool")
+                        Text(L10n.EventSettlement.remainingPool)
                         Spacer()
                         Text(formatMinor(currentSettlement.walletRemainingMinor))
                             .foregroundStyle(currentSettlement.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
@@ -159,7 +159,7 @@ struct EventSettlementView: View {
                     }
                 }
                 
-                Section("Settlement Mode") {
+                Section(L10n.EventSettlement.mode) {
                     Toggle("One-counterparty mode (organizer)", isOn: $useSingleCoordinator)
                     if useSingleCoordinator {
                         Picker("Organizer", selection: Binding(
@@ -178,14 +178,14 @@ struct EventSettlementView: View {
                     }
                 }
                 
-                Section("From Event Wallet") {
+                Section(L10n.EventSettlement.fromWallet) {
                     if walletIncomingInstructions.isEmpty && walletOutgoingInstructions.isEmpty {
                         Text("No direct wallet settlement transfer.")
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(walletIncomingInstructions) { instruction in
                             HStack {
-                                Text("Event Wallet pays")
+                                Text(L10n.EventSettlement.walletPays)
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(memberName(for: instruction.memberId))
@@ -201,7 +201,7 @@ struct EventSettlementView: View {
                                 Text("\(memberName(for: instruction.memberId)) pays")
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text("Event Wallet")
+                                    Text(L10n.EventSettlement.wallet)
                                         .font(.app(.subheadline, weight: .medium))
                                     Text(formatMinor(instruction.amountMinor))
                                         .font(.app(.caption))
@@ -212,7 +212,7 @@ struct EventSettlementView: View {
                     }
                 }
                 
-                Section("Member Transfers") {
+                Section(L10n.EventSettlement.memberTransfers) {
                     if currentSettlement.instructions.isEmpty {
                         Text("No member-to-member transfer needed.")
                             .foregroundStyle(.secondary)
@@ -230,7 +230,7 @@ struct EventSettlementView: View {
                     }
                 }
                 
-                Section("Balances") {
+                Section(L10n.EventSettlement.balances) {
                     ForEach(currentSettlement.balances) { balance in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -251,7 +251,7 @@ struct EventSettlementView: View {
                     }
                 }
                 
-                Section("Export to Wallet") {
+                Section(L10n.EventSettlement.exportToWallet) {
                     Toggle("Export my net balance as one wallet transaction", isOn: $exportToWallet)
                     if exportToWallet {
                         Picker("Wallet", selection: Binding(
@@ -280,16 +280,16 @@ struct EventSettlementView: View {
                     }
                 }
             }
-            .navigationTitle("Settle Event")
+            .navigationTitle(L10n.EventSettlement.settleEvent)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isProcessing ? "Saving..." : "Confirm") {
+                    Button(isProcessing ? L10n.EventSettlement.saving : L10n.EventSettlement.confirm) {
                         confirmSettlement()
                     }
                     .disabled(
@@ -375,6 +375,6 @@ struct EventSettlementView: View {
     private func formatMinor(_ value: Int64) -> String {
         MoneyMinorUnitConverter
             .fromMinorUnits(value, currencyCode: event.currencyCode)
-            .formatted(.currency(code: event.currencyCode))
+            .formattedAmount(for: event.currencyCode)
     }
 }

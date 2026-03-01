@@ -231,7 +231,7 @@ struct BudgetDetailView: View {
                 HStack {
                     Text(L10n.Budget.limit)
                     Spacer()
-                    Text(budgetLimitConverted.formatted(.currency(code: preferredCurrency)))
+                    Text(budgetLimitConverted.formattedAmount(for: preferredCurrency))
                         .foregroundStyle(.secondary)
                 }
                 
@@ -240,7 +240,7 @@ struct BudgetDetailView: View {
                         Label(L10n.Budget.rolloverTitle, systemImage: "arrow.up.circle.fill")
                             .foregroundStyle(.green)
                         Spacer()
-                        Text("+\(budget.rolloverAmount.formatted(.currency(code: preferredCurrency)))")
+                        Text("+\(budget.rolloverAmount.formattedAmount(for: preferredCurrency))")
                             .foregroundStyle(.green)
                     }
                 }
@@ -248,14 +248,14 @@ struct BudgetDetailView: View {
                 HStack {
                     Text(L10n.Budget.totalSpent)
                     Spacer()
-                    Text(totalSpent.formatted(.currency(code: preferredCurrency)))
+                    Text(totalSpent.formattedAmount(for: preferredCurrency))
                         .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
                 }
                 
                 HStack {
                     Text(L10n.Budget.remaining)
                     Spacer()
-                    Text(remaining.formatted(.currency(code: preferredCurrency)))
+                    Text(remaining.formattedAmount(for: preferredCurrency))
                         .font(.app(.body, weight: .medium))
                         .foregroundStyle(remaining >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                 }
@@ -264,7 +264,7 @@ struct BudgetDetailView: View {
                     HStack {
                         Text(L10n.Budget.original)
                         Spacer()
-                        Text(budget.amountLimit.formatted(.currency(code: budget.currencyCode)))
+                        Text(budget.amountLimit.formattedAmount(for: budget.currencyCode))
                             .foregroundStyle(.secondary)
                             .font(.app(.caption))
                     }
@@ -278,7 +278,7 @@ struct BudgetDetailView: View {
                     HStack {
                         Label(L10n.Budget.dailyAverage, systemImage: "chart.bar.fill")
                         Spacer()
-                        Text(dailyAverage.formatted(.currency(code: preferredCurrency)))
+                        Text(dailyAverage.formattedAmount(for: preferredCurrency))
                             .foregroundStyle(.secondary)
                     }
                     
@@ -286,7 +286,7 @@ struct BudgetDetailView: View {
                     HStack {
                         Label(L10n.Budget.dailyBudget, systemImage: "target")
                         Spacer()
-                        Text(dailyBudget.formatted(.currency(code: preferredCurrency)))
+                        Text(dailyBudget.formattedAmount(for: preferredCurrency))
                             .foregroundStyle(dailyBudget > 0 ? ThemeManager.shared.incomeColor : .secondary)
                     }
                     
@@ -295,10 +295,10 @@ struct BudgetDetailView: View {
                         Label(L10n.Budget.projectedTotal, systemImage: "chart.line.uptrend.xyaxis")
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(projectedSpending.formatted(.currency(code: preferredCurrency)))
+                            Text(projectedSpending.formattedAmount(for: preferredCurrency))
                                 .foregroundStyle(projectedSpending > budgetLimitConverted ? ThemeManager.shared.expenseColor : .secondary)
                             if projectedSpending > budgetLimitConverted {
-                                Text(L10n.Budget.overBy((projectedSpending - budgetLimitConverted).formatted(.currency(code: preferredCurrency))))
+                                Text(L10n.Budget.overBy((projectedSpending - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
                                     .font(.app(.caption2))
                                     .foregroundStyle(ThemeManager.shared.expenseColor)
                             }
@@ -325,7 +325,7 @@ struct BudgetDetailView: View {
                                 ProgressView(value: goal.progress)
                                     .tint(Color(hex: goal.colorHex) ?? .accentColor)
                                 
-                                Text("\(goal.progressPercent) of \(goal.targetAmount.formatted(.currency(code: goal.currencyCode)))")
+                                Text("\(goal.progressPercent) \("common.of".localized) \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
                                     .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
@@ -378,7 +378,7 @@ struct BudgetDetailView: View {
                                 .cornerRadius(4)
                         }
                         if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
-                            Text("None")
+                            Text("budget.threshold.none".localized)
                                 .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                         }

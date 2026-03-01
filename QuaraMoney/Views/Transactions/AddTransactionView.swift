@@ -144,7 +144,7 @@ struct AddTransactionView: View {
                                     Image(systemName: debt.type == .owedToMe ? "arrow.up.right.circle.fill" : "arrow.down.left.circle.fill")
                                         .foregroundStyle(debt.type == .owedToMe ? .red : .green)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(debt.type == .owedToMe ? "Linked to Debt" : "Linked to Loan")
+                                        Text(debt.type == .owedToMe ? "transaction.linkedToDebt".localized : "transaction.linkedToLoan".localized)
                                             .font(.app(.caption2))
                                             .foregroundStyle(.secondary)
                                         Text(debt.personName)
@@ -278,7 +278,7 @@ struct AddTransactionView: View {
                 HStack {
                     Image(systemName: "slider.horizontal.3")
                         .foregroundStyle(.orange)
-                    Text("Balance Adjustment")
+                    Text("transaction.type.adjustment".localized)
                         .font(.app(.headline))
                     Spacer()
                     Image(systemName: "lock.fill")
@@ -451,7 +451,7 @@ struct AddTransactionView: View {
                     }
                     
                     let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
-                    Text("≈ \(convertedAmount.formatted(.currency(code: dest.currencyCode)))")
+                    Text("≈ \(convertedAmount.formattedAmount(for: dest.currencyCode))")
                         .font(.app(.caption))
                         .foregroundStyle(.blue)
                 }
@@ -535,12 +535,12 @@ struct AddTransactionView: View {
                     .foregroundStyle(.primary)
                 }
             }
-            .navigationTitle("Select Category")
+            .navigationTitle(L10n.TransactionAdditional.selectCategory)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $categorySearchText, prompt: "Search categories")
+            .searchable(text: $categorySearchText, prompt: L10n.TransactionAdditional.searchCategories)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showAllCategories = false }
+                    Button(L10n.Common.cancel) { showAllCategories = false }
                 }
             }
         }
@@ -600,7 +600,7 @@ struct AddTransactionView: View {
                     Image(systemName: "clock")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
-                    Text("Time")
+                    Text(L10n.TransactionAdditional.time)
                     Spacer()
                     Text(viewModel.date.formatted(date: .omitted, time: .shortened))
                         .foregroundStyle(.secondary)

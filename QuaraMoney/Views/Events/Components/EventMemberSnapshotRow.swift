@@ -22,7 +22,7 @@ struct EventMemberSnapshotRow: View {
                                     .foregroundStyle(.blue)
                             )
                         
-                        Text("Add")
+                        Text(L10n.Common.add)
                             .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }

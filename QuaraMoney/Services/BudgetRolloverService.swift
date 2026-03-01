@@ -159,7 +159,7 @@ struct BudgetRolloverService {
         let center = UNUserNotificationCenter.current()
         let content = UNMutableNotificationContent()
         content.title = "Budget Rolled Over"
-        content.body = "Your \(budget.displayName) budget has \(amount.formatted(.currency(code: budget.currencyCode))) carried over to the new period."
+        content.body = "Your \(budget.displayName) budget has \(amount.formattedAmount(for: budget.currencyCode)) carried over to the new period."
         content.sound = .default
         
         let request = UNNotificationRequest(

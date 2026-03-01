@@ -13,7 +13,7 @@ enum TransactionType: String, Codable, CaseIterable, Identifiable {
         case .income: return L10n.Transaction.TransactionType.income
         case .expense: return L10n.Transaction.TransactionType.expense
         case .transfer: return L10n.Transaction.TransactionType.transfer
-        case .adjustment: return "Adjustment" // TODO: Add localization
+        case .adjustment: return L10n.Transaction.TransactionType.adjustment
         }
     }
 }

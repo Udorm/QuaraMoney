@@ -30,7 +30,7 @@ struct NetWorthCard: View {
                 Spacer()
             }
             
-            Text(totalNetWorth.formatted(.currency(code: currencyManager.preferredCurrencyCode)))
+            Text(totalNetWorth.formattedAmount(for: currencyManager.preferredCurrencyCode))
                 .font(.app(.largeTitle, weight: .bold)) // Approximating size 36 with largeTitle
                 .contentTransition(.numericText())
                 .foregroundStyle(totalNetWorth >= 0 ? Color.primary : ThemeManager.shared.expenseColor)

@@ -126,7 +126,7 @@ struct BudgetInsightsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 // Time Range Picker
-                Picker("Time Range", selection: $selectedTimeRange) {
+                Picker(L10n.Filter.title, selection: $selectedTimeRange) {
                     ForEach(InsightTimeRange.allCases, id: \.self) { range in
                         Text(range.displayName).tag(range)
                     }
@@ -151,16 +151,16 @@ struct BudgetInsightsView: View {
                 // Key Metrics
                 HStack(spacing: 12) {
                     MetricCard(
-                        title: "Budgets Met",
+                        title: "budget.budgetsMet".localized,
                         value: "\(Int(budgetPerformanceScore * 100))%",
-                        subtitle: "Last \(selectedTimeRange.months) months",
+                        subtitle: "common.last".localized + " \(selectedTimeRange.months) " + "common.months".localized,
                         color: budgetPerformanceScore >= 0.7 ? .green : (budgetPerformanceScore >= 0.5 ? .orange : .red)
                     )
                     
                     MetricCard(
-                        title: "Active Budgets",
+                        title: "budget.activeBudgets".localized,
                         value: "\(activeBudgets.count)",
-                        subtitle: budgets.filter { $0.isRecurring }.count > 0 ? "\(budgets.filter { $0.isRecurring }.count) recurring" : "No recurring",
+                        subtitle: budgets.filter { $0.isRecurring }.count > 0 ? "\(budgets.filter { $0.isRecurring }.count) \(L10n.Budget.recurring.lowercased())" : "common.none".localized,
                         color: .accentColor
                     )
                 }
@@ -187,7 +187,7 @@ struct BudgetInsightsView: View {
             }
             .padding(.vertical)
         }
-        .navigationTitle("Budget Insights")
+        .navigationTitle(L10n.Budget.insights)
         .background(Color(.systemGroupedBackground))
     }
     
@@ -252,9 +252,9 @@ enum InsightTimeRange: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .threeMonths: return "3 Months"
-        case .sixMonths: return "6 Months"
-        case .oneYear: return "1 Year"
+        case .threeMonths: return "3 \("common.months".localized)"
+        case .sixMonths: return "6 \("common.months".localized)"
+        case .oneYear: return "1 \(L10n.Filter.year)"
         }
     }
     
@@ -346,7 +346,7 @@ struct PerformanceScoreCard: View {
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Budget Performance")
+                    Text("budget.performance".localized)
                         .font(.app(.headline))
                     
                     HStack(spacing: 8) {
@@ -382,7 +382,7 @@ struct PerformanceScoreCard: View {
                 VStack(spacing: 4) {
                     Text("\(Int(score * 100))%")
                         .font(.app(.title3, weight: .bold))
-                    Text("Success Rate")
+                    Text("budget.successRate".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -393,7 +393,7 @@ struct PerformanceScoreCard: View {
                 VStack(spacing: 4) {
                     Text("\(activeBudgetsCount)")
                         .font(.app(.title3, weight: .bold))
-                    Text("Active")
+                    Text(L10n.Budget.Filter.active)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -410,7 +410,7 @@ struct MonthlyTrendChart: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Monthly Budget Utilization")
+            Text("budget.monthlyUtilization".localized)
                 .font(.app(.headline))
             
             Chart {
@@ -444,7 +444,7 @@ struct MonthlyTrendChart: View {
                     Circle()
                         .fill(Color.accentColor.opacity(0.3))
                         .frame(width: 10, height: 10)
-                    Text("Budgeted")
+                    Text("budget.budgeted".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -453,7 +453,7 @@ struct MonthlyTrendChart: View {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 10, height: 10)
-                    Text("Under Budget")
+                    Text("budget.underBudget".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -462,7 +462,7 @@ struct MonthlyTrendChart: View {
                     Circle()
                         .fill(Color.red)
                         .frame(width: 10, height: 10)
-                    Text("Over Budget")
+                    Text("budget.overBudget".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -509,7 +509,7 @@ struct OverspendingCategoriesCard: View {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
-                Text("Categories That Need Attention")
+                Text("budget.attentionCategories".localized)
                     .font(.app(.headline))
             }
             
@@ -552,7 +552,7 @@ struct ActiveBudgetsSummary: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Active Budgets Status")
+            Text("budget.activeBudgetsStatus".localized)
                 .font(.app(.headline))
             
             ForEach(budgets.prefix(5)) { budget in
@@ -632,8 +632,8 @@ struct BudgetTipsCard: View {
         if performanceScore < 0.5 {
             tips.append(BudgetTip(
                 icon: "lightbulb.fill",
-                title: "Consider increasing budgets",
-                description: "Your budgets might be too strict. Try increasing limits by 10-15%."
+                title: "budget.tip.increase".localized,
+                description: "budget.tip.increaseDesc".localized
             ))
         }
         
@@ -641,23 +641,23 @@ struct BudgetTipsCard: View {
             let topCategory = overspendingCategories[0]
             tips.append(BudgetTip(
                 icon: "exclamationmark.circle.fill",
-                title: "Review \(topCategory.category.name) spending",
-                description: "This category exceeds budget \(topCategory.percentage) of the time."
+                title: String(format: "budget.tip.review".localized, topCategory.category.name),
+                description: String(format: "budget.tip.reviewDesc".localized, topCategory.percentage)
             ))
         }
         
         if performanceScore >= 0.8 {
             tips.append(BudgetTip(
                 icon: "star.fill",
-                title: "Great job!",
-                description: "You're staying within budget most of the time. Keep it up!"
+                title: "budget.tip.greatJob".localized,
+                description: "budget.tip.greatJobDesc".localized
             ))
         }
         
         tips.append(BudgetTip(
             icon: "calendar.badge.clock",
-            title: "Check budgets weekly",
-            description: "Regular reviews help catch overspending early."
+            title: "budget.tip.checkWeekly".localized,
+            description: "budget.tip.checkWeeklyDesc".localized
         ))
         
         return tips
@@ -665,7 +665,7 @@ struct BudgetTipsCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Tips & Recommendations")
+            Text("budget.tips".localized)
                 .font(.app(.headline))
             
             ForEach(tips.prefix(3), id: \.title) { tip in

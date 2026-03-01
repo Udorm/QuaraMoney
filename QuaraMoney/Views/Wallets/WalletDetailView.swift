@@ -42,7 +42,7 @@ struct WalletDetailView: View {
                     }
                     
                     // Balance
-                    Text(viewModel.wallet.balance.formatted(.currency(code: viewModel.wallet.currencyCode)))
+                    Text(viewModel.wallet.balance.formattedAmount(for: viewModel.wallet.currencyCode))
                         .font(.app(.largeTitle, weight: .bold))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)

@@ -229,10 +229,19 @@ class BudgetNotificationService: ObservableObject {
     }
     
     func loadNotifications() {
-        if let data = UserDefaults.standard.data(forKey: "BudgetNotifications"),
-           let decoded = try? JSONDecoder().decode([BudgetNotification].self, from: data) {
-            inAppNotifications = decoded
-            updateUnreadCount()
+        // Decode JSON off the main thread to avoid blocking UI
+        Task.detached(priority: .utility) {
+            let notifications: [BudgetNotification]
+            if let data = UserDefaults.standard.data(forKey: "BudgetNotifications"),
+               let decoded = try? JSONDecoder().decode([BudgetNotification].self, from: data) {
+                notifications = decoded
+            } else {
+                notifications = []
+            }
+            await MainActor.run { [notifications] in
+                self.inAppNotifications = notifications
+                self.updateUnreadCount()
+            }
         }
     }
     

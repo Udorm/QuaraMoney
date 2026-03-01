@@ -13,13 +13,26 @@ struct QuaraMoneyApp: App {
     @StateObject private var languageManager = LanguageManager.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     
-    // Initialize appearance BEFORE any views are created
     init() {
-        // Setup UIKit appearances (must happen before views are created)
-        UIFont.setupAppAppearance()
+        // All heavy work deferred to .task{} modifiers
     }
     
-    var sharedModelContainer: ModelContainer = {
+    // MARK: - ModelContainer (lazily created on first access)
+    
+    /// Cached container – created once, reused across body evaluations.
+    /// Using nonisolated(unsafe) static because App struct is recreated on every body eval.
+    nonisolated(unsafe) private static var _cachedContainer: ModelContainer?
+    
+    private var sharedModelContainer: ModelContainer {
+        if let cached = Self._cachedContainer {
+            return cached
+        }
+        let container = Self.makeModelContainer()
+        Self._cachedContainer = container
+        return container
+    }
+    
+    private static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
             Wallet.self,
             Category.self,
@@ -42,7 +55,7 @@ struct QuaraMoneyApp: App {
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
-    }()
+    }
     
     /// The default cascaded font for the entire app
     private var defaultAppFont: Font {
@@ -61,91 +74,21 @@ struct QuaraMoneyApp: App {
                     OnboardingView()
                 }
             }
-    // Apply cascaded font globally - this makes ALL text use the font with Khmer fallback
             .environment(\.font, defaultAppFont)
             // Force view recreation when language changes
             .id(languageManager.fontRefreshID)
             .environmentObject(languageManager)
             .preferredColorScheme(selectedTheme.colorScheme)
-            .onAppear {
-                // Setup UIKit appearances after window appears to ensure font is loaded
+            .task {
+                // Deferred from init() — runs after first frame renders
                 UIFont.setupAppAppearance()
+                // Pre-warm common font sizes on background thread for smoother scrolling
+                UIFont.prewarmFontCache()
             }
         }
         .modelContainer(sharedModelContainer)
     }
     
-    @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var securityManager = SecurityManager.shared
-    
-    private var bodyContent: some View {
-        Group {
-            if securityManager.isAppLocked {
-                ZStack {
-                    ContentView()
-                        .blur(radius: 10)
-                        .disabled(true)
-                    
-                    Color(.systemBackground).ignoresSafeArea()
-                    
-                    VStack(spacing: 20) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 64))
-                        
-                        Text("QuaraMoney Locked")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Button {
-                            securityManager.authenticate()
-                        } label: {
-                            Label("Unlock", systemImage: "faceid")
-                                .font(.headline)
-                                .padding()
-                                .background(Color.accentColor)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                        }
-                    }
-                }
-            } else {
-                Group {
-                    if isOnboardingCompleted {
-                        ContentView()
-                            .onAppear {
-                                setupServices()
-                            }
-                    } else {
-                        OnboardingView()
-                    }
-                }
-                // Apply cascaded font globally
-                .environment(\.font, defaultAppFont)
-                .id(languageManager.fontRefreshID)
-                .environmentObject(languageManager)
-                .preferredColorScheme(selectedTheme.colorScheme)
-            }
-        }
-        .onAppear {
-             UIFont.setupAppAppearance()
-             // Initial check if locked
-             if securityManager.isAppLockEnabled {
-                 securityManager.lockApp()
-                 securityManager.authenticate()
-             }
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background {
-                // Lock instantly when backgrounded
-                securityManager.lockApp()
-            } else if newPhase == .active {
-                // Try to unlock if locked and enabled
-                if securityManager.isAppLocked {
-                    securityManager.authenticate()
-                }
-            }
-        }
-    }
     
     @AppStorage("appTheme") private var selectedTheme: AppTheme = .system
     
@@ -208,8 +151,8 @@ struct QuaraMoneyApp: App {
         
         let debtCategoryName = L10n.Category.debtAndLoans
         
-        // Perform heavy database operations in background
-        Task.detached(priority: .userInitiated) {
+        // Perform heavy database operations in background (utility priority to avoid competing with UI)
+        Task.detached(priority: .utility) {
             let context = ModelContext(container)
             
             // Check recurring transactions
@@ -229,7 +172,7 @@ struct QuaraMoneyApp: App {
             // 1. Debt (Lending out money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: "Debt", // TODO: Localize
+                name: L10n.Debt.SystemCategory.debt,
                 icon: "arrow.up.right",
                 colorHex: "#FF3B30",
                 type: .expense
@@ -238,7 +181,7 @@ struct QuaraMoneyApp: App {
             // 2. Debt Collection (Receiving money back) - Income
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: "Debt Collection", // TODO: Localize
+                name: L10n.Debt.SystemCategory.debtCollection,
                 icon: "tray.and.arrow.down.fill",
                 colorHex: "#34C759",
                 type: .income
@@ -247,7 +190,7 @@ struct QuaraMoneyApp: App {
             // 3. Loan (Borrowing money) - Income
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: "Loan", // TODO: Localize
+                name: L10n.Debt.SystemCategory.loan,
                 icon: "arrow.down.left",
                 colorHex: "#34C759",
                 type: .income
@@ -256,7 +199,7 @@ struct QuaraMoneyApp: App {
             // 4. Loan Repayment (Paying back money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: "Loan Repayment", // TODO: Localize
+                name: L10n.Debt.SystemCategory.loanRepayment,
                 icon: "tray.and.arrow.up.fill",
                 colorHex: "#007AFF",
                 type: .expense
@@ -278,13 +221,17 @@ struct QuaraMoneyApp: App {
                 colorHex: "#795548",
                 type: .expense
             )
+            
+            try? context.save()
         }
-        
-        // Setup notification service on main thread as it deals with UI/State
-        let mainContext = sharedModelContainer.mainContext
-        BudgetNotificationService.shared.configure(modelContext: mainContext)
-        BudgetNotificationService.shared.loadNotifications()
-
-        BudgetNotificationService.shared.setupNotificationCategories()
+        // Defer notification setup to avoid blocking the main thread at launch
+        Task { @MainActor in
+            // Let the UI settle before loading notifications
+            try? await Task.sleep(for: .seconds(2))
+            let mainContext = sharedModelContainer.mainContext
+            BudgetNotificationService.shared.configure(modelContext: mainContext)
+            BudgetNotificationService.shared.loadNotifications()
+            BudgetNotificationService.shared.setupNotificationCategories()
+        }
     }
 }

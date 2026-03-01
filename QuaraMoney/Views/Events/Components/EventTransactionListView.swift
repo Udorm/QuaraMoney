@@ -105,7 +105,7 @@ private struct EventDailySectionHeader: View {
                 .font(.app(.headline))
                 .textCase(nil) // Ensure natural casing
             Spacer()
-            Text(total.formatted(.currency(code: currencyCode)))
+            Text(total.formattedAmount(for: currencyCode))
                 .font(.app(.subheadline))
                 .foregroundStyle(total >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }

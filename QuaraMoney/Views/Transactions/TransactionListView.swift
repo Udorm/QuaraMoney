@@ -100,7 +100,7 @@ struct DailySectionHeader: View {
             Text(section.date, style: .date)
                 .font(.app(.headline))
             Spacer()
-            Text(section.dailyTotal.formatted(.currency(code: currencyCode)))
+            Text(section.dailyTotal.formattedAmount(for: currencyCode))
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? incomeColor : expenseColor)
         }

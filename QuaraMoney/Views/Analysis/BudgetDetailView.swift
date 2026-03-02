@@ -223,7 +223,7 @@ struct BudgetDetailView: View {
                 }
                 .padding(.vertical, 8)
             }
-            .listRowBackground(Color.clear)
+            .listRowBackground(progressColor.opacity(0.06))
             .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
             
             // MARK: - Summary Section

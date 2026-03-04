@@ -424,7 +424,17 @@ enum L10n {
         
         static var progress: String { "savings.progress".localized }
         static var complete: String { "savings.complete".localized }
-        
+        static var contributionHistory: String { "savings.contributionHistory".localized }
+        static var manualContributions: String { "savings.manualContributions".localized }
+        static var transferContributions: String { "savings.transferContributions".localized }
+        static var noLinkedTransactions: String { "savings.noLinkedTransactions".localized }
+        static var transferToGoal: String { "savings.transferToGoal".localized }
+        static var recordContribution: String { "savings.recordContribution".localized }
+        static var fromWallet: String { "savings.fromWallet".localized }
+        static var contribute: String { "savings.contribute".localized }
+        static var selectSourceWallet: String { "savings.selectSourceWallet".localized }
+        static var contributionAmount: String { "savings.contributionAmount".localized }
+
         enum Status {
             static var reached: String { "savings.status.reached".localized }
             static var pastDate: String { "savings.status.pastDate".localized }

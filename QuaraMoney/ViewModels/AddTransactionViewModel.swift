@@ -18,6 +18,7 @@ class AddTransactionViewModel: BaseViewModel {
     @Published var selectedEvent: Event?
     @Published var excludeFromReports: Bool = false
     @Published var debt: Debt?
+    @Published var selectedSavingsGoal: SavingsGoal?
     
     @Published var exchangeRate: Double = 1.0
     
@@ -57,6 +58,7 @@ class AddTransactionViewModel: BaseViewModel {
             
             if txn.type == .transfer {
                 self.destinationWallet = txn.destinationWallet
+                self.selectedSavingsGoal = txn.savingsGoal
             } else {
                 self.selectedCategory = txn.category
             }
@@ -168,9 +170,11 @@ class AddTransactionViewModel: BaseViewModel {
             transaction.destinationWallet = destinationWallet
             transaction.exchangeRate = Decimal(exchangeRate)
             transaction.category = nil
+            transaction.savingsGoal = selectedSavingsGoal
         } else {
             transaction.category = selectedCategory
             transaction.destinationWallet = nil
+            transaction.savingsGoal = nil
             // Store exchange rate for multi-currency income/expense
             transaction.exchangeRate = Decimal(exchangeRate)
         }

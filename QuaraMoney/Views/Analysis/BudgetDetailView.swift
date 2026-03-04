@@ -223,8 +223,8 @@ struct BudgetDetailView: View {
                 }
                 .padding(.vertical, 8)
             }
-            .listRowBackground(progressColor.opacity(0.06))
-            .listRowInsets(EdgeInsets(top: 10, leading: 20, bottom: 10, trailing: 20))
+            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
             
             // MARK: - Summary Section
             Section(L10n.Budget.summary) {
@@ -322,10 +322,10 @@ struct BudgetDetailView: View {
                                 Text(goal.name)
                                     .font(.app(.headline))
                                 
-                                ProgressView(value: goal.progress)
+                                ProgressView(value: goal.progress(converter: CurrencyManager.shared.convert))
                                     .tint(Color(hex: goal.colorHex) ?? .accentColor)
                                 
-                                Text("\(goal.progressPercent) \("common.of".localized) \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
+                                Text("\(goal.progressPercent(converter: CurrencyManager.shared.convert)) \("common.of".localized) \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
                                     .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
@@ -431,11 +431,11 @@ struct BudgetDetailView: View {
         .navigationTitle(L10n.Budget.details)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
                     showEditBudget = true
                 } label: {
-                    Text(L10n.Common.edit)
+                    Image(systemName: "pencil")
                 }
             }
         }

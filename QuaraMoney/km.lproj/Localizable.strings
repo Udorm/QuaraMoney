@@ -476,6 +476,17 @@
 "savings.status.weeksLeft" = "នៅសល់ %d សប្តាហ៍";
 "savings.status.monthsLeft" = "នៅសល់ %d ខែ";
 
+"savings.contributionHistory" = "ប្រវត្តិនៃការបរិច្ចាគ";
+"savings.manualContributions" = "ការបរិច្ចាគដោយដៃ";
+"savings.transferContributions" = "តាមរយៈការផ្ទេរ";
+"savings.noLinkedTransactions" = "គ្មានប្រតិបត្តិការភ្ជាប់";
+"savings.transferToGoal" = "ផ្ទេរទៅគោលដៅ";
+"savings.recordContribution" = "កត់ត្រាការបរិច្ចាគ";
+"savings.fromWallet" = "ពីកាបូប";
+"savings.contribute" = "បរិច្ចាគ";
+"savings.selectSourceWallet" = "ជ្រើសរើសកាបូបប្រភព";
+"savings.contributionAmount" = "ចំនួនដែលត្រូវបរិច្ចាគ";
+
 // MARK: - Debt
 "debt.title" = "បំណុល និង កម្ចី";
 "debt.owedToMe" = "គេជំពាក់ខ្ញុំ";

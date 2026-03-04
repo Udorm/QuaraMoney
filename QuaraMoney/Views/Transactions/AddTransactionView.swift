@@ -9,6 +9,7 @@ struct AddTransactionView: View {
     // Query data
     @Query(sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
     
     // UI State
     @State private var isDateExpanded = false
@@ -158,6 +159,27 @@ struct AddTransactionView: View {
                             }
                         }
                         
+                        // MARK: - Linked Savings Goal Indicator (editing)
+                        if viewModel.isEditing, let goal = viewModel.selectedSavingsGoal, viewModel.type == .transfer {
+                            Section {
+                                HStack {
+                                    Image(systemName: goal.iconName)
+                                        .foregroundStyle(Color(hex: goal.colorHex) ?? .green)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(L10n.Savings.selectGoal)
+                                            .font(.app(.caption2))
+                                            .foregroundStyle(.secondary)
+                                        Text(goal.name)
+                                            .font(.app(.subheadline, weight: .semibold))
+                                    }
+                                    Spacer()
+                                    Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
+                                        .font(.app(.caption))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
                         // MARK: - Wallet Selector
                         Section("transaction.fromWallet".localized) {
                             walletSelector
@@ -167,6 +189,24 @@ struct AddTransactionView: View {
                         if viewModel.type == .transfer {
                             Section("transaction.toWallet".localized) {
                                 destinationWalletSection
+                            }
+
+                            // Savings Goal Picker for transfers
+                            Section {
+                                savingsGoalPicker
+                            }
+                            .onChange(of: viewModel.destinationWallet) { _, newDest in
+                                guard let dest = newDest else {
+                                    viewModel.selectedSavingsGoal = nil
+                                    return
+                                }
+                                // Auto-select if exactly one active goal is linked to this wallet
+                                let matchingGoals = savingsGoals.filter { goal in
+                                    !goal.isCompleted && goal.linkedWallet?.id == dest.id
+                                }
+                                if matchingGoals.count == 1 {
+                                    viewModel.selectedSavingsGoal = matchingGoals.first
+                                }
                             }
                         } else if viewModel.type != .adjustment {
                             Section(L10n.Category.title) {
@@ -299,6 +339,7 @@ struct AddTransactionView: View {
                 .onChange(of: viewModel.type) { _, newType in
                     if newType != .transfer {
                         viewModel.selectedCategory = nil
+                        viewModel.selectedSavingsGoal = nil
                     }
                 }
             }
@@ -634,6 +675,31 @@ struct AddTransactionView: View {
         }
     }
     
+    // MARK: - Savings Goal Picker (for Transfers)
+    private var savingsGoalPicker: some View {
+        let eligibleGoals = savingsGoals.filter { goal in
+            !goal.isCompleted && (goal.linkedWallet == nil || goal.linkedWallet?.id == viewModel.destinationWallet?.id)
+        }
+        // Sort: goals whose linkedWallet matches the destination wallet come first
+        let sortedGoals = eligibleGoals.sorted { g1, g2 in
+            let g1Matches = g1.linkedWallet?.id == viewModel.destinationWallet?.id && g1.linkedWallet != nil
+            let g2Matches = g2.linkedWallet?.id == viewModel.destinationWallet?.id && g2.linkedWallet != nil
+            if g1Matches != g2Matches { return g1Matches }
+            return g1.priority < g2.priority
+        }
+
+        return Picker(L10n.Savings.selectGoal, selection: $viewModel.selectedSavingsGoal) {
+            Text("budget.threshold.none".localized).tag(nil as SavingsGoal?)
+            ForEach(sortedGoals) { goal in
+                HStack {
+                    Image(systemName: goal.iconName)
+                    Text(goal.name)
+                }
+                .tag(goal as SavingsGoal?)
+            }
+        }
+    }
+
     private var reportingSection: some View {
         Section {
             // Exclude Toggle

@@ -38,6 +38,7 @@ final class SavingsGoal {
     // Relationships
     @Relationship(deleteRule: .nullify) var linkedWallet: Wallet?
     @Relationship(deleteRule: .nullify, inverse: \Budget.savingsGoal) var linkedBudget: Budget?
+    @Relationship(deleteRule: .nullify, inverse: \Transaction.savingsGoal) var linkedTransactions: [Transaction]?
     
     init(
         name: String,
@@ -66,21 +67,38 @@ final class SavingsGoal {
     }
     
     // MARK: - Computed Properties
-    
+
+    /// Get total transactions converted to goal currency via a provided converter function
+    func transactionContributedAmount(converter: (Decimal, String, String) -> Decimal) -> Decimal {
+        guard let transactions = linkedTransactions, !transactions.isEmpty else { return 0 }
+        return transactions.reduce(Decimal.zero) { total, txn in
+            if txn.currencyCode == currencyCode {
+                return total + txn.amount
+            } else {
+                return total + converter(txn.amount, txn.currencyCode, currencyCode)
+            }
+        }
+    }
+
+    /// Total saved: manual contributions + linked transaction contributions
+    func totalSaved(converter: (Decimal, String, String) -> Decimal) -> Decimal {
+        currentAmount + transactionContributedAmount(converter: converter)
+    }
+
     /// Progress towards goal (0.0 - 1.0+)
-    var progress: Double {
+    func progress(converter: (Decimal, String, String) -> Decimal) -> Double {
         guard targetAmount > 0 else { return 0 }
-        return Double(truncating: currentAmount as NSNumber) / Double(truncating: targetAmount as NSNumber)
+        return Double(truncating: totalSaved(converter: converter) as NSNumber) / Double(truncating: targetAmount as NSNumber)
     }
-    
+
     /// Progress as percentage string
-    var progressPercent: String {
-        "\(Int(min(progress, 1.0) * 100))%"
+    func progressPercent(converter: (Decimal, String, String) -> Decimal) -> String {
+        "\(Int(min(progress(converter: converter), 1.0) * 100))%"
     }
-    
+
     /// Amount remaining to reach goal
-    var remainingAmount: Decimal {
-        max(targetAmount - currentAmount, 0)
+    func remainingAmount(converter: (Decimal, String, String) -> Decimal) -> Decimal {
+        max(targetAmount - totalSaved(converter: converter), 0)
     }
     
     /// Days until target date (nil if no target date)
@@ -91,20 +109,20 @@ final class SavingsGoal {
     }
     
     /// Suggested monthly contribution to reach goal by target date
-    var suggestedMonthlyContribution: Decimal? {
+    func suggestedMonthlyContribution(converter: (Decimal, String, String) -> Decimal) -> Decimal? {
         guard let targetDate = targetDate,
               targetDate > Date(),
-              remainingAmount > 0 else { return nil }
+              remainingAmount(converter: converter) > 0 else { return nil }
         
         let calendar = Calendar.current
         let months = calendar.dateComponents([.month], from: Date(), to: targetDate).month ?? 1
-        guard months > 0 else { return remainingAmount }
+        guard months > 0 else { return remainingAmount(converter: converter) }
         
-        return remainingAmount / Decimal(months)
+        return remainingAmount(converter: converter) / Decimal(months)
     }
     
     /// Whether the goal is on track based on target date
-    var isOnTrack: Bool {
+    func isOnTrack(converter: (Decimal, String, String) -> Decimal) -> Bool {
         guard let targetDate = targetDate,
               let daysRemaining = daysRemaining,
               daysRemaining > 0 else { return true }
@@ -114,7 +132,7 @@ final class SavingsGoal {
         guard totalDays > 0 else { return true }
         
         let expectedProgress = Double(totalDays - daysRemaining) / Double(totalDays)
-        return progress >= expectedProgress * 0.9 // 10% buffer
+        return progress(converter: converter) >= expectedProgress * 0.9 // 10% buffer
     }
     
     /// Status message for the goal
@@ -143,24 +161,24 @@ final class SavingsGoal {
     // MARK: - Methods
     
     /// Add contribution to the goal
-    func addContribution(_ amount: Decimal) {
+    func addContribution(_ amount: Decimal, converter: (Decimal, String, String) -> Decimal) {
         currentAmount += amount
-        checkCompletion()
+        checkCompletion(converter: converter)
     }
     
     /// Withdraw from the goal
-    func withdraw(_ amount: Decimal) {
+    func withdraw(_ amount: Decimal, converter: (Decimal, String, String) -> Decimal) {
         currentAmount = max(currentAmount - amount, 0)
         // Uncomplete if withdrawn below target
-        if currentAmount < targetAmount {
+        if totalSaved(converter: converter) < targetAmount {
             isCompleted = false
             completedDate = nil
         }
     }
     
     /// Check and update completion status
-    private func checkCompletion() {
-        if currentAmount >= targetAmount && !isCompleted {
+    func checkCompletion(converter: (Decimal, String, String) -> Decimal) {
+        if totalSaved(converter: converter) >= targetAmount && !isCompleted {
             isCompleted = true
             completedDate = Date()
         }

@@ -476,6 +476,17 @@
 "savings.status.weeksLeft" = "%d weeks left";
 "savings.status.monthsLeft" = "%d months left";
 
+"savings.contributionHistory" = "Contribution History";
+"savings.manualContributions" = "Manual Contributions";
+"savings.transferContributions" = "Via Transfers";
+"savings.noLinkedTransactions" = "No linked transactions";
+"savings.transferToGoal" = "Transfer to Goal";
+"savings.recordContribution" = "Record Contribution";
+"savings.fromWallet" = "From Wallet";
+"savings.contribute" = "Contribute";
+"savings.selectSourceWallet" = "Select source wallet";
+"savings.contributionAmount" = "Amount to contribute";
+
 // MARK: - Debt
 "debt.title" = "Debts & Loans";
 "debt.owedToMe" = "Owed To Me";

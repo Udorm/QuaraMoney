@@ -18,7 +18,8 @@ class TestModelContainer {
             RecurringRule.self,
             Transaction.self,
             Budget.self,
-            Debt.self
+            Debt.self,
+            SavingsGoal.self
         ]
         let schema = Schema(modelTypes)
         

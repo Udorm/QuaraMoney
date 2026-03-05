@@ -116,6 +116,9 @@
 "category.education" = "ការអប់រំ";
 "category.tech" = "បច្ចេកវិទ្យា";
 "category.debtAndLoans" = "បំណុល និង កម្ចី";
+"category.trip" = "ការធ្វើដំណើរ";
+"category.saving" = "ការសន្សំ";
+"category.giftsAndDonations" = "អំណោយ និង ការបរិច្ចាគ";
 
 // MARK: - Budget (ថវិកា)
 "budget.title" = "ថវិកា";

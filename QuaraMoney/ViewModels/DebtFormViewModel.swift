@@ -1,22 +1,22 @@
 import Foundation
 import SwiftData
-import Combine
 
+@Observable
 @MainActor
-final class DebtFormViewModel: ObservableObject {
-    @Published var personName = ""
-    @Published var amountText = ""
-    @Published var currencyCode: String = CurrencyManager.shared.preferredCurrencyCode
-    @Published var type: DebtType = .iOwe
-    @Published var dueDate: Date = Date()
-    @Published var hasDueDate = false
-    @Published var note = ""
-    @Published var selectedWallet: Wallet?
+final class DebtFormViewModel {
+    var personName = ""
+    var amountText = ""
+    var currencyCode: String = CurrencyManager.shared.preferredCurrencyCode
+    var type: DebtType = .iOwe
+    var dueDate: Date = Date()
+    var hasDueDate = false
+    var note = ""
+    var selectedWallet: Wallet?
 
-    @Published var errorMessage: String?
-    @Published var showError = false
-    @Published var showSuccess = false
-    @Published var isSaving = false
+    var errorMessage: String?
+    var showError = false
+    var showSuccess = false
+    var isSaving = false
 
     let debtToEdit: Debt?
 

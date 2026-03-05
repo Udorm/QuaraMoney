@@ -12,6 +12,11 @@ struct AddCategoryView: View {
     
     private var categoryToEdit: Category?
     
+    /// Whether the category being edited is a system category (read-only)
+    private var isSystemCategory: Bool {
+        categoryToEdit?.isSystem == true
+    }
+    
     init(categoryToEdit: Category? = nil) {
         self.categoryToEdit = categoryToEdit
         
@@ -28,12 +33,14 @@ struct AddCategoryView: View {
             Form {
                 Section("category.details".localized) {
                     TextField("category.name".localized, text: $name)
+                        .disabled(isSystemCategory)
                     
                     Picker("Type", selection: $selectedType) {
                         Text("category.expense".localized).tag(TransactionType.expense)
                         Text("category.income".localized).tag(TransactionType.income)
                     }
                     .pickerStyle(.segmented)
+                    .disabled(isSystemCategory)
                 }
                 
                 Section("category.appearance".localized) {
@@ -61,28 +68,30 @@ struct AddCategoryView: View {
                     .padding(.vertical)
                     .listRowBackground(Color.clear)
                     
-                    NavigationLink {
-                        ColorPickerView(selectedColorHex: $selectedColorHex)
-                            .navigationTitle("category.selectColor".localized)
-                    } label: {
-                        HStack {
-                            Text("category.color".localized)
-                            Spacer()
-                            Circle()
-                                .fill(Color(hex: selectedColorHex) ?? .blue)
-                                .frame(width: 24, height: 24)
+                    if !isSystemCategory {
+                        NavigationLink {
+                            ColorPickerView(selectedColorHex: $selectedColorHex)
+                                .navigationTitle("category.selectColor".localized)
+                        } label: {
+                            HStack {
+                                Text("category.color".localized)
+                                Spacer()
+                                Circle()
+                                    .fill(Color(hex: selectedColorHex) ?? .blue)
+                                    .frame(width: 24, height: 24)
+                            }
                         }
-                    }
-                    
-                    NavigationLink {
-                        IconPickerView(selectedIcon: $selectedIcon, selectedColorHex: $selectedColorHex)
-                            .navigationTitle("category.selectIcon".localized)
-                    } label: {
-                        HStack {
-                            Text("category.icon".localized)
-                            Spacer()
-                            Image(systemName: selectedIcon)
-                                .foregroundColor(Color(hex: selectedColorHex) ?? .blue)
+                        
+                        NavigationLink {
+                            IconPickerView(selectedIcon: $selectedIcon, selectedColorHex: $selectedColorHex)
+                                .navigationTitle("category.selectIcon".localized)
+                        } label: {
+                            HStack {
+                                Text("category.icon".localized)
+                                Spacer()
+                                Image(systemName: selectedIcon)
+                                    .foregroundColor(Color(hex: selectedColorHex) ?? .blue)
+                            }
                         }
                     }
                 }
@@ -97,21 +106,25 @@ struct AddCategoryView: View {
                     }
                 }
                 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        saveCategory()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
+                if !isSystemCategory {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            saveCategory()
+                            dismiss()
+                        } label: {
+                            Image(systemName: "checkmark")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(name.isEmpty)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(name.isEmpty)
                 }
             }
         }
     }
     
     private func saveCategory() {
+        guard !isSystemCategory else { return }
+        
         if let category = categoryToEdit {
             category.name = name
             category.icon = selectedIcon

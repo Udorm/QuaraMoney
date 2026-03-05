@@ -1,11 +1,11 @@
 import SwiftUI
 import SwiftData
-import Combine
 
+@Observable
 @MainActor
-final class DebtListViewModel: ObservableObject {
-    @Published var selectedType: DebtType? = nil
-    @Published var showCompleted = false
+final class DebtListViewModel {
+    var selectedType: DebtType? = nil
+    var showCompleted = false
 
     func filteredDebts(_ allDebts: [Debt]) -> [Debt] {
         var debts = allDebts

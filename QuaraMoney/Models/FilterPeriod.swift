@@ -2,6 +2,11 @@ import Foundation
 
 /// Shared filter period enum used across ViewModels.
 /// Consolidates duplicate Period enums from HomeViewModel, AnalysisViewModel, WalletDetailViewModel.
+
+enum TabPeriodSelection: Hashable, Equatable, Sendable {
+    case month(Date)
+    case custom
+}
 enum FilterPeriod: String, CaseIterable, Identifiable, Sendable {
     case thisMonth
     case lastMonth

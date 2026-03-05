@@ -17,15 +17,34 @@ struct WalletDetailView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Month Selection
-            MonthSelectionView(
-                selectedDate: $viewModel.selectedMonth,
-                months: viewModel.availableMonths
-            )
-            .padding(.bottom, 8)
-            .background(Color(uiColor: .systemBackground))
-            
             List {
+            Section {
+                MonthSelectionView(
+                    selectedTab: $viewModel.selectedTab,
+                    months: Array(viewModel.availableMonths.suffix(3))
+                )
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
+                
+                if case .custom = viewModel.selectedTab {
+                    HStack {
+                        Spacer()
+                        DatePicker("Start", selection: $viewModel.customStartDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .appFont(.subheadline)
+                        Text("-")
+                            .foregroundStyle(.secondary)
+                            .appFont(.subheadline)
+                        DatePicker("End", selection: $viewModel.customEndDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .appFont(.subheadline)
+                        Spacer()
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
+            }
+            
             // Header Section (Balance)
             // Header Section (Hero)
             Section {

@@ -3,14 +3,15 @@ import SwiftData
 import SwiftUI
 import Combine
 
+@Observable
 @MainActor
-class AnalysisViewModel: ObservableObject {
+class AnalysisViewModel {
     private var modelContext: ModelContext?
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Filters
     
-    @Published var selectedPeriod: AnalysisPeriod = .week {
+    var selectedPeriod: AnalysisPeriod = .week {
         didSet {
             // Reset reference date to now when changing period
             currentReferenceDate = Date()
@@ -19,30 +20,30 @@ class AnalysisViewModel: ObservableObject {
         }
     }
     
-    @Published var customStartDate: Date = Date() {
+    var customStartDate: Date = Date() {
         didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
-    @Published var customEndDate: Date = Date() {
+    var customEndDate: Date = Date() {
         didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
-    @Published var selectedWallet: Wallet? {
+    var selectedWallet: Wallet? {
         didSet { refreshData() }
     }
     
-    @Published var selectedTransactionType: TransactionTypeFilter = .expense {
+    var selectedTransactionType: TransactionTypeFilter = .expense {
         didSet { refreshData() }
     }
     
     // Reference date for navigation (scroll to change periods)
-    @Published var currentReferenceDate: Date = Date()
+    var currentReferenceDate: Date = Date()
     
     // Internal Date Range derived from filters
     private var startDate: Date = Date()
     private var endDate: Date = Date()
     
-    @Published var grouping: TimeGrouping = .day
+    var grouping: TimeGrouping = .day
     
     // MARK: - Navigation
     
@@ -61,14 +62,14 @@ class AnalysisViewModel: ObservableObject {
     }
     
     // MARK: - Output Data
-    @Published var netWorth: Decimal = 0
-    @Published var totalIncome: Decimal = 0
-    @Published var totalExpense: Decimal = 0
-    @Published var savingsRate: Double = 0
+    var netWorth: Decimal = 0
+    var totalIncome: Decimal = 0
+    var totalExpense: Decimal = 0
+    var savingsRate: Double = 0
     
     // For Charts
-    @Published var dailyStats: [DailyStat] = []
-    @Published var categoryStats: [CategoryStat] = []
+    var dailyStats: [DailyStat] = []
+    var categoryStats: [CategoryStat] = []
     
     var isFilterActive: Bool {
         return selectedPeriod != .day || selectedWallet != nil
@@ -93,7 +94,7 @@ class AnalysisViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.refreshData()
             }
-            .store(in: &cancellables)
+            .store(in: &self.cancellables)
     }
     
     /// Configure the model context - call this on view appear

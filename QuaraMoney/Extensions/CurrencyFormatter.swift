@@ -4,7 +4,7 @@ extension Decimal {
     /// Formats the decimal as a currency string, respecting the currency code's native symbol.
     /// - Parameter currencyCode: The 3-letter ISO currency code (e.g., "USD", "KHR")
     /// - Returns: A localized, standard currency string (e.g., "៛1,000.00", "$1,000.00")
-    func formattedAmount(for currencyCode: String) -> String {
+    nonisolated func formattedAmount(for currencyCode: String) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
@@ -25,14 +25,14 @@ extension Decimal {
 
 extension Double {
     /// Formats the double as a currency string, respecting the currency code's native symbol.
-    func formattedAmount(for currencyCode: String) -> String {
+    nonisolated func formattedAmount(for currencyCode: String) -> String {
         return Decimal(self).formattedAmount(for: currencyCode)
     }
 }
 
 extension Int64 {
     /// Formats the minor unit Int64 as a currency string using the provided currency code.
-    func formattedMinorAmount(for currencyCode: String) -> String {
+    nonisolated func formattedMinorAmount(for currencyCode: String) -> String {
         // Assume MoneyMinorUnitConverter handles the math, but we need to do it manually if not importing Services
         // A simple workaround based on the 2 digit standard since JPY is 0:
         let fractionDigits = currencyCode.uppercased() == "JPY" ? 0 : 2

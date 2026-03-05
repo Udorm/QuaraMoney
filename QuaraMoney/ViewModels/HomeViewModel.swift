@@ -8,8 +8,7 @@ class HomeViewModel: ObservableObject {
     private var modelContext: ModelContext
     private var cancellables = Set<AnyCancellable>()
     
-    // New Month Selection Logic
-    @Published var selectedMonth: Date = Date() {
+    @Published var selectedTab: TabPeriodSelection = .month(Date()) {
         didSet {
             updateDateRange()
             refreshData()
@@ -23,8 +22,22 @@ class HomeViewModel: ObservableObject {
     // or maybe we just won't show the picker in UI.
     @Published var selectedPeriod: FilterPeriod = .thisMonth // Default to thisMonth
     
-    @Published var customStartDate: Date = Date()
-    @Published var customEndDate: Date = Date()
+    @Published var customStartDate: Date = Date() {
+        didSet {
+            if selectedTab == .custom {
+                updateDateRange()
+                refreshData()
+            }
+        }
+    }
+    @Published var customEndDate: Date = Date() {
+        didSet {
+            if selectedTab == .custom {
+                updateDateRange()
+                refreshData()
+            }
+        }
+    }
     
     @Published var searchText: String = ""
     
@@ -73,7 +86,7 @@ class HomeViewModel: ObservableObject {
         // If we use standard LTR implementation, right is end of list.
         // So [Month-11, Month-10, ..., ThisMonth]
         self.availableMonths = months.reversed()
-        self.selectedMonth = currentMonthStart
+        self.selectedTab = .month(currentMonthStart)
         
         updateDateRange()
         
@@ -101,13 +114,19 @@ class HomeViewModel: ObservableObject {
     }
     
     private func updateDateRange() {
-        // Always use selectedMonth for the range now
         let calendar = Calendar.current
-        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth))!
-        let end = calendar.date(byAdding: .month, value: 1, to: start)!.addingTimeInterval(-1)
         
-        self.startDate = start
-        self.endDate = end
+        if case .month(let date) = selectedTab {
+            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
+            let end = calendar.date(byAdding: .month, value: 1, to: start)!.addingTimeInterval(-1)
+            self.startDate = start
+            self.endDate = end
+        } else {
+            let start = calendar.startOfDay(for: customStartDate)
+            let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) ?? customEndDate
+            self.startDate = start
+            self.endDate = end
+        }
     }
     
     func refreshData() {
@@ -183,15 +202,15 @@ class HomeViewModel: ObservableObject {
     }
     
     var isFilterActive: Bool {
-        // Filter is active if not the current month OR custom wallet selected?
-        // User said: "remove date filter from context menu"
-        // So checking if 'selectedPeriod' is default might be irrelevant for date.
-        // But for UI state (e.g. clear filters), maybe we reset to this month?
-        return !Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) || selectedWallet != nil
+        if case .month(let date) = selectedTab {
+            return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) || selectedWallet != nil
+        }
+        return true // Custom is active
     }
     
     func resetFilters() {
-        selectedMonth = Date() // Back to today/this month
+        let currentMonthStart = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date()))!
+        selectedTab = .month(currentMonthStart) // Back to today/this month
         selectedWallet = nil
         searchText = ""
     }

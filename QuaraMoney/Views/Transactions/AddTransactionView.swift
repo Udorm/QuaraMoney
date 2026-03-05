@@ -5,6 +5,7 @@ struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
+    let startWithScanner: Bool
     
     // Query data
     @Query(sort: \Category.name) private var categories: [Category]
@@ -27,9 +28,10 @@ struct AddTransactionView: View {
     private let maxQuickCategories = 3 // Show 3 categories + "More" to keep strictly to one row (4 items)
     private let maxQuickWallets = 4
     
-    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
+    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
+        self.startWithScanner = startWithScanner
     }
     
     private var filteredCategories: [Category] {
@@ -288,7 +290,11 @@ struct AddTransactionView: View {
                     viewModel.syncCurrencyToWallet()
                 }
                 // Only show keyboard for new transactions
-                showKeyboard = isNewTransaction
+                showKeyboard = isNewTransaction && !startWithScanner
+                
+                if startWithScanner {
+                    showScanner = true
+                }
             }
             .background(Color(.systemGroupedBackground))
         }

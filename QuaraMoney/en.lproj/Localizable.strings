@@ -116,6 +116,9 @@
 "category.education" = "Education";
 "category.tech" = "Tech";
 "category.debtAndLoans" = "Debts & Loans";
+"category.trip" = "Trip";
+"category.saving" = "Saving";
+"category.giftsAndDonations" = "Gifts & Donations";
 
 // MARK: - Budget
 "budget.title" = "Budgets";

@@ -1,4 +1,4 @@
-
+import SwiftUI
 import SwiftUI
 import SwiftData
 
@@ -6,10 +6,14 @@ struct DebtListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Debt.dateCreated, order: .reverse) private var allDebts: [Debt]
 
-    @StateObject private var viewModel = DebtListViewModel()
+    @State private var viewModel = DebtListViewModel()
 
     @State private var showAddDebtSheet = false
     @State private var debtToEdit: Debt?
+
+    private var isFilterActive: Bool {
+        viewModel.showCompleted
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,17 +88,26 @@ struct DebtListView: View {
         }
         .navigationTitle(L10n.Debt.title)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Menu {
-                    Toggle("Show Completed", isOn: $viewModel.showCompleted)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                }
-            }
-
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showAddDebtSheet = true }) {
                     Image(systemName: "plus")
+                }
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Toggle("Show Completed", isOn: $viewModel.showCompleted)
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isFilterActive ? .white : .primary)
+                        .padding(6)
+                        .background {
+                            if isFilterActive {
+                                Circle()
+                                    .fill(.blue)
+                            }
+                        }
                 }
             }
         }

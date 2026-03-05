@@ -1,25 +1,25 @@
 import SwiftUI
 import SwiftData
 import Foundation
-import Combine
 
+@Observable
 @MainActor
-class AddEventLedgerTransactionViewModel: ObservableObject {
+class AddEventLedgerTransactionViewModel {
     let event: Event
     let transactionToEdit: EventLedgerTransaction?
     
-    @Published var expression: String = ""
-    @Published var evaluatedAmount: Decimal = 0
-    @Published var transactionKind: EventLedgerTransactionKind = .expense
-    @Published var selectedCategoryId: UUID?
-    @Published var useEventWallet: Bool = false
-    @Published var selectedPayerMemberId: UUID?
-    @Published var isCustomSplit: Bool = false
-    @Published var selectedParticipantIds: Set<UUID> = []
-    @Published var date: Date = Date()
-    @Published var note: String = ""
-    @Published var selectedCurrencyCode: String = "USD"
-    @Published var errorMessage: String?
+    var expression: String = ""
+    var evaluatedAmount: Decimal = 0
+    var transactionKind: EventLedgerTransactionKind = .expense
+    var selectedCategoryId: UUID?
+    var useEventWallet: Bool = false
+    var selectedPayerMemberId: UUID?
+    var isCustomSplit: Bool = false
+    var selectedParticipantIds: Set<UUID> = []
+    var date: Date = Date()
+    var note: String = ""
+    var selectedCurrencyCode: String = "USD"
+    var errorMessage: String?
     
     private var modelContext: ModelContext?
     
@@ -67,7 +67,7 @@ class AddEventLedgerTransactionViewModel: ObservableObject {
         }
     }
     
-    @Published var expenseCategories: [Category] = []
+    var expenseCategories: [Category] = []
     
     var resolvedAmount: Decimal {
         evaluatedAmount

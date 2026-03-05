@@ -5,7 +5,7 @@ struct AddEventLedgerTransactionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @StateObject private var viewModel: AddEventLedgerTransactionViewModel
+    @State private var viewModel: AddEventLedgerTransactionViewModel
     
     @State private var isDateExpanded = false
     @State private var isTimeExpanded = false
@@ -18,7 +18,7 @@ struct AddEventLedgerTransactionView: View {
     private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4)
     
     init(event: Event, transactionToEdit: EventLedgerTransaction? = nil) {
-        _viewModel = StateObject(wrappedValue: AddEventLedgerTransactionViewModel(event: event, transactionToEdit: transactionToEdit))
+        self.viewModel = AddEventLedgerTransactionViewModel(event: event, transactionToEdit: transactionToEdit)
     }
     
     var body: some View {

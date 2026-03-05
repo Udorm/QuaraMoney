@@ -8,11 +8,21 @@ class WalletDetailViewModel: ObservableObject {
     private var modelContext: ModelContext
     let wallet: Wallet
     
-    // Month Selection
-    @Published var selectedMonth: Date = Date() {
+    @Published var selectedTab: TabPeriodSelection = .month(Date()) {
         didSet {
             updateDateRange()
             fetchTransactions()
+        }
+    }
+    
+    @Published var customStartDate: Date = Date() {
+        didSet {
+            if selectedTab == .custom { updateDateRange(); fetchTransactions() }
+        }
+    }
+    @Published var customEndDate: Date = Date() {
+        didSet {
+            if selectedTab == .custom { updateDateRange(); fetchTransactions() }
         }
     }
     
@@ -30,12 +40,19 @@ class WalletDetailViewModel: ObservableObject {
     
     var filterDescription: String {
         let calendar = Calendar.current
-        if calendar.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) {
-            return "This Month"
-        } else {
-             let formatter = DateFormatter()
-             formatter.dateFormat = "MMMM yyyy"
-             return formatter.string(from: selectedMonth)
+        let formatter = DateFormatter()
+        
+        switch selectedTab {
+        case .month(let date):
+            if calendar.isDate(date, equalTo: Date(), toGranularity: .month) {
+                return "This Month"
+            } else {
+                formatter.dateFormat = "MMMM yyyy"
+                return formatter.string(from: date)
+            }
+        case .custom:
+            formatter.dateStyle = .medium
+            return "\(formatter.string(from: startDate)) - \(formatter.string(from: endDate))"
         }
     }
     
@@ -55,7 +72,7 @@ class WalletDetailViewModel: ObservableObject {
             }
         }
         self.availableMonths = months.reversed()
-        self.selectedMonth = currentMonthStart
+        self.selectedTab = .month(currentMonthStart)
         
         updateDateRange()
         
@@ -81,11 +98,18 @@ class WalletDetailViewModel: ObservableObject {
     
     private func updateDateRange() {
         let calendar = Calendar.current
-        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth))!
-        let end = calendar.date(byAdding: .month, value: 1, to: start)!.addingTimeInterval(-1)
-        
-        self.startDate = start
-        self.endDate = end
+        switch selectedTab {
+        case .month(let date):
+            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
+            let end = calendar.date(byAdding: .month, value: 1, to: start)!.addingTimeInterval(-1)
+            self.startDate = start
+            self.endDate = end
+        case .custom:
+            let start = calendar.startOfDay(for: customStartDate)
+            let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEndDate) ?? customEndDate
+            self.startDate = start
+            self.endDate = end
+        }
     }
     
     func fetchTransactions() {
@@ -159,6 +183,9 @@ class WalletDetailViewModel: ObservableObject {
     }
     
     var isFilterActive: Bool {
-        return !Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month)
+        if case .month(let date) = selectedTab {
+            return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month)
+        }
+        return true
     }
 }

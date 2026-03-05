@@ -23,7 +23,9 @@ struct CategoryListView: View {
                         CategoryRow(category: category)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                categoryToEdit = category
+                                if !category.isSystem {
+                                    categoryToEdit = category
+                                }
                             }
                     }
                     .onDelete { indexSet in
@@ -38,7 +40,9 @@ struct CategoryListView: View {
                         CategoryRow(category: category)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                categoryToEdit = category
+                                if !category.isSystem {
+                                    categoryToEdit = category
+                                }
                             }
                     }
                     .onDelete { indexSet in
@@ -90,6 +94,13 @@ struct CategoryRow: View {
             Text(category.name)
             
             Spacer()
+            
+            if category.isSystem {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
+        .deleteDisabled(category.isSystem)
     }
 }

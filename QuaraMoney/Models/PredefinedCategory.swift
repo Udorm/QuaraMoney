@@ -26,6 +26,10 @@ struct PredefinedCategory {
         PredefinedCategory(nameKey: "category.others", icon: "circle.grid.2x2.fill", colorHex: "#A2845E", type: .expense), // Olive
         // Also adding Income for completeness
         PredefinedCategory(nameKey: "category.salary", icon: "dollarsign.circle.fill", colorHex: "#34C759", type: .income),
-        PredefinedCategory(nameKey: "category.investments", icon: "chart.line.uptrend.xyaxis", colorHex: "#007AFF", type: .income)
+        PredefinedCategory(nameKey: "category.investments", icon: "chart.line.uptrend.xyaxis", colorHex: "#007AFF", type: .income),
+        // Trip, Saving, Gifts
+        PredefinedCategory(nameKey: "category.trip", icon: "airplane", colorHex: "#FF9800", type: .expense),
+        PredefinedCategory(nameKey: "category.saving", icon: "banknote.fill", colorHex: "#4CAF50", type: .expense),
+        PredefinedCategory(nameKey: "category.giftsAndDonations", icon: "gift.fill", colorHex: "#E91E63", type: .expense)
     ]
 }

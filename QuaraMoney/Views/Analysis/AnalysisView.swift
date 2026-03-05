@@ -4,7 +4,7 @@ import Charts
 
 struct AnalysisView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var viewModel = AnalysisViewModel()
+    @State private var viewModel = AnalysisViewModel()
     
     var body: some View {
         AnalysisContentView(vm: viewModel)
@@ -16,7 +16,7 @@ struct AnalysisView: View {
 }
 
 struct AnalysisContentView: View {
-    @ObservedObject var vm: AnalysisViewModel
+    @Bindable var vm: AnalysisViewModel
     
     // For Wallet Filter - We need to query wallets. 
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -68,7 +68,7 @@ struct AnalysisContentView: View {
 
 
 struct SpendingTrendChart: View {
-    @ObservedObject var vm: AnalysisViewModel
+    @Bindable var vm: AnalysisViewModel
     @State private var dragOffset: CGFloat = 0
     @State private var slideDirection: Int = 0 // -1 = left, 0 = none, 1 = right
     
@@ -277,7 +277,7 @@ struct SpendingTrendChart: View {
 }
 
 struct CategoryBreakdownChart: View {
-    @ObservedObject var vm: AnalysisViewModel
+    var vm: AnalysisViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

@@ -250,6 +250,9 @@ enum L10n {
         static var education: String { "category.education".localized }
         static var tech: String { "category.tech".localized }
         static var debtAndLoans: String { "category.debtAndLoans".localized }
+        static var trip: String { "category.trip".localized }
+        static var saving: String { "category.saving".localized }
+        static var giftsAndDonations: String { "category.giftsAndDonations".localized }
     }
     
 

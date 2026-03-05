@@ -5,11 +5,11 @@ import UniformTypeIdentifiers
 struct CSVImportView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: CSVImportViewModel
+    @State private var viewModel: CSVImportViewModel
     @State private var showFilePicker = false
     
     init(modelContext: ModelContext) {
-        _viewModel = StateObject(wrappedValue: CSVImportViewModel(modelContext: modelContext))
+        self.viewModel = CSVImportViewModel(modelContext: modelContext)
     }
     
     var body: some View {

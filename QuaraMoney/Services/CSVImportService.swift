@@ -304,10 +304,13 @@ final class CSVImportService {
         if let exact = typeCategories.first(where: { $0.name.lowercased() == normalized }) {
             return exact
         }
-        if let partial = typeCategories.first(where: { $0.name.lowercased().contains(normalized) || normalized.contains($0.name.lowercased()) }) {
+        if let partial = typeCategories.first(where: { 
+            let catName = $0.name.lowercased()
+            return catName.contains(normalized) || normalized.contains(catName)
+        }) {
             return partial
         }
-        return typeCategories.first
+        return nil // Prompt user to map unknown categories
     }
     
     func matchWallet(name: String, from wallets: [Wallet]) -> Wallet? {
@@ -316,10 +319,13 @@ final class CSVImportService {
         if let exact = wallets.first(where: { $0.name.lowercased() == normalized }) {
             return exact
         }
-        if let partial = wallets.first(where: { $0.name.lowercased().contains(normalized) || normalized.contains($0.name.lowercased()) }) {
+        if let partial = wallets.first(where: { 
+            let walletName = $0.name.lowercased()
+            return walletName.contains(normalized) || normalized.contains(walletName)
+        }) {
             return partial
         }
-        return wallets.first
+        return nil // Prompt user to select wallet if not found
     }
     
     // MARK: - Full Import (Streaming)

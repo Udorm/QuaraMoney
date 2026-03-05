@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
+    @State private var shouldScan = false
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     init(modelContext: ModelContext) {
@@ -16,41 +17,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Month Selection Tab Bar
-                MonthSelectionView(
-                    selectedDate: $viewModel.selectedMonth,
-                    months: viewModel.availableMonths
-                )
-                .padding(.bottom, 8)
-                .background(Color(uiColor: .systemBackground))
-                
-                List {
-                    // Summary Section
-                    if viewModel.selectedWallet != nil {
-                        Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
-                            FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
-                        }
-                    } else {
-                        Section {
-                             FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
-                        }
-                    }
-
-
-                    // Daily Transactions
-                    ForEach(viewModel.dailySections) { section in
-                        Section(header: DailyHeader(section: section)) {
-                            ForEach(section.transactions) { txn in
-                                HomeTransactionRow(
-                                    transaction: txn,
-                                    onEdit: { transactionToEdit = txn },
-                                    onDelete: { viewModel.deleteTransaction(txn) }
-                                )
-                            }
-                        }
-                    }
-                }
-                .listStyle(.insetGrouped)
+                transactionList
             }
             .navigationTitle(L10n.Home.title)
             .searchable(text: $viewModel.searchText)
@@ -60,8 +27,8 @@ struct HomeView: View {
                 try? await Task.sleep(for: .milliseconds(100))
                 viewModel.refreshData()
             }
-            .sheet(isPresented: $showingAddTransaction) {
-                AddTransactionContainer(transaction: nil, isNewTransaction: true)
+            .sheet(isPresented: $showingAddTransaction, onDismiss: { shouldScan = false }) {
+                AddTransactionContainer(transaction: nil, isNewTransaction: true, startWithScanner: shouldScan)
             }
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
@@ -79,6 +46,14 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
+                        shouldScan = true
+                        showingAddTransaction = true
+                    } label: {
+                        Image(systemName: "doc.text.viewfinder")
+                    }
+
+                    Button {
+                        shouldScan = false
                         showingAddTransaction = true
                     } label: {
                         Image(systemName: "plus")
@@ -97,6 +72,61 @@ struct HomeView: View {
                 
             }
         }
+    }
+
+    private var transactionList: some View {
+        List {
+            Section {
+                MonthSelectionView(
+                    selectedTab: $viewModel.selectedTab,
+                    months: Array(viewModel.availableMonths.suffix(3))
+                )
+                
+                if case .custom = viewModel.selectedTab {
+                    HStack {
+                        Spacer()
+                        DatePicker("Start", selection: $viewModel.customStartDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .font(.app(.headline))
+                        Text("-")
+                            .foregroundStyle(.secondary)
+                            .font(.app(.headline))
+                        DatePicker("End", selection: $viewModel.customEndDate, displayedComponents: .date)
+                            .labelsHidden()
+                            .font(.app(.headline))
+                        Spacer()
+                    }
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .listRowBackground(Color.clear)
+            
+            
+            // Summary Section
+            if viewModel.selectedWallet != nil {
+                Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
+                    FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                }
+            } else {
+                Section {
+                     FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                }
+            }
+
+            // Daily Transactions
+            ForEach(viewModel.dailySections) { section in
+                Section(header: DailyHeader(section: section)) {
+                    ForEach(section.transactions) { txn in
+                        HomeTransactionRow(
+                            transaction: txn,
+                            onEdit: { transactionToEdit = txn },
+                            onDelete: { viewModel.deleteTransaction(txn) }
+                        )
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
     }
 }
 
@@ -139,10 +169,12 @@ struct AddTransactionContainer: View {
     @Environment(\.modelContext) private var modelContext
     let transaction: Transaction?
     let isNewTransaction: Bool
+    let startWithScanner: Bool
     
-    init(transaction: Transaction? = nil, isNewTransaction: Bool = true) {
+    init(transaction: Transaction? = nil, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
         self.transaction = transaction
         self.isNewTransaction = isNewTransaction
+        self.startWithScanner = startWithScanner
     }
     
     var body: some View {
@@ -152,7 +184,8 @@ struct AddTransactionContainer: View {
                 initialWallet: nil,
                 transaction: transaction
             ),
-            isNewTransaction: isNewTransaction
+            isNewTransaction: isNewTransaction,
+            startWithScanner: startWithScanner
         )
     }
 }
@@ -182,5 +215,38 @@ struct DailyHeader: View {
 // Let's use a simple one here for now.
 
 
+#Preview("HomeView") {
+    let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Wallet.self, Transaction.self, Category.self, configurations: configuration)
+    let context = container.mainContext
 
+    // Seed minimal preview data if empty
+    if try! context.fetch(FetchDescriptor<Wallet>()).isEmpty {
+        let wallet = Wallet(name: "Personal", currencyCode: "USD", icon: "wallet.pass", colorHex: "#4F46E5")
+        let groceries = Category(name: "Groceries", icon: "cart", colorHex: "#EF4444", type: .expense)
+        let salary = Category(name: "Salary", icon: "banknote", colorHex: "#10B981", type: .income)
+
+        context.insert(wallet)
+        context.insert(groceries)
+        context.insert(salary)
+        let now = Date()
+        let t1 = Transaction(amount: 24.99, currencyCode: "USD", date: now, type: .expense)
+        t1.note = "Market run"
+        t1.sourceWallet = wallet
+        t1.category = groceries
+        
+        let t2 = Transaction(amount: 1500.00, currencyCode: "USD", date: Calendar.current.date(byAdding: .day, value: -1, to: now)!, type: .income)
+        t2.note = "Monthly salary"
+        t2.sourceWallet = wallet
+        t2.category = salary
+        
+        context.insert(t1)
+        context.insert(t2)
+
+        try? context.save()
+    }
+
+    return HomeView(modelContext: context)
+        .modelContainer(container)
+}
 

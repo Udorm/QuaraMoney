@@ -143,6 +143,9 @@ struct QuaraMoneyApp: App {
             DefaultCategoryData(name: L10n.Category.subscriptions, icon: "arrow.triangle.2.circlepath", colorHex: "#3F51B5", type: .expense),
             DefaultCategoryData(name: L10n.Category.financial, icon: "building.columns", colorHex: "#009688", type: .expense),
             DefaultCategoryData(name: L10n.Category.debtAndLoans, icon: "banknote", colorHex: "#795548", type: .expense),
+            DefaultCategoryData(name: L10n.Category.trip, icon: "airplane", colorHex: "#FF9800", type: .expense),
+            DefaultCategoryData(name: L10n.Category.saving, icon: "banknote.fill", colorHex: "#4CAF50", type: .expense),
+            DefaultCategoryData(name: L10n.Category.giftsAndDonations, icon: "gift.fill", colorHex: "#E91E63", type: .expense),
             
             // Bills
             DefaultCategoryData(name: L10n.Category.electricityBill, icon: "bolt", colorHex: "#FFEB3B", type: .expense),
@@ -151,6 +154,34 @@ struct QuaraMoneyApp: App {
         ]
         
         let debtCategoryName = L10n.Category.debtAndLoans
+        
+        let debtSystemCategoryDebt = L10n.Debt.SystemCategory.debt
+        let debtSystemCategoryDebtCollection = L10n.Debt.SystemCategory.debtCollection
+        let debtSystemCategoryLoan = L10n.Debt.SystemCategory.loan
+        let debtSystemCategoryLoanRepayment = L10n.Debt.SystemCategory.loanRepayment
+        let categoryTrip = L10n.Category.trip
+        let categorySaving = L10n.Category.saving
+        let categoryGiftsAndDonations = L10n.Category.giftsAndDonations
+        
+        let mustHaveCategories: [(String, String, String, TransactionType)] = [
+            // Income
+            (L10n.Category.salary, "dollarsign.circle", "#4CAF50", .income),
+            (L10n.Category.investments, "chart.line.uptrend.xyaxis", "#2196F3", .income),
+            (L10n.Category.others, "gift", "#FFC107", .income),
+            // Expense
+            (L10n.Category.foodAndDrink, "fork.knife", "#FF5722", .expense),
+            (L10n.Category.housing, "house", "#795548", .expense),
+            (L10n.Category.transportation, "car", "#03A9F4", .expense),
+            (L10n.Category.health, "heart", "#F44336", .expense),
+            (L10n.Category.financial, "building.columns", "#009688", .expense),
+            (L10n.Category.debtAndLoans, "banknote", "#795548", .expense),
+            (L10n.Category.trip, "airplane", "#FF9800", .expense),
+            (L10n.Category.saving, "banknote.fill", "#4CAF50", .expense),
+            // Bills
+            (L10n.Category.electricityBill, "bolt", "#FFEB3B", .expense),
+            (L10n.Category.waterBill, "drop", "#2196F3", .expense),
+            (L10n.Category.internetBill, "wifi", "#00BCD4", .expense),
+        ]
         
         // Perform heavy database operations in background (utility priority to avoid competing with UI)
         Task.detached(priority: .utility) {
@@ -173,7 +204,7 @@ struct QuaraMoneyApp: App {
             // 1. Debt (Lending out money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: L10n.Debt.SystemCategory.debt,
+                name: debtSystemCategoryDebt,
                 icon: "arrow.up.right",
                 colorHex: "#FF3B30",
                 type: .expense
@@ -182,7 +213,7 @@ struct QuaraMoneyApp: App {
             // 2. Debt Collection (Receiving money back) - Income
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: L10n.Debt.SystemCategory.debtCollection,
+                name: debtSystemCategoryDebtCollection,
                 icon: "tray.and.arrow.down.fill",
                 colorHex: "#34C759",
                 type: .income
@@ -191,7 +222,7 @@ struct QuaraMoneyApp: App {
             // 3. Loan (Borrowing money) - Income
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: L10n.Debt.SystemCategory.loan,
+                name: debtSystemCategoryLoan,
                 icon: "arrow.down.left",
                 colorHex: "#34C759",
                 type: .income
@@ -200,7 +231,7 @@ struct QuaraMoneyApp: App {
             // 4. Loan Repayment (Paying back money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
                 modelContext: context,
-                name: L10n.Debt.SystemCategory.loanRepayment,
+                name: debtSystemCategoryLoanRepayment,
                 icon: "tray.and.arrow.up.fill",
                 colorHex: "#007AFF",
                 type: .expense
@@ -222,6 +253,39 @@ struct QuaraMoneyApp: App {
                 colorHex: "#795548",
                 type: .expense
             )
+            
+            // Ensure new categories exist for existing users (safe: won't duplicate)
+            DefaultDataService.ensureCategoryExists(
+                modelContext: context,
+                name: categoryTrip,
+                icon: "airplane",
+                colorHex: "#FF9800",
+                type: .expense
+            )
+            DefaultDataService.ensureCategoryExists(
+                modelContext: context,
+                name: categorySaving,
+                icon: "banknote.fill",
+                colorHex: "#4CAF50",
+                type: .expense
+            )
+            DefaultDataService.ensureCategoryExists(
+                modelContext: context,
+                name: categoryGiftsAndDonations,
+                icon: "gift.fill",
+                colorHex: "#E91E63",
+                type: .expense
+            )
+            
+            for (name, icon, colorHex, type) in mustHaveCategories {
+                DefaultDataService.ensureSystemCategoryExists(
+                    modelContext: context,
+                    name: name,
+                    icon: icon,
+                    colorHex: colorHex,
+                    type: type
+                )
+            }
             
             try? context.save()
         }

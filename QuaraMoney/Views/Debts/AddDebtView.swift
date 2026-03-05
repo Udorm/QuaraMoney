@@ -6,12 +6,12 @@ struct AddDebtView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @StateObject private var viewModel: DebtFormViewModel
+    @State private var viewModel: DebtFormViewModel
 
     @Query(sort: \Wallet.name) private var wallets: [Wallet]
 
     init(debtToEdit: Debt? = nil) {
-        _viewModel = StateObject(wrappedValue: DebtFormViewModel(debt: debtToEdit))
+        _viewModel = State(wrappedValue: DebtFormViewModel(debt: debtToEdit))
     }
 
     var body: some View {

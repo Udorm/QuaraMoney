@@ -6,6 +6,7 @@ struct OnboardingView: View {
     @ObservedObject private var themeManager = ThemeManager.shared
     
     @State private var currentStep: OnboardingStep = .welcome
+    @State private var searchText: String = ""
     @Namespace private var animationNamespace
     
     enum OnboardingStep: Int, CaseIterable {
@@ -122,45 +123,110 @@ struct OnboardingView: View {
     }
     
     private var currencyView: some View {
-        VStack(spacing: 24) {
-            Text(L10n.Onboarding.selectCurrency)
-                .font(.app(.title, weight: .bold))
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                Text(L10n.Onboarding.selectCurrency)
+                    .font(.app(.title, weight: .bold))
+                
+                Text(L10n.Onboarding.currencyDescription)
+                    .font(.app(.subheadline))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 20)
             
-            Text(L10n.Onboarding.currencyDescription)
-                .font(.app(.subheadline))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField(L10n.Common.search, text: $searchText)
+                    .font(.app(.body))
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(12)
+            .padding(.horizontal)
+            .padding(.bottom, 16)
             
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 16) {
-                    ForEach(currencyManager.availableCurrencies, id: \.self) { currency in
-                        Button(action: {
-                            withAnimation {
-                                currencyManager.preferredCurrencyCode = currency
-                            }
-                        }) {
-                            VStack {
-                                Text(currency)
-                                    .font(.app(.headline))
-                                    .foregroundColor(currencyManager.preferredCurrencyCode == currency ? .white : .primary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(currencyManager.preferredCurrencyCode == currency ? Color.accentColor : Color(.secondarySystemBackground))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.accentColor, lineWidth: currencyManager.preferredCurrencyCode == currency ? 0 : 0)
-                            )
+            List {
+                if searchText.isEmpty {
+                    Section(header: Text("Common Currencies")) {
+                        ForEach(["USD", "KHR", "EUR", "GBP", "JPY"], id: \.self) { code in
+                            currencyRow(for: code)
                         }
                     }
                 }
-                .padding()
+                
+                Section(header: Text(searchText.isEmpty ? "All Currencies" : "Search Results")) {
+                    ForEach(filteredCurrencies, id: \.id) { currency in
+                        currencyRow(for: currency.id)
+                    }
+                }
+            }
+            .listStyle(.plain)
+        }
+    }
+    
+    private var filteredCurrencies: [CurrencyManager.CurrencyInfo] {
+        if searchText.isEmpty {
+            return currencyManager.availableCurrencyInfos
+        } else {
+            return currencyManager.availableCurrencyInfos.filter { 
+                $0.searchString.contains(searchText.lowercased())
             }
         }
-        .padding()
+    }
+    
+    private func currencyRow(for code: String) -> some View {
+        let isSelected = currencyManager.preferredCurrencyCode == code
+        let info = currencyManager.availableCurrencyInfos.first { $0.id == code }
+        
+        return Button(action: {
+            withAnimation(.spring()) {
+                currencyManager.preferredCurrencyCode = code
+            }
+        }) {
+            HStack(spacing: 16) {
+                // Symbol Icon
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.accentColor : Color(.systemGray6))
+                        .frame(width: 44, height: 44)
+                    
+                    Text(info?.symbol ?? code)
+                        .font(.app(.headline, weight: .bold))
+                        .foregroundColor(isSelected ? .white : .primary)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(info?.name ?? code)
+                        .font(.app(.body, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Text(code)
+                        .font(.app(.caption))
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.accentColor)
+                        .font(.title3)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowSeparator(.hidden)
     }
     
     private var themeView: some View {

@@ -1,12 +1,12 @@
 import Foundation
 import SwiftData
 import SwiftUI
-import Combine
 
+@Observable
 @MainActor
-final class CSVImportViewModel: ObservableObject {
-    private let modelContext: ModelContext
-    private lazy var importService = CSVImportService(modelContext: modelContext)
+final class CSVImportViewModel {
+    @ObservationIgnored private let modelContext: ModelContext
+    @ObservationIgnored private let importService: CSVImportService
     
     // MARK: - Step Management
     enum ImportStep {
@@ -17,34 +17,35 @@ final class CSVImportViewModel: ObservableObject {
         case complete
     }
     
-    @Published var currentStep: ImportStep = .selectFile
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    @Published var showError = false
+    var currentStep: ImportStep = .selectFile
+    var isLoading = false
+    var errorMessage: String?
+    var showError = false
     
     // MARK: - CSV Data
-    @Published var fileURL: URL?
-    @Published var headers: [String] = []
+    var fileURL: URL?
+    var headers: [String] = []
     // We only keep a limited number of rows for preview/mapping
-    @Published var previewRawRows: [[String]] = [] 
-    @Published var mapping = CSVColumnMapping()
-    @Published var parsedPreviewRows: [CSVParsedRow] = []
-    @Published var totalDetectedRows: Int = 0
+    var previewRawRows: [[String]] = [] 
+    var mapping = CSVColumnMapping()
+    var parsedPreviewRows: [CSVParsedRow] = []
+    var totalDetectedRows: Int = 0
     
     // MARK: - Existing Data
-    @Published var categories: [Category] = []
-    @Published var wallets: [Wallet] = []
-    @Published var selectedDefaultWallet: Wallet?
+    var categories: [Category] = []
+    var wallets: [Wallet] = []
+    var selectedDefaultWallet: Wallet?
     
     // MARK: - Import Result
-    @Published var importResult: CSVImportResult?
+    var importResult: CSVImportResult?
     
     // MARK: - Learned Mappings
-    @Published var categoryMappings: [String: Category] = [:]
-    @Published var walletMappings: [String: Wallet] = [:]
+    var categoryMappings: [String: Category] = [:]
+    var walletMappings: [String: Wallet] = [:]
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        self.importService = CSVImportService(modelContext: modelContext)
         loadExistingData()
     }
     

@@ -65,6 +65,24 @@ class CurrencyManager: ObservableObject {
         Locale.commonISOCurrencyCodes.sorted()
     }
     
+    struct CurrencyInfo: Identifiable, Hashable {
+        let id: String // Currency Code (e.g., "USD")
+        let name: String
+        let symbol: String
+        
+        var searchString: String {
+            "\(id) \(name) \(symbol)".lowercased()
+        }
+    }
+    
+    private(set) lazy var availableCurrencyInfos: [CurrencyInfo] = {
+        availableCurrencies.map { code in
+            let name = Locale.current.localizedString(forCurrencyCode: code) ?? code
+            let symbol = String.currencySymbol(for: code)
+            return CurrencyInfo(id: code, name: name, symbol: symbol)
+        }
+    }()
+    
     func convert(amount: Decimal, from sourceCurrency: String, to targetCurrency: String) -> Decimal {
         guard let sourceRate = rates[sourceCurrency], let targetRate = rates[targetCurrency] else {
             // Fallback logic if rates are missing

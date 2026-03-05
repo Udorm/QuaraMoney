@@ -57,6 +57,7 @@ struct WalletListView: View {
 private struct WalletListContent: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var wallets: [Wallet]
+    @Query private var allActiveWallets: [Wallet]
     @Binding var walletToEdit: Wallet?
     let showArchived: Bool
     let searchText: String
@@ -74,10 +75,19 @@ private struct WalletListContent: View {
             (searchText.isEmpty || wallet.name.localizedStandardContains(searchText))
         }
         _wallets = Query(filter: filter, sort: \Wallet.name)
+        
+        let netWorthFilter = #Predicate<Wallet> { !$0.isArchived }
+        _allActiveWallets = Query(filter: netWorthFilter, sort: \Wallet.name)
     }
     
     var body: some View {
         List {
+            if !showArchived {
+                Section {
+                    NetWorthCard(wallets: allActiveWallets)
+                }
+            }
+            
             Section(header: Text(showArchived ? L10n.Wallet.Status.archivedWallets : L10n.Wallet.Status.activeWallets)) {
                 ForEach(wallets) { wallet in
                     NavigationLink(destination: WalletDetailView(wallet: wallet, modelContext: modelContext)) {

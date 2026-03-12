@@ -356,6 +356,12 @@ enum L10n {
         static var lastYear: String { "filter.lastYear".localized }
     }
     
+    // MARK: - Filtered Transactions
+    enum FilteredTransactions {
+        static func count(_ n: Int) -> String { "filteredTransactions.count".localized(with: n) }
+        static var transactionsLabel: String { "filteredTransactions.transactionsLabel".localized }
+    }
+
     // MARK: - Analysis
     enum Analysis {
         static var title: String { "analysis.title".localized }

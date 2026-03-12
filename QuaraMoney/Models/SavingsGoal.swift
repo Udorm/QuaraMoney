@@ -37,7 +37,6 @@ final class SavingsGoal {
     
     // Relationships
     @Relationship(deleteRule: .nullify) var linkedWallet: Wallet?
-    @Relationship(deleteRule: .nullify, inverse: \Budget.savingsGoal) var linkedBudget: Budget?
     @Relationship(deleteRule: .nullify, inverse: \Transaction.savingsGoal) var linkedTransactions: [Transaction]?
     
     init(

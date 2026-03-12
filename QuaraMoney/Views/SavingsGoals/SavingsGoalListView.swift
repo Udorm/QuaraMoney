@@ -572,6 +572,7 @@ struct AddSavingsGoalView: View {
 
     @State private var showIconPicker = false
     @State private var showColorPicker = false
+    @State private var showCurrencyPicker = false
 
     private var goalColor: Color {
         Color(hex: selectedColor) ?? .blue
@@ -638,13 +639,22 @@ struct AddSavingsGoalView: View {
                         TextField(L10n.Savings.targetAmount, text: $targetAmountString)
                             .keyboardType(.decimalPad)
 
-                        Picker("", selection: $selectedCurrency) {
-                            ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
-                                Text(code).tag(code)
+                        Button {
+                            showCurrencyPicker = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(selectedCurrency)
+                                    .font(.app(.subheadline, weight: .bold))
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.secondarySystemBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                         }
-                        .labelsHidden()
-                        .frame(width: 80)
                     }
                 }
 
@@ -763,6 +773,12 @@ struct AddSavingsGoalView: View {
             .sheet(isPresented: $showColorPicker) {
                 ColorPickerView(selectedColorHex: $selectedColor)
             }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack {
+                    CurrencySelectionView(selection: $selectedCurrency)
+                }
+                .presentationDetents([.medium, .large])
+            }
         }
     }
 
@@ -863,6 +879,7 @@ struct EditSavingsGoalView: View {
 
     @State private var showIconPicker = false
     @State private var showColorPicker = false
+    @State private var showCurrencyPicker = false
 
     private var goalColor: Color {
         Color(hex: selectedColor) ?? .blue
@@ -916,13 +933,22 @@ struct EditSavingsGoalView: View {
                         TextField(L10n.Savings.targetAmount, text: $targetAmountString)
                             .keyboardType(.decimalPad)
 
-                        Picker("", selection: $selectedCurrency) {
-                            ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
-                                Text(code).tag(code)
+                        Button {
+                            showCurrencyPicker = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(selectedCurrency)
+                                    .font(.app(.subheadline, weight: .bold))
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.secondarySystemBackground))
+                            .foregroundColor(.primary)
+                            .clipShape(Capsule())
                         }
-                        .labelsHidden()
-                        .frame(width: 80)
                     }
                 }
 
@@ -992,6 +1018,12 @@ struct EditSavingsGoalView: View {
             }
             .sheet(isPresented: $showColorPicker) {
                 ColorPickerView(selectedColorHex: $selectedColor)
+            }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack {
+                    CurrencySelectionView(selection: $selectedCurrency)
+                }
+                .presentationDetents([.medium, .large])
             }
         }
     }

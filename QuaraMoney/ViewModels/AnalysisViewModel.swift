@@ -40,8 +40,8 @@ class AnalysisViewModel {
     var currentReferenceDate: Date = Date()
     
     // Internal Date Range derived from filters
-    private var startDate: Date = Date()
-    private var endDate: Date = Date()
+    private(set) var startDate: Date = Date()
+    private(set) var endDate: Date = Date()
     
     var grouping: TimeGrouping = .day
     

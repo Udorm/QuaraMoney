@@ -291,51 +291,74 @@ struct CategoryBreakdownChart: View {
             
             LazyVStack(spacing: 0) {
                 ForEach(vm.categoryStats.prefix(5)) { stat in
-                    VStack(spacing: 12) {
-                        HStack {
-                            Image(systemName: stat.icon.isEmpty ? "circle.fill" : stat.icon)
-                                .appFont(.title3)
-                                .foregroundStyle(Color(hex: stat.colorHex) ?? .blue)
-                                .frame(width: 30)
-                                
-                            VStack(alignment: .leading) {
-                                Text(stat.name)
-                                    .font(.app(.subheadline, weight: .medium))
-                                
-                                GeometryReader { geo in
-                                    ZStack(alignment: .leading) {
-                                        Capsule().fill(Color(.systemGray4).opacity(0.5))
-                                            .frame(height: 6)
-                                        
-                                        let maxAmount = vm.categoryStats.first?.amount ?? 1
-                                        let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
-                                        
-                                        Capsule().fill(Color(hex: stat.colorHex) ?? .blue)
-                                            .frame(width: geo.size.width * CGFloat(ratio), height: 6)
+                    NavigationLink {
+                        FilteredTransactionsDetailView(
+                            config: TransactionFilterConfig(
+                                title: stat.name,
+                                startDate: vm.startDate,
+                                endDate: vm.endDate,
+                                walletId: vm.selectedWallet?.id,
+                                walletName: vm.selectedWallet?.name,
+                                categoryId: stat.id,
+                                categoryName: stat.name,
+                                categoryIcon: stat.icon,
+                                categoryColorHex: stat.colorHex,
+                                transactionType: vm.selectedTransactionType,
+                                dateRangeDescription: vm.filterDescription
+                            )
+                        )
+                    } label: {
+                        VStack(spacing: 12) {
+                            HStack {
+                                Image(systemName: stat.icon.isEmpty ? "circle.fill" : stat.icon)
+                                    .appFont(.title3)
+                                    .foregroundStyle(Color(hex: stat.colorHex) ?? .blue)
+                                    .frame(width: 30)
+
+                                VStack(alignment: .leading) {
+                                    Text(stat.name)
+                                        .font(.app(.subheadline, weight: .medium))
+
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            Capsule().fill(Color(.systemGray4).opacity(0.5))
+                                                .frame(height: 6)
+
+                                            let maxAmount = vm.categoryStats.first?.amount ?? 1
+                                            let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
+
+                                            Capsule().fill(Color(hex: stat.colorHex) ?? .blue)
+                                                .frame(width: geo.size.width * CGFloat(ratio), height: 6)
+                                        }
                                     }
+                                    .frame(height: 6)
                                 }
-                                .frame(height: 6)
+
+                                Spacer()
+
+                                VStack(alignment: .trailing) {
+                                    Text(stat.amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
+                                        .font(.app(.callout))
+                                        .monospacedDigit()
+
+                                    let total = vm.categoryStats.reduce(0) { $0 + $1.amount }
+                                    let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
+                                    Text(percent.formatted(.percent.precision(.fractionLength(0))))
+                                        .font(.app(.caption2))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Image(systemName: "chevron.right")
+                                    .font(.app(.caption))
+                                    .foregroundStyle(.tertiary)
                             }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing) {
-                                Text(stat.amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                                    .font(.app(.callout))
-                                    .monospacedDigit()
-                                
-                                let total = vm.categoryStats.reduce(0) { $0 + $1.amount }
-                                let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
-                                Text(percent.formatted(.percent.precision(.fractionLength(0))))
-                                    .font(.app(.caption2))
-                                    .foregroundStyle(.secondary)
-                            }
+                            .padding(.vertical, 8)
+
+                            Divider()
+                                .padding(.leading, 40)
                         }
-                        .padding(.vertical, 8)
-                        
-                        Divider()
-                            .padding(.leading, 40)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }

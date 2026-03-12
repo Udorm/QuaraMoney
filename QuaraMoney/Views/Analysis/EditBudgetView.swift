@@ -8,8 +8,6 @@ struct EditBudgetView: View {
     @Bindable var budget: Budget
     
     @Query(sort: \Category.name) private var categories: [Category]
-
-    @Query(sort: \SavingsGoal.name) private var savingsGoals: [SavingsGoal]
     
     // MARK: - Form State (initialized from budget)
     
@@ -40,15 +38,12 @@ struct EditBudgetView: View {
     @State private var alertAt80: Bool = true
     @State private var alertAt100: Bool = true
     
-    // Savings goal
-    @State private var linkSavingsGoal: Bool = false
-    @State private var selectedSavingsGoal: SavingsGoal?
-    
     // Budget category type
     @State private var budgetCategoryType: BudgetCategoryType?
     
     // UI State
     @State private var showAdvancedOptions: Bool = false
+    @State private var showCurrencyPicker = false
     
     init(budget: Budget) {
         self.budget = budget
@@ -88,10 +83,6 @@ struct EditBudgetView: View {
         _alertAt50 = State(initialValue: budget.alertAt50)
         _alertAt80 = State(initialValue: budget.alertAt80)
         _alertAt100 = State(initialValue: budget.alertAt100)
-        
-        // Savings goal
-        _linkSavingsGoal = State(initialValue: budget.savingsGoal != nil)
-        _selectedSavingsGoal = State(initialValue: budget.savingsGoal)
         
         // Category type
         _budgetCategoryType = State(initialValue: budget.budgetCategoryType)
@@ -197,14 +188,23 @@ struct EditBudgetView: View {
                         HStack {
                             TextField(L10n.Transaction.amount, text: $amountString)
                                 .keyboardType(.decimalPad)
-                            
-                            Picker("", selection: $selectedCurrency) {
-                                ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
-                                    Text(code).tag(code)
+
+                            Button {
+                                showCurrencyPicker = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(selectedCurrency)
+                                        .font(.app(.subheadline, weight: .bold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color(.secondarySystemBackground))
+                                .foregroundColor(.primary)
+                                .clipShape(Capsule())
                             }
-                            .labelsHidden()
-                            .frame(width: 80)
                         }
                     }
                 }
@@ -280,20 +280,6 @@ struct EditBudgetView: View {
                         }
                     }
                     
-                    // Savings Goal Link
-                    if !savingsGoals.isEmpty {
-                        Toggle(L10n.Budget.linkSavings, isOn: $linkSavingsGoal)
-                        
-                        if linkSavingsGoal {
-                            Picker(L10n.Savings.selectGoal, selection: $selectedSavingsGoal) {
-                                Text(L10n.Savings.selectGoal).tag(nil as SavingsGoal?)
-                                ForEach(savingsGoals.filter { !$0.isCompleted }) { goal in
-                                    Label(goal.name, systemImage: goal.iconName)
-                                        .tag(goal as SavingsGoal?)
-                                }
-                            }
-                        }
-                    }
                 }
                 
                 // MARK: - Current Status (Read-only info)
@@ -333,6 +319,12 @@ struct EditBudgetView: View {
         }
         .sheet(isPresented: $showCategoryPicker) {
             MultiCategoryPicker(selectedCategories: $selectedCategories)
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencySelectionView(selection: $selectedCurrency)
+            }
+            .presentationDetents([.medium, .large])
         }
     }
     
@@ -384,12 +376,6 @@ struct EditBudgetView: View {
         // Update category type
         budget.budgetCategoryType = budgetCategoryType
         
-        // Update savings goal
-        if linkSavingsGoal {
-            budget.savingsGoal = selectedSavingsGoal
-        } else {
-            budget.savingsGoal = nil
-        }
     }
 }
 
@@ -397,5 +383,5 @@ struct EditBudgetView: View {
     @Previewable @State var budget = Budget(amountLimit: 500, currencyCode: "USD", category: nil, month: 2, year: 2026)
     
     EditBudgetView(budget: budget)
-        .modelContainer(for: [Budget.self, Category.self, SavingsGoal.self], inMemory: true)
+        .modelContainer(for: [Budget.self, Category.self], inMemory: true)
 }

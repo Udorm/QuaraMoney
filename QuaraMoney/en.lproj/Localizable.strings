@@ -685,6 +685,10 @@
 "analysis.period.y" = "Y";
 "analysis.period.ly" = "LY";
 
+// MARK: - Filtered Transactions
+"filteredTransactions.count" = "%d Transactions";
+"filteredTransactions.transactionsLabel" = "transactions";
+
 /* Common missing */
 "common.of" = "of";
 

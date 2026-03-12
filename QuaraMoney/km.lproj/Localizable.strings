@@ -669,4 +669,8 @@
 "settings.resetDefaults" = "កំណត់ទៅដើមវិញ";
 "settings.themeTitle" = "ពណ៌ នង រចនាប័ទ្ម";
 
+// MARK: - Filtered Transactions
+"filteredTransactions.count" = "ប្រតិបត្តិការ %d";
+"filteredTransactions.transactionsLabel" = "ប្រតិបត្តិការ";
+
 "common.of" = "នៃ";

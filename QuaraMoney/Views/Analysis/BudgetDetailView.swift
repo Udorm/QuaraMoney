@@ -307,43 +307,6 @@ struct BudgetDetailView: View {
                 }
             }
             
-            // MARK: - Linked Savings Goal
-            if let goal = budget.savingsGoal {
-                Section {
-                    NavigationLink {
-                        SavingsGoalDetailView(goal: goal)
-                    } label: {
-                        HStack {
-                            Image(systemName: goal.iconName)
-                                .foregroundStyle(Color(hex: goal.colorHex) ?? .accentColor)
-                                .frame(width: 30)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(goal.name)
-                                    .font(.app(.headline))
-                                
-                                ProgressView(value: goal.progress(converter: CurrencyManager.shared.convert))
-                                    .tint(Color(hex: goal.colorHex) ?? .accentColor)
-                                
-                                Text("\(goal.progressPercent(converter: CurrencyManager.shared.convert)) \("common.of".localized) \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
-                                    .font(.app(.caption))
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if goal.isCompleted {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                } header: {
-                    Text(L10n.Budget.linkedSavings)
-                }
-            }
-            
             // MARK: - Alert Settings
             Section {
                 HStack {
@@ -409,23 +372,41 @@ struct BudgetDetailView: View {
             }
             
             // MARK: - Transactions Section
-            if relevantTransactions.isEmpty {
-                Section(L10n.Budget.transactions(0)) {
+            Section(L10n.Budget.transactions(relevantTransactions.count)) {
+                if relevantTransactions.isEmpty {
                     Text(L10n.Budget.noTransactions)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
-                }
-            } else {
-                TransactionListView(
-                    transactions: relevantTransactions,
-                    onEdit: { txn in
-                        transactionToEdit = txn
-                    },
-                    onDelete: { txn in
-                        deleteTransaction(txn)
+                } else {
+                    let periodRange = budget.periodDateRange
+                    let budgetCategoryIds = budget.trackedCategoryIds
+                    let catInfos = budget.trackedCategoryInfos
+                    NavigationLink {
+                        FilteredTransactionsDetailView(
+                            config: TransactionFilterConfig(
+                                title: budget.displayName,
+                                startDate: periodRange.start,
+                                endDate: periodRange.end,
+                                transactionType: .expense,
+                                dateRangeDescription: budget.periodDisplayString,
+                                categoryIds: budgetCategoryIds.isEmpty ? nil : budgetCategoryIds,
+                                categoryInfos: catInfos.isEmpty ? nil : catInfos
+                            )
+                        )
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(relevantTransactions.count) " + "filteredTransactions.transactionsLabel".localized)
+                                    .font(.app(.subheadline, weight: .medium))
+                                Text(totalSpent.formattedAmount(for: preferredCurrency))
+                                    .font(.app(.caption))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
                     }
-                )
+                }
             }
         }
         .navigationTitle(L10n.Budget.details)
@@ -466,5 +447,5 @@ struct BudgetDetailView: View {
     NavigationStack {
         BudgetDetailView(budget: budget, transactions: [])
     }
-    .modelContainer(for: [Budget.self, Transaction.self, Category.self, SavingsGoal.self], inMemory: true)
+    .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
 }

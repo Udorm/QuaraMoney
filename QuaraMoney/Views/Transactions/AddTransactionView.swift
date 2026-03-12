@@ -13,8 +13,6 @@ struct AddTransactionView: View {
     @Query(sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
     
     // UI State
-    @State private var isDateExpanded = false
-    @State private var isTimeExpanded = false
     @State private var showAllCategories = false
     @State private var showAllWallets = false
     @State private var showKeyboard = true
@@ -598,76 +596,29 @@ struct AddTransactionView: View {
     private var optionalFieldsSection: some View {
         Group {
             // Date Selection Row
-            Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    isDateExpanded.toggle()
-                    if isDateExpanded {
-                        isTimeExpanded = false
-                        showKeyboard = false
-                    }
-                }
-            } label: {
+            DatePicker(
+                selection: $viewModel.date,
+                displayedComponents: [.date]
+            ) {
                 HStack {
                     Image(systemName: "calendar")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
                     Text("transaction.date".localized)
-                    Spacer()
-                    Text(viewModel.date.formatted(date: .long, time: .omitted))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isDateExpanded ? 90 : 0))
                 }
             }
-            .buttonStyle(.plain)
-            
-            if isDateExpanded {
-                DatePicker(
-                    "",
-                    selection: $viewModel.date,
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.graphical)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-            
+
             // Time Selection Row
-            Button {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    isTimeExpanded.toggle()
-                    if isTimeExpanded {
-                        isDateExpanded = false
-                        showKeyboard = false
-                    }
-                }
-            } label: {
+            DatePicker(
+                selection: $viewModel.date,
+                displayedComponents: [.hourAndMinute]
+            ) {
                 HStack {
                     Image(systemName: "clock")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
                     Text(L10n.TransactionAdditional.time)
-                    Spacer()
-                    Text(viewModel.date.formatted(date: .omitted, time: .shortened))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isTimeExpanded ? 90 : 0))
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            if isTimeExpanded {
-                DatePicker(
-                    "",
-                    selection: $viewModel.date,
-                    displayedComponents: [.hourAndMinute]
-                )
-                .datePickerStyle(.wheel)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
             
             // Note Field

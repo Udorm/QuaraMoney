@@ -113,13 +113,7 @@ final class Budget {
     
     /// Single category (nil = total/overall budget)
     @Relationship(deleteRule: .nullify) var category: Category?
-    
 
-
-    
-    /// Linked savings goal (New)
-    @Relationship(deleteRule: .nullify) var savingsGoal: SavingsGoal?
-    
     /// List of categories for this budget (New - replaces single category and group)
     @Relationship(deleteRule: .nullify) var categories: [Category]?
     
@@ -278,7 +272,18 @@ final class Budget {
         }
         return [] // Total budget tracks all
     }
-    
+
+    /// Category display info for filter chips
+    var trackedCategoryInfos: [FilterCategoryInfo] {
+        if let categories = categories, !categories.isEmpty {
+            return categories.map { FilterCategoryInfo(id: $0.id, name: $0.name, icon: $0.icon, colorHex: $0.colorHex) }
+        }
+        if let category = category {
+            return [FilterCategoryInfo(id: category.id, name: category.name, icon: category.icon, colorHex: category.colorHex)]
+        }
+        return []
+    }
+
     // MARK: - Methods
     
     /// Calculate the effective limit for percentage-based budgets

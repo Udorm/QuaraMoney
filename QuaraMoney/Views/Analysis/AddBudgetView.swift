@@ -6,8 +6,6 @@ struct AddBudgetView: View {
     @Environment(\.dismiss) private var dismiss
     
     @Query(sort: \Category.name) private var categories: [Category]
-
-    @Query(sort: \SavingsGoal.name) private var savingsGoals: [SavingsGoal]
     
     // MARK: - Form State
     
@@ -38,15 +36,12 @@ struct AddBudgetView: View {
     @State private var alertAt80: Bool = true
     @State private var alertAt100: Bool = true
     
-    // Savings goal
-    @State private var linkSavingsGoal: Bool = false
-    @State private var selectedSavingsGoal: SavingsGoal?
-    
     // Budget category type (for templates)
     @State private var budgetCategoryType: BudgetCategoryType?
     
     // UI State
     @State private var showAdvancedOptions: Bool = false
+    @State private var showCurrencyPicker = false
     
     private var isFormValid: Bool {
         let hasTarget = targetType == .total || !selectedCategories.isEmpty
@@ -159,14 +154,23 @@ struct AddBudgetView: View {
                         HStack {
                             TextField(L10n.Transaction.amount, text: $amountString)
                                 .keyboardType(.decimalPad)
-                            
-                            Picker("", selection: $selectedCurrency) {
-                                ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
-                                    Text(code).tag(code)
+
+                            Button {
+                                showCurrencyPicker = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(selectedCurrency)
+                                        .font(.app(.subheadline, weight: .bold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color(.secondarySystemBackground))
+                                .foregroundColor(.primary)
+                                .clipShape(Capsule())
                             }
-                            .labelsHidden()
-                            .frame(width: 80)
                         }
                     }
                 }
@@ -242,20 +246,6 @@ struct AddBudgetView: View {
                         }
                     }
                     
-                    // Savings Goal Link
-                    if !savingsGoals.isEmpty {
-                        Toggle(L10n.Budget.linkSavings, isOn: $linkSavingsGoal)
-                        
-                        if linkSavingsGoal {
-                            Picker(L10n.Savings.title, selection: $selectedSavingsGoal) {
-                                Text(L10n.Savings.selectGoal).tag(nil as SavingsGoal?)
-                                ForEach(savingsGoals.filter { !$0.isCompleted }) { goal in
-                                    Label(goal.name, systemImage: goal.iconName)
-                                        .tag(goal as SavingsGoal?)
-                                }
-                            }
-                        }
-                    }
                 }
             }
             .navigationTitle(L10n.Budget.new)
@@ -282,6 +272,12 @@ struct AddBudgetView: View {
 
         .sheet(isPresented: $showCategoryPicker) {
             MultiCategoryPicker(selectedCategories: $selectedCategories)
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencySelectionView(selection: $selectedCurrency)
+            }
+            .presentationDetents([.medium, .large])
         }
     }
     
@@ -325,11 +321,6 @@ struct AddBudgetView: View {
             budget.amountType = .fixed(amount)
         }
         
-        // Link savings goal if selected
-        if linkSavingsGoal, let goal = selectedSavingsGoal {
-            budget.savingsGoal = goal
-        }
-        
         modelContext.insert(budget)
     }
 }
@@ -360,5 +351,5 @@ enum BudgetTargetType: String, CaseIterable, Identifiable {
 
 #Preview {
     AddBudgetView()
-        .modelContainer(for: [Budget.self, Category.self, SavingsGoal.self], inMemory: true)
+        .modelContainer(for: [Budget.self, Category.self], inMemory: true)
 }

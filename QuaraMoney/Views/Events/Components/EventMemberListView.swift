@@ -90,7 +90,7 @@ private struct MemberRow: View {
                         .frame(width: 40, height: 40)
                         .overlay(
                             Image(systemName: icon)
-                                .font(.system(size: 20))
+                                .appFont(size: 20)
                                 .foregroundStyle(Color(hex: member.colorHex) ?? .blue)
                         )
                 } else {
@@ -132,7 +132,7 @@ private struct MemberRow: View {
                 }
                 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .appFont(size: 14, weight: .semibold)
                     .foregroundStyle(Color(.tertiaryLabel))
             }
             .padding(.vertical, 4)

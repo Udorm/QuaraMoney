@@ -18,7 +18,7 @@ struct EventMemberSnapshotRow: View {
                             .frame(width: 56, height: 56)
                             .overlay(
                                 Image(systemName: "plus")
-                                    .font(.system(size: 24))
+                                    .appFont(size: 24)
                                     .foregroundStyle(.blue)
                             )
                         
@@ -58,7 +58,7 @@ private struct MemberSnapshotItem: View {
                     .frame(width: 56, height: 56)
                     .overlay(
                         Image(systemName: icon)
-                            .font(.system(size: 28))
+                            .appFont(size: 28)
                             .foregroundStyle(Color(hex: member.colorHex) ?? .blue)
                     )
             } else {

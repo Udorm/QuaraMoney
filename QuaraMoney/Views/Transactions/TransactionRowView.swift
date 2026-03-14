@@ -195,5 +195,7 @@ struct TransactionRowView: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(titleText), \(amountText), \(timeText)\(subtitleText.map { ", \($0)" } ?? "")")
     }
 }

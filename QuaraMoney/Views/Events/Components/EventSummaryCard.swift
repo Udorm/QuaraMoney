@@ -47,8 +47,7 @@ struct EventSummaryCard: View {
                     .textCase(.uppercase)
                 
                 Text(formatMinor(totalCost))
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
+                    .appFont(size: 34, weight: .bold)
                     .foregroundStyle(.primary)
             }
             

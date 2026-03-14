@@ -18,6 +18,10 @@ final class Transaction {
     var currencyCode: String // Currency of the transaction
     var exchangeRate: Decimal // Conversion rate to Wallet's currency
     
+    // Timestamps (for future sync readiness)
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
     // Attachments
     var photoData: Data?
     
@@ -37,5 +41,16 @@ final class Transaction {
         self.exchangeRate = exchangeRate
         self.date = date
         self.type = type
+    }
+
+    // MARK: - Validation
+
+    /// Returns an array of validation errors. Empty means valid.
+    func validate() -> [ModelValidationError] {
+        var errors: [ModelValidationError] = []
+        if amount <= 0 { errors.append(.negativeOrZeroAmount(field: "Amount")) }
+        if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
+        if exchangeRate <= 0 { errors.append(.invalidExchangeRate) }
+        return errors
     }
 }

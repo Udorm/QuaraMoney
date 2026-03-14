@@ -9,6 +9,10 @@ final class Wallet {
     var icon: String // SF Symbol name
     var colorHex: String
     var isArchived: Bool = false
+
+    // Timestamps (for future sync readiness)
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     
     // MARK: - Performance: Cached Balance
     /// Cached balance value for performance - avoids O(n) computation on every access
@@ -32,5 +36,16 @@ final class Wallet {
         self.currencyCode = currencyCode
         self.icon = icon
         self.colorHex = colorHex
+    }
+
+    // MARK: - Validation
+
+    func validate() -> [ModelValidationError] {
+        var errors: [ModelValidationError] = []
+        if name.trimmingCharacters(in: .whitespaces).isEmpty {
+            errors.append(.emptyName(field: "Wallet name"))
+        }
+        if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
+        return errors
     }
 }

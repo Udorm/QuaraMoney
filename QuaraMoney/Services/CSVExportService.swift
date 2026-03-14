@@ -40,7 +40,10 @@ class CSVExportService {
             try csvText.write(to: path, atomically: true, encoding: .utf8)
             return path
         } catch {
+            #if DEBUG
             print("Failed to create CSV file: \(error)")
+            #endif
+            ErrorService.shared.handleError(error, context: "csvGenerate")
             return nil
         }
     }
@@ -78,7 +81,10 @@ class CSVExportService {
             
             return generateCSV(transactions: filtered)
         } catch {
+            #if DEBUG
             print("Failed to fetch transactions for export: \(error)")
+            #endif
+            ErrorService.shared.handleError(error, context: "csvExport")
             return nil
         }
     }

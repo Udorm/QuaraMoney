@@ -51,6 +51,7 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: "doc.text.viewfinder")
                     }
+                    .accessibilityLabel("Scan receipt")
 
                     Button {
                         shouldScan = false
@@ -58,6 +59,7 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Add transaction")
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
@@ -204,6 +206,8 @@ struct DailyHeader: View {
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(section.date.formatted(date: .long, time: .omitted)), daily total \(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))")
     }
 }
 

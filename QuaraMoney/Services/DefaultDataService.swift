@@ -33,7 +33,9 @@ struct DefaultDataService {
             try modelContext.save()
             
         } catch {
+            #if DEBUG
             print("Failed to seed default categories: \(error)")
+            #endif
         }
     }
     
@@ -54,10 +56,14 @@ struct DefaultDataService {
                     isSystem: false
                 )
                 modelContext.insert(category)
+                #if DEBUG
                 print("Created missing category: \(name)")
+                #endif
             }
         } catch {
+            #if DEBUG
             print("Failed to ensure category exists: \(error)")
+            #endif
         }
     }
     
@@ -72,7 +78,9 @@ struct DefaultDataService {
             if let existing = try modelContext.fetch(descriptor).first {
                 if !existing.isSystem {
                     existing.isSystem = true
+                    #if DEBUG
                     print("Marked existing category as system: \(name)")
+                    #endif
                 }
             } else {
                 let category = Category(
@@ -83,10 +91,14 @@ struct DefaultDataService {
                     isSystem: true
                 )
                 modelContext.insert(category)
+                #if DEBUG
                 print("Created system category: \(name)")
+                #endif
             }
         } catch {
+            #if DEBUG
             print("Failed to ensure system category exists: \(error)")
+            #endif
         }
     }
 }

@@ -26,6 +26,8 @@ struct NetWorthCard: View {
                 .foregroundStyle(totalNetWorth >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Net worth, \(totalNetWorth.formattedAmount(for: currencyManager.preferredCurrencyCode))")
     }
 }
 

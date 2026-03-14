@@ -431,7 +431,7 @@ struct MemberGridItem: View {
                     
                     if member.isLocalUser {
                          Image(systemName: "person.circle.fill")
-                            .font(.system(size: 12))
+                            .appFont(size: 12)
                             .foregroundColor(.blue)
                             .background(Circle().fill(.white))
                             .offset(x: 14, y: 14)

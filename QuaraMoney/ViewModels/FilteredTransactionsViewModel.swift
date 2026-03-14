@@ -109,7 +109,11 @@ class FilteredTransactionsViewModel {
 
     func deleteTransaction(_ transaction: Transaction) {
         modelContext?.delete(transaction)
-        try? modelContext?.save()
+        do {
+            try modelContext?.save()
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "FilteredTransactionsVM.deleteTransaction")
+        }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }

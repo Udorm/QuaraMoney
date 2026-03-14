@@ -637,6 +637,9 @@
 "export.exportToCSV" = "Export to CSV";
 "export.exportData" = "Export Data";
 "export.selectWallets" = "Select Wallets";
+"export.description" = "Exported file includes date, time, amount, currency, category, type, note, and wallet information.";
+"export.failed" = "Export Failed";
+"export.errorGeneration" = "Could not generate CSV file.";
 
 // MARK: - Category Additions
 "category.details" = "Details";
@@ -658,32 +661,12 @@
 "analysis.timePeriod" = "Time Period";
 "analysis.total" = "Total";
 
-/* Export Options */
-"export.dataSelection" = "Data Selection";
-"export.wallets" = "Wallets";
-"export.allWallets" = "All Wallets";
-"export.selectedCount" = "%d Selected";
-"export.generating" = "Generating CSV...";
-"export.exportToCSV" = "Export to CSV";
-"export.description" = "Exported file includes date, time, amount, currency, category, type, note, and wallet information.";
-"export.exportData" = "Export Data";
-"export.selectWallets" = "Select Wallets";
-"export.failed" = "Export Failed";
-"export.errorGeneration" = "Could not generate CSV file.";
-
 /* Settings */
 "settings.incomeColor" = "Income Color";
 "settings.expenseColor" = "Expense Color";
 "settings.currentColor" = "Current Color";
 "settings.resetDefaults" = "Reset to Defaults";
 "settings.themeTitle" = "Theme & Colors";
-
-/* Analysis */
-"analysis.period.w" = "W";
-"analysis.period.m" = "M";
-"analysis.period.6m" = "6M";
-"analysis.period.y" = "Y";
-"analysis.period.ly" = "LY";
 
 // MARK: - Filtered Transactions
 "filteredTransactions.count" = "%d Transactions";

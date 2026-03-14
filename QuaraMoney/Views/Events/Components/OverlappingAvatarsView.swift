@@ -21,7 +21,7 @@ struct OverlappingAvatarsView: View {
                     .frame(width: size, height: size)
                     .overlay(
                         Text("+\(members.count - limit)")
-                            .font(.system(size: size * 0.4, weight: .bold))
+                            .appFont(size: size * 0.4, weight: .bold)
                             .foregroundStyle(.secondary)
                     )
                     .overlay(
@@ -50,7 +50,7 @@ private struct AvatarView: View {
                 .frame(width: size, height: size)
                 .overlay(
                     Image(systemName: icon)
-                        .font(.system(size: size * 0.5))
+                        .appFont(size: size * 0.5)
                         .foregroundStyle(Color(hex: member.colorHex) ?? .blue)
                 )
         } else {
@@ -59,7 +59,7 @@ private struct AvatarView: View {
                 .frame(width: size, height: size)
                 .overlay(
                     Text(member.initials)
-                        .font(.system(size: size * 0.4, weight: .medium))
+                        .appFont(size: size * 0.4, weight: .medium)
                         .foregroundStyle(.secondary)
                 )
         }

@@ -75,6 +75,8 @@ struct FinancialSummaryCards: View {
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Net total \(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode)), Income \(income.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode)), Expense \(expense.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))")
     }
 }
 

@@ -122,7 +122,7 @@ struct EventRowView: View {
                         .frame(width: 44, height: 44)
                     
                     Image(systemName: event.icon)
-                        .font(.system(size: 20))
+                        .appFont(size: 20)
                         .foregroundStyle(eventColor)
                 }
                 

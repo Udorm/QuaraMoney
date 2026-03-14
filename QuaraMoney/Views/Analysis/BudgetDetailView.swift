@@ -10,96 +10,25 @@ struct BudgetDetailView: View {
     @State private var showEditBudget = false
     @State private var transactionToEdit: Transaction?
     
-    private var preferredCurrency: String {
-        CurrencyManager.shared.preferredCurrencyCode
+    // MARK: - ViewModel (owns all budget calculations)
+    
+    private var vm: BudgetDetailViewModel {
+        BudgetDetailViewModel(budget: budget, transactions: transactions)
     }
     
-    /// Transactions relevant to this budget (filtered by category, period, expense type)
-    private var relevantTransactions: [Transaction] {
-        let periodRange = budget.periodDateRange
-        
-        return transactions.filter { txn in
-            guard txn.type == .expense,
-                  txn.date >= periodRange.start && txn.date < periodRange.end else {
-                return false
-            }
-            
-            // Check if transaction matches budget target
-            if budget.isTotalBudget {
-                return true
-            } else if let categories = budget.categories, !categories.isEmpty {
-                return categories.contains { $0.id == txn.category?.id }
-            } else if let categoryId = budget.category?.id {
-                return txn.category?.id == categoryId
-            }
-            
-            return false
-        }.sorted { $0.date > $1.date }
-    }
+    // MARK: - View-only helpers
     
-    /// Total spending converted to preferred currency
-    private var totalSpent: Decimal {
-        relevantTransactions.reduce(Decimal.zero) { total, txn in
-            let converted = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: preferredCurrency
-            )
-            return total + converted
-        }
-    }
-    
-    /// Budget limit converted to preferred currency
-    private var budgetLimitConverted: Decimal {
-        let limit: Decimal
-        if case .percentOfIncome = budget.amountType {
-            let income = calculateIncome()
-            limit = budget.calculateEffectiveLimit(income: income)
-        } else {
-            limit = budget.effectiveLimit
-        }
-        
-        return CurrencyManager.shared.convert(
-            amount: limit,
-            from: budget.currencyCode,
-            to: preferredCurrency
-        )
-    }
-    
-    /// Calculate total income for the budget period
-    private func calculateIncome() -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantIncome = transactions.filter { txn in
-            txn.type == .income &&
-            txn.date >= periodRange.start &&
-            txn.date < periodRange.end
-        }
-        
-        return relevantIncome.reduce(Decimal.zero) { total, txn in
-            let converted = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: budget.currencyCode
-            )
-            return total + converted
-        }
-    }
-    
-    /// Remaining amount
-    private var remaining: Decimal {
-        budgetLimitConverted - totalSpent
-    }
-    
-    /// Progress ratio (0.0 to 1.0+)
-    private var progress: Double {
-        guard budgetLimitConverted > 0 else { return 0 }
-        return Double(truncating: totalSpent as NSNumber) / Double(truncating: budgetLimitConverted as NSNumber)
-    }
-    
-    private var isOverBudget: Bool {
-        totalSpent > budgetLimitConverted
-    }
+    private var preferredCurrency: String { vm.preferredCurrency }
+    private var relevantTransactions: [Transaction] { vm.relevantTransactions }
+    private var totalSpent: Decimal { vm.totalSpent }
+    private var budgetLimitConverted: Decimal { vm.budgetLimitConverted }
+    private var remaining: Decimal { vm.remaining }
+    private var progress: Double { vm.progress }
+    private var isOverBudget: Bool { vm.isOverBudget }
+    private var dailyAverage: Decimal { vm.dailyAverage }
+    private var projectedSpending: Decimal { vm.projectedSpending }
+    private var dailyBudget: Decimal { vm.dailyBudget }
+    private var budgetIcon: String { vm.budgetIcon }
     
     private var progressColor: Color {
         if isOverBudget {
@@ -108,32 +37,6 @@ struct BudgetDetailView: View {
             return .orange
         } else {
             return ThemeManager.shared.incomeColor
-        }
-    }
-    
-    /// Daily spending average
-    private var dailyAverage: Decimal {
-        let daysElapsed = budget.totalDays - budget.daysRemaining
-        guard daysElapsed > 0 else { return 0 }
-        return totalSpent / Decimal(daysElapsed)
-    }
-    
-    /// Projected spending at current rate
-    private var projectedSpending: Decimal {
-        dailyAverage * Decimal(budget.totalDays)
-    }
-    
-    /// Daily budget to stay on track
-    private var dailyBudget: Decimal {
-        guard budget.daysRemaining > 0 else { return 0 }
-        return max(remaining, 0) / Decimal(budget.daysRemaining)
-    }
-    
-    private var budgetIcon: String {
-        if let category = budget.category {
-            return category.icon
-        } else {
-            return "sum"
         }
     }
     
@@ -219,6 +122,8 @@ struct BudgetDetailView: View {
                                 .font(.app(.subheadline, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Budget \(Int(progress * 100)) percent \(isOverBudget ? "over budget" : "used")")
                     }
                 }
                 .padding(.vertical, 8)
@@ -418,6 +323,7 @@ struct BudgetDetailView: View {
                 } label: {
                     Image(systemName: "pencil")
                 }
+                .accessibilityLabel("Edit budget")
             }
         }
         .sheet(isPresented: $showEditBudget) {

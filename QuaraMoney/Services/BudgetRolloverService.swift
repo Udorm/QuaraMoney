@@ -20,7 +20,13 @@ struct BudgetRolloverService {
         }
         
         // Save changes
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            #if DEBUG
+            print("[BudgetRollover] Failed to save rollover changes: \(error)")
+            #endif
+        }
     }
     
     /// Check if a budget needs rollover processing
@@ -167,7 +173,13 @@ struct BudgetRolloverService {
             content: content,
             trigger: nil
         )
-        try? await center.add(request)
+        do {
+            try await center.add(request)
+        } catch {
+            #if DEBUG
+            print("[BudgetRollover] Failed to schedule rollover notification: \(error)")
+            #endif
+        }
     }
     
     // MARK: - Logging

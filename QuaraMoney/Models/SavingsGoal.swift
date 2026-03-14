@@ -12,6 +12,7 @@ final class SavingsGoal {
     var currencyCode: String
     var targetDate: Date?
     var createdDate: Date
+    var updatedAt: Date = Date()
     var iconName: String
     var colorHex: String
     var isCompleted: Bool

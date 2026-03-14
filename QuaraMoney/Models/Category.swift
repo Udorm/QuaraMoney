@@ -10,6 +10,10 @@ final class Category {
     var type: TransactionType // .income or .expense only
     
     var isSystem: Bool = false
+
+    // Timestamps (for future sync readiness)
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     
     // Relationships
     @Relationship(deleteRule: .deny) var transactions: [Transaction]?

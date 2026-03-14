@@ -5,6 +5,17 @@ import Combine
 @MainActor
 class CurrencyManager: ObservableObject {
     static let shared = CurrencyManager()
+
+    /// Fallback exchange rates relative to USD — safe to access from any isolation context.
+    /// Used by Wallet balance computation where @MainActor rates may not be accessible.
+    nonisolated static let fallbackRates: [String: Double] = [
+        "USD": 1.0,
+        "KHR": 4000.0,
+        "EUR": 0.92,
+        "THB": 35.0,
+        "SGD": 1.35,
+        "JPY": 150.0
+    ]
     
     @Published var preferredCurrencyCode: String {
         didSet {
@@ -144,15 +155,25 @@ class CurrencyManager: ObservableObject {
     }
     
     private func saveRatesToCache() {
-        if let encoded = try? JSONEncoder().encode(rates) {
+        do {
+            let encoded = try JSONEncoder().encode(rates)
             UserDefaults.standard.set(encoded, forKey: ratesCacheKey)
+        } catch {
+            #if DEBUG
+            print("[CurrencyManager] Failed to encode rates cache: \(error)")
+            #endif
         }
     }
     
     private func loadCachedRates() {
-        if let data = UserDefaults.standard.data(forKey: ratesCacheKey),
-           let decoded = try? JSONDecoder().decode([String: Double].self, from: data) {
-            self.rates = decoded
+        if let data = UserDefaults.standard.data(forKey: ratesCacheKey) {
+            do {
+                self.rates = try JSONDecoder().decode([String: Double].self, from: data)
+            } catch {
+                #if DEBUG
+                print("[CurrencyManager] Failed to decode rates cache: \(error)")
+                #endif
+            }
         }
         
         // Ensure defaults exist

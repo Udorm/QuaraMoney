@@ -30,7 +30,9 @@ class BudgetNotificationService: ObservableObject {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             return granted
         } catch {
+            #if DEBUG
             print("Notification permission error: \(error)")
+            #endif
             return false
         }
     }
@@ -177,7 +179,9 @@ class BudgetNotificationService: ObservableObject {
         do {
             try await center.add(request)
         } catch {
+            #if DEBUG
             print("Failed to schedule notification: \(error)")
+            #endif
         }
     }
     
@@ -211,7 +215,9 @@ class BudgetNotificationService: ObservableObject {
         do {
             try await center.add(request)
         } catch {
+            #if DEBUG
             print("Failed to schedule daily summary: \(error)")
+            #endif
         }
     }
     
@@ -223,8 +229,11 @@ class BudgetNotificationService: ObservableObject {
     // MARK: - Persistence
     
     private func saveNotifications() {
-        if let encoded = try? JSONEncoder().encode(inAppNotifications) {
+        do {
+            let encoded = try JSONEncoder().encode(inAppNotifications)
             UserDefaults.standard.set(encoded, forKey: "BudgetNotifications")
+        } catch {
+            ErrorService.shared.handleError(error, context: "saveNotifications")
         }
     }
     
@@ -232,9 +241,13 @@ class BudgetNotificationService: ObservableObject {
         // Decode JSON off the main thread to avoid blocking UI
         Task.detached(priority: .utility) {
             let notifications: [BudgetNotification]
-            if let data = UserDefaults.standard.data(forKey: "BudgetNotifications"),
-               let decoded = try? JSONDecoder().decode([BudgetNotification].self, from: data) {
-                notifications = decoded
+            if let data = UserDefaults.standard.data(forKey: "BudgetNotifications") {
+                do {
+                    notifications = try JSONDecoder().decode([BudgetNotification].self, from: data)
+                } catch {
+                    notifications = []
+                    await ErrorService.shared.handleError(error, context: "loadNotifications")
+                }
             } else {
                 notifications = []
             }

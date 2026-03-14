@@ -45,7 +45,7 @@ struct FilteredTransactionsDetailView: View {
                                 ForEach(displayCategories) { cat in
                                     HStack(spacing: 4) {
                                         Image(systemName: cat.icon.isEmpty ? "circle.fill" : cat.icon)
-                                            .font(.system(size: 10))
+                                            .appFont(size: 10)
                                         Text(cat.name)
                                             .font(.app(.caption))
                                     }
@@ -76,7 +76,7 @@ struct FilteredTransactionsDetailView: View {
                         if let type = config.transactionType {
                             HStack(spacing: 4) {
                                 Image(systemName: type == .expense ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                                    .font(.system(size: 12))
+                                    .appFont(size: 12)
                                 Text(type.rawValue)
                                     .font(.app(.caption))
                             }
@@ -135,7 +135,7 @@ struct FilteredTransactionsDetailView: View {
     private func filterRow<Content: View>(icon: String, label: String?, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .appFont(size: 12)
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
                 .padding(.top, label != nil ? 2 : 4)

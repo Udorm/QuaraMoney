@@ -33,31 +33,20 @@ extension Wallet {
         let walletCurrency = self.currencyCode
         
         // Helper to convert transaction amount to wallet currency
-        // Note: Using inline conversion to avoid @MainActor isolation issues
+        // Uses CurrencyManager's cached rates with fallback defaults
         func convertToWalletCurrency(_ amount: Decimal, from txnCurrency: String) -> Decimal {
             if txnCurrency == walletCurrency {
                 return amount
             }
-            
-            // Inline currency conversion using known rates
-            // Default rates relative to USD
-            let rates: [String: Decimal] = [
-                "USD": 1,
-                "KHR": 4000,
-                "EUR": 0.92,
-                "THB": 35,
-                "SGD": 1.35,
-                "JPY": 150
-            ]
-            
+
+            // Use CurrencyManager's fallback rates (safe to access from any isolation context)
+            let rates = CurrencyManager.fallbackRates
             guard let sourceRate = rates[txnCurrency], let targetRate = rates[walletCurrency] else {
-                // If unknown currency pair, return original amount
                 return amount
             }
-            
-            // Convert: source -> USD -> target
-            let amountInUSD = amount / sourceRate
-            return amountInUSD * targetRate
+
+            let amountInUSD = amount / Decimal(sourceRate)
+            return amountInUSD * Decimal(targetRate)
         }
         
         // 1. Process Outgoing Transactions (Income, Expense, Transfer OUT)

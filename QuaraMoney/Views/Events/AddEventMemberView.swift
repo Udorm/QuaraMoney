@@ -39,7 +39,7 @@ struct AddEventMemberView: View {
                                     .frame(width: 80, height: 80)
                                     .overlay(
                                         Image(systemName: avatarIcon)
-                                            .font(.system(size: 40))
+                                            .appFont(size: 40)
                                             .foregroundStyle(Color(hex: colorHex) ?? .blue)
                                     )
                             }
@@ -156,7 +156,7 @@ private struct MemberIconPickerView: View {
                             dismiss()
                         } label: {
                             Image(systemName: icon)
-                                .font(.system(size: 24))
+                                .appFont(size: 24)
                                 .frame(width: 50, height: 50)
                                 .background(selectedIcon == icon ? themeColor.opacity(0.1) : Color(.secondarySystemFill))
                                 .foregroundStyle(selectedIcon == icon ? themeColor : .primary)

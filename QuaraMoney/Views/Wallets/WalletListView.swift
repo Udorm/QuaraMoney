@@ -38,6 +38,7 @@ struct WalletListView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
+                        .accessibilityLabel("Add wallet")
                         
                         //filter button
                         Button {
@@ -48,6 +49,7 @@ struct WalletListView: View {
                                 .font(.app(.title3))
                                 .foregroundStyle(showArchived ? .blue : .primary)
                         }
+                        .accessibilityLabel(showArchived ? "Filter, showing archived" : "Filter wallets")
                     }
                 }
         }
@@ -184,13 +186,21 @@ private struct WalletListContent: View {
     
     private func archiveWallet(_ wallet: Wallet) {
         wallet.isArchived = true
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "WalletListView.archiveWallet")
+        }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
-    
+
     private func unarchiveWallet(_ wallet: Wallet) {
         wallet.isArchived = false
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "WalletListView.unarchiveWallet")
+        }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
     

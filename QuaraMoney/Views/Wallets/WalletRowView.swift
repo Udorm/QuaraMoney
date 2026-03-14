@@ -35,5 +35,7 @@ struct WalletRowView: View {
                 .monospacedDigit()
                 .foregroundStyle(wallet.balance >= 0 ? Color.primary : expenseColor)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(wallet.name) wallet, balance \(wallet.balance.formattedAmount(for: wallet.currencyCode))")
     }
 }

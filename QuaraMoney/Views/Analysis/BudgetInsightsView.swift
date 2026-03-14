@@ -201,31 +201,7 @@ struct BudgetInsightsView: View {
     }
     
     private func calculateSpending(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantTransactions = transactions.filter { txn in
-            guard txn.type == .expense,
-                  txn.date >= periodRange.start && txn.date < periodRange.end else {
-                return false
-            }
-            
-            if budget.isTotalBudget {
-                return true
-            } else if !budget.trackedCategoryIds.isEmpty {
-                let categoryIds = budget.trackedCategoryIds
-                return categoryIds.contains(txn.category?.id ?? UUID())
-            }
-            
-            return false
-        }
-        
-        return relevantTransactions.reduce(Decimal.zero) { total, txn in
-            total + CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: preferredCurrency
-            )
-        }
+        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
     }
     
     private func averageSpendingRatio(for budgets: [Budget]) -> Double {
@@ -594,31 +570,7 @@ struct ActiveBudgetsSummary: View {
     }
     
     private func calculateSpending(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantTransactions = transactions.filter { txn in
-            guard txn.type == .expense,
-                  txn.date >= periodRange.start && txn.date < periodRange.end else {
-                return false
-            }
-            
-            if budget.isTotalBudget {
-                return true
-            } else if !budget.trackedCategoryIds.isEmpty {
-                let categoryIds = budget.trackedCategoryIds
-                return categoryIds.contains(txn.category?.id ?? UUID())
-            }
-            
-            return false
-        }
-        
-        return relevantTransactions.reduce(Decimal.zero) { total, txn in
-            total + CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: preferredCurrency
-            )
-        }
+        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
     }
 }
 

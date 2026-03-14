@@ -30,25 +30,25 @@ class NotificationManager: ObservableObject {
     }
     
     func checkPermissionStatus() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.isPermissionGranted = settings.authorizationStatus == .authorized
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            Task { @MainActor in
+                self?.isPermissionGranted = settings.authorizationStatus == .authorized
                 // If permission revoked externally, update state
-                if !self.isPermissionGranted && self.isDailyReminderEnabled {
-                    self.isDailyReminderEnabled = false
+                if self?.isPermissionGranted == false && self?.isDailyReminderEnabled == true {
+                    self?.isDailyReminderEnabled = false
                 }
             }
         }
     }
-    
+
     func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            DispatchQueue.main.async {
-                self.isPermissionGranted = granted
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
+            Task { @MainActor in
+                self?.isPermissionGranted = granted
                 if granted {
-                    self.isDailyReminderEnabled = true // Auto enable on grant
+                    self?.isDailyReminderEnabled = true
                 } else {
-                    self.isDailyReminderEnabled = false
+                    self?.isDailyReminderEnabled = false
                 }
             }
         }

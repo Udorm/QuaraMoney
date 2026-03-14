@@ -124,81 +124,12 @@ struct BudgetListView: View {
         return filterPeriod.displayName
     }
     
-    /// Calculate spending for a budget by filtering transactions and converting to preferred currency
     private func calculateSpending(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        // Filter transactions within the budget period
-        let relevantTransactions = transactions.filter { txn in
-            guard !txn.excludeFromReports,
-                  txn.event == nil,
-                  txn.type == .expense,
-                  txn.date >= periodRange.start && txn.date < periodRange.end else {
-                return false
-            }
-            
-            // Check if transaction matches budget target
-            if budget.isTotalBudget {
-                // Total budget: include all expenses
-                return true
-            } else if let categories = budget.categories, !categories.isEmpty {
-                // Multi-category budget
-                return categories.contains { $0.id == txn.category?.id }
-            } else if let categoryId = budget.category?.id {
-                // Single category budget
-                return txn.category?.id == categoryId
-            }
-            
-            return false
-        }
-        
-        // Convert each transaction to preferred currency and sum
-        return relevantTransactions.reduce(Decimal.zero) { total, txn in
-            let converted = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: preferredCurrency
-            )
-            return total + converted
-        }
+        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
     }
     
-    /// Convert budget limit to preferred currency
     private func convertBudgetLimit(for budget: Budget) -> Decimal {
-        let limit: Decimal
-        if case .percentOfIncome = budget.amountType {
-            let income = calculateIncome(for: budget)
-            limit = budget.calculateEffectiveLimit(income: income)
-        } else {
-            limit = budget.effectiveLimit
-        }
-        
-        return CurrencyManager.shared.convert(
-            amount: limit,
-            from: budget.currencyCode,
-            to: preferredCurrency
-        )
-    }
-    
-    /// Calculate total income for the budget period
-    private func calculateIncome(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantIncome = transactions.filter { txn in
-            txn.event == nil &&
-            txn.type == .income &&
-            txn.date >= periodRange.start &&
-            txn.date < periodRange.end
-        }
-        
-        return relevantIncome.reduce(Decimal.zero) { total, txn in
-            let converted = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: budget.currencyCode
-            )
-            return total + converted
-        }
+        BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
     }
     
     private func deleteBudgets(offsets: IndexSet) {
@@ -254,74 +185,27 @@ struct BudgetSummarySection: View {
     
     private var totalBudgeted: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
-            let limit: Decimal
-            if case .percentOfIncome = budget.amountType {
-                let income = calculateIncome(for: budget)
-                limit = budget.calculateEffectiveLimit(income: income)
-            } else {
-                limit = budget.effectiveLimit
-            }
-            
-            return total + CurrencyManager.shared.convert(
-                amount: limit,
-                from: budget.currencyCode,
-                to: preferredCurrency
-            )
-        }
-    }
-    
-    /// Calculate total income for the budget period (Matches logic in BudgetListView)
-    private func calculateIncome(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantIncome = transactions.filter { txn in
-            txn.event == nil &&
-            txn.type == .income &&
-            txn.date >= periodRange.start &&
-            txn.date < periodRange.end
-        }
-        
-        return relevantIncome.reduce(Decimal.zero) { total, txn in
-            let converted = CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: budget.currencyCode
-            )
-            return total + converted
+            total + BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
         }
     }
     
     private var totalSpent: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
-            total + calculateSpending(for: budget)
+            total + BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
         }
     }
     
     private var onTrackCount: Int {
         budgets.filter { budget in
-            let spent = calculateSpending(for: budget)
-            let limit: Decimal
-            if case .percentOfIncome = budget.amountType {
-                let income = calculateIncome(for: budget)
-                limit = budget.calculateEffectiveLimit(income: income)
-            } else {
-                limit = budget.effectiveLimit
-            }
-            
-            let limitConverted = CurrencyManager.shared.convert(
-                amount: limit,
-                from: budget.currencyCode,
-                to: preferredCurrency
-            )
+            let spent = BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
+            let limitConverted = BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
             let progress = limitConverted > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limitConverted as NSNumber) : 0
-            return progress <= 1.0 // Changed to 1.0 to consider "on track" as not over budget, or strict 0.8? Sticking to logic "over budget" count implies > 1.0 usually, but let's keep original logic loosely or refine. Original was <= 0.8. Let's use <= 1.0 for "On Track" in general sense, or strictly adhering to "Healthy". 
-            // Let's stick to "On Track" meaning "Not Over Budget" for the text label "X on track, Y over".
+            return progress <= 1.0
         }.count
     }
     
     var body: some View {
         VStack(spacing: 16) {
-            // Top Row: Spent vs Budgeted
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.Budget.totalSpent)
@@ -343,7 +227,6 @@ struct BudgetSummarySection: View {
                 }
             }
             
-            // Progress Bar
             let progress = totalBudgeted > 0 ? Double(truncating: totalSpent as NSNumber) / Double(truncating: totalBudgeted as NSNumber) : 0
             VStack(spacing: 8) {
                 ProgressView(value: min(progress, 1.0))
@@ -363,37 +246,6 @@ struct BudgetSummarySection: View {
             }
         }
         .padding(.vertical, 8)
-    }
-    
-    private func calculateSpending(for budget: Budget) -> Decimal {
-        let periodRange = budget.periodDateRange
-        
-        let relevantTransactions = transactions.filter { txn in
-            guard !txn.excludeFromReports,
-                  txn.event == nil,
-                  txn.type == .expense,
-                  txn.date >= periodRange.start && txn.date < periodRange.end else {
-                return false
-            }
-            
-            if budget.isTotalBudget {
-                return true
-            } else if let categories = budget.categories, !categories.isEmpty {
-                return categories.contains { $0.id == txn.category?.id }
-            } else if let categoryId = budget.category?.id {
-                return txn.category?.id == categoryId
-            }
-            
-            return false
-        }
-        
-        return relevantTransactions.reduce(Decimal.zero) { total, txn in
-            CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: preferredCurrency
-            ) + total
-        }
     }
 }
 

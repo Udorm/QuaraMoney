@@ -213,7 +213,9 @@ class BudgetSuggestionService {
         do {
             return try modelContext.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("Error fetching transactions: \(error)")
+            #endif
             return []
         }
     }
@@ -241,7 +243,9 @@ class BudgetSuggestionService {
         do {
             return try modelContext.fetch(descriptor)
         } catch {
+            #if DEBUG
             print("Error fetching transactions: \(error)")
+            #endif
             return []
         }
     }

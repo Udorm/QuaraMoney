@@ -37,7 +37,11 @@ final class DebtListViewModel {
             let debt = debts[index]
             context.delete(debt)
         }
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "DebtListViewModel.deleteDebts")
+        }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 

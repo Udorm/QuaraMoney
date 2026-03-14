@@ -252,6 +252,7 @@ struct AddTransactionView: View {
                     } label: {
                         Image(systemName: "xmark")
                     }
+                    .accessibilityLabel("Cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -263,6 +264,7 @@ struct AddTransactionView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
+                    .accessibilityLabel("Save transaction")
                 }
                 
                 // Moved scan button to FAB
@@ -277,7 +279,9 @@ struct AddTransactionView: View {
                             }
                         }
                     case .failure(let error):
+                        #if DEBUG
                         print("Scanner failed: \(error)")
+                        #endif
                     }
                 }
             }
@@ -690,5 +694,6 @@ struct WalletChip: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(wallet.name) wallet\(isSelected ? ", selected" : "")")
     }
 }

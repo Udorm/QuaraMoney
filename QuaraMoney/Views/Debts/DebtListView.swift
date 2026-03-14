@@ -92,6 +92,7 @@ struct DebtListView: View {
                 Button(action: { showAddDebtSheet = true }) {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add debt")
             }
             
             ToolbarItem(placement: .topBarTrailing) {
@@ -99,7 +100,7 @@ struct DebtListView: View {
                     Toggle("Show Completed", isOn: $viewModel.showCompleted)
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: 14, weight: .semibold))
+                        .appFont(size: 14, weight: .semibold)
                         .foregroundStyle(isFilterActive ? .white : .primary)
                         .padding(6)
                         .background {
@@ -138,7 +139,11 @@ struct DebtListView: View {
         }
         
         if didChange {
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                ErrorService.shared.handlePersistenceError(error, context: "DebtListView.normalizeCompletionStates")
+            }
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
         }
     }
@@ -201,6 +206,8 @@ struct DebtRow: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(debt.personName), \(debt.type == .owedToMe ? "owes you" : "you owe") \(debt.remainingAmount.formattedAmount(for: debt.currencyCode))\(debt.isCompleted ? ", paid" : "")")
     }
 }
 
@@ -228,5 +235,7 @@ struct SummaryCard: View {
         .padding()
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(amount.formatted(.currency(code: CurrencyManager.shared.preferredCurrencyCode)))")
     }
 }

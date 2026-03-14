@@ -19,13 +19,11 @@ class SecurityManager: ObservableObject {
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             isAuthenticating = true
             
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock QuaraMoney") { success, authenticationError in
-                DispatchQueue.main.async {
-                    self.isAuthenticating = false
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock QuaraMoney") { [weak self] success, authenticationError in
+                Task { @MainActor in
+                    self?.isAuthenticating = false
                     if success {
-                        self.isAppLocked = false
-                    } else {
-                        // Keep locked if failed
+                        self?.isAppLocked = false
                     }
                 }
             }

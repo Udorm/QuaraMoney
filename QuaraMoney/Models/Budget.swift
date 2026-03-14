@@ -29,6 +29,10 @@ final class Budget {
     
     /// Start date of the budget period
     var startDate: Date = Date()
+
+    // Timestamps (for future sync readiness)
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     
     /// End date for custom periods (nil for standard periods)
     var customEndDate: Date?
@@ -150,7 +154,6 @@ final class Budget {
         self.rolloverAmount = 0
         self.alertAt50 = alertAt50
         self.alertAt80 = alertAt80
-        self.alertAt100 = alertAt100
         self.alertAt100 = alertAt100
         self.budgetCategoryTypeRaw = budgetCategoryType?.rawValue
         self.categories = categories
@@ -343,6 +346,15 @@ final class Budget {
         
         // Reset alert tracking
         resetAlertTracking()
+    }
+
+    // MARK: - Validation
+
+    func validate() -> [ModelValidationError] {
+        var errors: [ModelValidationError] = []
+        if amountLimit < 0 { errors.append(.negativeOrZeroAmount(field: "Budget limit")) }
+        if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
+        return errors
     }
 }
 

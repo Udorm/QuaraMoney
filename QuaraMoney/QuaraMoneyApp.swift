@@ -11,7 +11,10 @@ import SwiftData
 @main
 struct QuaraMoneyApp: App {
     @StateObject private var languageManager = LanguageManager.shared
+    @StateObject private var errorService = ErrorService.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showPrivacyOverlay = false
     
     init() {
         // All heavy work deferred to .task{} modifiers
@@ -32,29 +35,64 @@ struct QuaraMoneyApp: App {
         return container
     }
     
+    private static let modelSchema = Schema([
+        Wallet.self,
+        Category.self,
+        Event.self,
+        EventMember.self,
+        EventLedgerTransaction.self,
+        EventLedgerParticipant.self,
+        EventSettlementSnapshot.self,
+        EventSettlementTransfer.self,
+        EventWalletExportRecord.self,
+        RecurringRule.self,
+        Transaction.self,
+        Budget.self,
+        Debt.self,
+        SavingsGoal.self
+    ])
+
     private static func makeModelContainer() -> ModelContainer {
-        let schema = Schema([
-            Wallet.self,
-            Category.self,
-            Event.self,
-            EventMember.self,
-            EventLedgerTransaction.self,
-            EventLedgerParticipant.self,
-            EventSettlementSnapshot.self,
-            EventSettlementTransfer.self,
-            EventWalletExportRecord.self,
-            RecurringRule.self,
-            Transaction.self,
-            Budget.self,
-            Debt.self,
-            SavingsGoal.self
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(
+                for: modelSchema,
+                migrationPlan: QuaraMoneySchemaMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // First failure: try deleting the corrupted store and recreating
+            #if DEBUG
+            print("ModelContainer creation failed: \(error). Attempting recovery by deleting store.")
+            #endif
+            return recoverModelContainer(originalError: error)
+        }
+    }
+
+    /// Attempts to recover from a corrupted ModelContainer by deleting the store and recreating it.
+    private static func recoverModelContainer(originalError: Error) -> ModelContainer {
+        // Delete the default SwiftData store
+        if let storeURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let defaultStoreURL = storeURL.appendingPathComponent("default.store")
+            for ext in ["", "-wal", "-shm"] {
+                let fileURL = defaultStoreURL.appendingPathExtension(ext.isEmpty ? "" : String(ext.dropFirst()))
+                let url = ext.isEmpty ? defaultStoreURL : URL(fileURLWithPath: defaultStoreURL.path + ext)
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
+        let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)
+        do {
+            return try ModelContainer(for: modelSchema, configurations: [modelConfiguration])
+        } catch {
+            // Last resort: use in-memory store so the app doesn't crash-loop
+            #if DEBUG
+            print("Recovery failed: \(error). Using in-memory store.")
+            #endif
+            let inMemoryConfig = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: true)
+            // If even in-memory fails, there's a fundamental code issue — crash is appropriate
+            return try! ModelContainer(for: modelSchema, configurations: [inMemoryConfig])
         }
     }
     
@@ -85,6 +123,34 @@ struct QuaraMoneyApp: App {
                 UIFont.setupAppAppearance()
                 // Pre-warm common font sizes on background thread for smoother scrolling
                 UIFont.prewarmFontCache()
+            }
+            .alert(
+                item: $errorService.currentError
+            ) { appError in
+                Alert(
+                    title: Text(appError.title),
+                    message: Text(appError.message),
+                    dismissButton: .default(Text(L10n.Common.ok)) {
+                        errorService.dismiss()
+                    }
+                )
+            }
+            .overlay {
+                if showPrivacyOverlay {
+                    ZStack {
+                        Color(.systemBackground)
+                            .ignoresSafeArea()
+                        Image(systemName: "lock.shield.fill")
+                            .appFont(size: 48)
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showPrivacyOverlay = (newPhase != .active)
+                }
             }
         }
         .modelContainer(sharedModelContainer)
@@ -287,7 +353,13 @@ struct QuaraMoneyApp: App {
                 )
             }
             
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                #if DEBUG
+                print("[Setup] Failed to save default data: \(error)")
+                #endif
+            }
         }
         // Defer notification setup to avoid blocking the main thread at launch
         Task { @MainActor in

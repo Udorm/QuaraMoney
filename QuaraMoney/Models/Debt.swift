@@ -27,6 +27,10 @@ final class Debt {
     var note: String?
     var dateCreated: Date
     var isCompleted: Bool = false
+
+    // Timestamps (for future sync readiness)
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
     
     // Relationship to linked transactions
     @Relationship(deleteRule: .cascade, inverse: \Transaction.debt)
@@ -105,5 +109,17 @@ final class Debt {
         let total = currentTotalAmount
         guard total > 0 else { return 0 }
         return NSDecimalNumber(decimal: amountPaid).doubleValue / NSDecimalNumber(decimal: total).doubleValue
+    }
+
+    // MARK: - Validation
+
+    func validate() -> [ModelValidationError] {
+        var errors: [ModelValidationError] = []
+        if personName.trimmingCharacters(in: .whitespaces).isEmpty {
+            errors.append(.emptyName(field: "Person name"))
+        }
+        if totalAmount <= 0 { errors.append(.negativeOrZeroAmount(field: "Total amount")) }
+        if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
+        return errors
     }
 }

@@ -75,7 +75,7 @@ class HomeViewModel: ObservableObject {
         let calendar = Calendar.current
         let now = Date()
         // Current month start
-        let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
         
         for i in 0..<12 {
             if let date = calendar.date(byAdding: .month, value: -i, to: currentMonthStart) {
@@ -117,8 +117,8 @@ class HomeViewModel: ObservableObject {
         let calendar = Calendar.current
         
         if case .month(let date) = selectedTab {
-            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date))!
-            let end = calendar.date(byAdding: .month, value: 1, to: start)!.addingTimeInterval(-1)
+            let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+            let end = (calendar.date(byAdding: .month, value: 1, to: start) ?? start).addingTimeInterval(-1)
             self.startDate = start
             self.endDate = end
         } else {

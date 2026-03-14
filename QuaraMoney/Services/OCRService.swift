@@ -28,10 +28,14 @@ class OCRService {
         // 1. Try Gemini if API Key exists
         if let apiKey = SecurityManager.shared.getAPIKey(), !apiKey.isEmpty {
             do {
+                #if DEBUG
                 print("Attempting Gemini OCR...")
+                #endif
                 return try await scanWithGemini(image: image, apiKey: apiKey, availableWallets: availableWallets)
             } catch {
-                print("Gemini OCR failed, falling back to Vision: \(error)")
+                #if DEBUG
+                print("Gemini OCR failed, falling back to Vision: \(error.localizedDescription)")
+                #endif
                 // Fallthrough to Vision
             }
         }
@@ -242,7 +246,9 @@ class OCRService {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            print("Gemini API Error: \(String(data: data, encoding: .utf8) ?? "Unknown")")
+            #if DEBUG
+            print("Gemini API Error: status \(( response as? HTTPURLResponse)?.statusCode ?? -1)")
+            #endif
             throw OCRServiceError.textRecognitionFailed
         }
         

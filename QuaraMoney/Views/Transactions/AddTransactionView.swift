@@ -3,7 +3,7 @@ import SwiftData
 
 struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject var viewModel: AddTransactionViewModel
+    @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
     let startWithScanner: Bool
     
@@ -27,7 +27,7 @@ struct AddTransactionView: View {
     private let maxQuickWallets = 4
     
     init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
-        self._viewModel = StateObject(wrappedValue: viewModel)
+        self._viewModel = State(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
         self.startWithScanner = startWithScanner
     }

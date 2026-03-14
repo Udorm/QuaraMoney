@@ -1,0 +1,260 @@
+import SwiftUI
+import SwiftData
+import Charts
+
+struct SavingsGoalDetailView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var goal: SavingsGoal
+
+    @State private var showAddContribution = false
+    @State private var showEditGoal = false
+
+    private var goalColor: Color {
+        Color(hex: goal.colorHex) ?? .blue
+    }
+
+    var body: some View {
+        List {
+            // MARK: - Header Section with Donut Chart
+            Section {
+                VStack(spacing: 24) {
+                    // Header Info
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(goal.name)
+                                .font(.app(.title2, weight: .bold))
+
+                            if let targetDate = goal.targetDate {
+                                Text(targetDate.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.app(.subheadline))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if let days = goal.daysRemaining, days > 0 {
+                                Text(L10n.Budget.daysLeft(days))
+                                    .font(.app(.caption))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Image(systemName: goal.iconName)
+                            .font(.app(.title2))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(goalColor.gradient)
+                            .clipShape(Circle())
+                            .shadow(color: goalColor.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
+                    .padding(.horizontal, 4)
+
+                    // Donut Chart
+                    ZStack {
+                        Chart {
+                            if goal.isCompleted {
+                                SectorMark(
+                                    angle: .value("Saved", 100),
+                                    innerRadius: .ratio(0.65),
+                                    angularInset: 2
+                                )
+                                .foregroundStyle(goalColor.gradient)
+                            } else {
+                                SectorMark(
+                                    angle: .value("Saved", Double(truncating: goal.totalSaved(converter: CurrencyManager.shared.convert) as NSNumber)),
+                                    innerRadius: .ratio(0.65),
+                                    angularInset: 2
+                                )
+                                .foregroundStyle(goalColor.gradient)
+                                .cornerRadius(4)
+
+                                SectorMark(
+                                    angle: .value("Remaining", max(0, Double(truncating: goal.remainingAmount(converter: CurrencyManager.shared.convert) as NSNumber))),
+                                    innerRadius: .ratio(0.65),
+                                    angularInset: 2
+                                )
+                                .foregroundStyle(Color(.systemGray5))
+                                .cornerRadius(4)
+                            }
+                        }
+                        .frame(height: 220)
+
+                        // Center Label
+                        VStack(spacing: 4) {
+                            Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
+                                .font(.app(.largeTitle, weight: .bold))
+                                .foregroundStyle(goal.isCompleted ? goalColor : .primary)
+
+                            Text(goal.isCompleted ? L10n.Savings.complete : L10n.Savings.progress)
+                                .font(.app(.subheadline, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
+
+            // MARK: - Goal Progress Section
+            Section(L10n.Budget.summary) {
+                HStack {
+                    Text(L10n.Savings.totalSaved)
+                    Spacer()
+                    Text(goal.totalSaved(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
+                        .font(.app(.body, weight: .medium))
+                        .foregroundStyle(goalColor)
+                }
+
+                HStack {
+                    Text(L10n.Savings.targetAmount)
+                    Spacer()
+                    Text(goal.targetAmount.formattedAmount(for: goal.currencyCode))
+                        .foregroundStyle(.secondary)
+                }
+
+                if goal.currentAmount > 0 || goal.transactionContributedAmount(converter: CurrencyManager.shared.convert) > 0 {
+                    HStack {
+                        Text(L10n.Savings.manualContributions)
+                        Spacer()
+                        Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
+                            .foregroundStyle(.secondary)
+                            .font(.app(.caption))
+                    }
+
+                    HStack {
+                        Text(L10n.Savings.transferContributions)
+                        Spacer()
+                        Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
+                            .foregroundStyle(.secondary)
+                            .font(.app(.caption))
+                    }
+                }
+
+                if let suggested = goal.suggestedMonthlyContribution(converter: CurrencyManager.shared.convert) {
+                    HStack {
+                        Text(L10n.Savings.monthlyNeeded)
+                        Spacer()
+                        Text(suggested.formattedAmount(for: goal.currencyCode))
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                HStack {
+                    Text(L10n.Savings.status)
+                    Spacer()
+                    Text(goal.statusMessage)
+                        .foregroundStyle(goal.isOnTrack(converter: CurrencyManager.shared.convert) ? .green : .orange)
+                        .font(.app(.subheadline, weight: .medium))
+                }
+
+                if goal.autoContributeEnabled, let amount = goal.autoContributeAmount {
+                    HStack {
+                        Text(L10n.Savings.autoContribute)
+                        Spacer()
+                        Text("\(amount.formattedAmount(for: goal.currencyCode)) / \(goal.autoContributePeriod?.displayName ?? "")")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let wallet = goal.linkedWallet {
+                    HStack {
+                        Text(L10n.Savings.wallet)
+                        Spacer()
+                        Label(wallet.name, systemImage: wallet.icon)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // MARK: Contribution History
+            if let transactions = goal.linkedTransactions, !transactions.isEmpty {
+                Section(L10n.Savings.contributionHistory) {
+                    ForEach(transactions.sorted(by: { $0.date > $1.date })) { txn in
+                        TransactionRowView(transaction: txn, contextWallet: goal.linkedWallet)
+                    }
+                }
+            } else {
+                Section(L10n.Savings.contributionHistory) {
+                    ContentUnavailableView(
+                        L10n.Savings.noLinkedTransactions,
+                        systemImage: "tray",
+                        description: Text(L10n.Savings.noGoalsDescription)
+                    )
+                    .listRowBackground(Color.clear)
+                }
+            }
+
+            // MARK: Actions
+            if goal.isCompleted {
+                Section {
+                    Button {
+                        goal.isCompleted = false
+                        goal.completedDate = nil
+                    } label: {
+                        Label(L10n.Savings.markActive, systemImage: "arrow.uturn.backward")
+                    }
+                }
+            }
+        }
+        .navigationTitle(goal.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if !goal.isCompleted {
+                    Button {
+                        showAddContribution = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel(L10n.Savings.recordContribution)
+                }
+
+                Button {
+                    showEditGoal = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .accessibilityLabel(L10n.Savings.edit)
+            }
+        }
+        .sheet(isPresented: $showAddContribution) {
+            SavingsContributionSheet(goal: goal)
+        }
+        .sheet(isPresented: $showEditGoal) {
+            EditSavingsGoalView(goal: goal)
+        }
+    }
+
+    private var daysColor: Color {
+        guard let days = goal.daysRemaining else { return .secondary }
+        if days < 14 { return .red }
+        if days < 30 { return .orange }
+        return .green
+    }
+}
+
+// MARK: - Savings Contribution Sheet (wraps AddTransactionView)
+
+private struct SavingsContributionSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    let goal: SavingsGoal
+
+    var body: some View {
+        let vm = AddTransactionViewModel(
+            dataService: SwiftDataService(modelContext: modelContext),
+            initialWallet: nil
+        )
+        let _ = configureSavingsTransfer(vm)
+        AddTransactionView(viewModel: vm, isNewTransaction: true)
+    }
+
+    private func configureSavingsTransfer(_ vm: AddTransactionViewModel) {
+        vm.type = .transfer
+        vm.note = goal.name
+        vm.selectedSavingsGoal = goal
+        if let wallet = goal.linkedWallet {
+            vm.destinationWallet = wallet
+        }
+    }
+}

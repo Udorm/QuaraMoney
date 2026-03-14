@@ -3,7 +3,7 @@ import SwiftData
 
 struct WalletDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var viewModel: WalletDetailViewModel
+    @State private var viewModel: WalletDetailViewModel
     
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
@@ -12,7 +12,7 @@ struct WalletDetailView: View {
     @State private var isSearchPresented = false
     
     init(wallet: Wallet, modelContext: ModelContext) {
-        _viewModel = StateObject(wrappedValue: WalletDetailViewModel(modelContext: modelContext, wallet: wallet))
+        _viewModel = State(wrappedValue: WalletDetailViewModel(modelContext: modelContext, wallet: wallet))
     }
     
     var body: some View {

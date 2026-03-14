@@ -2,10 +2,10 @@ import SwiftUI
 
 struct AdjustBalanceView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: AdjustBalanceViewModel
+    @State private var viewModel: AdjustBalanceViewModel
     
     init(wallet: Wallet, dataService: DataService) {
-        _viewModel = StateObject(wrappedValue: AdjustBalanceViewModel(wallet: wallet, dataService: dataService))
+        _viewModel = State(wrappedValue: AdjustBalanceViewModel(wallet: wallet, dataService: dataService))
     }
     
     var body: some View {

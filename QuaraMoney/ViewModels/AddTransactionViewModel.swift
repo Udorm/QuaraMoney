@@ -1,29 +1,29 @@
 import Foundation
 import SwiftUI
 import SwiftData
-import Combine
 
+@Observable
 @MainActor
 class AddTransactionViewModel: BaseViewModel {
     // Expression-based input for calculator
-    @Published var expression: String = ""
-    @Published var evaluatedAmount: Decimal = 0
-    
-    @Published var type: TransactionType = .expense
-    @Published var date: Date = Date()
-    @Published var note: String = ""
-    @Published var selectedCategory: Category?
-    @Published var destinationWallet: Wallet?
-    @Published var selectedWallet: Wallet?
-    @Published var selectedEvent: Event?
-    @Published var excludeFromReports: Bool = false
-    @Published var debt: Debt?
-    @Published var selectedSavingsGoal: SavingsGoal?
-    
-    @Published var exchangeRate: Double = 1.0
-    
+    var expression: String = ""
+    var evaluatedAmount: Decimal = 0
+
+    var type: TransactionType = .expense
+    var date: Date = Date()
+    var note: String = ""
+    var selectedCategory: Category?
+    var destinationWallet: Wallet?
+    var selectedWallet: Wallet?
+    var selectedEvent: Event?
+    var excludeFromReports: Bool = false
+    var debt: Debt?
+    var selectedSavingsGoal: SavingsGoal?
+
+    var exchangeRate: Double = 1.0
+
     // Multi-currency support: transaction currency (may differ from wallet currency)
-    @Published var selectedCurrencyCode: String = "USD" {
+    var selectedCurrencyCode: String = "USD" {
         didSet {
             if oldValue != selectedCurrencyCode {
                 updateTransactionCurrencyExchangeRate()

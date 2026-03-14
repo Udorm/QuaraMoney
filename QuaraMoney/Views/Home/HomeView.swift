@@ -3,7 +3,7 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var viewModel: HomeViewModel
+    @State private var viewModel: HomeViewModel
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
@@ -11,7 +11,7 @@ struct HomeView: View {
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     init(modelContext: ModelContext) {
-        _viewModel = StateObject(wrappedValue: HomeViewModel(modelContext: modelContext))
+        _viewModel = State(wrappedValue: HomeViewModel(modelContext: modelContext))
     }
     
     var body: some View {

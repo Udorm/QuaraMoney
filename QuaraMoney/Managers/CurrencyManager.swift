@@ -182,6 +182,22 @@ class CurrencyManager: ObservableObject {
     }
 }
 
+// MARK: - Static Currency Conversion (nonisolated)
+extension CurrencyManager {
+    /// Converts an amount between currencies using provided rates.
+    /// Safe to call from any isolation context (nonisolated, static).
+    nonisolated static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
+        guard source != target else { return amount }
+        guard let sourceRate = rates[source], let targetRate = rates[target] else {
+            if source == "USD" && target == "KHR" { return amount * 4000 }
+            if source == "KHR" && target == "USD" { return amount / 4000 }
+            return amount
+        }
+        let amountUSD = amount / Decimal(sourceRate)
+        return amountUSD * Decimal(targetRate)
+    }
+}
+
 struct ExchangeRateResponse: Codable {
     let result: String
     let rates: [String: Double]

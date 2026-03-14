@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AddWalletView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject var viewModel: AddWalletViewModel
+    @State var viewModel: AddWalletViewModel
     
     // Focus state for keyboard
     @FocusState private var isNameFocused: Bool

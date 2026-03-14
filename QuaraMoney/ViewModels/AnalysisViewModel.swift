@@ -204,14 +204,7 @@ class AnalysisViewModel {
     }
     
     nonisolated private static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
-        guard let sourceRate = rates[source], let targetRate = rates[target] else {
-            if source == "USD" && target == "KHR" { return amount * 4000 }
-            if source == "KHR" && target == "USD" { return amount / 4000 }
-            if source == target { return amount }
-            return amount
-        }
-        let amountUSD = amount / Decimal(sourceRate)
-        return amountUSD * Decimal(targetRate)
+        CurrencyManager.convert(amount: amount, from: source, to: target, rates: rates)
     }
     
     // Removed old fetchTransactionsAndComputeStats as it is replaced by refreshData + background processor

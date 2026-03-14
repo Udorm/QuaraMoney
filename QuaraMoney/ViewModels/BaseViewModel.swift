@@ -1,18 +1,18 @@
 import Foundation
 import SwiftData
-import Combine
 
+@Observable
 @MainActor
-class BaseViewModel: ObservableObject {
+class BaseViewModel {
     let dataService: DataService
-    
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
-    
+
+    var isLoading: Bool = false
+    var errorMessage: String?
+
     init(dataService: DataService) {
         self.dataService = dataService
     }
-    
+
     func handleError(_ error: Error) {
         self.errorMessage = error.localizedDescription
         #if DEBUG

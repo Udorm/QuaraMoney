@@ -1,13 +1,13 @@
 import Foundation
 import SwiftUI
-import Combine
 
+@Observable
 @MainActor
 class AddWalletViewModel: BaseViewModel {
-    @Published var name: String = ""
-    @Published var currencyCode: String = "USD"
-    @Published var icon: String = "wallet.pass"
-    @Published var colorHex: String = "#007AFF" // Default iOS Blue
+    var name: String = ""
+    var currencyCode: String = "USD"
+    var icon: String = "wallet.pass"
+    var colorHex: String = "#007AFF" // Default iOS Blue
     
     private(set) var walletToEdit: Wallet?
     

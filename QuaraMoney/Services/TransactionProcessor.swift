@@ -100,18 +100,7 @@ struct TransactionProcessor {
     
     /// Helper for currency conversion
     nonisolated private static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
-        guard let sourceRate = rates[source], let targetRate = rates[target] else {
-            // Fallback for KHR/USD typical case if rates missing
-            if source == "USD" && target == "KHR" { return amount * 4000 }
-            if source == "KHR" && target == "USD" { return amount / 4000 }
-            if source == target { return amount }
-            return amount
-        }
-        
-        // Convert to Base (USD) then to Target
-        let amountUSD = amount / Decimal(sourceRate)
-        let amountTarget = amountUSD * Decimal(targetRate)
-        return amountTarget
+        CurrencyManager.convert(amount: amount, from: source, to: target, rates: rates)
     }
     
     /// Creates a FetchDescriptor for transactions within a date range.

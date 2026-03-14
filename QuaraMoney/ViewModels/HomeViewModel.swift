@@ -3,26 +3,26 @@ import SwiftData
 import SwiftUI
 import Combine
 
+@Observable
 @MainActor
-class HomeViewModel: ObservableObject {
-    private var modelContext: ModelContext
-    private var cancellables = Set<AnyCancellable>()
-    
-    @Published var selectedTab: TabPeriodSelection = .month(Date()) {
+class HomeViewModel {
+    @ObservationIgnored private var modelContext: ModelContext
+    @ObservationIgnored private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private let searchSubject = PassthroughSubject<String, Never>()
+
+    var selectedTab: TabPeriodSelection = .month(Date()) {
         didSet {
             updateDateRange()
             refreshData()
         }
     }
-    
+
     // Last 12 months
     let availableMonths: [Date]
-    
-    // Keep FilterPeriod for now if needed, but we'll likely ignore it for date range
-    // or maybe we just won't show the picker in UI.
-    @Published var selectedPeriod: FilterPeriod = .thisMonth // Default to thisMonth
-    
-    @Published var customStartDate: Date = Date() {
+
+    var selectedPeriod: FilterPeriod = .thisMonth
+
+    var customStartDate: Date = Date() {
         didSet {
             if selectedTab == .custom {
                 updateDateRange()
@@ -30,7 +30,7 @@ class HomeViewModel: ObservableObject {
             }
         }
     }
-    @Published var customEndDate: Date = Date() {
+    var customEndDate: Date = Date() {
         didSet {
             if selectedTab == .custom {
                 updateDateRange()
@@ -38,68 +38,56 @@ class HomeViewModel: ObservableObject {
             }
         }
     }
-    
-    @Published var searchText: String = ""
-    
-    @Published var selectedWallet: Wallet? {
+
+    var searchText: String = "" {
+        didSet { searchSubject.send(searchText) }
+    }
+
+    var selectedWallet: Wallet? {
         didSet { refreshData() }
     }
-    
-    private var startDate: Date = Date()
-    private var endDate: Date = Date()
-    
+
+    @ObservationIgnored private var startDate: Date = Date()
+    @ObservationIgnored private var endDate: Date = Date()
+
     var filterDescription: String {
-        // filterDescription used to show "This Month • All Wallets"
-        // Now the month is obvious from the tab bar.
-        // Maybe just show Wallet filter status?
-        // User said "reports... correspond to the month user selects".
-        // The header in the list was "This Month • All Wallets".
-        // If the tab bar is above, maybe we don't need the period part in the description.
-        // But let's keep it simple.
         let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
         return walletDesc
-        // If we want to show the date range:
-        // let dateDesc = selectedMonth.formatted(.dateTime.month().year())
-        // return "\(dateDesc) • \(walletDesc)"
     }
-    
-    @Published var incomeTotal: Decimal = 0
-    @Published var expenseTotal: Decimal = 0
-    @Published var dailySections: [DailyTransactionSection] = []
-    
+
+    var incomeTotal: Decimal = 0
+    var expenseTotal: Decimal = 0
+    var dailySections: [DailyTransactionSection] = []
+
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
-        
+
         // Initialize available months (last 12 months including current)
         var months: [Date] = []
         let calendar = Calendar.current
         let now = Date()
-        // Current month start
         let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
-        
+
         for i in 0..<12 {
             if let date = calendar.date(byAdding: .month, value: -i, to: currentMonthStart) {
                 months.append(date)
             }
         }
-        // Reverse so recent is at the end? User said: "recent month being on the right".
-        // If we use standard LTR implementation, right is end of list.
-        // So [Month-11, Month-10, ..., ThisMonth]
         self.availableMonths = months.reversed()
         self.selectedTab = .month(currentMonthStart)
-        
+
         updateDateRange()
-        
+
         // Listen for data resets using Combine for automatic cleanup
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.resetAndRefresh()
+                self?.refreshData()
             }
             .store(in: &cancellables)
-            
+
         // Setup search debounce
-        $searchText
+        searchSubject
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -107,15 +95,10 @@ class HomeViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
-    // Refresh data without clearing (to avoid flash)
-    private func resetAndRefresh() {
-        refreshData()
-    }
-    
+
     private func updateDateRange() {
         let calendar = Calendar.current
-        
+
         if case .month(let date) = selectedTab {
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
             let end = (calendar.date(byAdding: .month, value: 1, to: start) ?? start).addingTimeInterval(-1)
@@ -128,20 +111,20 @@ class HomeViewModel: ObservableObject {
             self.endDate = end
         }
     }
-    
+
     func refreshData() {
         let start = startDate
         let end = endDate
         let walletId = selectedWallet?.id
         let search = searchText
-        
+
         let container = modelContext.container
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
-        
+
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
-            
+
             let dataID = TransactionProcessor.fetchAndProcess(
                 context: context,
                 startDate: start,
@@ -151,18 +134,18 @@ class HomeViewModel: ObservableObject {
                 targetCurrency: preferredCurrency,
                 searchText: search
             )
-            
+
             await self.applyData(dataID)
         }
     }
-    
+
     private func applyData(_ dataID: ProcessedTransactionDataID) {
         self.incomeTotal = dataID.incomeTotal
         self.expenseTotal = dataID.expenseTotal
-        
+
         // Resolve IDs to Objects on Main Actor
         var resolvedSections: [DailyTransactionSection] = []
-        
+
         for section in dataID.dailySections {
             var transactions: [Transaction] = []
             for id in section.transactionIds {
@@ -170,7 +153,7 @@ class HomeViewModel: ObservableObject {
                     transactions.append(txn)
                 }
             }
-            
+
             if !transactions.isEmpty {
                 resolvedSections.append(DailyTransactionSection(
                     date: section.date,
@@ -179,15 +162,15 @@ class HomeViewModel: ObservableObject {
                 ))
             }
         }
-        
+
         self.dailySections = resolvedSections
     }
-    
+
     func deleteTransaction(_ transaction: Transaction) {
         // Invalidate wallet caches before deleting
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()
-        
+
         modelContext.delete(transaction)
         do {
             try modelContext.save()
@@ -200,14 +183,14 @@ class HomeViewModel: ObservableObject {
             #endif
         }
     }
-    
+
     var isFilterActive: Bool {
         if case .month(let date) = selectedTab {
             return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) || selectedWallet != nil
         }
         return true // Custom is active
     }
-    
+
     func resetFilters() {
         let currentMonthStart = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date()))!
         selectedTab = .month(currentMonthStart) // Back to today/this month

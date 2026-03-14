@@ -1,11 +1,11 @@
 import Foundation
 import SwiftData
 import SwiftUI
-import Combine
 
+@Observable
 @MainActor
 class WalletListViewModel: BaseViewModel {
-    @Published var wallets: [Wallet] = []
+    var wallets: [Wallet] = []
     
     // We can inject the context or rely on the query in the View. 
     // For MVVM with SwiftData, usually the View tracks the Query, but for logic we might want it here.

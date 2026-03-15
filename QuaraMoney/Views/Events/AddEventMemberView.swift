@@ -102,14 +102,20 @@ struct AddEventMemberView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.Common.save) {
+                    Button {
                         save()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.semibold)
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
@@ -173,9 +179,11 @@ private struct MemberIconPickerView: View {
             .navigationTitle("Select Icon")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
             }

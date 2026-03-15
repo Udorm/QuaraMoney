@@ -30,50 +30,40 @@ struct MultiCategoryPicker: View {
                     ContentUnavailableView.search(text: searchText)
                 } else {
                     ForEach(filteredCategories) { category in
-                        Button {
+                        SelectableRow(
+                            title: category.name,
+                            icon: category.icon,
+                            iconColor: Color(hex: category.colorHex) ?? .gray,
+                            isSelected: selectedCategories.contains(category.id),
+                            selectionStyle: .circleCheckmark
+                        ) {
                             toggleCategory(category)
-                        } label: {
-                            HStack {
-                                Image(systemName: category.icon)
-                                    .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
-                                    .frame(width: 30)
-                                
-                                Text(category.name)
-                                    .foregroundStyle(.primary)
-                                
-                                Spacer()
-                                
-                                if selectedCategories.contains(category.id) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.blue)
-                                } else {
-                                    Image(systemName: "circle")
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: L10n.Common.search)
-            .navigationTitle(L10n.Budget.selectCategories) // Make sure to add/use this key or literal "Select Categories"
+            .searchable(text: $searchText, placement: .toolbar, prompt: L10n.Common.search)
+            .navigationTitle(L10n.Budget.selectCategories)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.done) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(selectedCategories.isEmpty ? L10n.Common.selectAll : L10n.Common.deselectAll) {
+                    Button {
                         if selectedCategories.isEmpty {
                             selectAll()
                         } else {
                             deselectAll()
                         }
+                    } label: {
+                        Text(selectedCategories.isEmpty ? L10n.Common.selectAll : L10n.Common.deselectAll)
+                            .font(.app(.subheadline))
                     }
                 }
             }

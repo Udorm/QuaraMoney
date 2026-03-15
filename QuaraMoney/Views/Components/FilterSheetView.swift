@@ -13,23 +13,24 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
     @Binding var customStartDate: Date
     @Binding var customEndDate: Date
     @Binding var isPresented: Bool
-    
+
     var wallets: [Wallet]
     var showWalletFilter: Bool = true
-    var showPeriodFilter: Bool = true // New property
+    var showPeriodFilter: Bool = true
+    var onApply: (() -> Void)?
     var extraContent: Content
-    
+
     // Local state for pending selections (not applied until Done)
     @State private var pendingPeriod: Period
     @State private var pendingWallet: Wallet?
     @State private var pendingStartDate: Date
     @State private var pendingEndDate: Date
-    
+
     // Track if custom period is selected to show date pickers
     private var isCustomPeriodSelected: Bool {
         pendingPeriod.displayName == L10n.Period.custom
     }
-    
+
     init(
         selectedPeriod: Binding<Period>,
         selectedWallet: Binding<Wallet?>,
@@ -38,7 +39,8 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
         isPresented: Binding<Bool>,
         wallets: [Wallet],
         showWalletFilter: Bool = true,
-        showPeriodFilter: Bool = true, // New parameter
+        showPeriodFilter: Bool = true,
+        onApply: (() -> Void)? = nil,
         @ViewBuilder extraContent: () -> Content
     ) {
         self._selectedPeriod = selectedPeriod
@@ -49,8 +51,9 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
         self.wallets = wallets
         self.showWalletFilter = showWalletFilter
         self.showPeriodFilter = showPeriodFilter
+        self.onApply = onApply
         self.extraContent = extraContent()
-        
+
         // Initialize pending state with current values
         self._pendingPeriod = State(initialValue: selectedPeriod.wrappedValue)
         self._pendingWallet = State(initialValue: selectedWallet.wrappedValue)
@@ -65,10 +68,10 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                 if showPeriodFilter {
                     Section {
                         ForEach(Array(Period.allCases)) { period in
-                            PeriodRow(
-                                period: period,
-                                isSelected: (pendingPeriod as AnyHashable) == (period as AnyHashable),
-                                icon: getIcon(for: period)
+                            SelectableRow(
+                                title: period.displayName,
+                                icon: getIcon(for: period),
+                                isSelected: (pendingPeriod as AnyHashable) == (period as AnyHashable)
                             ) {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     pendingPeriod = period
@@ -109,19 +112,18 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                 if showWalletFilter {
                     Section {
                         // All Wallets option
-                        WalletRow(
-                            name: "filter.allWallets".localized,
+                        SelectableRow(
+                            title: "filter.allWallets".localized,
                             icon: "square.stack.3d.up",
-                            iconColor: .secondary,
                             isSelected: pendingWallet == nil
                         ) {
                             pendingWallet = nil
                         }
-                        
+
                         // Individual wallets
                         ForEach(wallets) { wallet in
-                            WalletRow(
-                                name: wallet.name,
+                            SelectableRow(
+                                title: wallet.name,
                                 icon: wallet.icon.isEmpty ? "creditcard" : wallet.icon,
                                 iconColor: Color(hex: wallet.colorHex) ?? .blue,
                                 isSelected: pendingWallet?.id == wallet.id
@@ -170,6 +172,7 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
         selectedWallet = pendingWallet
         customStartDate = pendingStartDate
         customEndDate = pendingEndDate
+        onApply?()
         isPresented = false
     }
     
@@ -191,79 +194,6 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
     }
 }
 
-// MARK: - Period Row Component
-
-private struct PeriodRow<Period: LocalizableDisplayName>: View {
-    let period: Period
-    let isSelected: Bool
-    let icon: String
-    let onTap: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(isSelected ? .blue : .secondary)
-                .frame(width: 24)
-            
-            Text(period.displayName)
-                .font(.app(.body))
-                .foregroundStyle(.primary)
-            
-            Spacer()
-            
-            if isSelected {
-                Image(systemName: "checkmark")
-                //    .foregroundStyle(.blue)
-                //    .fontWeight(.semibold)
-                // User didn't ask to remove checkmark but standard lists use blue checkmark.
-                // Keeping as is.
-                     .foregroundStyle(.blue)
-                     .fontWeight(.semibold)
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-    }
-}
-
-// MARK: - Wallet Row Component
-
-struct WalletRow: View {
-    let name: String
-    let icon: String
-    let iconColor: Color
-    let isSelected: Bool
-    let onTap: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(iconColor)
-                .frame(width: 24)
-            
-            Text(name)
-                .font(.app(.body))
-                .foregroundStyle(.primary)
-            
-            Spacer()
-            
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.blue)
-                    .fontWeight(.semibold)
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onTap()
-        }
-    }
-}
-
 // MARK: - Filter Sheet Button (Toolbar Button)
 
 /// A toolbar button that opens the filter sheet.
@@ -275,10 +205,11 @@ struct FilterSheetButton<Period: Hashable & Identifiable & CaseIterable & Locali
     @Binding var customEndDate: Date
     var wallets: [Wallet]
     var showWalletFilter: Bool = true
-    var showPeriodFilter: Bool = true // New property
+    var showPeriodFilter: Bool = true
     var defaultPeriod: Period? = nil
+    var onApply: (() -> Void)?
     let extraContent: () -> Content
-    
+
     @State private var showFilterSheet = false
     
     // Check if filter is active for UI state
@@ -326,7 +257,8 @@ struct FilterSheetButton<Period: Hashable & Identifiable & CaseIterable & Locali
                 isPresented: $showFilterSheet,
                 wallets: wallets,
                 showWalletFilter: showWalletFilter,
-                showPeriodFilter: showPeriodFilter, // Pass it
+                showPeriodFilter: showPeriodFilter,
+                onApply: onApply,
                 extraContent: extraContent
             )
         }
@@ -340,7 +272,8 @@ struct FilterSheetButton<Period: Hashable & Identifiable & CaseIterable & Locali
         wallets: [Wallet],
         defaultPeriod: Period? = nil,
         showWalletFilter: Bool = true,
-        showPeriodFilter: Bool = true, // New parameter
+        showPeriodFilter: Bool = true,
+        onApply: (() -> Void)? = nil,
         @ViewBuilder extraContent: @escaping () -> Content
     ) {
         self._selectedPeriod = selectedPeriod
@@ -351,6 +284,7 @@ struct FilterSheetButton<Period: Hashable & Identifiable & CaseIterable & Locali
         self.defaultPeriod = defaultPeriod
         self.showWalletFilter = showWalletFilter
         self.showPeriodFilter = showPeriodFilter
+        self.onApply = onApply
         self.extraContent = extraContent
     }
 }
@@ -366,7 +300,8 @@ extension FilterSheetButton where Content == EmptyView {
         wallets: [Wallet],
         defaultPeriod: Period? = nil,
         showWalletFilter: Bool = true,
-        showPeriodFilter: Bool = true // New parameter
+        showPeriodFilter: Bool = true,
+        onApply: (() -> Void)? = nil
     ) {
         self._selectedPeriod = selectedPeriod
         self._selectedWallet = selectedWallet
@@ -376,6 +311,7 @@ extension FilterSheetButton where Content == EmptyView {
         self.defaultPeriod = defaultPeriod
         self.showWalletFilter = showWalletFilter
         self.showPeriodFilter = showPeriodFilter
+        self.onApply = onApply
         self.extraContent = { EmptyView() }
     }
 }

@@ -29,7 +29,7 @@ struct CurrencySelectionView: View {
                     }
                 }
             }
-            
+
             // All Currencies
             Section(searchText.isEmpty ? "All Currencies" : "Search Results") {
                 ForEach(filteredCurrencies, id: \.self) { code in
@@ -37,8 +37,18 @@ struct CurrencySelectionView: View {
                 }
             }
         }
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search Currency")
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search Currency")
         .navigationTitle("Select Currency")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+            }
+        }
     }
     
     private func currencyRow(_ code: String) -> some View {

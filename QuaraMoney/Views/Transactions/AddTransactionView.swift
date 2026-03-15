@@ -417,38 +417,28 @@ struct AddTransactionView: View {
         return NavigationStack {
             List {
                 ForEach(displayWallets) { wallet in
-                    Button {
+                    SelectableRow(
+                        title: wallet.name,
+                        subtitle: wallet.currencyCode,
+                        icon: wallet.icon,
+                        iconColor: .blue,
+                        isSelected: viewModel.selectedWallet?.id == wallet.id
+                    ) {
                         viewModel.selectedWallet = wallet
                         viewModel.syncCurrencyToWallet()
                         viewModel.updateExchangeRate()
                         showAllWallets = false
-                    } label: {
-                        HStack {
-                            Image(systemName: wallet.icon)
-                                .foregroundStyle(.blue)
-                                .frame(width: 24)
-                            VStack(alignment: .leading) {
-                                Text(wallet.name)
-                                Text(wallet.currencyCode)
-                                    .font(.app(.caption))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if viewModel.selectedWallet?.id == wallet.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
-                            }
-                        }
                     }
-                    .foregroundStyle(.primary)
                 }
             }
             .navigationTitle(L10n.Wallet.selectWallet)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $walletSearchText, prompt: Text("transaction.searchWallets".localized))
+            .searchable(text: $walletSearchText, placement: .toolbar, prompt: Text("transaction.searchWallets".localized))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { showAllWallets = false }
+                    Button { showAllWallets = false } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
             }
         }
@@ -565,31 +555,25 @@ struct AddTransactionView: View {
         return NavigationStack {
             List {
                 ForEach(displayCategories) { category in
-                    Button {
+                    SelectableRow(
+                        title: category.name,
+                        icon: category.icon,
+                        iconColor: Color(hex: category.colorHex) ?? .gray,
+                        isSelected: viewModel.selectedCategory?.id == category.id
+                    ) {
                         viewModel.selectedCategory = category
                         showAllCategories = false
-                    } label: {
-                        HStack {
-                            Image(systemName: category.icon)
-                                .foregroundColor(Color(hex: category.colorHex) ?? .gray)
-                                .frame(width: 24)
-                            Text(category.name)
-                            Spacer()
-                            if viewModel.selectedCategory?.id == category.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
-                            }
-                        }
                     }
-                    .foregroundStyle(.primary)
                 }
             }
             .navigationTitle(L10n.TransactionAdditional.selectCategory)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $categorySearchText, prompt: L10n.TransactionAdditional.searchCategories)
+            .searchable(text: $categorySearchText, placement: .toolbar, prompt: L10n.TransactionAdditional.searchCategories)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.Common.cancel) { showAllCategories = false }
+                    Button { showAllCategories = false } label: {
+                        Image(systemName: "xmark")
+                    }
                 }
             }
         }

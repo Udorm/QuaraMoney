@@ -259,9 +259,10 @@ extension UIFont {
             let weights: [UIFont.Weight] = [.regular, .medium, .semibold, .bold]
             for size in sizes {
                 for weight in weights {
-                    await MainActor.run {
-                        _ = UIFont.appWithCascade(ofSize: size, weight: weight)
-                    }
+                    // UIFont/descriptor creation is thread-safe for reads.
+                    // Avoid dispatching back to MainActor — that causes
+                    // micro-stutters during the critical first seconds.
+                    _ = UIFont.appWithCascade(ofSize: size, weight: weight)
                 }
             }
         }

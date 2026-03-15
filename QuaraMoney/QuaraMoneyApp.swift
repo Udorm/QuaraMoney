@@ -56,9 +56,10 @@ struct QuaraMoneyApp: App {
         let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)
 
         do {
+            // No migration stages yet — skip migration plan to reduce container init time.
+            // Re-add migrationPlan: when SchemaV2 is introduced.
             return try ModelContainer(
                 for: modelSchema,
-                migrationPlan: QuaraMoneySchemaMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -96,24 +97,22 @@ struct QuaraMoneyApp: App {
         }
     }
     
-    /// The default cascaded font for the entire app
-    private var defaultAppFont: Font {
-        Font(UIFont.appWithCascade(ofSize: 17, weight: .regular))
-    }
+    /// The default cascaded font for the entire app (computed once, then cached by NSCache)
+    private static let defaultAppFont: Font = Font(UIFont.appWithCascade(ofSize: 17, weight: .regular))
 
     var body: some Scene {
         WindowGroup {
             Group {
                 if isOnboardingCompleted {
                     ContentView()
-                        .onAppear {
+                        .task {
                             setupServices()
                         }
                 } else {
                     OnboardingView()
                 }
             }
-            .environment(\.font, defaultAppFont)
+            .environment(\.font, Self.defaultAppFont)
             // Force view recreation when language changes
             .id(languageManager.fontRefreshID)
             .environmentObject(languageManager)

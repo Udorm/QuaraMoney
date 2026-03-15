@@ -18,16 +18,16 @@ struct WalletFilterSheet: View {
             List {
                 Section {
                     // Active Option
-                    FilterOptionRow(
+                    SelectableRow(
                         title: L10n.Wallet.Status.active,
                         icon: "checkmark.circle",
                         isSelected: !pendingShowArchived
                     ) {
                         pendingShowArchived = false
                     }
-                    
+
                     // Archived Option
-                    FilterOptionRow(
+                    SelectableRow(
                         title: L10n.Wallet.Status.archived,
                         icon: "archivebox",
                         isSelected: pendingShowArchived
@@ -68,38 +68,4 @@ struct WalletFilterSheet: View {
     }
 }
 
-// Reusable row for consistent UI
-private struct FilterOptionRow: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(isSelected ? .blue : .secondary)
-                .frame(width: 24)
-            
-            Text(title)
-                .font(.app(.body))
-                .foregroundStyle(.primary)
-            
-            Spacer()
-            
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.blue)
-                    .fontWeight(.semibold)
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation {
-                action()
-            }
-        }
-    }
-}
 

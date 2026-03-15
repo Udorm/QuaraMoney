@@ -45,13 +45,7 @@ struct AnalysisContentView: View {
             .background(Color(.systemGroupedBackground))
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    AnalysisFilterSheetButton(
-                        selectedTransactionType: $vm.selectedTransactionType,
-                        selectedWallet: $vm.selectedWallet,
-                        customStartDate: $vm.customStartDate,
-                        customEndDate: $vm.customEndDate,
-                        wallets: wallets
-                    )
+                    AnalysisFilterButton(vm: vm, wallets: wallets)
                 }
             }
         }
@@ -366,5 +360,43 @@ struct CategoryBreakdownChart: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .padding(.horizontal)
+    }
+}
+
+// MARK: - Analysis Filter Button (wraps FilterSheetButton with transaction type picker)
+
+private struct AnalysisFilterButton: View {
+    @Bindable var vm: AnalysisViewModel
+    var wallets: [Wallet]
+
+    // Pending transaction type (applied on Done via onApply)
+    @State private var pendingTransactionType: TransactionTypeFilter = .expense
+
+    var body: some View {
+        FilterSheetButton(
+            selectedPeriod: $vm.selectedPeriod,
+            selectedWallet: $vm.selectedWallet,
+            customStartDate: $vm.customStartDate,
+            customEndDate: $vm.customEndDate,
+            wallets: wallets,
+            showPeriodFilter: false,
+            onApply: {
+                vm.selectedTransactionType = pendingTransactionType
+            }
+        ) {
+            Section("analysis.transactionType".localized) {
+                Picker("analysis.transactionType".localized, selection: $pendingTransactionType) {
+                    Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
+                    Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .onAppear {
+            pendingTransactionType = vm.selectedTransactionType
+        }
+        .onChange(of: vm.selectedTransactionType) { _, newValue in
+            pendingTransactionType = newValue
+        }
     }
 }

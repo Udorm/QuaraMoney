@@ -15,6 +15,8 @@ struct QuaraMoneyApp: App {
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
+    @State private var showSplash = !_hasShownSplash
+    nonisolated(unsafe) private static var _hasShownSplash = false
     
     init() {
         // All heavy work deferred to .task{} modifiers
@@ -102,14 +104,27 @@ struct QuaraMoneyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if isOnboardingCompleted {
-                    ContentView()
-                        .task {
-                            setupServices()
+            ZStack {
+                Group {
+                    if isOnboardingCompleted {
+                        ContentView()
+                            .task {
+                                setupServices()
+                            }
+                    } else {
+                        OnboardingView()
+                    }
+                }
+                .opacity(showSplash ? 0 : 1)
+
+                if showSplash {
+                    SplashScreenView {
+                        Self._hasShownSplash = true
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showSplash = false
                         }
-                } else {
-                    OnboardingView()
+                    }
+                    .transition(.opacity)
                 }
             }
             .environment(\.font, Self.defaultAppFont)

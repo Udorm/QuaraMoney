@@ -653,5 +653,5 @@ struct BudgetTip {
     NavigationStack {
         BudgetInsightsView()
     }
-    .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
+    .modelContainer(for: [Budget.self, Transaction.self, TransactionLocation.self, Category.self], inMemory: true)
 }

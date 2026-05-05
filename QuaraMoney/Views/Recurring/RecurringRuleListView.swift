@@ -74,3 +74,10 @@ struct RecurringRuleListView: View {
         }
     }
 }
+#Preview {
+    NavigationStack {
+        RecurringRuleListView()
+            .modelContainer(for: [RecurringRule.self], inMemory: true)
+    }
+}
+

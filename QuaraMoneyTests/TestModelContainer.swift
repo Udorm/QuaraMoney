@@ -17,6 +17,7 @@ class TestModelContainer {
             EventWalletExportRecord.self,
             RecurringRule.self,
             Transaction.self,
+            TransactionLocation.self,
             Budget.self,
             Debt.self,
             SavingsGoal.self

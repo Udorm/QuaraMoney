@@ -675,3 +675,30 @@
 /* Common missing */
 "common.of" = "of";
 
+// MARK: - Transaction Location
+"transaction.location" = "Location";
+"transaction.location.pick" = "Pick Location";
+"transaction.location.selected" = "Selected Location";
+"transaction.location.clear" = "Clear Location";
+"transaction.location.useCurrent" = "Use Current Location";
+"transaction.location.useCurrentSubtitle" = "Use your device location";
+"transaction.location.useSelected" = "Use This Location";
+"transaction.location.pinOnMap" = "Pin Location on Map";
+"transaction.location.pinOnMapSubtitle" = "Choose a point manually";
+"transaction.location.suggestions" = "Suggested Locations";
+"transaction.location.loadingNearby" = "Finding nearby places...";
+"transaction.location.noNearby" = "No nearby places found";
+"transaction.location.searchPrompt" = "Search places or addresses";
+"transaction.location.searchResults" = "Search Results";
+"transaction.location.searching" = "Searching...";
+"transaction.location.clearSearch" = "Clear Search";
+"transaction.location.noResults" = "No places found";
+"transaction.location.resolvingPin" = "Finding location details...";
+"transaction.location.moveMapToPin" = "Move the map so the pin is on the location you want.";
+"transaction.location.tapMapTitle" = "Tap the map";
+"transaction.location.tapMapDescription" = "Drop a pin to use that location.";
+"transaction.location.errorTitle" = "Location Unavailable";
+"transaction.location.errorUnavailable" = "Location services are unavailable.";
+"transaction.location.errorDenied" = "Location access is disabled. Enable location access in Settings to use your current location.";
+"transaction.location.errorRestricted" = "Location access is restricted on this device.";
+"transaction.location.errorNoLocation" = "Could not determine a location.";

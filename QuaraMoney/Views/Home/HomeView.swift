@@ -221,7 +221,7 @@ struct DailyHeader: View {
 
 #Preview("HomeView") {
     let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Wallet.self, Transaction.self, Category.self, configurations: configuration)
+    let container = try! ModelContainer(for: Wallet.self, Transaction.self, TransactionLocation.self, Category.self, configurations: configuration)
     let context = container.mainContext
 
     // Seed minimal preview data if empty
@@ -253,4 +253,3 @@ struct DailyHeader: View {
     return HomeView(modelContext: context)
         .modelContainer(container)
 }
-

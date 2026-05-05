@@ -113,3 +113,10 @@ struct AddRecurringRuleView: View {
         modelContext.insert(rule)
     }
 }
+#Preview {
+    NavigationStack {
+        AddRecurringRuleView()
+            .modelContainer(for: [RecurringRule.self], inMemory: true)
+    }
+}
+

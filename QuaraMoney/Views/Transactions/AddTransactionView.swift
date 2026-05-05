@@ -19,6 +19,7 @@ struct AddTransactionView: View {
     @State private var categorySearchText = ""
     @State private var walletSearchText = ""
     @State private var showScanner = false
+    @State private var showLocationPicker = false
 
     @FocusState private var isNoteFieldFocused: Bool
     
@@ -284,6 +285,11 @@ struct AddTransactionView: View {
                         #endif
                     }
                 }
+            }
+            .sheet(isPresented: $showLocationPicker) {
+                TransactionLocationPickerView(selection: $viewModel.selectedLocation)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 // Preselect the most used wallet (by transaction count)
@@ -616,6 +622,38 @@ struct AddTransactionView: View {
                     .frame(width: 24)
                 TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showKeyboard = false
+                    isNoteFieldFocused = false
+                }
+                showLocationPicker = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("transaction.location".localized)
+                            .foregroundStyle(.primary)
+
+                        if let location = viewModel.selectedLocation {
+                            Text(location.title)
+                                .font(.app(.caption))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.app(.caption, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
     }

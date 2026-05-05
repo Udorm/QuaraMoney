@@ -19,6 +19,7 @@ class AddTransactionViewModel: BaseViewModel {
     var excludeFromReports: Bool = false
     var debt: Debt?
     var selectedSavingsGoal: SavingsGoal?
+    var selectedLocation: TransactionLocationSelection?
 
     var exchangeRate: Double = 1.0
 
@@ -50,6 +51,9 @@ class AddTransactionViewModel: BaseViewModel {
             self.selectedEvent = txn.event
             self.excludeFromReports = txn.excludeFromReports
             self.selectedCurrencyCode = txn.currencyCode
+            if let location = txn.location {
+                self.selectedLocation = TransactionLocationSelection(location: location)
+            }
             
             // Handle legacy exchangeRate (Decimal) -> Double
             self.exchangeRate = NSDecimalNumber(decimal: txn.exchangeRate).doubleValue
@@ -165,6 +169,7 @@ class AddTransactionViewModel: BaseViewModel {
         
         transaction.note = note.isEmpty ? nil : note
         transaction.sourceWallet = wallet
+        transaction.updatedAt = Date()
         
         if type == .transfer {
             transaction.destinationWallet = destinationWallet
@@ -180,6 +185,19 @@ class AddTransactionViewModel: BaseViewModel {
         }
         
         transaction.excludeFromReports = excludeFromReports
+        if let selectedLocation {
+            if let existingLocation = transaction.location {
+                selectedLocation.apply(to: existingLocation)
+            } else {
+                transaction.location = selectedLocation.makePersistentLocation()
+            }
+        } else {
+            if let existingLocation = transaction.location {
+                dataService.delete(existingLocation)
+            }
+            transaction.location = nil
+        }
+
         // Event entries are now isolated in EventLedgerTransaction.
         // Keep wallet transactions detached from events to avoid double-accounting.
         transaction.event = nil

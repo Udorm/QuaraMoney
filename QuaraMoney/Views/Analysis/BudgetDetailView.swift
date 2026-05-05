@@ -353,5 +353,5 @@ struct BudgetDetailView: View {
     NavigationStack {
         BudgetDetailView(budget: budget, transactions: [])
     }
-    .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
+    .modelContainer(for: [Budget.self, Transaction.self, TransactionLocation.self, Category.self], inMemory: true)
 }

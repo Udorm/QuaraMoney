@@ -24,6 +24,9 @@ final class Transaction {
 
     // Attachments
     var photoData: Data?
+
+    // Location metadata for future intelligent suggestions
+    @Relationship(deleteRule: .cascade) var location: TransactionLocation?
     
     // Relationships
     var category: Category? // Nil for transfers

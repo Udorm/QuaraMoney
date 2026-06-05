@@ -10,15 +10,34 @@ class FilteredTransactionsViewModel {
     var transactions: [Transaction] = []
     var totalAmount: Decimal = 0
     var isLoading = false
+    var searchText: String = "" {
+        didSet {
+            searchSubject.send(searchText)
+        }
+    }
+    var sortOption: TransactionSortOption {
+        didSet {
+            fetchTransactions()
+        }
+    }
 
     private var modelContext: ModelContext?
     private var cancellables = Set<AnyCancellable>()
+    private let searchSubject = PassthroughSubject<String, Never>()
 
     init(config: TransactionFilterConfig) {
         self.config = config
+        self.sortOption = config.defaultSortOption
 
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.fetchTransactions()
+            }
+            .store(in: &cancellables)
+
+        searchSubject
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.fetchTransactions()
             }
@@ -39,8 +58,11 @@ class FilteredTransactionsViewModel {
         let categoryId = config.categoryId
         let categoryIds = config.categoryIds
         let transactionType = config.transactionType
+        let savingsGoalId = config.savingsGoalId
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         let rates = CurrencyManager.shared.rates
+        let currentSearchText = searchText
+        let currentSortOption = sortOption
 
         isLoading = true
 
@@ -72,19 +94,63 @@ class FilteredTransactionsViewModel {
                     fetched = fetched.filter { $0.type == targetType }
                 }
 
-                // Calculate total in preferred currency
-                let total = fetched.reduce(Decimal.zero) { sum, txn in
-                    let converted = Self.convert(
-                        amount: txn.amount,
-                        from: txn.currencyCode,
-                        to: preferredCurrency,
-                        rates: rates
-                    )
-                    return sum + converted
+                // Filter by savingsGoalId
+                if let savingsGoalId {
+                    fetched = fetched.filter { $0.savingsGoal?.id == savingsGoalId }
                 }
 
-                await MainActor.run { [fetched, total] in
-                    self.transactions = fetched
+                // Filter by search text
+                let cleanSearch = currentSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleanSearch.isEmpty {
+                    fetched = fetched.filter { txn in
+                        let noteMatch = txn.note?.localizedCaseInsensitiveContains(cleanSearch) ?? false
+                        let categoryMatch = txn.category?.name.localizedCaseInsensitiveContains(cleanSearch) ?? false
+                        return noteMatch || categoryMatch
+                    }
+                }
+
+                // Sort based on sortOption
+                switch currentSortOption {
+                case .newestFirst:
+                    fetched.sort { $0.date > $1.date }
+                case .oldestFirst:
+                    fetched.sort { $0.date < $1.date }
+                case .highestAmount:
+                    fetched.sort { t1, t2 in
+                        let a1 = Self.convert(amount: t1.amount, from: t1.currencyCode, to: preferredCurrency, rates: rates)
+                        let a2 = Self.convert(amount: t2.amount, from: t2.currencyCode, to: preferredCurrency, rates: rates)
+                        if a1 == a2 {
+                            return t1.date > t2.date
+                        }
+                        return a1 > a2
+                    }
+                case .lowestAmount:
+                    fetched.sort { t1, t2 in
+                        let a1 = Self.convert(amount: t1.amount, from: t1.currencyCode, to: preferredCurrency, rates: rates)
+                        let a2 = Self.convert(amount: t2.amount, from: t2.currencyCode, to: preferredCurrency, rates: rates)
+                        if a1 == a2 {
+                            return t1.date > t2.date
+                        }
+                        return a1 < a2
+                    }
+                }
+
+                // Calculate total in preferred currency using the shared helper
+                let total = TransactionProcessor.calculateTotal(
+                    fetched,
+                    rates: rates,
+                    targetCurrency: preferredCurrency,
+                    typeFilter: transactionType == .expense ? .expense : (transactionType == .income ? .income : nil)
+                )
+
+                let ids = fetched.map { $0.persistentModelID }
+
+                await MainActor.run { [ids, total] in
+                    if let context = self.modelContext {
+                        self.transactions = ids.compactMap { context.model(for: $0) as? Transaction }
+                    } else {
+                        self.transactions = []
+                    }
                     self.totalAmount = total
                     self.isLoading = false
                 }
@@ -101,6 +167,10 @@ class FilteredTransactionsViewModel {
     }
 
     func deleteTransaction(_ transaction: Transaction) {
+        // Invalidate wallet caches before deleting
+        transaction.sourceWallet?.invalidateBalanceCache()
+        transaction.destinationWallet?.invalidateBalanceCache()
+
         modelContext?.delete(transaction)
         do {
             try modelContext?.save()

@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+private struct BackdateTarget: Identifiable, Equatable {
+    let id = UUID()
+    let date: Date
+}
+
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: HomeViewModel
@@ -8,6 +13,7 @@ struct HomeView: View {
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
     @State private var shouldScan = false
+    @State private var backdateTarget: BackdateTarget?
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     init(modelContext: ModelContext) {
@@ -33,6 +39,9 @@ struct HomeView: View {
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
             }
+            .sheet(item: $backdateTarget) { target in
+                AddTransactionContainer(transaction: nil, isNewTransaction: true, initialDate: target.date)
+            }
             .onChange(of: showingAddTransaction) { oldValue, newValue in
                 if !newValue {
                     viewModel.refreshData()
@@ -43,8 +52,13 @@ struct HomeView: View {
                      viewModel.refreshData()
                 }
             }
+            .onChange(of: backdateTarget) { oldValue, newValue in
+                if newValue == nil {
+                    viewModel.refreshData()
+                }
+            }
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         shouldScan = true
                         showingAddTransaction = true
@@ -52,6 +66,19 @@ struct HomeView: View {
                         Image(systemName: "doc.text.viewfinder")
                     }
                     .accessibilityLabel("Scan receipt")
+                }
+
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        Picker(selection: $viewModel.sortOption, label: Text(L10n.Sort.title)) {
+                            ForEach(TransactionSortOption.allCases) { option in
+                                Text(option.displayName).tag(option)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Sort transactions")
 
                     Button {
                         shouldScan = false
@@ -71,7 +98,6 @@ struct HomeView: View {
                         showPeriodFilter: false
                     )
                 }
-                
             }
         }
     }
@@ -107,23 +133,50 @@ struct HomeView: View {
             // Summary Section
             if viewModel.selectedWallet != nil {
                 Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
-                    FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                    FinancialSummaryCards(
+                        income: viewModel.incomeTotal,
+                        expense: viewModel.expenseTotal,
+                        dailySections: viewModel.dailySections,
+                        startDate: viewModel.currentStartDate,
+                        endDate: viewModel.currentEndDate,
+                        previousPeriodCumulative: viewModel.previousPeriodCumulative
+                    )
                 }
             } else {
                 Section {
-                     FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
+                    FinancialSummaryCards(
+                        income: viewModel.incomeTotal,
+                        expense: viewModel.expenseTotal,
+                        dailySections: viewModel.dailySections,
+                        startDate: viewModel.currentStartDate,
+                        endDate: viewModel.currentEndDate,
+                        previousPeriodCumulative: viewModel.previousPeriodCumulative
+                    )
                 }
             }
 
-            // Daily Transactions
-            ForEach(viewModel.dailySections) { section in
-                Section(header: DailyHeader(section: section)) {
-                    ForEach(section.transactions) { txn in
-                        HomeTransactionRow(
-                            transaction: txn,
-                            onEdit: { transactionToEdit = txn },
-                            onDelete: { viewModel.deleteTransaction(txn) }
-                        )
+            // Daily Transactions or sorted flat list
+            if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
+                ForEach(viewModel.sortedTransactions) { txn in
+                    HomeTransactionRow(
+                        transaction: txn,
+                        onEdit: { transactionToEdit = txn },
+                        onDelete: { viewModel.deleteTransaction(txn) }
+                    )
+                }
+            } else {
+                ForEach(viewModel.dailySections) { section in
+                    Section(header: DailyHeader(section: section, onAddTapped: {
+                        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: section.date) ?? section.date
+                        backdateTarget = BackdateTarget(date: noon)
+                    })) {
+                        ForEach(section.transactions) { txn in
+                            HomeTransactionRow(
+                                transaction: txn,
+                                onEdit: { transactionToEdit = txn },
+                                onDelete: { viewModel.deleteTransaction(txn) }
+                            )
+                        }
                     }
                 }
             }
@@ -165,49 +218,29 @@ struct HomeTransactionRow: View {
         }
     }
 }
-
-// Wrapper to handle ViewModel creation
-struct AddTransactionContainer: View {
-    @Environment(\.modelContext) private var modelContext
-    let transaction: Transaction?
-    let isNewTransaction: Bool
-    let startWithScanner: Bool
-    
-    init(transaction: Transaction? = nil, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
-        self.transaction = transaction
-        self.isNewTransaction = isNewTransaction
-        self.startWithScanner = startWithScanner
-    }
-    
-    var body: some View {
-        AddTransactionView(
-            viewModel: AddTransactionViewModel(
-                dataService: SwiftDataService(modelContext: modelContext),
-                initialWallet: nil,
-                transaction: transaction
-            ),
-            isNewTransaction: isNewTransaction,
-            startWithScanner: startWithScanner
-        )
-    }
-}
 struct DailyHeader: View {
     let section: DailyTransactionSection
-    
+    var onAddTapped: (() -> Void)? = nil
+
     var body: some View {
         HStack {
             Text(section.date.formatted(date: .long, time: .omitted))
                 .font(.app(.headline))
             Spacer()
-            // Here we want to see the daily total in the DASHBOARD currency, likely.
-            // The view model already calculated dailyTotal in the preferred currency.
             Text(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+            if let onAddTapped {
+                Button(action: onAddTapped) {
+                    Image(systemName: "plus.circle")
+                        .font(.subheadline)
+                }
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add transaction on \(section.date.formatted(date: .long, time: .omitted))")
+            }
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(section.date.formatted(date: .long, time: .omitted)), daily total \(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))")
     }
 }
 

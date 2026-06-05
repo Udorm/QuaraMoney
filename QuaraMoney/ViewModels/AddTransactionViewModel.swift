@@ -35,12 +35,18 @@ class AddTransactionViewModel: BaseViewModel {
     private var existingTransaction: Transaction?
     var isEditing: Bool { existingTransaction != nil }
     
-    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil) {
+    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil) {
         self.selectedWallet = initialWallet
         self.selectedEvent = initialEvent
         self.existingTransaction = transaction
         super.init(dataService: dataService)
-        
+
+        if initialDate == nil && transaction == nil {
+            // keep default Date()
+        } else if transaction == nil, let d = initialDate {
+            self.date = d
+        }
+
         if let txn = transaction {
             self.evaluatedAmount = txn.amount
             self.expression = formatDecimalForExpression(txn.amount)

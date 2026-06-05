@@ -167,21 +167,37 @@ struct SavingsGoalDetailView: View {
                 }
             }
 
-            // MARK: Contribution History
-            if let transactions = goal.linkedTransactions, !transactions.isEmpty {
-                Section(L10n.Savings.contributionHistory) {
-                    ForEach(transactions.sorted(by: { $0.date > $1.date })) { txn in
-                        TransactionRowView(transaction: txn, contextWallet: goal.linkedWallet)
-                    }
-                }
-            } else {
-                Section(L10n.Savings.contributionHistory) {
-                    ContentUnavailableView(
-                        L10n.Savings.noLinkedTransactions,
-                        systemImage: "tray",
-                        description: Text(L10n.Savings.noGoalsDescription)
+            // MARK: - Contribution History
+            Section(L10n.Savings.contributionHistory) {
+                let transactions = goal.linkedTransactions ?? []
+                if transactions.isEmpty {
+                    Text(L10n.Savings.noLinkedTransactions)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                } else {
+                    let config = TransactionFilterConfig(
+                        title: goal.name,
+                        startDate: .distantPast,
+                        endDate: .distantFuture,
+                        dateRangeDescription: L10n.Filter.allTime,
+                        savingsGoalId: goal.id,
+                        savingsGoalName: goal.name
                     )
-                    .listRowBackground(Color.clear)
+                    NavigationLink {
+                        FilteredTransactionsDetailView(config: config)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("\(transactions.count) " + "filteredTransactions.transactionsLabel".localized)
+                                    .font(.app(.subheadline, weight: .medium))
+                                Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
+                                    .font(.app(.caption))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                    }
                 }
             }
 

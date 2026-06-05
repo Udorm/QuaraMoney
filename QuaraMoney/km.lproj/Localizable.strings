@@ -281,6 +281,10 @@
 
 // MARK: - Analysis (ការវិភាគ)
 "analysis.title" = "ការវិភាគ";
+"analysis.monthlyExpense" = "ចំណាយប្រចាំខែ";
+"analysis.averageThreeMonths" = "មធ្យមភាគ 3 ខែ";
+"analysis.vsAverageThreeMonths" = "ធៀបនឹងមធ្យមភាគ 3 ខែ";
+"analysis.budget" = "កញ្ចប់ថវិកា";
 "analysis.transactionType" = "ប្រភេទប្រតិបត្តិការ";
 "analysis.totalSpending" = "ចំណាយសរុប";
 "analysis.totalIncome" = "ចំណូលសរុប";
@@ -291,6 +295,9 @@
 "analysis.topSpendingCategories" = "ប្រភេទចំណាយខ្ពស់";
 "analysis.topIncomeCategories" = "ប្រភេទចំណូលខ្ពស់";
 "analysis.net" = "លុយលស់";
+"analysis.previousMonth" = "ខែមុន";
+"analysis.previousPeriod" = "រយៈពេលមុន";
+
 
 // MARK: - Events (ព្រឹត្តិការណ៍)
 "event.title" = "ព្រឹត្តិការណ៍";
@@ -390,6 +397,20 @@
 "more.features" = "មុខងារ";
 "more.management" = "ការគ្រប់គ្រង";
 "more.app" = "កម្មវិធី";
+
+// MARK: - Profile (ប្រវត្តិរូប)
+"profile.title" = "ប្រវត្តិរូប";
+"profile.displayName" = "ឈ្មោះបង្ហាញ";
+"profile.namePlaceholder" = "ឈ្មោះរបស់អ្នក";
+"profile.changePhoto" = "ប្ដូររូបថត";
+"profile.removePhoto" = "លុបរូបថត";
+"profile.takePhoto" = "ថតរូប";
+"profile.chooseFromLibrary" = "ជ្រើសរើសពីបណ្ណាល័យ";
+"profile.memberSince" = "សមាជិកតាំងពី";
+"profile.totalWallets" = "កាបូប";
+"profile.totalTransactions" = "ប្រតិបត្តិការ";
+"profile.editProfile" = "កែប្រែប្រវត្តិរូប";
+"profile.photoOptions" = "រូបថតប្រវត្តិរូប";
 
 // MARK: - Notifications (ការជូនដំណឹង)
 "notifications.title" = "ការជូនដំណឹង";
@@ -702,3 +723,50 @@
 "transaction.location.errorDenied" = "ការចូលប្រើទីតាំងត្រូវបានបិទ។ សូមបើកការចូលប្រើទីតាំងក្នុងការកំណត់ ដើម្បីប្រើទីតាំងបច្ចុប្បន្ន។";
 "transaction.location.errorRestricted" = "ការចូលប្រើទីតាំងត្រូវបានកម្រិតលើឧបករណ៍នេះ។";
 "transaction.location.errorNoLocation" = "មិនអាចកំណត់ទីតាំងបានទេ។";
+
+// MARK: - Sorting
+"sort.title" = "តម្រៀបតាម";
+"sort.newestFirst" = "ថ្មីបំផុតមុន";
+"sort.oldestFirst" = "ចាស់បំផុតមុន";
+"sort.highestAmount" = "ចំនួនច្រើនបំផុតមុន";
+"sort.lowestAmount" = "ចំនួនតិចបំផុតមុន";
+"filter.allTime" = "ទាំងអស់";
+
+// MARK: - Pro Analytics
+"analysis.pro.mode" = "របៀបវិភាគ";
+"analysis.pro.mode.basic" = "មូលដ្ឋាន";
+"analysis.pro.mode.pro" = "Pro";
+"analysis.pro.netWorth" = "ទ្រព្យសុទ្ធ";
+"analysis.pro.expenses" = "ចំណាយ";
+"analysis.pro.savingsRate" = "អត្រាសន្សំ";
+"analysis.pro.new" = "ថ្មី";
+"analysis.pro.period" = "កំឡុងពេល";
+"analysis.pro.amount" = "ចំនួនទឹកប្រាក់";
+"analysis.pro.weekday" = "ថ្ងៃក្នុងសប្តាហ៍";
+"analysis.pro.other" = "ផ្សេងៗ";
+"analysis.pro.cashFlow" = "លំហូរសាច់ប្រាក់";
+"analysis.pro.cashFlow.subtitle" = "ចំណូលធៀបនឹងចំណាយ";
+"analysis.pro.netTrend" = "និន្នាការលំហូរសាច់ប្រាក់សុទ្ធ";
+"analysis.pro.netTrend.subtitle" = "ចំណូលសរុបដកចំណាយ";
+"analysis.pro.weekdayPattern" = "ការចំណាយតាមថ្ងៃនៃសប្តាហ៍";
+"analysis.pro.weekdayPattern.subtitle" = "ពេលដែលអ្នកចំណាយច្រើនបំផុត";
+"analysis.pro.avgPerDay" = "មធ្យម/ថ្ងៃ";
+"analysis.pro.topDay" = "ថ្ងៃកំពូល";
+"analysis.pro.projected" = "ការព្យាករណ៍";
+"analysis.pro.heatmap" = "ផែនទីកម្តៅនៃការចំណាយ";
+"analysis.pro.heatmap.subtitle" = "កម្រិតការចំណាយប្រចាំថ្ងៃ";
+"analysis.pro.less" = "តិច";
+"analysis.pro.more" = "ច្រើន";
+"analysis.pro.topPlaces" = "ទីកន្លែងកំពូល";
+"analysis.pro.topPlaces.subtitle" = "កន្លែងដែលលុយរបស់អ្នកទៅ";
+"analysis.pro.visits" = "ដង";
+"analysis.pro.insights" = "ការយល់ដឹង";
+"analysis.pro.insights.empty" = "បន្ថែមប្រតិបត្តិការបន្ថែមដើម្បីទទួលបានការយល់ដឹង។";
+"analysis.pro.insight.spentMore" = "អ្នកបានចំណាយច្រើនជាងកំឡុងពេលមុន %@។";
+"analysis.pro.insight.spentLess" = "អ្នកបានចំណាយតិចជាងកំឡុងពេលមុន %@។";
+"analysis.pro.insight.topCategory" = "%@ គឺជាប្រភេទធំបំផុតរបស់អ្នកនៅ %@។";
+"analysis.pro.insight.saved" = "អ្នកបានសន្សំ %@ នៃចំណូលរបស់អ្នកក្នុងកំឡុងពេលនេះ។";
+"analysis.pro.insight.overspent" = "អ្នកបានចំណាយច្រើនជាងចំណូលក្នុងកំឡុងពេលនេះ។";
+"analysis.pro.insight.busiestDay" = "អ្នកចំណាយច្រើនបំផុតនៅថ្ងៃ %@។";
+"analysis.pro.insight.projection" = "តាមល្បឿននេះ អ្នកនឹងឈានដល់ប្រហែល %@ នៅចុងកំឡុងពេល។";
+"analysis.pro.insight.topPlace" = "ចំណាយច្រើនបំផុតនៅ %@ (%@)។";

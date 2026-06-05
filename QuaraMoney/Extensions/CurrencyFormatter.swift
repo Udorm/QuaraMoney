@@ -21,12 +21,56 @@ extension Decimal {
         
         return formatter.string(from: NSDecimalNumber(decimal: self)) ?? ""
     }
+    
+    /// Formats the decimal as a short currency string (e.g., "$1K", "$20.5K", "៛5M")
+    nonisolated func formattedAmountShort(for currencyCode: String) -> String {
+        let absValue = abs(self)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currencyCode
+        
+        let locale = NSLocale(localeIdentifier: currencyCode)
+        if let symbol = locale.displayName(forKey: .currencySymbol, value: currencyCode) {
+            formatter.currencySymbol = symbol
+        }
+        
+        let valueToFormat: Decimal
+        let suffix: String
+        
+        if absValue >= 1_000_000 {
+            valueToFormat = self / 1_000_000
+            suffix = "M"
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 1
+        } else if absValue >= 1_000 {
+            valueToFormat = self / 1_000
+            suffix = "K"
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = 1
+        } else {
+            valueToFormat = self
+            suffix = ""
+            let fractionDigits = currencyCode.uppercased() == "JPY" ? 0 : 2
+            formatter.minimumFractionDigits = 0
+            formatter.maximumFractionDigits = fractionDigits
+        }
+        
+        guard let formatted = formatter.string(from: NSDecimalNumber(decimal: valueToFormat)) else {
+            return ""
+        }
+        return formatted + suffix
+    }
 }
 
 extension Double {
     /// Formats the double as a currency string, respecting the currency code's native symbol.
     nonisolated func formattedAmount(for currencyCode: String) -> String {
         return Decimal(self).formattedAmount(for: currencyCode)
+    }
+    
+    /// Formats the double as a short currency string.
+    nonisolated func formattedAmountShort(for currencyCode: String) -> String {
+        return Decimal(self).formattedAmountShort(for: currencyCode)
     }
 }
 

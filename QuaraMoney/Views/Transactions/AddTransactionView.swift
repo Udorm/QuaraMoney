@@ -92,8 +92,6 @@ struct AddTransactionView: View {
                 
                 VStack(spacing: 16) {
                     List {
-                        
-
                         // MARK: - Amount & Type (Fluid row)
                         Section {
                             AmountDisplayView(
@@ -223,6 +221,8 @@ struct AddTransactionView: View {
                         reportingSection
                     }
                     .listStyle(.insetGrouped)
+                    .listSectionSpacing(.compact)
+                    .contentMargins(.top, 16, for: .scrollContent)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -241,6 +241,7 @@ struct AddTransactionView: View {
                     .background(Color(.systemGroupedBackground))
                 }
             }
+            .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .principal) {

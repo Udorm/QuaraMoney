@@ -4,23 +4,45 @@ import Charts
 
 struct AnalysisView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("analyticsProMode") private var proMode: Bool = false
     @State private var viewModel = AnalysisViewModel()
-    
+
     var body: some View {
-        AnalysisContentView(vm: viewModel)
-            .onAppear {
-                viewModel.configure(modelContext: modelContext)
-                viewModel.refreshData()
-            }
+        // Route to the advanced dashboard when enabled. The gate is always unlocked today
+        // but keeps a single choke point for a future paywall (see ProFeatureGate).
+        if proMode && ProFeatureGate.isProUnlocked {
+            ProAnalyticsView(proMode: $proMode)
+        } else {
+            AnalysisContentView(vm: viewModel, proMode: $proMode)
+                .onAppear {
+                    viewModel.configure(modelContext: modelContext)
+                    viewModel.refreshData()
+                }
+        }
+    }
+}
+
+/// Segmented Basic ⇄ Pro switch shown in the Analysis nav bar. Shared by both modes.
+struct AnalyticsModePicker: View {
+    @Binding var proMode: Bool
+
+    var body: some View {
+        Picker("analysis.pro.mode".localized, selection: $proMode) {
+            Text("analysis.pro.mode.basic".localized).tag(false)
+            Text("analysis.pro.mode.pro".localized).tag(true)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 170)
     }
 }
 
 struct AnalysisContentView: View {
     @Bindable var vm: AnalysisViewModel
-    
-    // For Wallet Filter - We need to query wallets. 
+    @Binding var proMode: Bool
+
+    // For Wallet Filter - We need to query wallets.
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -31,10 +53,10 @@ struct AnalysisContentView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
-                    
+
                     // Charts (Now includes the Period Picker)
                     SpendingTrendChart(vm: vm)
-                    
+
                     if !vm.categoryStats.isEmpty {
                         CategoryBreakdownChart(vm: vm)
                     }
@@ -42,8 +64,12 @@ struct AnalysisContentView: View {
                 .padding(.vertical)
             }
             .navigationTitle(L10n.Analysis.title)
+            .navigationBarTitleDisplayMode(.inline)
             .background(Color(.systemGroupedBackground))
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    AnalyticsModePicker(proMode: $proMode)
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     AnalysisFilterButton(vm: vm, wallets: wallets)
                 }
@@ -272,7 +298,8 @@ struct SpendingTrendChart: View {
 
 struct CategoryBreakdownChart: View {
     var vm: AnalysisViewModel
-    
+    @State private var selectedStat: CategoryStat?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
@@ -284,23 +311,9 @@ struct CategoryBreakdownChart: View {
             }
             
             LazyVStack(spacing: 0) {
-                ForEach(vm.categoryStats.prefix(5)) { stat in
-                    NavigationLink {
-                        FilteredTransactionsDetailView(
-                            config: TransactionFilterConfig(
-                                title: stat.name,
-                                startDate: vm.startDate,
-                                endDate: vm.endDate,
-                                walletId: vm.selectedWallet?.id,
-                                walletName: vm.selectedWallet?.name,
-                                categoryId: stat.id,
-                                categoryName: stat.name,
-                                categoryIcon: stat.icon,
-                                categoryColorHex: stat.colorHex,
-                                transactionType: vm.selectedTransactionType,
-                                dateRangeDescription: vm.filterDescription
-                            )
-                        )
+                ForEach(vm.categoryStats) { stat in
+                    Button {
+                        selectedStat = stat
                     } label: {
                         VStack(spacing: 12) {
                             HStack {
@@ -360,6 +373,28 @@ struct CategoryBreakdownChart: View {
         .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
         .padding(.horizontal)
+        .sheet(item: $selectedStat) { stat in
+            NavigationStack {
+                FilteredTransactionsDetailView(
+                    config: TransactionFilterConfig(
+                        title: stat.name,
+                        startDate: vm.startDate,
+                        endDate: vm.endDate,
+                        walletId: vm.selectedWallet?.id,
+                        walletName: vm.selectedWallet?.name,
+                        categoryId: stat.id,
+                        categoryName: stat.name,
+                        categoryIcon: stat.icon,
+                        categoryColorHex: stat.colorHex,
+                        transactionType: vm.selectedTransactionType,
+                        dateRangeDescription: vm.filterDescription,
+                        defaultSortOption: .highestAmount
+                    )
+                )
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 }
 

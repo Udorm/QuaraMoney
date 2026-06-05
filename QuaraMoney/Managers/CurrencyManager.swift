@@ -203,33 +203,4 @@ struct ExchangeRateResponse: Codable {
     let rates: [String: Double]
 }
 
-// MARK: - Transaction Calculation Utilities
-extension CurrencyManager {
-    /// Calculate total of transactions converted to target currency
-    /// - Parameters:
-    ///   - transactions: Array of transactions to sum
-    ///   - targetCurrency: The currency code to convert all amounts to (e.g., "USD")
-    ///   - filter: Optional filter to apply before summing
-    /// - Returns: Total amount in target currency
-    func calculateTotal(
-        transactions: [Transaction],
-        targetCurrency: String,
-        filter: ((Transaction) -> Bool)? = nil
-    ) -> Decimal {
-        let filtered = filter != nil ? transactions.filter(filter!) : transactions
-        return filtered.reduce(Decimal.zero) { total, txn in
-            let converted = convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency)
-            return total + converted
-        }
-    }
-    
-    /// Calculate expense total (type == .expense) converted to target currency
-    func calculateExpenseTotal(transactions: [Transaction], targetCurrency: String) -> Decimal {
-        calculateTotal(transactions: transactions, targetCurrency: targetCurrency) { $0.type == .expense }
-    }
-    
-    /// Calculate income total (type == .income) converted to target currency
-    func calculateIncomeTotal(transactions: [Transaction], targetCurrency: String) -> Decimal {
-        calculateTotal(transactions: transactions, targetCurrency: targetCurrency) { $0.type == .income }
-    }
-}
+

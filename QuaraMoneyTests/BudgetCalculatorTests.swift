@@ -24,9 +24,17 @@ final class BudgetCalculatorTests: XCTestCase {
         return cat
     }
 
-    private func makeTransaction(amount: Decimal, type: TransactionType, currency: String = "USD", category: AppCategory? = nil, date: Date = Date()) -> Transaction {
+    private func makeTransaction(
+        amount: Decimal,
+        type: TransactionType,
+        currency: String = "USD",
+        category: AppCategory? = nil,
+        date: Date = Date(),
+        excludeFromReports: Bool = false
+    ) -> Transaction {
         let txn = Transaction(amount: amount, currencyCode: currency, date: date, type: type)
         txn.category = category
+        txn.excludeFromReports = excludeFromReports
         context.insert(txn)
         return txn
     }
@@ -99,5 +107,28 @@ final class BudgetCalculatorTests: XCTestCase {
 
         let spent = BudgetCalculator.calculateSpending(for: budget, transactions: allTransactions(), targetCurrency: "USD")
         XCTAssertEqual(spent, 80, "Total budget should include all expense categories")
+    }
+
+    func testCalculateSpendingExcludesReports() {
+        let cat = makeCategory(name: "Food")
+        let budget = makeBudget(limit: 500, category: cat)
+
+        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        _ = makeTransaction(amount: 20, type: .expense, category: cat, date: marchDate)
+        _ = makeTransaction(amount: 50, type: .expense, category: cat, date: marchDate, excludeFromReports: true) // excluded from report
+
+        let spent = BudgetCalculator.calculateSpending(for: budget, transactions: allTransactions(), targetCurrency: "USD")
+        XCTAssertEqual(spent, 20, "Spending should exclude transactions marked as excludeFromReports")
+    }
+
+    func testCalculateIncomeExcludesReports() {
+        let budget = makeBudget(limit: 500)
+
+        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+        _ = makeTransaction(amount: 1000, type: .income, date: marchDate)
+        _ = makeTransaction(amount: 500, type: .income, date: marchDate, excludeFromReports: true) // excluded from report
+
+        let income = BudgetCalculator.calculateIncome(for: budget, transactions: allTransactions())
+        XCTAssertEqual(income, 1000, "Income calculation should exclude transactions marked as excludeFromReports")
     }
 }

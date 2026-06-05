@@ -22,8 +22,7 @@ enum BudgetCalculator {
         let categoryIds = budget.trackedCategoryIds          // empty → total budget
 
         let relevant = transactions.filter { txn in
-            guard !txn.excludeFromReports,
-                  txn.event == nil,
+            guard txn.event == nil,
                   txn.type == .expense,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
@@ -35,13 +34,12 @@ enum BudgetCalculator {
             return categoryIds.contains(txnCatId)
         }
 
-        return relevant.reduce(Decimal.zero) { total, txn in
-            total + CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: targetCurrency
-            )
-        }
+        return TransactionProcessor.calculateTotal(
+            relevant,
+            rates: CurrencyManager.shared.rates,
+            targetCurrency: targetCurrency,
+            typeFilter: .expense
+        )
     }
 
     // MARK: - Income
@@ -64,13 +62,12 @@ enum BudgetCalculator {
             txn.date < periodRange.end
         }
 
-        return relevant.reduce(Decimal.zero) { total, txn in
-            total + CurrencyManager.shared.convert(
-                amount: txn.amount,
-                from: txn.currencyCode,
-                to: currency
-            )
-        }
+        return TransactionProcessor.calculateTotal(
+            relevant,
+            rates: CurrencyManager.shared.rates,
+            targetCurrency: currency,
+            typeFilter: .income
+        )
     }
 
     // MARK: - Budget Limit

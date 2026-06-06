@@ -8,6 +8,7 @@ struct TransactionWalletPickerSheet: View {
     let onDismiss: () -> Void
 
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
 
     private var displayWallets: [Wallet] {
         guard !searchText.isEmpty else { return wallets }
@@ -40,13 +41,9 @@ struct TransactionWalletPickerSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(L10n.Wallet.selectWallet)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(
-                text: $searchText,
-                placement: .toolbar,
-                prompt: "transaction.searchWallets".localized
-            )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { onDismiss() } label: {
@@ -54,14 +51,42 @@ struct TransactionWalletPickerSheet: View {
                     }
                     .accessibilityLabel(L10n.Common.cancel)
                 }
-                if #available(iOS 26, *) {
-                    DefaultToolbarItem(kind: .search, placement: .bottomBar)
-                }
+            }
+            .safeAreaBar(edge: .bottom) {
+                searchBar
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemGroupedBackground))
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.app(.body))
+                .foregroundStyle(.secondary)
+
+            TextField("transaction.searchWallets".localized, text: $searchText)
+                .font(.app(.body))
+                .autocorrectionDisabled()
+                .focused($isSearchFocused)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Common.cancel)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .glassEffect(.regular, in: Capsule())
+        .padding(.horizontal, 16)
     }
 
     private func sectionHeader(_ title: String) -> some View {

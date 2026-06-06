@@ -53,21 +53,8 @@ struct iOS18ContentView: View {
                                 .appFont(.caption2)
                         }
                     }
-                    
+
                     Tab(value: 3) {
-                        LazyView(WalletListView())
-                    } label: {
-                        VStack {
-                            Image(systemName: "wallet.pass.fill")
-                            Text(L10n.Wallet.title)
-                                .appFont(.caption2)
-                        }
-                    }
-
-                    
-
-                    
-                    Tab(value: 4) {
                         LazyView(MoreView())
                     } label: {
                         VStack {
@@ -91,15 +78,8 @@ struct iOS18ContentView: View {
                     Tab(L10n.Budget.title, systemImage: "dollarsign.circle.fill", value: 2) {
                         LazyView(BudgetTabView())
                     }
-                    
-                    Tab(L10n.Wallet.title, systemImage: "wallet.pass.fill", value: 3) {
-                        LazyView(WalletListView())
-                    }
 
-                    
-
-                    
-                    Tab(L10n.Tab.more, systemImage: "ellipsis.circle", value: 4) {
+                    Tab(L10n.Tab.more, systemImage: "ellipsis.circle", value: 3) {
                         LazyView(MoreView())
                     }
                 }
@@ -143,9 +123,6 @@ struct LegacyContentView: View {
                             Label(L10n.Budget.title, systemImage: "dollarsign.circle.fill")
                         }
                         NavigationLink(value: 3) {
-                            Label(L10n.Wallet.title, systemImage: "wallet.pass.fill")
-                        }
-                        NavigationLink(value: 4) {
                             Label(L10n.Tab.more, systemImage: "ellipsis.circle")
                         }
                     }
@@ -181,18 +158,12 @@ struct LegacyContentView: View {
                             Label(L10n.Budget.title, systemImage: "dollarsign.circle.fill")
                         }
                         .tag(2)
-                    
-                    LazyView(WalletListView())
-                        .tabItem {
-                            Label(L10n.Wallet.title, systemImage: "wallet.pass.fill")
-                        }
-                        .tag(3)
-                    
+
                     LazyView(MoreView())
                         .tabItem {
                             Label(L10n.Tab.more, systemImage: "ellipsis.circle")
                         }
-                        .tag(4)
+                        .tag(3)
                 }
             }
         }
@@ -213,8 +184,7 @@ struct LegacyContentView: View {
         case 0: HomeView(modelContext: modelContext)
         case 1: LazyView(AnalysisView())
         case 2: LazyView(BudgetTabView())
-        case 3: LazyView(WalletListView())
-        case 4: LazyView(MoreView())
+        case 3: LazyView(MoreView())
         default: HomeView(modelContext: modelContext)
         }
     }

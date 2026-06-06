@@ -16,167 +16,231 @@ struct SettingsView: View {
     @State private var isDeleting = false
     @State private var showError = false
     @State private var errorMessage = ""
-    
+
     var body: some View {
         Form {
             Section(L10n.Settings.general) {
-                // Language Picker
-                Picker(L10n.Settings.language, selection: Binding(
+                Picker(selection: Binding(
                     get: { languageManager.selectedLanguage },
                     set: { languageManager.selectedLanguage = $0 }
                 )) {
                     ForEach(LanguageManager.Language.allCases) { language in
                         Text(language.displayName).tag(language)
                     }
+                } label: {
+                    Label {
+                        Text(L10n.Settings.language)
+                    } icon: {
+                        ListIconView(systemImage: "globe", color: .blue)
+                    }
                 }
-                
+
                 NavigationLink(destination: ThemeSettingsView()) {
-                    HStack {
-                        Text(L10n.Settings.themeColors)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(ThemeManager.shared.incomeColor)
-                                .frame(width: 12, height: 12)
-                            Circle()
-                                .fill(ThemeManager.shared.expenseColor)
-                                .frame(width: 12, height: 12)
+                    Label {
+                        LabeledContent {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(ThemeManager.shared.incomeColor)
+                                    .frame(width: 10, height: 10)
+                                Circle()
+                                    .fill(ThemeManager.shared.expenseColor)
+                                    .frame(width: 10, height: 10)
+                            }
+                        } label: {
+                            Text(L10n.Settings.themeColors)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
+                    }
+                }
+
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Toggle(isOn: $useSidebarOniPad) {
+                        Label {
+                            Text(L10n.Settings.useSidebarOniPad)
+                        } icon: {
+                            ListIconView(systemImage: "sidebar.left", color: Color(.systemGray))
                         }
                     }
                 }
-                
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    Toggle(L10n.Settings.useSidebarOniPad, isOn: $useSidebarOniPad)
-                }
             }
-            
+
             Section("Appearance") {
-                Picker("App Theme", selection: $selectedTheme) {
+                Picker(selection: $selectedTheme) {
                     ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
                         Label(theme.rawValue, systemImage: theme.icon)
                             .tag(theme)
                     }
+                } label: {
+                    Label {
+                        Text("App Theme")
+                    } icon: {
+                        ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
+                    }
                 }
             }
-            
+
             Section("Currency") {
                 NavigationLink(destination: CurrencySelectionView()) {
-                    HStack {
-                        Text(L10n.Settings.defaultCurrency)
-                        Spacer()
-                        Text(currencyManager.preferredCurrencyCode)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                if currencyManager.preferredCurrencyCode != "USD" {
-                    HStack {
-                        Text("Exchange Rate")
-                        Spacer()
-                        if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
-                            Text("1 USD ≈ \(rate.formatted(.number.precision(.fractionLength(2)))) \(currencyManager.preferredCurrencyCode)")
+                    Label {
+                        LabeledContent {
+                            Text(currencyManager.preferredCurrencyCode)
                                 .foregroundStyle(.secondary)
-                        } else {
-                            Text("Fetching...")
-                                .foregroundStyle(.secondary)
-                                .task {
-                                    await currencyManager.fetchRates()
-                                }
+                        } label: {
+                            Text(L10n.Settings.defaultCurrency)
                         }
+                    } icon: {
+                        ListIconView(systemImage: "dollarsign.circle.fill", color: .green)
                     }
                 }
-            }
-            
-            Section("Notifications") {
-                Toggle("Daily Reminder", isOn: $notificationManager.isDailyReminderEnabled)
-                    .onChange(of: notificationManager.isDailyReminderEnabled) { _, newValue in
-                        if newValue {
-                            notificationManager.requestPermission()
-                        }
-                    }
-                
-                if notificationManager.isDailyReminderEnabled {
-                    DatePicker("Time", selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute)
-                }
-            }
-            
 
-            
-            Section("Security") {
-                Toggle("App Lock", isOn: $securityManager.isAppLockEnabled)
-                    .onChange(of: securityManager.isAppLockEnabled) { _, newValue in
-                        // If enabling, require auth to confirm
-                        if newValue {
-                             // This is a simplified check. In production, you might want to confirm auth first
+                if currencyManager.preferredCurrencyCode != "USD" {
+                    Label {
+                        LabeledContent {
+                            Group {
+                                if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
+                                    Text("1 USD ≈ \(rate.formatted(.number.precision(.fractionLength(2)))) \(currencyManager.preferredCurrencyCode)")
+                                } else {
+                                    Text("Fetching...")
+                                        .task { await currencyManager.fetchRates() }
+                                }
+                            }
+                            .foregroundStyle(.secondary)
+                        } label: {
+                            Text("Exchange Rate")
                         }
+                    } icon: {
+                        ListIconView(systemImage: "arrow.2.squarepath", color: .teal)
                     }
+                }
             }
-            
-            Section("AI Scanning") {
-                SecureField("Gemini API Key", text: Binding(
-                    get: { securityManager.getAPIKey() ?? "" },
-                    set: { newValue in
-                        if newValue.isEmpty {
-                            securityManager.deleteAPIKey()
-                        } else {
-                            _ = securityManager.saveAPIKey(newValue)
+
+            Section("Notifications") {
+                Toggle(isOn: $notificationManager.isDailyReminderEnabled) {
+                    Label {
+                        Text("Daily Reminder")
+                    } icon: {
+                        ListIconView(systemImage: "bell.fill", color: .red)
+                    }
+                }
+                .onChange(of: notificationManager.isDailyReminderEnabled) { _, newValue in
+                    if newValue { notificationManager.requestPermission() }
+                }
+
+                if notificationManager.isDailyReminderEnabled {
+                    DatePicker(selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute) {
+                        Label {
+                            Text("Time")
+                        } icon: {
+                            ListIconView(systemImage: "clock.fill", color: .orange)
                         }
                     }
-                ))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                
+                }
+            }
+
+            Section("Security") {
+                Toggle(isOn: $securityManager.isAppLockEnabled) {
+                    Label {
+                        Text("App Lock")
+                    } icon: {
+                        ListIconView(systemImage: "lock.fill", color: Color(.systemGray2))
+                    }
+                }
+            }
+
+            Section("AI Scanning") {
+                Label {
+                    SecureField("Gemini API Key", text: Binding(
+                        get: { securityManager.getAPIKey() ?? "" },
+                        set: { newValue in
+                            if newValue.isEmpty {
+                                securityManager.deleteAPIKey()
+                            } else {
+                                _ = securityManager.saveAPIKey(newValue)
+                            }
+                        }
+                    ))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                } icon: {
+                    ListIconView(systemImage: "sparkles", color: .purple)
+                }
+
                 Text("Enter your Gemini API Key to enable smart receipt scanning. If left empty, the app will use standard on-device OCR.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             Section(L10n.Settings.dataManagement) {
                 NavigationLink(destination: ExportOptionsView()) {
-                    Label("Export Transactions", systemImage: "square.and.arrow.up")
+                    Label {
+                        Text("Export Transactions")
+                    } icon: {
+                        ListIconView(systemImage: "square.and.arrow.up.fill", color: .blue)
+                    }
                 }
-                
+
                 NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
-                    Label(L10n.Settings.importCSV, systemImage: "square.and.arrow.down")
+                    Label {
+                        Text(L10n.Settings.importCSV)
+                    } icon: {
+                        ListIconView(systemImage: "square.and.arrow.down.fill", color: .teal)
+                    }
                 }
-                
+
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    if isDeleting {
-                        HStack {
-                            Text(L10n.Status.deleting)
-                            Spacer()
-                            ProgressView()
+                    Label {
+                        if isDeleting {
+                            HStack {
+                                Text(L10n.Status.deleting)
+                                Spacer()
+                                ProgressView()
+                            }
+                        } else {
+                            Text(L10n.Settings.deleteAllTransactions)
                         }
-                    } else {
-                        Text(L10n.Settings.deleteAllTransactions)
+                    } icon: {
+                        ListIconView(systemImage: "trash.fill", color: .red)
                     }
                 }
                 .disabled(isPopulating || isDeleting)
-                
+
                 Button {
                     showPopulateConfirmation = true
                 } label: {
-                    if isPopulating {
-                        HStack {
-                            Text(L10n.Status.populating)
-                            Spacer()
-                            ProgressView()
+                    Label {
+                        if isPopulating {
+                            HStack {
+                                Text(L10n.Status.populating)
+                                Spacer()
+                                ProgressView()
+                            }
+                        } else {
+                            Text(L10n.Settings.populateSampleData)
+                                .foregroundStyle(.primary)
                         }
-                    } else {
-                        Text(L10n.Settings.populateSampleData)
+                    } icon: {
+                        ListIconView(systemImage: "chart.bar.doc.horizontal", color: .orange)
                     }
                 }
                 .disabled(isPopulating || isDeleting)
-                
-                Button(L10n.Settings.resetOnboarding) {
+
+                Button {
                     isOnboardingCompleted = false
+                } label: {
+                    Label {
+                        Text(L10n.Settings.resetOnboarding)
+                            .foregroundStyle(.primary)
+                    } icon: {
+                        ListIconView(systemImage: "arrow.counterclockwise", color: Color(.systemOrange))
+                    }
                 }
             }
-            
+
             Section {
-                 Text(L10n.Settings.version)
+                Text(L10n.Settings.version)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .foregroundStyle(.secondary)
                     .font(.app(.footnote))
@@ -189,7 +253,7 @@ struct SettingsView: View {
                 ZStack {
                     Color.black.opacity(0.4)
                         .ignoresSafeArea()
-                    
+
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
@@ -212,7 +276,7 @@ struct SettingsView: View {
                     let service = SampleDataService(modelContext: modelContext)
                     do {
                         try await service.populate()
-                        try? await Task.sleep(nanoseconds: 500_000_000) 
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                     } catch {
                         errorMessage = "Error populating data: \(error.localizedDescription)"
                         showError = true

@@ -201,12 +201,13 @@ private struct CurrencySegmentedPicker: View {
             }
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)
             .padding(.horizontal, 9)
-            .padding(.vertical, 4)
+            .frame(minHeight: 32)
             .background(
                 Capsule()
                     .fill(isSelected ? Color(.systemBackground) : Color.clear)
                     .shadow(color: isSelected ? .black.opacity(0.1) : .clear, radius: 1.5, x: 0, y: 1)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)

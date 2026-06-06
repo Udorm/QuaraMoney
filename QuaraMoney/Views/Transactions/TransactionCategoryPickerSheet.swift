@@ -16,6 +16,7 @@ struct TransactionCategoryPickerSheet: View {
     let onDismiss: () -> Void
 
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
     /// Persisted layout preference for the full list (suggestions are always a grid).
     @AppStorage("categoryPicker.useGridLayout") private var useGridLayout = true
 
@@ -34,7 +35,6 @@ struct TransactionCategoryPickerSheet: View {
         return allCategories.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
-    /// Hidden during search so it doesn't compete with the iOS 26 bottom-bar search pill.
     private var showSuggestions: Bool {
         searchText.isEmpty && !suggestionItems.isEmpty
     }
@@ -48,13 +48,9 @@ struct TransactionCategoryPickerSheet: View {
                 allCategoriesSection
             }
             .listStyle(.insetGrouped)
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("transaction.selectCategory".localized)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(
-                text: $searchText,
-                placement: .toolbar,
-                prompt: "transaction.searchCategories".localized
-            )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { onDismiss() } label: {
@@ -62,15 +58,44 @@ struct TransactionCategoryPickerSheet: View {
                     }
                     .accessibilityLabel(L10n.Common.cancel)
                 }
-                // iOS 26+: move the search field to the native bottom bar pill.
-                if #available(iOS 26, *) {
-                    DefaultToolbarItem(kind: .search, placement: .bottomBar)
-                }
+            }
+            .safeAreaBar(edge: .bottom) {
+                searchBar
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.app(.body))
+                .foregroundStyle(.secondary)
+
+            TextField("transaction.searchCategories".localized, text: $searchText)
+                .font(.app(.body))
+                .autocorrectionDisabled()
+                .focused($isSearchFocused)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Common.cancel)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .glassEffect(.regular, in: Capsule())
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Suggested Section

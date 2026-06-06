@@ -19,6 +19,7 @@ struct AddTransactionView: View {
     @State private var showKeyboard = true
     @State private var showScanner = false
     @State private var showLocationPicker = false
+    @State private var isFetchingCurrentLocation = false
 
     // Suggestion engine: cached, contextual rankings (recomputed on context changes, not every body pass)
     @State private var scoredWallets: [ScoredWallet] = []
@@ -134,6 +135,31 @@ struct AddTransactionView: View {
                 recomputeSuggestions()
             } catch {
                 // Location is an optional ranking signal; ignore unavailable/denied/no-fix.
+            }
+        }
+    }
+
+    /// One-tap action from the location row: resolves the device's current location and writes it
+    /// straight into the transaction, without opening the full picker.
+    private func useCurrentLocationDirectly() {
+        guard !isFetchingCurrentLocation else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showKeyboard = false
+            isNoteFieldFocused = false
+        }
+        isFetchingCurrentLocation = true
+        Task {
+            defer { isFetchingCurrentLocation = false }
+            do {
+                let location = try await locationService.requestCurrentLocation()
+                let selection = try await TransactionPlaceLookup.reverseGeocode(
+                    location: location,
+                    source: .currentLocation
+                )
+                viewModel.selectedLocation = selection
+                HapticManager.shared.notification(type: .success)
+            } catch {
+                HapticManager.shared.notification(type: .error)
             }
         }
     }
@@ -630,6 +656,17 @@ struct AddTransactionView: View {
     }
     
     // MARK: - Optional Fields Section
+
+    /// Settings-style rounded-square icon tile for consistent, native-looking form rows.
+    private func fieldIcon(_ systemName: String, color: Color) -> some View {
+        Image(systemName: systemName)
+            .font(.app(.footnote, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 29, height: 29)
+            .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .accessibilityHidden(true)
+    }
+
     private var optionalFieldsSection: some View {
         Group {
             // Date Selection Row
@@ -637,11 +674,10 @@ struct AddTransactionView: View {
                 selection: $viewModel.date,
                 displayedComponents: [.date]
             ) {
-                HStack {
-                    Image(systemName: "calendar")
-                        .foregroundStyle(.blue)
-                        .frame(width: 24)
+                Label {
                     Text("transaction.date".localized)
+                } icon: {
+                    fieldIcon("calendar", color: .red)
                 }
             }
 
@@ -650,53 +686,68 @@ struct AddTransactionView: View {
                 selection: $viewModel.date,
                 displayedComponents: [.hourAndMinute]
             ) {
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundStyle(.blue)
-                        .frame(width: 24)
+                Label {
                     Text(L10n.TransactionAdditional.time)
+                } icon: {
+                    fieldIcon("clock", color: .orange)
                 }
             }
-            
+
             // Note Field
-            HStack {
-                Image(systemName: "note.text")
-                    .foregroundStyle(.blue)
-                    .frame(width: 24)
+            Label {
                 TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
+                    .submitLabel(.done)
+            } icon: {
+                fieldIcon("note.text", color: .gray)
             }
 
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showKeyboard = false
-                    isNoteFieldFocused = false
-                }
-                showLocationPicker = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .foregroundStyle(.blue)
-                        .frame(width: 24)
+            // Location Row — tappable label opens the picker; trailing circle is a one-tap current-location shortcut.
+            HStack(spacing: 12) {
+                fieldIcon("mappin.and.ellipse", color: .blue)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showKeyboard = false
+                        isNoteFieldFocused = false
+                    }
+                    showLocationPicker = true
+                } label: {
+                    HStack(spacing: 8) {
                         Text("transaction.location".localized)
                             .foregroundStyle(.primary)
 
+                        Spacer(minLength: 8)
+
                         if let location = viewModel.selectedLocation {
                             Text(location.title)
-                                .font(.app(.caption))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.app(.caption, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+
+                // Compact one-tap "use current location" — fills the field without opening the picker.
+                Button {
+                    useCurrentLocationDirectly()
+                } label: {
+                    ZStack {
+                        if isFetchingCurrentLocation {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "location.fill")
+                                .font(.app(.footnote, weight: .semibold))
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .frame(width: 30, height: 30)
+                    .background(Color.blue.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(isFetchingCurrentLocation)
+                .accessibilityLabel("transaction.location.useCurrent".localized)
             }
         }
     }

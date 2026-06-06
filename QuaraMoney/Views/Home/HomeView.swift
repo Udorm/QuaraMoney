@@ -106,6 +106,42 @@ struct HomeView: View {
         }
     }
 
+    private var currentPeriodText: String {
+        switch viewModel.selectedTab {
+        case .month(let date):
+            let calendar = Calendar.current
+            if calendar.isDate(date, equalTo: Date(), toGranularity: .month) {
+                return L10n.Filter.thisMonth
+            } else if let lastMonth = calendar.date(byAdding: .month, value: -1, to: Date()),
+                      calendar.isDate(date, equalTo: lastMonth, toGranularity: .month) {
+                return L10n.Filter.lastMonth
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM yyyy"
+                return formatter.string(from: date)
+            }
+        case .custom:
+            let start = viewModel.customStartDate.formatted(.dateTime.month(.abbreviated).day())
+            let end = viewModel.customEndDate.formatted(.dateTime.month(.abbreviated).day().year())
+            return "\(start) – \(end)"
+        }
+    }
+
+    private var summaryHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            if viewModel.selectedWallet != nil {
+                Text(viewModel.filterDescription)
+                    .font(.app(.subheadline))
+            }
+            Spacer()
+            Text(currentPeriodText)
+                .font(.app(.subheadline))
+                .foregroundStyle(viewModel.selectedWallet != nil ? .secondary : .primary)
+        }
+        .textCase(nil)
+        .padding(.top, -8)  // Tighten the gap between the picker section and the summary card
+    }
+
     private var transactionList: some View {
         List {
             Section {
@@ -113,7 +149,7 @@ struct HomeView: View {
                     selectedTab: $viewModel.selectedTab,
                     months: Array(viewModel.availableMonths.suffix(3))
                 )
-                
+
                 if case .custom = viewModel.selectedTab {
                     HStack {
                         Spacer()
@@ -132,31 +168,17 @@ struct HomeView: View {
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             .listRowBackground(Color.clear)
-            
-            
+
             // Summary Section
-            if viewModel.selectedWallet != nil {
-                Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
-                    FinancialSummaryCards(
-                        income: viewModel.incomeTotal,
-                        expense: viewModel.expenseTotal,
-                        dailySections: viewModel.dailySections,
-                        startDate: viewModel.currentStartDate,
-                        endDate: viewModel.currentEndDate,
-                        previousPeriodCumulative: viewModel.previousPeriodCumulative
-                    )
-                }
-            } else {
-                Section {
-                    FinancialSummaryCards(
-                        income: viewModel.incomeTotal,
-                        expense: viewModel.expenseTotal,
-                        dailySections: viewModel.dailySections,
-                        startDate: viewModel.currentStartDate,
-                        endDate: viewModel.currentEndDate,
-                        previousPeriodCumulative: viewModel.previousPeriodCumulative
-                    )
-                }
+            Section(header: summaryHeader) {
+                FinancialSummaryCards(
+                    income: viewModel.incomeTotal,
+                    expense: viewModel.expenseTotal,
+                    dailySections: viewModel.dailySections,
+                    startDate: viewModel.currentStartDate,
+                    endDate: viewModel.currentEndDate,
+                    previousPeriodCumulative: viewModel.previousPeriodCumulative
+                )
             }
 
             // Daily Transactions or sorted flat list

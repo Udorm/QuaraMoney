@@ -15,6 +15,7 @@
 "common.ok" = "OK";
 "common.back" = "Back";
 "common.close" = "Close";
+"common.hide" = "Hide";
 "common.create" = "Create";
 "common.preview" = "Preview";
 "common.seeAll" = "See All";

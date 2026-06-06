@@ -32,6 +32,7 @@ struct FinancialSummaryCards: View {
     
     @Query(sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
     @State private var rawSelectedDate: Date? = nil
+    @State private var showDetails = false
     
     init(
         income: Decimal,
@@ -215,7 +216,7 @@ struct FinancialSummaryCards: View {
             if showChart {
                 // ── Header: Two-column legend like Apple Health ──
                 chartHeader
-                
+
                 // ── Chart: Two smooth lines ──
                 chartView
                     .frame(height: 120)
@@ -226,7 +227,7 @@ struct FinancialSummaryCards: View {
                         Text(L10n.Analysis.net.uppercased())
                             .appFont(.caption2, weight: .bold)
                             .foregroundStyle(.secondary)
-                        
+
                         Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                             .appFont(.title, weight: .bold)
                             .foregroundStyle(net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
@@ -234,9 +235,28 @@ struct FinancialSummaryCards: View {
                     Spacer()
                 }
             }
-            
-            // Bottom Statistics Grid
-            metricsGridView
+
+            // Show/hide toggle for income & net details
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) { showDetails.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(showDetails
+                         ? L10n.Common.hide
+                         : "\(L10n.Transaction.TransactionType.income) & \(L10n.Analysis.net)")
+                        .appFont(.caption, weight: .semibold)
+                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
+                        .appFont(.caption2, weight: .semibold)
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+
+            if showDetails {
+                metricsGridView
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(.vertical, 8)
     }

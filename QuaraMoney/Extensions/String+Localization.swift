@@ -138,6 +138,7 @@ enum L10n {
         static var ok: String { "common.ok".localized }
         static var back: String { "common.back".localized }
         static var close: String { "common.close".localized }
+        static var hide: String { "common.hide".localized }
         static var create: String { "common.create".localized }
         static var preview: String { "common.preview".localized }
         static var seeAll: String { "common.seeAll".localized }

@@ -4,6 +4,7 @@ struct CurrencySelectionView: View {
     @ObservedObject var currencyManager = CurrencyManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
 
     // Optional binding for selection mode. If nil, acts as Settings mode (updates preferredCurrencyCode).
     var selection: Binding<String>?
@@ -38,7 +39,7 @@ struct CurrencySelectionView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search Currency")
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Select Currency")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -48,10 +49,38 @@ struct CurrencySelectionView: View {
                 }
                 .accessibilityLabel(L10n.Common.cancel)
             }
-            if #available(iOS 26, *) {
-                DefaultToolbarItem(kind: .search, placement: .bottomBar)
+        }
+        .safeAreaBar(edge: .bottom) {
+            searchBar
+        }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.app(.body))
+                .foregroundStyle(.secondary)
+
+            TextField("Search Currency", text: $searchText)
+                .font(.app(.body))
+                .autocorrectionDisabled()
+                .focused($isSearchFocused)
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Common.cancel)
             }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .glassEffect(.regular, in: Capsule())
+        .padding(.horizontal, 16)
     }
 
     private func sectionHeader(_ title: String) -> some View {

@@ -4,7 +4,7 @@ import Foundation
 /// Savings goal model integrated with the budgeting system
 @Model
 final class SavingsGoal {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var goalDescription: String?
     var targetAmount: Decimal

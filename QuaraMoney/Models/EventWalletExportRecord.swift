@@ -17,7 +17,7 @@ enum EventWalletExportType: String, Codable, CaseIterable, Identifiable {
 
 @Model
 final class EventWalletExportRecord {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var memberId: UUID
     var walletTransactionId: UUID
     var amountMinor: Int64

@@ -15,10 +15,10 @@ extension Decimal {
             formatter.currencySymbol = symbol
         }
         
-        let fractionDigits = currencyCode.uppercased() == "JPY" ? 0 : 2
+        let fractionDigits = MoneyMinorUnitConverter.fractionDigits(for: currencyCode)
         formatter.minimumFractionDigits = fractionDigits
         formatter.maximumFractionDigits = fractionDigits
-        
+
         return formatter.string(from: NSDecimalNumber(decimal: self)) ?? ""
     }
     
@@ -50,7 +50,7 @@ extension Decimal {
         } else {
             valueToFormat = self
             suffix = ""
-            let fractionDigits = currencyCode.uppercased() == "JPY" ? 0 : 2
+            let fractionDigits = MoneyMinorUnitConverter.fractionDigits(for: currencyCode)
             formatter.minimumFractionDigits = 0
             formatter.maximumFractionDigits = fractionDigits
         }
@@ -77,12 +77,10 @@ extension Double {
 extension Int64 {
     /// Formats the minor unit Int64 as a currency string using the provided currency code.
     nonisolated func formattedMinorAmount(for currencyCode: String) -> String {
-        // Assume MoneyMinorUnitConverter handles the math, but we need to do it manually if not importing Services
-        // A simple workaround based on the 2 digit standard since JPY is 0:
-        let fractionDigits = currencyCode.uppercased() == "JPY" ? 0 : 2
-        let divisor: Decimal = fractionDigits > 0 ? pow(10, fractionDigits) : 1
-        let amount = Decimal(self) / divisor
-        
+        // Use the single source of truth for fraction digits so minor-unit math
+        // matches MoneyMinorUnitConverter (the ledger). Avoids 10-100x drift for
+        // currencies whose ISO minor unit isn't 2 (e.g. VND/CLP=0, KWD/BHD=3).
+        let amount = MoneyMinorUnitConverter.fromMinorUnits(self, currencyCode: currencyCode)
         return amount.formattedAmount(for: currencyCode)
     }
 }

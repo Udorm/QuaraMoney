@@ -4,7 +4,9 @@ import SwiftData
 struct BudgetListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Budget.startDate, order: .reverse)]) private var budgets: [Budget]
-    @Query private var transactions: [Transaction]
+    // Budgets only ever consider non-event transactions; scope the query so we
+    // don't materialize the entire event ledger alongside personal transactions.
+    @Query(filter: #Predicate<Transaction> { $0.event == nil }) private var transactions: [Transaction]
     @State private var showAddBudget = false
     @State private var filterPeriod: BudgetFilterPeriod = .active
     @State private var showRecurringOnly = false
@@ -61,22 +63,32 @@ struct BudgetListView: View {
                     description: L10n.Budget.emptyDescription
                 )
             } else {
+                // Single-pass spending for every shown budget, computed once per
+                // render instead of re-filtering all transactions per budget.
+                let shownBudgets = filteredBudgets
+                let spending = BudgetCalculator.spendingByBudget(
+                    for: shownBudgets,
+                    transactions: transactions,
+                    targetCurrency: preferredCurrency
+                )
+
                 List {
                     if filterPeriod == .active || filterPeriod == .all {
                         Section {
                             BudgetSummarySection(
-                                budgets: filteredBudgets.filter { $0.isActive },
-                                transactions: transactions
+                                budgets: shownBudgets.filter { $0.isActive },
+                                transactions: transactions,
+                                spending: spending
                             )
                         }
                     }
-                    
+
                     Section(header: Text(headerTitle).font(.app(.subheadline)).textCase(nil)) {
-                        ForEach(filteredBudgets) { budget in
+                        ForEach(shownBudgets) { budget in
                             NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
                                 BudgetRowView(
                                     budget: budget,
-                                    spent: calculateSpending(for: budget),
+                                    spent: spending[budget.id] ?? 0,
                                     budgetLimitConverted: convertBudgetLimit(for: budget)
                                 )
                             }
@@ -122,10 +134,6 @@ struct BudgetListView: View {
             return "\(filterPeriod.displayName) • \(L10n.Budget.recurringOnly)"
         }
         return filterPeriod.displayName
-    }
-    
-    private func calculateSpending(for budget: Budget) -> Decimal {
-        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
     }
     
     private func convertBudgetLimit(for budget: Budget) -> Decimal {
@@ -178,28 +186,34 @@ enum BudgetFilterPeriod: String, CaseIterable, Identifiable, LocalizableDisplayN
 struct BudgetSummarySection: View {
     let budgets: [Budget]
     let transactions: [Transaction]
-    
+    /// Precomputed spent-per-budget (keyed by `budget.id`) from a single pass.
+    let spending: [UUID: Decimal]
+
     private var preferredCurrency: String {
         CurrencyManager.shared.preferredCurrencyCode
     }
-    
+
+    private func spent(for budget: Budget) -> Decimal {
+        spending[budget.id] ?? 0
+    }
+
     private var totalBudgeted: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
             total + BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
         }
     }
-    
+
     private var totalSpent: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
-            total + BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
+            total + spent(for: budget)
         }
     }
-    
+
     private var onTrackCount: Int {
         budgets.filter { budget in
-            let spent = BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
+            let spentAmount = spent(for: budget)
             let limitConverted = BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
-            let progress = limitConverted > 0 ? Double(truncating: spent as NSNumber) / Double(truncating: limitConverted as NSNumber) : 0
+            let progress = limitConverted > 0 ? Double(truncating: spentAmount as NSNumber) / Double(truncating: limitConverted as NSNumber) : 0
             return progress <= 1.0
         }.count
     }

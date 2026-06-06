@@ -154,8 +154,12 @@ class AddTransactionViewModel: BaseViewModel {
         }
     }
     
-    func saveTransaction() {
-        guard evaluatedAmount > 0, let wallet = selectedWallet else { return }
+    /// Persists the transaction. Returns `true` on success so the caller can
+    /// decide whether to dismiss. On failure the error is surfaced via
+    /// `ErrorService` and `false` is returned (keep the sheet open for retry).
+    @discardableResult
+    func saveTransaction() -> Bool {
+        guard evaluatedAmount > 0, let wallet = selectedWallet else { return false }
         
         let transaction: Transaction
         if let existing = existingTransaction {
@@ -189,6 +193,10 @@ class AddTransactionViewModel: BaseViewModel {
             // Store exchange rate for multi-currency income/expense
             transaction.exchangeRate = Decimal(exchangeRate)
         }
+
+        // Record the authoritative rate so this transaction's contribution to
+        // wallet balances is deterministic and never recomputed at live rates.
+        transaction.storedRate = Decimal(exchangeRate)
         
         transaction.excludeFromReports = excludeFromReports
         if let selectedLocation {
@@ -215,14 +223,15 @@ class AddTransactionViewModel: BaseViewModel {
         do {
             try dataService.save()
             HapticManager.shared.notification(type: .success)
+            // Invalidate wallet balance caches only after a confirmed save.
+            wallet.invalidateBalanceCache()
+            destinationWallet?.invalidateBalanceCache()
+            return true
         } catch {
-            print("Error saving transaction: \(error)")
             HapticManager.shared.notification(type: .error)
+            ErrorService.shared.handlePersistenceError(error, context: "AddTransactionViewModel.saveTransaction")
+            return false
         }
-        
-        // Invalidate wallet balance caches
-        wallet.invalidateBalanceCache()
-        destinationWallet?.invalidateBalanceCache()
     }
     // MARK: - OCR / Receipt Scanning
     func scanReceipt(image: UIImage, availableWallets: [Wallet] = []) async {

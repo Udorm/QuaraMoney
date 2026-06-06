@@ -174,6 +174,59 @@ final class FinancialLogicTests: XCTestCase {
         XCTAssertEqual(totalExpense, 150)
         XCTAssertEqual(totalIncome - totalExpense, 350)
     }
+
+    // MARK: - Rate determinism (D2/D3) — Wallet.balance
+
+    func testBalanceUsesStoredRateForCrossCurrency() throws {
+        let wallet = Wallet(name: "USD", currencyCode: "USD", icon: "W", colorHex: "#000")
+        context.insert(wallet)
+
+        // 100 EUR expense, recorded at 1 EUR = 1.1 USD.
+        let expense = Transaction(amount: 100, currencyCode: "EUR", date: Date(), type: .expense)
+        expense.sourceWallet = wallet
+        expense.storedRate = 1.1
+        context.insert(expense)
+        try context.save()
+
+        // 100 * 1.1 = 110 USD out.
+        XCTAssertEqual(wallet.balance, -110)
+    }
+
+    func testBalanceRespectsGenuineUnitStoredRate() throws {
+        // Regression guard for the old `exchangeRate != 1.0` sentinel: a genuine
+        // 1.0 cross-currency rate must be honored, NOT recomputed via fallback
+        // (fallback EUR≈0.92 would wrongly yield ~108.7).
+        let wallet = Wallet(name: "USD", currencyCode: "USD", icon: "W", colorHex: "#000")
+        context.insert(wallet)
+
+        let income = Transaction(amount: 100, currencyCode: "EUR", date: Date(), type: .income)
+        income.sourceWallet = wallet
+        income.storedRate = 1.0
+        context.insert(income)
+        try context.save()
+
+        XCTAssertEqual(wallet.balance, 100)
+    }
+
+    func testCrossCurrencyTransferInUsesStoredRate() throws {
+        let source = Wallet(name: "KHR", currencyCode: "KHR", icon: "S", colorHex: "#000")
+        let dest = Wallet(name: "USD", currencyCode: "USD", icon: "D", colorHex: "#000")
+        context.insert(source)
+        context.insert(dest)
+
+        // Transfer 4000 KHR out, recorded at 1 KHR = 0.00025 USD → 1 USD in.
+        let transfer = Transaction(amount: 4000, currencyCode: "KHR", date: Date(), type: .transfer)
+        transfer.sourceWallet = source
+        transfer.destinationWallet = dest
+        transfer.storedRate = Decimal(string: "0.00025")
+        context.insert(transfer)
+        try context.save()
+
+        // Source loses 4000 KHR (same-currency path, storedRate ignored for source).
+        XCTAssertEqual(source.balance, -4000)
+        // Destination gains exactly 1 USD via the recorded rate.
+        XCTAssertEqual(dest.balance, 1)
+    }
 }
 
 // Helper extension to make test setup cleaner

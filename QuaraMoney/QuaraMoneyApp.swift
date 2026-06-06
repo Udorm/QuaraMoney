@@ -12,6 +12,7 @@ import SwiftData
 struct QuaraMoneyApp: App {
     @StateObject private var languageManager = LanguageManager.shared
     @StateObject private var errorService = ErrorService.shared
+    @StateObject private var securityManager = SecurityManager.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
@@ -37,32 +38,22 @@ struct QuaraMoneyApp: App {
         return container
     }
     
-    private static let modelSchema = Schema([
-        Wallet.self,
-        Category.self,
-        Event.self,
-        EventMember.self,
-        EventLedgerTransaction.self,
-        EventLedgerParticipant.self,
-        EventSettlementSnapshot.self,
-        EventSettlementTransfer.self,
-        EventWalletExportRecord.self,
-        RecurringRule.self,
-        Transaction.self,
-        TransactionLocation.self,
-        Budget.self,
-        Debt.self,
-        SavingsGoal.self
-    ])
+    // Derive the active schema from the versioned baseline so the container and
+    // the migration plan can never drift apart. Bump this to the latest
+    // VersionedSchema when SchemaV2 is introduced.
+    private static let modelSchema = Schema(versionedSchema: SchemaV1.self)
 
     private static func makeModelContainer() -> ModelContainer {
         let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)
 
         do {
-            // No migration stages yet — skip migration plan to reduce container init time.
-            // Re-add migrationPlan: when SchemaV2 is introduced.
+            // SchemaV1 is the launch baseline (post-`.unique`-removal). The plan
+            // has no stages yet; adding SchemaV2 + a MigrationStage here is what
+            // lets future schema changes migrate instead of falling into the
+            // (now non-destructive) recovery path below.
             return try ModelContainer(
                 for: modelSchema,
+                migrationPlan: QuaraMoneySchemaMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -74,21 +65,47 @@ struct QuaraMoneyApp: App {
         }
     }
 
-    /// Attempts to recover from a corrupted ModelContainer by deleting the store and recreating it.
+    /// Attempts to recover from a corrupted ModelContainer.
+    ///
+    /// IMPORTANT: this is a finance app — the on-disk store is the user's only
+    /// copy of their financial history. Before removing the corrupted store we
+    /// move it aside to a timestamped backup so the data is recoverable (support
+    /// can restore it, or a future migration can re-import it) instead of being
+    /// silently and permanently destroyed.
     private static func recoverModelContainer(originalError: Error) -> ModelContainer {
-        // Delete the default SwiftData store
         if let storeURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             let defaultStoreURL = storeURL.appendingPathComponent("default.store")
-            for ext in ["", "-wal", "-shm"] {
-                let fileURL = defaultStoreURL.appendingPathExtension(ext.isEmpty ? "" : String(ext.dropFirst()))
-                let url = ext.isEmpty ? defaultStoreURL : URL(fileURLWithPath: defaultStoreURL.path + ext)
-                try? FileManager.default.removeItem(at: url)
+            let stamp = Int(Date().timeIntervalSince1970)
+            let suffixes = ["", "-wal", "-shm"]
+
+            for suffix in suffixes {
+                let liveURL = URL(fileURLWithPath: defaultStoreURL.path + suffix)
+                guard FileManager.default.fileExists(atPath: liveURL.path) else { continue }
+
+                // Preserve the corrupted store as a backup rather than deleting it.
+                let backupURL = URL(fileURLWithPath: defaultStoreURL.path + ".corrupt-\(stamp)" + suffix)
+                do {
+                    try FileManager.default.moveItem(at: liveURL, to: backupURL)
+                } catch {
+                    // If we cannot move it aside, fall back to removing so the app
+                    // can at least launch — but log loudly.
+                    #if DEBUG
+                    print("[Recovery] Could not back up \(liveURL.lastPathComponent): \(error). Removing instead.")
+                    #endif
+                    try? FileManager.default.removeItem(at: liveURL)
+                }
             }
+            UserDefaults.standard.set(true, forKey: "didRecoverCorruptStore")
+            UserDefaults.standard.set(stamp, forKey: "lastStoreRecoveryStamp")
         }
 
         let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: modelSchema, configurations: [modelConfiguration])
+            return try ModelContainer(
+                for: modelSchema,
+                migrationPlan: QuaraMoneySchemaMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
             // Last resort: use in-memory store so the app doesn't crash-loop
             #if DEBUG
@@ -127,6 +144,16 @@ struct QuaraMoneyApp: App {
                     }
                     .transition(.opacity)
                 }
+
+                // Biometric gate: covers all content (including the privacy
+                // overlay) until the user authenticates.
+                if securityManager.isAppLocked {
+                    AppLockView {
+                        securityManager.authenticate()
+                    }
+                    .transition(.opacity)
+                    .zIndex(10)
+                }
             }
             .environment(\.font, Self.defaultAppFont)
             // Force view recreation when language changes
@@ -162,9 +189,29 @@ struct QuaraMoneyApp: App {
                     .transition(.opacity)
                 }
             }
-            .onChange(of: scenePhase) { _, newPhase in
+            .onChange(of: scenePhase) { oldPhase, newPhase in
                 withAnimation(.easeInOut(duration: 0.15)) {
                     showPrivacyOverlay = (newPhase != .active)
+                }
+
+                switch newPhase {
+                case .background, .inactive:
+                    // Lock when leaving the foreground (no-op unless the user
+                    // enabled app-lock in Settings).
+                    securityManager.lockApp()
+                case .active:
+                    // Returning to the foreground: prompt for biometrics if locked.
+                    if securityManager.isAppLocked {
+                        securityManager.authenticate()
+                    }
+                @unknown default:
+                    break
+                }
+            }
+            .task {
+                // Lock on cold launch if the user enabled app-lock.
+                if securityManager.isAppLockEnabled {
+                    securityManager.isAppLocked = true
                 }
             }
         }
@@ -384,6 +431,14 @@ struct QuaraMoneyApp: App {
             BudgetNotificationService.shared.configure(modelContext: mainContext)
             BudgetNotificationService.shared.loadNotifications()
             BudgetNotificationService.shared.setupNotificationCategories()
+
+            // Opportunistically refresh FX rates so display-time conversions
+            // (reports, net worth, budgets in the preferred currency) are current.
+            // fetchRates() self-throttles to once per 24h, so this is cheap and
+            // runs for all users — including USD-base users, who previously never
+            // refreshed. Historical wallet balances are unaffected: they derive
+            // from each transaction's stored rate, not these live rates.
+            await CurrencyManager.shared.fetchRates()
         }
     }
 }

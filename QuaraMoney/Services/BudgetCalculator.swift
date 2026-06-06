@@ -42,6 +42,53 @@ enum BudgetCalculator {
         )
     }
 
+    /// Spending for many budgets in a **single pass** over `transactions`.
+    ///
+    /// Equivalent to calling `calculateSpending` per budget, but iterates the
+    /// transaction list once instead of `O(budgets × transactions)` re-filtering
+    /// on every view render. Returns spent-per-budget keyed by `budget.id`,
+    /// converted to `targetCurrency`.
+    static func spendingByBudget(
+        for budgets: [Budget],
+        transactions: [Transaction],
+        targetCurrency: String
+    ) -> [UUID: Decimal] {
+        let rates = CurrencyManager.shared.rates
+
+        // Precompute each budget's period window and tracked-category set once.
+        struct BudgetContext {
+            let range: (start: Date, end: Date)
+            let categoryIds: Set<UUID>   // empty → total budget (all categories)
+        }
+        var contexts: [(id: UUID, ctx: BudgetContext)] = []
+        var totals: [UUID: Decimal] = [:]
+        for budget in budgets {
+            contexts.append((budget.id, BudgetContext(range: budget.periodDateRange,
+                                                      categoryIds: Set(budget.trackedCategoryIds))))
+            totals[budget.id] = 0
+        }
+
+        for txn in transactions {
+            guard txn.event == nil, txn.type == .expense, !txn.excludeFromReports else { continue }
+            let txnCategoryId = txn.category?.id
+
+            for entry in contexts {
+                let ctx = entry.ctx
+                guard txn.date >= ctx.range.start && txn.date < ctx.range.end else { continue }
+                if !ctx.categoryIds.isEmpty {
+                    guard let txnCategoryId, ctx.categoryIds.contains(txnCategoryId) else { continue }
+                }
+                let amount = CurrencyManager.convert(amount: txn.amount,
+                                                     from: txn.currencyCode,
+                                                     to: targetCurrency,
+                                                     rates: rates)
+                totals[entry.id, default: 0] += amount
+            }
+        }
+
+        return totals
+    }
+
     // MARK: - Income
 
     /// Total income within a budget's period, converted to `targetCurrency`

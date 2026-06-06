@@ -13,9 +13,13 @@ class SecurityManager: ObservableObject {
     private init() {}
     
     func authenticate() {
+        // Avoid stacking multiple biometric prompts when several triggers
+        // (cold-launch, scene-active, lock-view appear) fire close together.
+        guard !isAuthenticating else { return }
+
         let context = LAContext()
         var error: NSError?
-        
+
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             isAuthenticating = true
             

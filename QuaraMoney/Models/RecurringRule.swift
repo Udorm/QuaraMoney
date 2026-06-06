@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class RecurringRule {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String // e.g., "Netflix Subscription"
     var amount: Decimal
     var currencyCode: String

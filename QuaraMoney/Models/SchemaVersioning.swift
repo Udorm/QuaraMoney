@@ -3,8 +3,10 @@ import Foundation
 
 // MARK: - Schema Versioning
 
-/// V1 schema snapshot — captures the current model state as the baseline version.
-/// All future schema changes should add a new VersionedSchema and corresponding MigrationStage.
+/// V1 schema snapshot — the launch baseline (no `.unique` constraints, image
+/// blobs in external storage, `Transaction.date` indexed).
+/// All future schema changes must add a new VersionedSchema (with copied model
+/// definitions) and a corresponding MigrationStage in the plan below.
 enum SchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version = Schema.Version(1, 0, 0)
 

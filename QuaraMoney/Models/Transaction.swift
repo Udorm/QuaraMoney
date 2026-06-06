@@ -3,10 +3,14 @@ import Foundation
 
 @Model
 final class Transaction {
-    @Attribute(.unique) var id: UUID
+    // Index the date column to accelerate the date-range scans used throughout
+    // reporting/budgets (TransactionProcessor.makeDescriptor, BudgetCalculator).
+    // Note: only primitive columns are indexable — `type` is a Codable enum and
+    // cannot participate in a SwiftData index.
+    #Index<Transaction>([\.date])
+
+    var id: UUID
     var type: TransactionType
-    // Note: SwiftData indexing via @Attribute(.indexed) is not yet available
-    // TODO: Add index when SwiftData supports it for faster date-range queries
     var date: Date
     var note: String?
     
@@ -17,13 +21,24 @@ final class Transaction {
     var amount: Decimal // Raw amount in original currency
     var currencyCode: String // Currency of the transaction
     var exchangeRate: Decimal // Conversion rate to Wallet's currency
+
+    /// The exchange rate captured at creation time, used to convert `amount`
+    /// into the owning wallet's currency for balance computation.
+    /// `nil` for legacy rows that never recorded a rate.
+    ///
+    /// When present this is AUTHORITATIVE: historical balances must be derived
+    /// from it, never recomputed against fluctuating live/fallback rates. This
+    /// replaces the old `exchangeRate != 1.0` sentinel, which could not tell a
+    /// genuine 1.0 cross-currency rate apart from "no rate recorded".
+    var storedRate: Decimal?
     
     // Timestamps (for future sync readiness)
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    // Attachments
-    var photoData: Data?
+    // Attachments — stored externally to keep the SQLite row small and avoid
+    // faulting multi-MB receipt images into memory on every list fetch.
+    @Attribute(.externalStorage) var photoData: Data?
 
     // Location metadata for future intelligent suggestions
     @Relationship(deleteRule: .cascade) var location: TransactionLocation?
@@ -51,7 +66,14 @@ final class Transaction {
     /// Returns an array of validation errors. Empty means valid.
     func validate() -> [ModelValidationError] {
         var errors: [ModelValidationError] = []
-        if amount <= 0 { errors.append(.negativeOrZeroAmount(field: "Amount")) }
+        // Adjustments carry a *signed* amount (a balance correction can be
+        // negative to decrease a wallet — see AdjustBalanceViewModel). Only the
+        // non-adjustment types require a strictly positive amount.
+        if type == .adjustment {
+            if amount == 0 { errors.append(.negativeOrZeroAmount(field: "Amount")) }
+        } else if amount <= 0 {
+            errors.append(.negativeOrZeroAmount(field: "Amount"))
+        }
         if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
         if exchangeRate <= 0 { errors.append(.invalidExchangeRate) }
         return errors

@@ -186,13 +186,31 @@ class CurrencyManager: ObservableObject {
 extension CurrencyManager {
     /// Converts an amount between currencies using provided rates.
     /// Safe to call from any isolation context (nonisolated, static).
+    ///
+    /// Falls back to `convertOrNil`; if conversion is genuinely impossible
+    /// (unknown currency with no fallback rate) it returns the amount unchanged
+    /// to preserve historical behavior. Prefer `convertOrNil` in new code so the
+    /// caller can decide how to handle unconvertible amounts rather than silently
+    /// mixing currencies 1:1.
     nonisolated static func convert(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {
+        convertOrNil(amount: amount, from: source, to: target, rates: rates) ?? amount
+    }
+
+    /// Converts an amount between currencies, returning `nil` when no rate is
+    /// available for either currency (in `rates` or in `fallbackRates`).
+    /// This lets callers exclude or flag unconvertible amounts instead of
+    /// summing two different currencies as if they were equal.
+    nonisolated static func convertOrNil(amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal? {
         guard source != target else { return amount }
-        guard let sourceRate = rates[source], let targetRate = rates[target] else {
-            if source == "USD" && target == "KHR" { return amount * 4000 }
-            if source == "KHR" && target == "USD" { return amount / 4000 }
-            return amount
+
+        // Resolve each rate from live rates first, then the static fallback table.
+        let sourceRate = rates[source] ?? fallbackRates[source]
+        let targetRate = rates[target] ?? fallbackRates[target]
+
+        guard let sourceRate, let targetRate, sourceRate > 0 else {
+            return nil
         }
+
         let amountUSD = amount / Decimal(sourceRate)
         return amountUSD * Decimal(targetRate)
     }

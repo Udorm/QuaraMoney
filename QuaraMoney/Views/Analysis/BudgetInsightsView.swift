@@ -6,8 +6,9 @@ import Charts
 struct BudgetInsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var budgets: [Budget]
-    @Query private var transactions: [Transaction]
-    
+    // Budgets only consider non-event transactions — scope the query accordingly.
+    @Query(filter: #Predicate<Transaction> { $0.event == nil }) private var transactions: [Transaction]
+
     @State private var selectedTimeRange: InsightTimeRange = .sixMonths
     
     private var preferredCurrency: String {

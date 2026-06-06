@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class Category {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var icon: String
     var colorHex: String

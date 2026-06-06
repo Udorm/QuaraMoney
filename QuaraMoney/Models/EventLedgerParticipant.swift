@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class EventLedgerParticipant {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var memberId: UUID
     var orderIndex: Int
     

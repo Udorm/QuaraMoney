@@ -335,8 +335,9 @@ struct AddTransactionView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        viewModel.saveTransaction()
-                        dismiss()
+                        if viewModel.saveTransaction() {
+                            dismiss()
+                        }
                     } label: {
                         Image(systemName: "checkmark")
                             .fontWeight(.semibold)

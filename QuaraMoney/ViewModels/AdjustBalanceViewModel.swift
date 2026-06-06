@@ -69,6 +69,8 @@ class AdjustBalanceViewModel {
         transaction.sourceWallet = wallet
         transaction.note = note.isEmpty ? nil : note
         transaction.excludeFromReports = excludeFromReports
+        // Adjustment is denominated in the wallet's own currency.
+        transaction.storedRate = 1
 
         dataService.insert(transaction)
 

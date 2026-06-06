@@ -126,7 +126,14 @@ extension String {
 
 /// Centralized localization keys for type-safe access
 enum L10n {
-    
+
+    // MARK: - Security
+    enum Security {
+        static var lockedTitle: String { "security.lockedTitle".localized }
+        static var lockedMessage: String { "security.lockedMessage".localized }
+        static var unlock: String { "security.unlock".localized }
+    }
+
     // MARK: - Common
     enum Common {
         static var cancel: String { "common.cancel".localized }
@@ -670,7 +677,8 @@ enum L10n {
         static var recordInitialTransaction: String { "debt.recordInitialTransaction".localized }
         static var initialTransactionHelp: String { "debt.initialTransactionHelp".localized }
         static var partialPayments: String { "debt.partialPayments".localized }
-        
+        static func deleteRelatedTransactionsWarning(_ count: Int) -> String { "debt.deleteRelatedTransactionsWarning".localized(with: count) }
+
         enum SystemCategory {
             static var debt: String { "debt.systemCategory.debt".localized }
             static var debtCollection: String { "debt.systemCategory.debtCollection".localized }

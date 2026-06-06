@@ -3,9 +3,9 @@ import Foundation
 
 @Model
 final class EventMember {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
-    var avatarData: Data?
+    @Attribute(.externalStorage) var avatarData: Data?
     var avatarIcon: String?
     var colorHex: String = "#007AFF" // Default blue
     var isArchived: Bool = false

@@ -18,7 +18,7 @@ enum DebtType: String, Codable, CaseIterable, Identifiable {
 
 @Model
 final class Debt {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var personName: String
     var totalAmount: Decimal
     var currencyCode: String

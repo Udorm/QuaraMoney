@@ -18,12 +18,12 @@ enum EventSettlementStatus: String, CaseIterable, Identifiable {
 
 @Model
 final class Event {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var title: String
     var startDate: Date
     var endDate: Date?
     var totalBudget: Decimal?
-    var coverImageData: Data?
+    @Attribute(.externalStorage) var coverImageData: Data?
     var notes: String?
     
     // New properties for enhanced features

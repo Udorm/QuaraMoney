@@ -89,16 +89,77 @@ extension Font {
 // MARK: - View Modifiers (The Explicit API)
 
 extension View {
-    
+
     /// Applies the Design System font. Use this instead of `.font(...)`.
-    /// Guaranteed to respect the font cascade (System for Latin, Khmer for Khmer).
+    /// Guaranteed to respect the font cascade (System for Latin, Khmer for Khmer)
+    /// AND to scale with the user's Dynamic Type setting.
     func appFont(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> some View {
-        self.font(.app(style, weight: weight))
+        modifier(AppFontModifier(size: Font.textStyleSize(style), weight: weight, referenceStyle: style.uiTextStyle))
     }
-    
+
     /// Applies the Design System font with a custom size. Use this instead of `.font(.system(size: ...))`.
+    /// Scales with Dynamic Type relative to the body text style.
     func appFont(size: CGFloat, weight: Font.Weight = .regular) -> some View {
-        self.font(.app(size: size, weight: weight))
+        modifier(AppFontModifier(size: size, weight: weight, referenceStyle: .body))
+    }
+}
+
+/// Resolves the cascade font at a size scaled for the current Dynamic Type
+/// setting. Reading `dynamicTypeSize` from the environment means the font is
+/// recomputed whenever the user changes their text size. At the default size
+/// (`.large`) the scale factor is 1.0, so existing layouts are unchanged.
+private struct AppFontModifier: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let size: CGFloat
+    let weight: Font.Weight
+    let referenceStyle: UIFont.TextStyle
+
+    func body(content: Content) -> some View {
+        let traits = UITraitCollection(preferredContentSizeCategory: dynamicTypeSize.uiContentSizeCategory)
+        let scaledSize = UIFontMetrics(forTextStyle: referenceStyle).scaledValue(for: size, compatibleWith: traits)
+        return content.font(Font(UIFont.appWithCascade(ofSize: scaledSize, weight: weight.toUIFontWeight())))
+    }
+}
+
+// MARK: - Dynamic Type bridging
+
+private extension Font.TextStyle {
+    /// The UIKit text style whose Dynamic Type scaling curve best matches.
+    var uiTextStyle: UIFont.TextStyle {
+        switch self {
+        case .largeTitle: return .largeTitle
+        case .title: return .title1
+        case .title2: return .title2
+        case .title3: return .title3
+        case .headline: return .headline
+        case .body: return .body
+        case .callout: return .callout
+        case .subheadline: return .subheadline
+        case .footnote: return .footnote
+        case .caption: return .caption1
+        case .caption2: return .caption2
+        @unknown default: return .body
+        }
+    }
+}
+
+private extension DynamicTypeSize {
+    var uiContentSizeCategory: UIContentSizeCategory {
+        switch self {
+        case .xSmall: return .extraSmall
+        case .small: return .small
+        case .medium: return .medium
+        case .large: return .large
+        case .xLarge: return .extraLarge
+        case .xxLarge: return .extraExtraLarge
+        case .xxxLarge: return .extraExtraExtraLarge
+        case .accessibility1: return .accessibilityMedium
+        case .accessibility2: return .accessibilityLarge
+        case .accessibility3: return .accessibilityExtraLarge
+        case .accessibility4: return .accessibilityExtraExtraLarge
+        case .accessibility5: return .accessibilityExtraExtraExtraLarge
+        @unknown default: return .large
+        }
     }
 }
 

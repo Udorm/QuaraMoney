@@ -9,8 +9,11 @@ struct ProfileView: View {
     @AppStorage("appInstallDate") private var installDateTimestamp: Double = 0
     
     @Query private var wallets: [Wallet]
-    @Query private var transactions: [Transaction]
-    
+
+    // Only the count is needed — fetch it instead of materializing every
+    // Transaction object (and its relationships) just to call `.count`.
+    @State private var transactionCount = 0
+
     @State private var avatarImage: UIImage?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showPhotoOptions = false
@@ -62,6 +65,10 @@ struct ProfileView: View {
             if installDateTimestamp == 0 {
                 installDateTimestamp = Date().timeIntervalSince1970
             }
+            refreshTransactionCount()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dataDidUpdate)) { _ in
+            refreshTransactionCount()
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -179,8 +186,12 @@ struct ProfileView: View {
         }
     }
     
+    private func refreshTransactionCount() {
+        transactionCount = (try? modelContext.fetchCount(FetchDescriptor<Transaction>())) ?? transactionCount
+    }
+
     // MARK: - Quick Stats Card
-    
+
     private var quickStatsCard: some View {
         HStack(spacing: 0) {
             statItem(
@@ -194,7 +205,7 @@ struct ProfileView: View {
                 .frame(height: 40)
             
             statItem(
-                value: "\(transactions.count)",
+                value: "\(transactionCount)",
                 label: L10n.Profile.totalTransactions,
                 icon: "arrow.left.arrow.right",
                 color: .orange

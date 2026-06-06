@@ -520,6 +520,7 @@
 "debt.recordPayment" = "Record Payment";
 "debt.markCompleted" = "Mark as Completed";
 "debt.partialPayments" = "Partial Payments";
+"debt.deleteRelatedTransactionsWarning" = "Deleting this debt will also delete all %d linked transactions and change the affected wallet balances. This action cannot be undone.";
 "debt.remaining" = "Remaining";
 "debt.paid" = "Paid";
 "debt.total" = "Total";
@@ -773,3 +774,7 @@
 "analysis.pro.insight.busiestDay" = "You spend the most on %@.";
 "analysis.pro.insight.projection" = "At this pace, you'll reach about %@ by period end.";
 "analysis.pro.insight.topPlace" = "Most spent at %@ (%@).";
+
+"security.lockedTitle" = "QuaraMoney is Locked";
+"security.lockedMessage" = "Authenticate to view your finances.";
+"security.unlock" = "Unlock";

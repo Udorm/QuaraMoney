@@ -118,9 +118,17 @@ View (SwiftUI @Query / @State)
 - `BudgetRolloverService` handles period transitions
 - `BudgetNotificationService` fires alerts at 50%/80% of limit
 
+### Transaction Suggestion Engine
+- `TransactionSuggestionEngine` (`Services/TransactionSuggestionEngine.swift`) — pure `@MainActor enum` that ranks wallets and categories for the Add Transaction quick-pickers.
+- Scoring model: `recencyDecay × weekdayBoost × hourBoost × coOccurrenceBoost × locationBoost` (all weights in `SuggestionWeights`).
+- Key types: `ScoredWallet`, `ScoredCategory` (holds `isHighlighted` for the dominant suggestion), `SuggestionLocationContext` (applePlaceID + spatialKey — for ranking **only**, never persisted to the transaction).
+- `AddTransactionView` fetches the device's current location via `CurrentLocationService` in the background on open (new entries only) to supply a `spatialKey` to the engine — this is **never** written to `viewModel.selectedLocation` or saved to the transaction.
+- Results are memoized in `@State` in `AddTransactionView` and recomputed on `onAppear` / changes to `type`, `selectedWallet`, `selectedCategory`, `selectedLocation`.
+- `AddEventLedgerTransactionViewModel` still uses the old count-based approach — extend if needed.
+
 ## Testing
 
 - XCTest with `@testable import QuaraMoney`
-- Each test uses fresh in-memory `ModelContainer` via `TestModelContainer.makeTestContainer()`
+- Each test uses fresh in-memory `ModelContainer` via `TestModelContainer.create()`
 - Coverage focus: settlement engine, currency conversion, budget rollover
 - Follow pattern in `EventSettlementEngineTests.swift`: create container → set up models → call service → assert

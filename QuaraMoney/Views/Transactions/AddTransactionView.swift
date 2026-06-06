@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,10 +17,17 @@ struct AddTransactionView: View {
     @State private var showAllCategories = false
     @State private var showAllWallets = false
     @State private var showKeyboard = true
-    @State private var categorySearchText = ""
     @State private var walletSearchText = ""
     @State private var showScanner = false
     @State private var showLocationPicker = false
+
+    // Suggestion engine: cached, contextual rankings (recomputed on context changes, not every body pass)
+    @State private var scoredWallets: [ScoredWallet] = []
+    @State private var scoredCategories: [ScoredCategory] = []
+    /// Device current-location spatial key, fetched in the background for ranking ONLY.
+    /// Never written to the transaction's location field.
+    @State private var backgroundLocationKey: String?
+    @State private var locationService = CurrentLocationService()
 
     @FocusState private var isNoteFieldFocused: Bool
     
@@ -37,46 +45,97 @@ struct AddTransactionView: View {
         categories.filter { $0.type == viewModel.type }
     }
     
-    /// Get frequently used categories (by transaction count) - limit to maxQuickCategories
-    private var frequentCategories: [Category] {
-        let sorted = filteredCategories.sorted { cat1, cat2 in
-            let count1 = cat1.transactions?.count ?? 0
-            let count2 = cat2.transactions?.count ?? 0
-            return count1 > count2
-        }
-        let count = filteredCategories.count
-        let limit = count > 4 ? 3 : 4 // If more than 4, show 3 + More. Else show all up to 4.
-        
-        var items = Array(sorted.prefix(limit))
-        
-        // If user selected a category that isn't in the top N, replace the last one to show selection
-        if let selected = viewModel.selectedCategory, !items.contains(where: { $0.id == selected.id }) {
-            if !items.isEmpty {
-                items[items.count - 1] = selected
-            } else {
-                items.append(selected)
+    /// Contextually-ranked categories for the current type (falls back to name order until first compute).
+    private var orderedCategories: [ScoredCategory] {
+        let typeMatched = scoredCategories.filter { $0.category.type == viewModel.type }
+        if typeMatched.isEmpty {
+            // Cold start or pre-compute: name-ordered (filteredCategories already sorted), no highlight.
+            return filteredCategories.map {
+                ScoredCategory(category: $0, score: 0, lastUsed: nil, isHighlighted: false)
             }
         }
-        
+        return typeMatched
+    }
+
+    /// Top contextual categories for the quick grid — keeps the 3+More cap and the
+    /// "inject the current selection so it stays visible" behavior.
+    private var frequentCategories: [ScoredCategory] {
+        let sorted = orderedCategories
+        let count = filteredCategories.count
+        let limit = count > 4 ? 3 : 4 // If more than 4, show 3 + More. Else show all up to 4.
+
+        var items = Array(sorted.prefix(limit))
+
+        // If user selected a category that isn't in the top N, replace the last one to show selection
+        if let selected = viewModel.selectedCategory, !items.contains(where: { $0.category.id == selected.id }) {
+            let selectedScored = sorted.first(where: { $0.category.id == selected.id })
+                ?? ScoredCategory(category: selected, score: 0, lastUsed: nil, isHighlighted: false)
+            if !items.isEmpty {
+                items[items.count - 1] = selectedScored
+            } else {
+                items.append(selectedScored)
+            }
+        }
+
         return items
     }
-    
-    /// Get frequently used wallets (by transaction count) - limit to maxQuickWallets
+
+    /// Contextually-ranked wallets for the quick chips (falls back to name order until first compute).
     private var frequentWallets: [Wallet] {
-        let sorted = wallets.sorted { w1, w2 in
-            let count1 = (w1.outgoingTransactions?.count ?? 0) + (w1.incomingTransactions?.count ?? 0)
-            let count2 = (w2.outgoingTransactions?.count ?? 0) + (w2.incomingTransactions?.count ?? 0)
-            return count1 > count2
-        }
-        return Array(sorted.prefix(maxQuickWallets))
+        let ordered = scoredWallets.isEmpty ? wallets : scoredWallets.map(\.wallet)
+        return Array(ordered.prefix(maxQuickWallets))
     }
-    
-    /// Get the most used wallet (by transaction count)
-    private var mostUsedWallet: Wallet? {
-        wallets.max { w1, w2 in
-            let count1 = (w1.outgoingTransactions?.count ?? 0) + (w1.incomingTransactions?.count ?? 0)
-            let count2 = (w2.outgoingTransactions?.count ?? 0) + (w2.incomingTransactions?.count ?? 0)
-            return count1 < count2
+
+    // MARK: - Suggestion recompute
+
+    /// Resolves the scoring location: manual selection first, else the background current location.
+    /// Used for ranking only — never persisted to the transaction.
+    private func scoringLocation() -> SuggestionLocationContext? {
+        if let selection = viewModel.selectedLocation {
+            return SuggestionLocationContext(
+                applePlaceID: selection.applePlaceID,
+                spatialKey: TransactionLocation.spatialKey(
+                    latitude: selection.latitude,
+                    longitude: selection.longitude
+                )
+            )
+        }
+        if let key = backgroundLocationKey {
+            return SuggestionLocationContext(applePlaceID: nil, spatialKey: key)
+        }
+        return nil
+    }
+
+    private func recomputeSuggestions() {
+        let location = scoringLocation()
+        scoredWallets = TransactionSuggestionEngine.rankWallets(
+            wallets,
+            type: viewModel.type,
+            selectedCategory: viewModel.selectedCategory,
+            location: location
+        )
+        scoredCategories = TransactionSuggestionEngine.rankCategories(
+            categories,
+            type: viewModel.type,
+            selectedWallet: viewModel.selectedWallet,
+            location: location
+        )
+    }
+
+    /// Fetches the device's current location in the background to bias suggestions.
+    /// Scoring signal only — silently ignores denial/failure and never sets a transaction location.
+    private func startBackgroundLocationFetch() {
+        Task {
+            do {
+                let location = try await locationService.requestCurrentLocation()
+                backgroundLocationKey = TransactionLocation.spatialKey(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+                recomputeSuggestions()
+            } catch {
+                // Location is an optional ranking signal; ignore unavailable/denied/no-fix.
+            }
         }
     }
     
@@ -293,18 +352,30 @@ struct AddTransactionView: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
-                // Preselect the most used wallet (by transaction count)
-                if viewModel.selectedWallet == nil, let wallet = mostUsedWallet ?? wallets.first {
+                recomputeSuggestions()
+                // Preselect the top contextually-ranked wallet
+                if viewModel.selectedWallet == nil, let wallet = scoredWallets.first?.wallet ?? wallets.first {
                     viewModel.selectedWallet = wallet
                     viewModel.syncCurrencyToWallet()
+                    // Selected wallet now informs category co-occurrence ranking
+                    recomputeSuggestions()
                 }
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction && !startWithScanner
-                
+
                 if startWithScanner {
                     showScanner = true
                 }
+
+                // Fetch current location in the background to refine suggestions (new entries only)
+                if isNewTransaction {
+                    startBackgroundLocationFetch()
+                }
             }
+            .onChange(of: viewModel.type) { _, _ in recomputeSuggestions() }
+            .onChange(of: viewModel.selectedWallet) { _, _ in recomputeSuggestions() }
+            .onChange(of: viewModel.selectedCategory) { _, _ in recomputeSuggestions() }
+            .onChange(of: viewModel.selectedLocation) { _, _ in recomputeSuggestions() }
             .background(Color(.systemGroupedBackground))
         }
     }
@@ -517,12 +588,13 @@ struct AddTransactionView: View {
             } else {
                 // Show frequent categories in grid
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                    ForEach(frequentCategories) { category in
+                    ForEach(frequentCategories) { scored in
                         CategoryGridItem(
-                            category: category,
-                            isSelected: viewModel.selectedCategory?.id == category.id
+                            category: scored.category,
+                            isSelected: viewModel.selectedCategory?.id == scored.category.id,
+                            isHighlighted: scored.isHighlighted
                         ) {
-                            viewModel.selectedCategory = category
+                            viewModel.selectedCategory = scored.category
                         }
                     }
                     
@@ -557,34 +629,16 @@ struct AddTransactionView: View {
     
     // MARK: - Category Picker Sheet
     private var categoryPickerSheet: some View {
-        let displayCategories = categorySearchText.isEmpty ? filteredCategories : filteredCategories.filter { $0.name.localizedCaseInsensitiveContains(categorySearchText) }
-        
-        return NavigationStack {
-            List {
-                ForEach(displayCategories) { category in
-                    SelectableRow(
-                        title: category.name,
-                        icon: category.icon,
-                        iconColor: Color(hex: category.colorHex) ?? .gray,
-                        isSelected: viewModel.selectedCategory?.id == category.id
-                    ) {
-                        viewModel.selectedCategory = category
-                        showAllCategories = false
-                    }
-                }
-            }
-            .navigationTitle(L10n.TransactionAdditional.selectCategory)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $categorySearchText, placement: .toolbar, prompt: L10n.TransactionAdditional.searchCategories)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { showAllCategories = false } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
+        TransactionCategoryPickerSheet(
+            allCategories: filteredCategories,
+            rankedSuggestions: orderedCategories,
+            selectedCategoryID: viewModel.selectedCategory?.id,
+            onSelect: { category in
+                viewModel.selectedCategory = category
+                showAllCategories = false
+            },
+            onDismiss: { showAllCategories = false }
+        )
     }
     
     // MARK: - Optional Fields Section

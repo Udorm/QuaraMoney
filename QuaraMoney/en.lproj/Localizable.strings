@@ -607,6 +607,8 @@
 "transaction.time" = "Time";
 "transaction.selectCategory" = "Select Category";
 "transaction.searchCategories" = "Search categories";
+"transaction.suggestedCategories" = "Suggested";
+"transaction.allCategories" = "All Categories";
 "transaction.linkedToDebt" = "Linked to Debt";
 "transaction.linkedToLoan" = "Linked to Loan";
 

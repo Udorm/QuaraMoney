@@ -607,6 +607,8 @@
 "transaction.time" = "ពេលវេលា";
 "transaction.selectCategory" = "ជ្រើសរើសប្រភេទ";
 "transaction.searchCategories" = "ស្វែងរកប្រភេទ";
+"transaction.suggestedCategories" = "បានណែនាំ";
+"transaction.allCategories" = "ប្រភេទទាំងអស់";
 "transaction.linkedToDebt" = "ភ្ជាប់ជាមួយបំណុល";
 "transaction.linkedToLoan" = "ភ្ជាប់ជាមួយកម្ចី";
 
@@ -671,11 +673,11 @@
 "category.newCategory" = "ប្រភេទថ្មី";
 
 // MARK: - Analysis Additions
-"analysis.period.w" = "ស1";
-"analysis.period.m" = "ខ1";
-"analysis.period.6m" = "ខ6";
-"analysis.period.y" = "ឆ1";
-"analysis.period.ly" = "ឆម";
+"analysis.period.w" = "សប្ផាហ័";
+"analysis.period.m" = "ខែ";
+"analysis.period.6m" = "៦ ខែ";
+"analysis.period.y" = "ឆ្នាំ";
+"analysis.period.ly" = "ឆ្នាំមុន";
 "analysis.timePeriod" = "រយៈពេល";
 "analysis.total" = "សរុប";
 

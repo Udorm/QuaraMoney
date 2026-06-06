@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Full-height category picker presented from the "More" button on Add Transaction.
 ///
-/// Layout:
-/// - A scrollable **All Categories** section at the top.
-/// - A sticky **Suggested** card pinned to the bottom (thumb-zone), hidden during search.
+/// Layout (native inset-grouped `List`, so every section is a real system card —
+/// identical corner radius / material to the rest of the app):
+/// - A **Suggested** section at the top (hidden during search).
+/// - An **All Categories** section below, switchable between list and grid.
 struct TransactionCategoryPickerSheet: View {
     /// All categories of the current transaction type (already type-filtered, name-sorted).
     let allCategories: [Category]
@@ -16,10 +17,12 @@ struct TransactionCategoryPickerSheet: View {
 
     @State private var searchText = ""
     /// Persisted layout preference for the full list (suggestions are always a grid).
-    @AppStorage("categoryPicker.useGridLayout") private var useGridLayout = false
+    @AppStorage("categoryPicker.useGridLayout") private var useGridLayout = true
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
     private let maxSuggestions = 8
+    /// Inner padding for a grid that sits as a single row inside a section card.
+    private let gridRowInsets = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
 
     /// Top suggestions that actually have a usage signal.
     private var suggestionItems: [ScoredCategory] {
@@ -38,19 +41,13 @@ struct TransactionCategoryPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                allCategoriesSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
-            }
-            .scrollContentBackground(.hidden)
-            .background(Color(.systemGroupedBackground))
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            List {
                 if showSuggestions {
-                    suggestionCard
+                    suggestionSection
                 }
+                allCategoriesSection
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("transaction.selectCategory".localized)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
@@ -66,7 +63,6 @@ struct TransactionCategoryPickerSheet: View {
                     .accessibilityLabel(L10n.Common.cancel)
                 }
                 // iOS 26+: move the search field to the native bottom bar pill.
-                // Suggestion card hides during search, so the two never coexist.
                 if #available(iOS 26, *) {
                     DefaultToolbarItem(kind: .search, placement: .bottomBar)
                 }
@@ -77,18 +73,10 @@ struct TransactionCategoryPickerSheet: View {
         .presentationBackground(Color(.systemGroupedBackground))
     }
 
-    // MARK: - Sticky Suggestion Card
+    // MARK: - Suggested Section
 
-    private let glowGradient = LinearGradient(
-        colors: [.blue.opacity(0.75), .cyan, .indigo.opacity(0.85), .purple.opacity(0.65)],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
-
-    private var suggestionCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("transaction.suggestedCategories".localized)
-
+    private var suggestionSection: some View {
+        Section {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(suggestionItems) { scored in
                     CategoryGridItem(
@@ -100,41 +88,19 @@ struct TransactionCategoryPickerSheet: View {
                     }
                 }
             }
+            .listRowInsets(gridRowInsets)
+        } header: {
+            sectionHeader("transaction.suggestedCategories".localized)
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        // Glow bloom border
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(glowGradient, lineWidth: 5)
-                .blur(radius: 4)
-                .opacity(0.6)
-        }
-        // Crisp gradient border on top of the bloom
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(glowGradient, lineWidth: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .background(Color(.systemGroupedBackground))
     }
 
     // MARK: - All Categories Section
 
     private var allCategoriesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                sectionHeader("transaction.allCategories".localized)
-                Spacer()
-                layoutToggle
-            }
-
+        Section {
             if displayCategories.isEmpty {
                 ContentUnavailableView.search(text: searchText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
+                    .listRowBackground(Color.clear)
             } else if useGridLayout {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(displayCategories) { category in
@@ -146,22 +112,24 @@ struct TransactionCategoryPickerSheet: View {
                         }
                     }
                 }
+                .listRowInsets(gridRowInsets)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(displayCategories.enumerated()), id: \.element.id) { index, category in
-                        CategoryColorRow(
-                            category: category,
-                            isSelected: selectedCategoryID == category.id
-                        ) {
-                            onSelect(category)
-                        }
-                        if index < displayCategories.count - 1 {
-                            Divider().padding(.leading, 56)
-                        }
+                ForEach(displayCategories) { category in
+                    CategoryColorRow(
+                        category: category,
+                        isSelected: selectedCategoryID == category.id
+                    ) {
+                        onSelect(category)
                     }
+                    // Align the row separator with the label text (past the icon).
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 44 }
                 }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        } header: {
+            HStack {
+                sectionHeader("transaction.allCategories".localized)
+                Spacer()
+                layoutToggle
             }
         }
     }
@@ -180,6 +148,7 @@ struct TransactionCategoryPickerSheet: View {
         Text(title)
             .font(.app(.headline))
             .foregroundStyle(.primary)
+            .textCase(nil)
     }
 }
 
@@ -214,8 +183,6 @@ private struct CategoryColorRow: View {
                         .fontWeight(.semibold)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

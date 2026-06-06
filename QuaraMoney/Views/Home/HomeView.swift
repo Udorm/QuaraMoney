@@ -25,6 +25,18 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 transactionList
             }
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                Button {
+                    shouldScan = false
+                    showingAddTransaction = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .modifier(AddTransactionFABStyle())
+                .controlSize(.large)
+                .padding(.trailing)
+                .padding(.bottom, 8)
+            }
             .navigationTitle(L10n.Home.title)
             .searchable(text: $viewModel.searchText)
             .searchToolbarBehavior(.minimize)
@@ -79,14 +91,6 @@ struct HomeView: View {
                         Image(systemName: "arrow.up.arrow.down")
                     }
                     .accessibilityLabel("Sort transactions")
-
-                    Button {
-                        shouldScan = false
-                        showingAddTransaction = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add transaction")
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
@@ -251,6 +255,20 @@ struct DailyHeader: View {
 // I will verify if I can import or redefine.
 // Let's use a simple one here for now.
 
+
+private struct AddTransactionFABStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .buttonStyle(.glassProminent)
+                .clipShape(.circle)
+        } else {
+            content
+                .buttonStyle(.borderedProminent)
+                .clipShape(.circle)
+        }
+    }
+}
 
 #Preview("HomeView") {
     let configuration = ModelConfiguration(isStoredInMemoryOnly: true)

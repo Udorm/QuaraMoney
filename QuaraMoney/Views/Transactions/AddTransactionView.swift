@@ -17,7 +17,6 @@ struct AddTransactionView: View {
     @State private var showAllCategories = false
     @State private var showAllWallets = false
     @State private var showKeyboard = true
-    @State private var walletSearchText = ""
     @State private var showScanner = false
     @State private var showLocationPicker = false
 
@@ -152,13 +151,20 @@ struct AddTransactionView: View {
                 VStack(spacing: 16) {
                     List {
                         // MARK: - Amount & Type (Fluid row)
-                        Section {
+                        Section(footer:
+                            Group {
+                                if let exchangeRateStr = exchangeRateString {
+                                    Label(exchangeRateStr, systemImage: "lock.fill")
+                                        .font(.app(.footnote))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        ) {
                             AmountDisplayView(
                                 amount: viewModel.evaluatedAmount,
                                 currencyCode: $viewModel.selectedCurrencyCode,
                                 expression: viewModel.expression,
                                 isEditing: showKeyboard,
-                                exchangeRateInfo: exchangeRateString,
                                 onTap: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showKeyboard = true
@@ -180,20 +186,6 @@ struct AddTransactionView: View {
                                     }
                                 }
                             )
-                        }
-                        
-                        if let exchangeRateStr = exchangeRateString {
-                            Section {
-                                HStack {
-                                    Text(exchangeRateStr)
-                                        .font(.app(.subheadline, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Image(systemName: "lock.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
                         }
                         
                         // MARK: - Linked Debt Indicator
@@ -456,23 +448,32 @@ struct AddTransactionView: View {
                             viewModel.updateExchangeRate()
                         }
                     }
+
+                    if wallets.count > maxQuickWallets {
+                        Button {
+                            showAllWallets = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "ellipsis")
+                                    .font(.app(.caption2))
+                                Text("common.more".localized)
+                                    .font(.app(.subheadline, weight: .medium))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(.tertiarySystemGroupedBackground))
+                            .foregroundColor(.secondary)
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            
-            if wallets.count > maxQuickWallets {
-                Button {
-                    showAllWallets = true
-                } label: {
-                    HStack {
-                        Image(systemName: "checklist")
-                        Text(L10n.Common.seeAll)
-                    }
-                    .font(.app(.subheadline))
-                    .foregroundStyle(.blue)
-                }
-                .buttonStyle(.plain)
-            }
         }
         .padding(.vertical, 4)
         .overlay(
@@ -490,37 +491,17 @@ struct AddTransactionView: View {
     
     // MARK: - Wallet Picker Sheet
     private var walletPickerSheet: some View {
-        let displayWallets = walletSearchText.isEmpty ? wallets : wallets.filter { $0.name.localizedCaseInsensitiveContains(walletSearchText) || $0.currencyCode.localizedCaseInsensitiveContains(walletSearchText) }
-        
-        return NavigationStack {
-            List {
-                ForEach(displayWallets) { wallet in
-                    SelectableRow(
-                        title: wallet.name,
-                        subtitle: wallet.currencyCode,
-                        icon: wallet.icon,
-                        iconColor: .blue,
-                        isSelected: viewModel.selectedWallet?.id == wallet.id
-                    ) {
-                        viewModel.selectedWallet = wallet
-                        viewModel.syncCurrencyToWallet()
-                        viewModel.updateExchangeRate()
-                        showAllWallets = false
-                    }
-                }
-            }
-            .navigationTitle(L10n.Wallet.selectWallet)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $walletSearchText, placement: .toolbar, prompt: Text("transaction.searchWallets".localized))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button { showAllWallets = false } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
+        TransactionWalletPickerSheet(
+            wallets: wallets,
+            selectedWalletID: viewModel.selectedWallet?.id,
+            onSelect: { wallet in
+                viewModel.selectedWallet = wallet
+                viewModel.syncCurrencyToWallet()
+                viewModel.updateExchangeRate()
+                showAllWallets = false
+            },
+            onDismiss: { showAllWallets = false }
+        )
     }
     
     // MARK: - Destination Wallet Section (for Transfers)
@@ -604,13 +585,20 @@ struct AddTransactionView: View {
                             showAllCategories = true
                         } label: {
                             VStack(spacing: 4) {
-                                Image(systemName: "ellipsis.circle.fill")
-                                    .font(.app(.title3))
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(.tertiarySystemGroupedBackground))
-                                    .clipShape(Circle())
-                                
+                                ZStack {
+                                    Image(systemName: "ellipsis")
+                                        .font(.app(.title3))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 40, height: 40)
+                                        .background(Color(.tertiarySystemGroupedBackground))
+                                        .clipShape(Circle())
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                        )
+                                }
+                                .frame(width: 46, height: 46)
+
                                 Text("common.more".localized)
                                     .font(.app(.caption2))
                                     .foregroundStyle(.secondary)

@@ -19,12 +19,10 @@ struct CategoryGridItem: View {
                     if isSelected {
                         Circle()
                             .stroke(categoryColor, lineWidth: 2)
-                            .frame(width: 46, height: 46)
                     } else if isHighlighted {
                         // Suggestion ring (dashed) — distinct from the solid selection ring
                         Circle()
                             .stroke(categoryColor.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                            .frame(width: 46, height: 46)
                     }
 
                     Image(systemName: category.icon)
@@ -34,7 +32,6 @@ struct CategoryGridItem: View {
                         .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
                         .clipShape(Circle())
                         .overlay(
-                            // Optional: subtle border for unselected to make them distinct from background
                             Circle()
                                 .stroke(Color.secondary.opacity(0.2), lineWidth: isSelected ? 0 : 1)
                         )
@@ -49,6 +46,7 @@ struct CategoryGridItem: View {
                             .offset(x: 18, y: -18)
                     }
                 }
+                .frame(width: 46, height: 46)
 
                 Text(category.name)
                     .font(.app(.caption2, weight: isSelected ? .bold : .regular))

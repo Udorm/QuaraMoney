@@ -113,6 +113,7 @@ struct WalletDetailView: View {
             } else {
                 TransactionListView(
                     transactions: viewModel.transactions,
+                    sortOption: viewModel.sortOption,
                     listHeader: viewModel.filterDescription, // Pass filter description as integrated header
                     onEdit: { txn in
                         transactionToEdit = txn
@@ -130,6 +131,18 @@ struct WalletDetailView: View {
         .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                // Sort Button
+                Menu {
+                    Picker(selection: $viewModel.sortOption, label: Text(L10n.Sort.title)) {
+                        ForEach(TransactionSortOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort transactions")
+
                 // Add Button (Top Right / Prominent)
                 Button {
                     showingAddTransaction = true
@@ -153,12 +166,6 @@ struct WalletDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                
-                // Filter Button
-                // Filter Button Removed - using MonthSelectionView
-
-                
-                
             }
         }
         .sheet(isPresented: $showingEditWallet) {
@@ -168,13 +175,7 @@ struct WalletDetailView: View {
             ))
         }
         .sheet(isPresented: $showingAddTransaction) {
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    initialWallet: viewModel.wallet
-                ),
-                isNewTransaction: true
-            )
+            AddTransactionContainer(isNewTransaction: true, initialWallet: viewModel.wallet)
         }
         .sheet(isPresented: $showingAdjustBalance) {
             AdjustBalanceView(
@@ -183,14 +184,7 @@ struct WalletDetailView: View {
             )
         }
         .sheet(item: $transactionToEdit) { txn in
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    initialWallet: viewModel.wallet,
-                    transaction: txn
-                ),
-                isNewTransaction: false
-            )
+            AddTransactionContainer(transaction: txn, isNewTransaction: false, initialWallet: viewModel.wallet)
         }
         .onAppear {
             viewModel.fetchTransactions()

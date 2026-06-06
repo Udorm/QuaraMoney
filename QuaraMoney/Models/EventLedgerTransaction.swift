@@ -23,7 +23,7 @@ enum EventExpensePaidSource: String, Codable, CaseIterable, Identifiable {
 
 @Model
 final class EventLedgerTransaction {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var kind: EventLedgerTransactionKind
     var title: String
     var amountMinor: Int64

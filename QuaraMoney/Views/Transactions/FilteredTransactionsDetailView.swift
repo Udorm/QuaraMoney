@@ -37,64 +37,10 @@ struct FilteredTransactionsDetailView: View {
         List {
             // MARK: - Filter Context & Summary
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Categories
-                    if !displayCategories.isEmpty {
-                        filterRow(icon: "square.grid.2x2", label: nil) {
-                            FlowLayout(spacing: 6) {
-                                ForEach(displayCategories) { cat in
-                                    HStack(spacing: 4) {
-                                        Image(systemName: cat.icon.isEmpty ? "circle.fill" : cat.icon)
-                                            .appFont(size: 10)
-                                        Text(cat.name)
-                                            .font(.app(.caption))
-                                    }
-                                    .foregroundStyle(Color(hex: cat.colorHex) ?? .blue)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background((Color(hex: cat.colorHex) ?? .blue).opacity(0.1))
-                                    .clipShape(Capsule())
-                                }
-                            }
-                        }
-                    }
-
-                    // Date range
-                    filterRow(icon: "calendar", label: config.formattedDateRange) {
-                        EmptyView()
-                    }
-
-                    // Wallet
-                    if let walletName = config.walletName {
-                        filterRow(icon: "wallet.bifold", label: walletName) {
-                            EmptyView()
-                        }
-                    }
-
-                    // Type + Summary
-                    HStack {
-                        if let type = config.transactionType {
-                            HStack(spacing: 4) {
-                                Image(systemName: type == .expense ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
-                                    .appFont(size: 12)
-                                Text(type.rawValue)
-                                    .font(.app(.caption))
-                            }
-                            .foregroundStyle(type == .expense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor)
-                        }
-
-                        Spacer()
-
-                        Text("filteredTransactions.count".localized(with: vm.transactions.count))
-                            .font(.app(.caption))
-                            .foregroundStyle(.secondary)
-
-                        Text(vm.totalAmount.formattedAmount(for: preferredCurrency))
-                            .font(.app(.subheadline, weight: .semibold))
-                            .monospacedDigit()
-                    }
-                }
-                .padding(.vertical, 4)
+                filterSummaryCard
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
 
             // MARK: - Transaction List
@@ -107,6 +53,7 @@ struct FilteredTransactionsDetailView: View {
             } else {
                 TransactionListView(
                     transactions: vm.transactions,
+                    sortOption: vm.sortOption,
                     onEdit: { txn in
                         transactionToEdit = txn
                     },
@@ -117,37 +64,151 @@ struct FilteredTransactionsDetailView: View {
             }
         }
         .navigationTitle(config.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
+        .searchable(text: $vm.searchText, placement: .toolbar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(selection: $vm.sortOption, label: Text(L10n.Sort.title)) {
+                        ForEach(TransactionSortOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+            }
+        }
         .onAppear {
             vm.configure(modelContext: modelContext)
         }
         .sheet(item: $transactionToEdit) { txn in
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    transaction: txn
-                ),
-                isNewTransaction: false
-            )
+            AddTransactionContainer(transaction: txn, isNewTransaction: false)
         }
     }
 
-    private func filterRow<Content: View>(icon: String, label: String?, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .appFont(size: 12)
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-                .padding(.top, label != nil ? 2 : 4)
+    // MARK: - Filter Summary Card
 
-            if let label {
-                Text(label)
-                    .font(.app(.caption))
-                    .foregroundStyle(.primary)
-            }
-
-            content()
+    private var accentColor: Color {
+        if let cat = displayCategories.first {
+            return Color(hex: cat.colorHex) ?? .blue
         }
+        if let type = config.transactionType {
+            return type == .expense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor
+        }
+        return .blue
+    }
+
+    @ViewBuilder
+    private var filterSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+
+            // MARK: Header — icon + context + type badge
+            HStack(alignment: .top, spacing: 12) {
+
+                // Category icon — iOS "app icon" rounded square style
+                let iconName: String = {
+                    if let cat = displayCategories.first, !cat.icon.isEmpty { return cat.icon }
+                    return "line.3.horizontal.decrease.circle.fill"
+                }()
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accentColor.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: iconName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                }
+
+                // Name + metadata
+                VStack(alignment: .leading, spacing: 4) {
+                    if displayCategories.count == 1, let cat = displayCategories.first {
+                        Text(cat.name)
+                            .font(.app(.subheadline, weight: .semibold))
+                    } else if displayCategories.count > 1 {
+                        FlowLayout(spacing: 4) {
+                            ForEach(displayCategories) { cat in
+                                let c = Color(hex: cat.colorHex) ?? .blue
+                                Text(cat.name)
+                                    .font(.app(.caption2, weight: .medium))
+                                    .foregroundStyle(c)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(c.opacity(0.1))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 10))
+                        Text(config.formattedDateRange)
+                            .font(.app(.caption))
+                        if let walletName = config.walletName {
+                            Text("·").foregroundStyle(.tertiary)
+                            Image(systemName: "wallet.bifold")
+                                .font(.system(size: 10))
+                            Text(walletName)
+                                .font(.app(.caption))
+                        }
+                        if let goalName = config.savingsGoalName {
+                            Text("·").foregroundStyle(.tertiary)
+                            Image(systemName: "target")
+                                .font(.system(size: 10))
+                            Text(goalName)
+                                .font(.app(.caption))
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                // Transaction type badge
+                if let type = config.transactionType {
+                    let isExpense = type == .expense
+                    let typeColor = isExpense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor
+                    HStack(spacing: 3) {
+                        Image(systemName: isExpense ? "arrow.down" : "arrow.up")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(type.rawValue.capitalized)
+                            .font(.app(.caption, weight: .semibold))
+                    }
+                    .foregroundStyle(typeColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(typeColor.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+            }
+            .padding(16)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            // MARK: Stats — total amount | transaction count
+            HStack(alignment: .firstTextBaseline) {
+                Text(vm.totalAmount.formattedAmount(for: preferredCurrency))
+                    .font(.app(.title2, weight: .bold))
+                    .monospacedDigit()
+
+                Spacer()
+
+                Text("filteredTransactions.count".localized(with: vm.transactions.count))
+                    .font(.app(.callout))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        }
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color(.separator).opacity(0.3), lineWidth: 0.5)
+        )
     }
 }
 

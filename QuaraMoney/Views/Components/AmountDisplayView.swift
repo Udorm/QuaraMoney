@@ -5,15 +5,13 @@ struct AmountDisplayView: View {
     @Binding var currencyCode: String
     let expression: String
     let isEditing: Bool
-    var exchangeRateInfo: String? = nil
     var onTap: (() -> Void)? = nil
-    
-    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, exchangeRateInfo: String? = nil, onTap: (() -> Void)? = nil) {
+
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, onTap: (() -> Void)? = nil) {
         self.amount = amount
         self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
-        self.exchangeRateInfo = exchangeRateInfo
         self.onTap = onTap
     }
     
@@ -102,41 +100,9 @@ struct AmountDisplayView: View {
         return expression.rangeOfCharacter(from: operators) != nil
     }
     
-    @State private var showCurrencyPicker = false
-    
     var body: some View {
         VStack(spacing: 8) {
-            // Currency Selection & Rate
-            HStack(spacing: 8) {
-                Button {
-                    showCurrencyPicker = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(currencyCode)
-                            .font(.app(.subheadline, weight: .bold))
-                        Image(systemName: "chevron.down")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(.secondarySystemBackground))
-                    .foregroundColor(.primary)
-                    .clipShape(Capsule())
-                }
-                .sheet(isPresented: $showCurrencyPicker) {
-                    NavigationStack {
-                        CurrencySelectionView(selection: $currencyCode)
-                    }
-                    .presentationDetents([.medium, .large])
-                }
-                
-                if let info = exchangeRateInfo {
-                    Text(info)
-                        .font(.app(.caption))
-                        .foregroundStyle(.secondary)
-                }
-            }
+            CurrencySegmentedPicker(currencyCode: $currencyCode)
             
             // Main amount/expression display & calculation preview
             VStack(spacing: 4) {
@@ -175,6 +141,76 @@ struct AmountDisplayView: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .animation(.easeInOut(duration: 0.15), value: hasOperators)
+    }
+}
+
+// MARK: - Currency Segmented Picker
+/// Compact, chip-sized currency toggle. USD / KHR are quick-select segments;
+/// the trailing segment opens the full picker and shows the active exotic
+/// currency code when one is selected.
+private struct CurrencySegmentedPicker: View {
+    @Binding var currencyCode: String
+    @State private var showCurrencyPicker = false
+
+    private let primary = ["USD", "KHR"]
+
+    private var isExotic: Bool { !primary.contains(currencyCode) }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(primary, id: \.self) { code in
+                segment(label: code, isSelected: currencyCode == code) {
+                    withAnimation(.easeInOut(duration: 0.15)) { currencyCode = code }
+                }
+            }
+
+            // More / exotic segment
+            segment(
+                label: isExotic ? currencyCode : nil,
+                isSelected: isExotic,
+                systemImageName: isExotic ? nil : "ellipsis"
+            ) {
+                showCurrencyPicker = true
+            }
+        }
+        .padding(2)
+        .background(Color(.tertiarySystemFill))
+        .clipShape(Capsule())
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencySelectionView(selection: $currencyCode)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Color(.systemGroupedBackground))
+        }
+    }
+
+    @ViewBuilder
+    private func segment(label: String?, isSelected: Bool, systemImageName: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 2) {
+                if let label {
+                    Text(label)
+                        .font(.app(.caption, weight: isSelected ? .bold : .medium))
+                }
+                if let icon = systemImageName {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+            }
+            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+            .padding(.horizontal, 9)
+            .frame(minHeight: 32)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Color(.systemBackground) : Color.clear)
+                    .shadow(color: isSelected ? .black.opacity(0.1) : .clear, radius: 1.5, x: 0, y: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }
 

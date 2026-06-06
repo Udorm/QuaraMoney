@@ -10,6 +10,8 @@ struct DebtListView: View {
 
     @State private var showAddDebtSheet = false
     @State private var debtToEdit: Debt?
+    @State private var debtToDelete: Debt?
+    @State private var showingDeleteAlert = false
 
     private var isFilterActive: Bool {
         viewModel.showCompleted
@@ -43,6 +45,13 @@ struct DebtListView: View {
                                 DebtRow(debt: debt)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    debtToDelete = debt
+                                    showingDeleteAlert = true
+                                } label: {
+                                    Label(L10n.Common.delete, systemImage: "trash")
+                                }
+
                                 Button {
                                     debtToEdit = debt
                                 } label: {
@@ -50,9 +59,6 @@ struct DebtListView: View {
                                 }
                                 .tint(.blue)
                             }
-                        }
-                        .onDelete { indexSet in
-                            viewModel.deleteDebts(viewModel.activeDebts(allDebts), at: indexSet, context: modelContext)
                         }
                     } header: {
                         if !viewModel.activeDebts(allDebts).isEmpty {
@@ -67,6 +73,13 @@ struct DebtListView: View {
                                     DebtRow(debt: debt)
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        debtToDelete = debt
+                                        showingDeleteAlert = true
+                                    } label: {
+                                        Label(L10n.Common.delete, systemImage: "trash")
+                                    }
+
                                     Button {
                                         debtToEdit = debt
                                     } label: {
@@ -74,9 +87,6 @@ struct DebtListView: View {
                                     }
                                     .tint(.blue)
                                 }
-                            }
-                            .onDelete { indexSet in
-                                viewModel.deleteDebts(viewModel.completedDebts(allDebts), at: indexSet, context: modelContext)
                             }
                         } header: {
                             Text(L10n.DebtAdditional.filterCompleted)
@@ -117,6 +127,14 @@ struct DebtListView: View {
         }
         .sheet(item: $debtToEdit) { debt in
             AddDebtView(debtToEdit: debt)
+        }
+        .alert(L10n.Common.delete, isPresented: $showingDeleteAlert, presenting: debtToDelete) { debt in
+            Button(L10n.Common.cancel, role: .cancel) {}
+            Button(L10n.Common.delete, role: .destructive) {
+                viewModel.deleteDebt(debt, context: modelContext)
+            }
+        } message: { debt in
+            Text(L10n.Debt.deleteRelatedTransactionsWarning(viewModel.linkedTransactionCount(debt)))
         }
         .onAppear {
             normalizeCompletionStates()

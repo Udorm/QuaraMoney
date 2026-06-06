@@ -31,6 +31,17 @@ final class ModelValidationTests: XCTestCase {
         XCTAssertTrue(txn.validate().contains(.invalidExchangeRate))
     }
 
+    func testAdjustmentNegativeAmountIsValid() {
+        // A balance correction that decreases a wallet is a legitimate negative adjustment.
+        let txn = Transaction(amount: -50, currencyCode: "USD", date: Date(), type: .adjustment)
+        XCTAssertFalse(txn.validate().contains(.negativeOrZeroAmount(field: "Amount")))
+    }
+
+    func testAdjustmentZeroAmountFails() {
+        let txn = Transaction(amount: 0, currencyCode: "USD", date: Date(), type: .adjustment)
+        XCTAssertTrue(txn.validate().contains(.negativeOrZeroAmount(field: "Amount")))
+    }
+
     // MARK: - Wallet
 
     func testWalletValidNamePasses() {

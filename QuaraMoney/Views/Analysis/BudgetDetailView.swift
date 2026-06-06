@@ -330,13 +330,7 @@ struct BudgetDetailView: View {
             EditBudgetView(budget: budget)
         }
         .sheet(item: $transactionToEdit) { txn in
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    transaction: txn
-                ),
-                isNewTransaction: false
-            )
+            AddTransactionContainer(transaction: txn, isNewTransaction: false)
         }
     }
     

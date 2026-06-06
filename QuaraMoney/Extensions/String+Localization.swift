@@ -126,7 +126,14 @@ extension String {
 
 /// Centralized localization keys for type-safe access
 enum L10n {
-    
+
+    // MARK: - Security
+    enum Security {
+        static var lockedTitle: String { "security.lockedTitle".localized }
+        static var lockedMessage: String { "security.lockedMessage".localized }
+        static var unlock: String { "security.unlock".localized }
+    }
+
     // MARK: - Common
     enum Common {
         static var cancel: String { "common.cancel".localized }
@@ -138,6 +145,7 @@ enum L10n {
         static var ok: String { "common.ok".localized }
         static var back: String { "common.back".localized }
         static var close: String { "common.close".localized }
+        static var hide: String { "common.hide".localized }
         static var create: String { "common.create".localized }
         static var preview: String { "common.preview".localized }
         static var seeAll: String { "common.seeAll".localized }
@@ -354,6 +362,7 @@ enum L10n {
         static var sixMonths: String { "filter.sixMonths".localized }
         static var year: String { "filter.year".localized }
         static var lastYear: String { "filter.lastYear".localized }
+        static var allTime: String { "filter.allTime".localized }
     }
     
     // MARK: - Filtered Transactions
@@ -366,6 +375,12 @@ enum L10n {
     enum Analysis {
         static var title: String { "analysis.title".localized }
         static var net: String { "analysis.net".localized }
+        static var monthlyExpense: String { "analysis.monthlyExpense".localized }
+        static var averageThreeMonths: String { "analysis.averageThreeMonths".localized }
+        static var vsAverageThreeMonths: String { "analysis.vsAverageThreeMonths".localized }
+        static var budget: String { "analysis.budget".localized }
+        static var previousMonth: String { "analysis.previousMonth".localized }
+        static var previousPeriod: String { "analysis.previousPeriod".localized }
     }
     
     // MARK: - Event
@@ -629,6 +644,22 @@ enum L10n {
         static var recurringRules: String { "recurring.title".localized }
     }
     
+    // MARK: - Profile
+    enum Profile {
+        static var title: String { "profile.title".localized }
+        static var displayName: String { "profile.displayName".localized }
+        static var namePlaceholder: String { "profile.namePlaceholder".localized }
+        static var changePhoto: String { "profile.changePhoto".localized }
+        static var removePhoto: String { "profile.removePhoto".localized }
+        static var takePhoto: String { "profile.takePhoto".localized }
+        static var chooseFromLibrary: String { "profile.chooseFromLibrary".localized }
+        static var memberSince: String { "profile.memberSince".localized }
+        static var totalWallets: String { "profile.totalWallets".localized }
+        static var totalTransactions: String { "profile.totalTransactions".localized }
+        static var editProfile: String { "profile.editProfile".localized }
+        static var photoOptions: String { "profile.photoOptions".localized }
+    }
+    
     // MARK: - Debt
     enum Debt {
         static var title: String { "debt.title".localized }
@@ -646,7 +677,8 @@ enum L10n {
         static var recordInitialTransaction: String { "debt.recordInitialTransaction".localized }
         static var initialTransactionHelp: String { "debt.initialTransactionHelp".localized }
         static var partialPayments: String { "debt.partialPayments".localized }
-        
+        static func deleteRelatedTransactionsWarning(_ count: Int) -> String { "debt.deleteRelatedTransactionsWarning".localized(with: count) }
+
         enum SystemCategory {
             static var debt: String { "debt.systemCategory.debt".localized }
             static var debtCollection: String { "debt.systemCategory.debtCollection".localized }
@@ -935,5 +967,14 @@ enum L10n {
         static var periodLY: String { "analysis.period.ly".localized }
         static var timePeriod: String { "analysis.timePeriod".localized }
         static var total: String { "analysis.total".localized }
+    }
+    
+    // MARK: - Sorting
+    enum Sort {
+        static var title: String { "sort.title".localized }
+        static var newestFirst: String { "sort.newestFirst".localized }
+        static var oldestFirst: String { "sort.oldestFirst".localized }
+        static var highestAmount: String { "sort.highestAmount".localized }
+        static var lowestAmount: String { "sort.lowestAmount".localized }
     }
 }

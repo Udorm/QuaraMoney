@@ -47,8 +47,17 @@ class HomeViewModel {
         didSet { refreshData() }
     }
 
+    var sortOption: TransactionSortOption = .newestFirst {
+        didSet { refreshData() }
+    }
+
+    var sortedTransactions: [Transaction] = []
+
     @ObservationIgnored private var startDate: Date = Date()
     @ObservationIgnored private var endDate: Date = Date()
+
+    var currentStartDate: Date { startDate }
+    var currentEndDate: Date { endDate }
 
     var filterDescription: String {
         let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
@@ -58,6 +67,7 @@ class HomeViewModel {
     var incomeTotal: Decimal = 0
     var expenseTotal: Decimal = 0
     var dailySections: [DailyTransactionSection] = []
+    var previousPeriodCumulative: [Decimal] = []
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
@@ -117,6 +127,7 @@ class HomeViewModel {
         let end = endDate
         let walletId = selectedWallet?.id
         let search = searchText
+        let currentSortOption = sortOption
 
         let container = modelContext.container
         let rates = CurrencyManager.shared.rates
@@ -132,7 +143,9 @@ class HomeViewModel {
                 walletId: walletId,
                 rates: rates,
                 targetCurrency: preferredCurrency,
-                searchText: search
+                searchText: search,
+                sortOption: currentSortOption,
+                calculateReferenceLine: true
             )
 
             await self.applyData(dataID)
@@ -142,6 +155,7 @@ class HomeViewModel {
     private func applyData(_ dataID: ProcessedTransactionDataID) {
         self.incomeTotal = dataID.incomeTotal
         self.expenseTotal = dataID.expenseTotal
+        self.previousPeriodCumulative = dataID.previousPeriodCumulative
 
         // Resolve IDs to Objects on Main Actor
         var resolvedSections: [DailyTransactionSection] = []
@@ -164,6 +178,14 @@ class HomeViewModel {
         }
 
         self.dailySections = resolvedSections
+
+        var resolvedTransactions: [Transaction] = []
+        for id in dataID.sortedTransactionIds {
+            if let txn = self.modelContext.model(for: id) as? Transaction {
+                resolvedTransactions.append(txn)
+            }
+        }
+        self.sortedTransactions = resolvedTransactions
     }
 
     func deleteTransaction(_ transaction: Transaction) {

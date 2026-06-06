@@ -30,6 +30,7 @@ final class BudgetDetailViewModel {
 
         return transactions.filter { txn in
             guard txn.type == .expense,
+                  txn.event == nil,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }

@@ -31,16 +31,26 @@ final class DebtListViewModel {
         allDebts.filter { $0.type == .iOwe }.reduce(0) { $0 + $1.remainingAmount }
     }
 
-    func deleteDebts(_ debts: [Debt], at offsets: IndexSet, context: ModelContext) {
-        let validOffsets = offsets.filter { $0 < debts.count }
-        for index in validOffsets {
-            let debt = debts[index]
-            context.delete(debt)
+    /// Number of wallet transactions that would be deleted along with this debt
+    /// (Debt.transactions is a `.cascade` relationship).
+    func linkedTransactionCount(_ debt: Debt) -> Int {
+        debt.transactions?.count ?? 0
+    }
+
+    /// Deletes a debt and its cascade-linked transactions, invalidating the
+    /// balance caches of every wallet those transactions touched so balances
+    /// don't silently go stale.
+    func deleteDebt(_ debt: Debt, context: ModelContext) {
+        for txn in debt.transactions ?? [] {
+            txn.sourceWallet?.invalidateBalanceCache()
+            txn.destinationWallet?.invalidateBalanceCache()
         }
+
+        context.delete(debt)
         do {
             try context.save()
         } catch {
-            ErrorService.shared.handlePersistenceError(error, context: "DebtListViewModel.deleteDebts")
+            ErrorService.shared.handlePersistenceError(error, context: "DebtListViewModel.deleteDebt")
         }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }

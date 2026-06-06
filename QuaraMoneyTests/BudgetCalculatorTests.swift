@@ -24,9 +24,17 @@ final class BudgetCalculatorTests: XCTestCase {
         return cat
     }
 
-    private func makeTransaction(amount: Decimal, type: TransactionType, currency: String = "USD", category: AppCategory? = nil, date: Date = Date()) -> Transaction {
+    private func makeTransaction(
+        amount: Decimal,
+        type: TransactionType,
+        currency: String = "USD",
+        category: AppCategory? = nil,
+        date: Date = Date(),
+        excludeFromReports: Bool = false
+    ) -> Transaction {
         let txn = Transaction(amount: amount, currencyCode: currency, date: date, type: type)
         txn.category = category
+        txn.excludeFromReports = excludeFromReports
         context.insert(txn)
         return txn
     }
@@ -99,5 +107,61 @@ final class BudgetCalculatorTests: XCTestCase {
 
         let spent = BudgetCalculator.calculateSpending(for: budget, transactions: allTransactions(), targetCurrency: "USD")
         XCTAssertEqual(spent, 80, "Total budget should include all expense categories")
+    }
+
+    func testCalculateSpendingExcludesReports() {
+        let cat = makeCategory(name: "Food")
+        let budget = makeBudget(limit: 500, category: cat)
+
+        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        _ = makeTransaction(amount: 20, type: .expense, category: cat, date: marchDate)
+        _ = makeTransaction(amount: 50, type: .expense, category: cat, date: marchDate, excludeFromReports: true) // excluded from report
+
+        let spent = BudgetCalculator.calculateSpending(for: budget, transactions: allTransactions(), targetCurrency: "USD")
+        XCTAssertEqual(spent, 20, "Spending should exclude transactions marked as excludeFromReports")
+    }
+
+    func testCalculateIncomeExcludesReports() {
+        let budget = makeBudget(limit: 500)
+
+        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+        _ = makeTransaction(amount: 1000, type: .income, date: marchDate)
+        _ = makeTransaction(amount: 500, type: .income, date: marchDate, excludeFromReports: true) // excluded from report
+
+        let income = BudgetCalculator.calculateIncome(for: budget, transactions: allTransactions())
+        XCTAssertEqual(income, 1000, "Income calculation should exclude transactions marked as excludeFromReports")
+    }
+
+    // MARK: - Single-pass batch (C2)
+
+    func testSpendingByBudgetMatchesPerBudgetCalculation() {
+        let food = makeCategory(name: "Food")
+        let transport = makeCategory(name: "Transport")
+
+        let foodBudget = makeBudget(limit: 500, category: food)
+        let transportBudget = makeBudget(limit: 300, category: transport)
+        let totalBudget = makeBudget(limit: 1000) // no category → all expenses
+
+        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        let febDate = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 10))!
+        _ = makeTransaction(amount: 30, type: .expense, category: food, date: marchDate)
+        _ = makeTransaction(amount: 50, type: .expense, category: transport, date: marchDate)
+        _ = makeTransaction(amount: 999, type: .expense, category: food, date: febDate) // outside period
+        _ = makeTransaction(amount: 20, type: .expense, category: food, date: marchDate, excludeFromReports: true) // excluded
+        _ = makeTransaction(amount: 100, type: .income, category: food, date: marchDate) // income ignored
+
+        let budgets = [foodBudget, transportBudget, totalBudget]
+        let txns = allTransactions()
+        let batch = BudgetCalculator.spendingByBudget(for: budgets, transactions: txns, targetCurrency: "USD")
+
+        // Batch must equal the per-budget method for every budget.
+        for budget in budgets {
+            let perBudget = BudgetCalculator.calculateSpending(for: budget, transactions: txns, targetCurrency: "USD")
+            XCTAssertEqual(batch[budget.id], perBudget, "Batch mismatch for budget \(budget.displayName)")
+        }
+
+        XCTAssertEqual(batch[foodBudget.id], 30)
+        XCTAssertEqual(batch[transportBudget.id], 50)
+        XCTAssertEqual(batch[totalBudget.id], 80) // 30 + 50, excludes income/excluded/out-of-period
     }
 }

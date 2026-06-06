@@ -15,6 +15,7 @@
 "common.ok" = "OK";
 "common.back" = "Back";
 "common.close" = "Close";
+"common.hide" = "Hide";
 "common.create" = "Create";
 "common.preview" = "Preview";
 "common.seeAll" = "See All";
@@ -281,6 +282,10 @@
 
 // MARK: - Analysis
 "analysis.title" = "Analysis";
+"analysis.monthlyExpense" = "Monthly Expense";
+"analysis.averageThreeMonths" = "3M Average";
+"analysis.vsAverageThreeMonths" = "vs. 3M Average";
+"analysis.budget" = "Budget";
 "analysis.transactionType" = "Transaction Type";
 "analysis.totalSpending" = "TOTAL SPENDING";
 "analysis.totalIncome" = "TOTAL INCOME";
@@ -291,6 +296,9 @@
 "analysis.topSpendingCategories" = "Top Spending Categories";
 "analysis.topIncomeCategories" = "Top Income Categories";
 "analysis.net" = "Net";
+"analysis.previousMonth" = "Prev Month";
+"analysis.previousPeriod" = "Prev Period";
+
 
 // MARK: - Events
 "event.title" = "Events";
@@ -390,6 +398,20 @@
 "more.features" = "Features";
 "more.management" = "Management";
 "more.app" = "App";
+
+// MARK: - Profile
+"profile.title" = "Profile";
+"profile.displayName" = "Display Name";
+"profile.namePlaceholder" = "Your Name";
+"profile.changePhoto" = "Change Photo";
+"profile.removePhoto" = "Remove Photo";
+"profile.takePhoto" = "Take Photo";
+"profile.chooseFromLibrary" = "Choose from Library";
+"profile.memberSince" = "Member Since";
+"profile.totalWallets" = "Wallets";
+"profile.totalTransactions" = "Transactions";
+"profile.editProfile" = "Edit Profile";
+"profile.photoOptions" = "Profile Photo";
 
 // MARK: - Notifications
 "notifications.title" = "Notifications";
@@ -498,6 +520,7 @@
 "debt.recordPayment" = "Record Payment";
 "debt.markCompleted" = "Mark as Completed";
 "debt.partialPayments" = "Partial Payments";
+"debt.deleteRelatedTransactionsWarning" = "Deleting this debt will also delete all %d linked transactions and change the affected wallet balances. This action cannot be undone.";
 "debt.remaining" = "Remaining";
 "debt.paid" = "Paid";
 "debt.total" = "Total";
@@ -586,6 +609,8 @@
 "transaction.time" = "Time";
 "transaction.selectCategory" = "Select Category";
 "transaction.searchCategories" = "Search categories";
+"transaction.suggestedCategories" = "Suggested";
+"transaction.allCategories" = "All Categories";
 "transaction.linkedToDebt" = "Linked to Debt";
 "transaction.linkedToLoan" = "Linked to Loan";
 
@@ -702,3 +727,54 @@
 "transaction.location.errorDenied" = "Location access is disabled. Enable location access in Settings to use your current location.";
 "transaction.location.errorRestricted" = "Location access is restricted on this device.";
 "transaction.location.errorNoLocation" = "Could not determine a location.";
+
+// MARK: - Sorting
+"sort.title" = "Sort By";
+"sort.newestFirst" = "Newest First";
+"sort.oldestFirst" = "Oldest First";
+"sort.highestAmount" = "Highest Amount";
+"sort.lowestAmount" = "Lowest Amount";
+"filter.allTime" = "All Time";
+
+// MARK: - Pro Analytics
+"analysis.pro.mode" = "Analytics Mode";
+"analysis.pro.mode.basic" = "Basic";
+"analysis.pro.mode.pro" = "Pro";
+"analysis.pro.netWorth" = "Net Worth";
+"analysis.pro.expenses" = "Expenses";
+"analysis.pro.savingsRate" = "Savings Rate";
+"analysis.pro.new" = "New";
+"analysis.pro.period" = "Period";
+"analysis.pro.amount" = "Amount";
+"analysis.pro.weekday" = "Weekday";
+"analysis.pro.other" = "Other";
+"analysis.pro.cashFlow" = "Cash Flow";
+"analysis.pro.cashFlow.subtitle" = "Income vs. expenses";
+"analysis.pro.netTrend" = "Net Cash Flow Trend";
+"analysis.pro.netTrend.subtitle" = "Cumulative income minus expenses";
+"analysis.pro.weekdayPattern" = "Spending by Day of Week";
+"analysis.pro.weekdayPattern.subtitle" = "When you spend the most";
+"analysis.pro.avgPerDay" = "Avg / Day";
+"analysis.pro.topDay" = "Top Day";
+"analysis.pro.projected" = "Projected";
+"analysis.pro.heatmap" = "Spending Heatmap";
+"analysis.pro.heatmap.subtitle" = "Daily spending intensity";
+"analysis.pro.less" = "Less";
+"analysis.pro.more" = "More";
+"analysis.pro.topPlaces" = "Top Places";
+"analysis.pro.topPlaces.subtitle" = "Where your money goes";
+"analysis.pro.visits" = "visits";
+"analysis.pro.insights" = "Insights";
+"analysis.pro.insights.empty" = "Add more transactions to unlock insights.";
+"analysis.pro.insight.spentMore" = "You spent %@ more than the previous period.";
+"analysis.pro.insight.spentLess" = "You spent %@ less than the previous period.";
+"analysis.pro.insight.topCategory" = "%@ is your biggest category at %@.";
+"analysis.pro.insight.saved" = "You saved %@ of your income this period.";
+"analysis.pro.insight.overspent" = "You spent more than you earned this period.";
+"analysis.pro.insight.busiestDay" = "You spend the most on %@.";
+"analysis.pro.insight.projection" = "At this pace, you'll reach about %@ by period end.";
+"analysis.pro.insight.topPlace" = "Most spent at %@ (%@).";
+
+"security.lockedTitle" = "QuaraMoney is Locked";
+"security.lockedMessage" = "Authenticate to view your finances.";
+"security.unlock" = "Unlock";

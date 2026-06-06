@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class Budget {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     
     // MARK: - Core Properties
     

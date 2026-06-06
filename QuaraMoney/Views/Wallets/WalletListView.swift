@@ -205,6 +205,19 @@ private struct WalletListContent: View {
     }
     
     private func deleteWallet(_ wallet: Wallet) {
+        // Deleting the wallet cascade-deletes its outgoing transactions, which
+        // includes transfers OUT to other wallets. Invalidate the balance caches
+        // of those destination wallets so their balances don't go stale.
+        for txn in wallet.outgoingTransactions ?? [] {
+            txn.destinationWallet?.invalidateBalanceCache()
+        }
+
         modelContext.delete(wallet)
+        do {
+            try modelContext.save()
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "WalletListView.deleteWallet")
+        }
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }

@@ -5,6 +5,7 @@ import SwiftData
 /// with edit/delete capabilities and daily aggregate totals.
 struct TransactionListView: View {
     let transactions: [Transaction]
+    var sortOption: TransactionSortOption = .newestFirst
     var listHeader: String? = nil // Optional top-level header
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
@@ -14,7 +15,8 @@ struct TransactionListView: View {
         TransactionProcessor.groupByDayObjects(
             transactions,
             rates: CurrencyManager.shared.rates,
-            targetCurrency: CurrencyManager.shared.preferredCurrencyCode
+            targetCurrency: CurrencyManager.shared.preferredCurrencyCode,
+            sortAscending: sortOption == .oldestFirst
         )
     }
     
@@ -22,6 +24,93 @@ struct TransactionListView: View {
         if transactions.isEmpty {
             Text(L10n.Budget.noTransactions)
                 .foregroundStyle(.secondary)
+        } else if sortOption == .highestAmount || sortOption == .lowestAmount {
+            if let listHeader, !listHeader.isEmpty {
+                Section(header:
+                    Text(listHeader)
+                        .font(.app(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 8)
+                ) {
+                    ForEach(transactions) { txn in
+                        Button {
+                            onEdit(txn)
+                        } label: {
+                            TransactionRowView(transaction: txn)
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                HapticManager.shared.impact(style: .medium)
+                                onDelete(txn)
+                            } label: {
+                                Label(L10n.Common.delete, systemImage: "trash")
+                            }
+                            
+                            Button {
+                                onEdit(txn)
+                            } label: {
+                                Label(L10n.Common.edit, systemImage: "pencil")
+                            }
+                            .tint(.blue)
+                        }
+                        .contextMenu {
+                            Button {
+                                onEdit(txn)
+                            } label: {
+                                Label(L10n.Common.edit, systemImage: "pencil")
+                                    .font(.app(.body))
+                            }
+                            Button(role: .destructive) {
+                                HapticManager.shared.impact(style: .medium)
+                                onDelete(txn)
+                            } label: {
+                                Label(L10n.Common.delete, systemImage: "trash")
+                                    .font(.app(.body))
+                            }
+                        }
+                    }
+                }
+            } else {
+                ForEach(transactions) { txn in
+                    Button {
+                        onEdit(txn)
+                    } label: {
+                        TransactionRowView(transaction: txn)
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            HapticManager.shared.impact(style: .medium)
+                            onDelete(txn)
+                        } label: {
+                            Label(L10n.Common.delete, systemImage: "trash")
+                        }
+                        
+                        Button {
+                            onEdit(txn)
+                        } label: {
+                            Label(L10n.Common.edit, systemImage: "pencil")
+                        }
+                        .tint(.blue)
+                    }
+                    .contextMenu {
+                        Button {
+                            onEdit(txn)
+                        } label: {
+                            Label(L10n.Common.edit, systemImage: "pencil")
+                                .font(.app(.body))
+                        }
+                        Button(role: .destructive) {
+                            HapticManager.shared.impact(style: .medium)
+                            onDelete(txn)
+                        } label: {
+                            Label(L10n.Common.delete, systemImage: "trash")
+                                .font(.app(.body))
+                        }
+                    }
+                }
+            }
         } else {
             ForEach(Array(dailySections.enumerated()), id: \.element.id) { index, section in
                 Section(header: 

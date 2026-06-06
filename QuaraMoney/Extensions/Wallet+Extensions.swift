@@ -33,7 +33,8 @@ extension Wallet {
         let walletCurrency = self.currencyCode
         
         // Helper to convert transaction amount to wallet currency
-        // Uses CurrencyManager's cached rates with fallback defaults
+        // Uses CurrencyManager's fallback rates (constant — keeps legacy balances
+        // stable rather than drifting with each network fetch).
         func convertToWalletCurrency(_ amount: Decimal, from txnCurrency: String) -> Decimal {
             if txnCurrency == walletCurrency {
                 return amount
@@ -48,23 +49,42 @@ extension Wallet {
             let amountInUSD = amount / Decimal(sourceRate)
             return amountInUSD * Decimal(targetRate)
         }
-        
+
+        // Resolves a transaction's amount in THIS wallet's currency, preferring
+        // the deterministic rate recorded at creation time over any live/fallback
+        // recomputation. Order matters:
+        //   1. Same currency        → amount as-is (also the correct path for
+        //                             transfers OUT, whose storedRate targets the
+        //                             destination wallet, not this one).
+        //   2. storedRate present   → amount × storedRate (authoritative, and it
+        //                             respects a genuine 1.0 cross-currency rate).
+        //   3. legacy exchangeRate  → amount × exchangeRate (pre-storedRate rows).
+        //   4. constant fallback    → best-effort conversion for rows with no rate.
+        func convertToWalletAmount(for txn: Transaction, fallbackFrom txnCurrency: String) -> Decimal {
+            if txnCurrency == walletCurrency {
+                return txn.amount
+            }
+            if let rate = txn.storedRate, rate > 0 {
+                return txn.amount * rate
+            }
+            if txn.exchangeRate > 0 && txn.exchangeRate != 1.0 {
+                return txn.amount * txn.exchangeRate
+            }
+            return convertToWalletCurrency(txn.amount, from: txnCurrency)
+        }
+
         // 1. Process Outgoing Transactions (Income, Expense, Transfer OUT)
         if let outgoing = self.outgoingTransactions {
             for txn in outgoing {
                 // Legacy event-linked wallet transactions are excluded from personal balance.
                 if txn.event != nil { continue }
-                
-                // For multi-currency transactions (income/expense), use stored exchange rate if available
-                let convertedAmount: Decimal
-                if txn.currencyCode != walletCurrency && txn.exchangeRate > 0 && txn.exchangeRate != 1.0 {
-                    // Use the exchange rate stored at time of transaction
-                    convertedAmount = txn.amount * txn.exchangeRate
-                } else {
-                    // Same currency or fallback to computed rate
-                    convertedAmount = convertToWalletCurrency(txn.amount, from: txn.currencyCode)
-                }
-                
+
+                // Convert the amount into this wallet's currency. Same-currency is
+                // checked first so transfers OUT (denominated in the source
+                // wallet's currency, but whose stored rate targets the *dest*) are
+                // never mis-converted.
+                let convertedAmount = convertToWalletAmount(for: txn, fallbackFrom: txn.currencyCode)
+
                 switch txn.type {
                 case .income:
                     total += convertedAmount
@@ -86,16 +106,10 @@ extension Wallet {
                 if txn.event != nil { continue }
                 
                 if txn.type == .transfer {
-                    // For transfers, use exchange rate if set (user-provided rate for cross-currency transfers)
-                    // Otherwise convert from transaction currency to wallet currency
-                    if txn.exchangeRate > 0 && txn.exchangeRate != 1.0 {
-                        // User-specified exchange rate: amount * rate gives destination currency amount
-                        total += (txn.amount * txn.exchangeRate)
-                    } else {
-                        // No explicit rate, convert using CurrencyManager
-                        let convertedAmount = convertToWalletCurrency(txn.amount, from: txn.currencyCode)
-                        total += convertedAmount
-                    }
+                    // Transfer IN: amount is denominated in the source wallet's
+                    // currency; storedRate (dest/source) converts it into this
+                    // (destination) wallet's currency deterministically.
+                    total += convertToWalletAmount(for: txn, fallbackFrom: txn.currencyCode)
                 }
             }
         }

@@ -12,11 +12,39 @@ struct DebtDetailView: View {
     @State private var transactionToEdit: Transaction?
     @State private var statusErrorMessage: String?
     @State private var showStatusError = false
+    @State private var sortOption: TransactionSortOption = .newestFirst
     
     private let completionTolerance: Decimal = 0.000001
     
     private var debtTransactions: [Transaction] {
-        debt.transactions ?? []
+        let list = debt.transactions ?? []
+        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
+        let rates = CurrencyManager.shared.rates
+        
+        switch sortOption {
+        case .newestFirst:
+            return list.sorted { $0.date > $1.date }
+        case .oldestFirst:
+            return list.sorted { $0.date < $1.date }
+        case .highestAmount:
+            return list.sorted { t1, t2 in
+                let a1 = CurrencyManager.convert(amount: t1.amount, from: t1.currencyCode, to: preferredCurrency, rates: rates)
+                let a2 = CurrencyManager.convert(amount: t2.amount, from: t2.currencyCode, to: preferredCurrency, rates: rates)
+                if a1 == a2 {
+                    return t1.date > t2.date
+                }
+                return a1 > a2
+            }
+        case .lowestAmount:
+            return list.sorted { t1, t2 in
+                let a1 = CurrencyManager.convert(amount: t1.amount, from: t1.currencyCode, to: preferredCurrency, rates: rates)
+                let a2 = CurrencyManager.convert(amount: t2.amount, from: t2.currencyCode, to: preferredCurrency, rates: rates)
+                if a1 == a2 {
+                    return t1.date > t2.date
+                }
+                return a1 < a2
+            }
+        }
     }
     
     private var hasRemainingBalance: Bool {
@@ -97,6 +125,7 @@ struct DebtDetailView: View {
             } else {
                 TransactionListView(
                     transactions: debtTransactions,
+                    sortOption: sortOption,
                     listHeader: L10n.Debt.history,
                     onEdit: { txn in
                         transactionToEdit = txn
@@ -140,18 +169,25 @@ struct DebtDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(selection: $sortOption, label: Text(L10n.Sort.title)) {
+                        ForEach(TransactionSortOption.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .accessibilityLabel("Sort transactions")
+            }
+        }
         .sheet(isPresented: $showPaymentSheet) {
             AddPaymentView(debt: debt, wallets: wallets)
         }
         .sheet(item: $transactionToEdit) { txn in
-            AddTransactionView(
-                viewModel: AddTransactionViewModel(
-                    dataService: SwiftDataService(modelContext: modelContext),
-                    initialWallet: txn.sourceWallet,
-                    transaction: txn
-                ),
-                isNewTransaction: false
-            )
+            AddTransactionContainer(transaction: txn, isNewTransaction: false, initialWallet: txn.sourceWallet)
         }
         .alert(L10n.Common.error, isPresented: $showStatusError) {
             Button(L10n.Common.ok, role: .cancel) { }

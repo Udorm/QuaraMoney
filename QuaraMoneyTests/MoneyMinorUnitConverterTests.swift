@@ -82,4 +82,54 @@ final class MoneyMinorUnitConverterTests: XCTestCase {
         let back = MoneyMinorUnitConverter.fromMinorUnits(minor, currencyCode: "JPY")
         XCTAssertEqual(original, back)
     }
+
+    // MARK: - Non-2-digit currencies (regression guard for the format/ledger mismatch)
+
+    func testFractionDigitsZeroDigitCurrencies() {
+        // VND and CLP have 0 ISO minor-unit digits.
+        XCTAssertEqual(MoneyMinorUnitConverter.fractionDigits(for: "VND"), 0)
+        XCTAssertEqual(MoneyMinorUnitConverter.fractionDigits(for: "CLP"), 0)
+    }
+
+    func testFractionDigitsThreeDigitCurrencies() {
+        // KWD and BHD have 3 ISO minor-unit digits.
+        XCTAssertEqual(MoneyMinorUnitConverter.fractionDigits(for: "KWD"), 3)
+        XCTAssertEqual(MoneyMinorUnitConverter.fractionDigits(for: "BHD"), 3)
+    }
+
+    func testToMinorUnitsVND() {
+        // 0 digits -> minor units equal the major amount.
+        let result = MoneyMinorUnitConverter.toMinorUnits(Decimal(25000), currencyCode: "VND")
+        XCTAssertEqual(result, 25000)
+    }
+
+    func testToMinorUnitsKWD() {
+        // 3 digits -> 1.234 KWD = 1234 minor units.
+        let result = MoneyMinorUnitConverter.toMinorUnits(Decimal(string: "1.234")!, currencyCode: "KWD")
+        XCTAssertEqual(result, 1234)
+    }
+
+    func testRoundTripVND() {
+        let original = Decimal(25000)
+        let minor = MoneyMinorUnitConverter.toMinorUnits(original, currencyCode: "VND")
+        XCTAssertEqual(MoneyMinorUnitConverter.fromMinorUnits(minor, currencyCode: "VND"), original)
+    }
+
+    func testRoundTripKWD() {
+        let original = Decimal(string: "1.234")!
+        let minor = MoneyMinorUnitConverter.toMinorUnits(original, currencyCode: "KWD")
+        XCTAssertEqual(MoneyMinorUnitConverter.fromMinorUnits(minor, currencyCode: "KWD"), original)
+    }
+
+    // MARK: - Formatting matches ledger digits (D1)
+
+    func testFormattedMinorAmountMatchesLedgerDigits() {
+        // 1234 minor units in KWD (3 digits) must read as 1.234, not 12.34.
+        let kwd = Int64(1234).formattedMinorAmount(for: "KWD")
+        XCTAssertTrue(kwd.contains("1.234"), "KWD minor formatting drifted: \(kwd)")
+
+        // 25000 minor units in VND (0 digits) must read as 25,000, not 250.00.
+        let vnd = Int64(25000).formattedMinorAmount(for: "VND")
+        XCTAssertTrue(vnd.contains("25,000") || vnd.contains("25000"), "VND minor formatting drifted: \(vnd)")
+    }
 }

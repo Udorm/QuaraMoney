@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class EventSettlementSnapshot {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var ledgerRevision: Int64
     var createdAt: Date
     
@@ -21,7 +21,7 @@ final class EventSettlementSnapshot {
 
 @Model
 final class EventSettlementTransfer {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var fromMemberId: UUID
     var toMemberId: UUID
     var amountMinor: Int64

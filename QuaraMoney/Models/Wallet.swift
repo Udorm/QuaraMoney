@@ -3,7 +3,7 @@ import Foundation
 
 @Model
 final class Wallet {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var currencyCode: String // e.g., "USD", "KHR"
     var icon: String // SF Symbol name

@@ -34,6 +34,10 @@ class WalletDetailViewModel {
         didSet { searchSubject.send(searchText) }
     }
 
+    var sortOption: TransactionSortOption = .newestFirst {
+        didSet { fetchTransactions() }
+    }
+
     var transactions: [Transaction] = []
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -121,6 +125,7 @@ class WalletDetailViewModel {
         let end = endDate
         let walletId = wallet.id
         let search = searchText
+        let currentSortOption = sortOption
 
         let container = modelContext.container
         let rates = CurrencyManager.shared.rates
@@ -136,7 +141,8 @@ class WalletDetailViewModel {
                 walletId: walletId,
                 rates: rates,
                 targetCurrency: preferredCurrency,
-                searchText: search
+                searchText: search,
+                sortOption: currentSortOption
             )
 
             await self.applyTransactions(result)
@@ -146,16 +152,13 @@ class WalletDetailViewModel {
     private func applyTransactions(_ result: ProcessedTransactionDataID) {
         var resolvedTransactions: [Transaction] = []
 
-        for section in result.dailySections {
-            for id in section.transactionIds {
-                if let txn = self.modelContext.model(for: id) as? Transaction {
-                    resolvedTransactions.append(txn)
-                }
+        for id in result.sortedTransactionIds {
+            if let txn = self.modelContext.model(for: id) as? Transaction {
+                resolvedTransactions.append(txn)
             }
         }
 
-        // Sort by date descending (should already be sorted by sections, but let's ensure)
-        self.transactions = resolvedTransactions.sorted { $0.date > $1.date }
+        self.transactions = resolvedTransactions
     }
 
     func deleteTransaction(_ transaction: Transaction) {

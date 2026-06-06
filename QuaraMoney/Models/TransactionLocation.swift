@@ -11,7 +11,7 @@ enum TransactionLocationSource: String, Codable, CaseIterable {
 
 @Model
 final class TransactionLocation {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
 
     var displayName: String?
     var fullAddress: String?

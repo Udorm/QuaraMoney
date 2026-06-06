@@ -26,9 +26,15 @@ struct TransactionFilterConfig: Sendable, Equatable {
     let categoryIds: [UUID]?
     /// Category display info for showing individual chips (used by budgets with multiple categories)
     let categoryInfos: [FilterCategoryInfo]?
+    let savingsGoalId: UUID?
+    let savingsGoalName: String?
+    let defaultSortOption: TransactionSortOption
 
     /// Formatted date range string like "Mar 1 – Mar 31, 2026"
     var formattedDateRange: String {
+        if startDate == .distantPast && endDate == .distantFuture {
+            return L10n.Filter.allTime
+        }
         let calendar = Calendar.current
         let sameYear = calendar.component(.year, from: startDate) == calendar.component(.year, from: endDate)
         let sameMonth = sameYear && calendar.component(.month, from: startDate) == calendar.component(.month, from: endDate)
@@ -68,7 +74,10 @@ struct TransactionFilterConfig: Sendable, Equatable {
         transactionType: TransactionTypeFilter? = nil,
         dateRangeDescription: String,
         categoryIds: [UUID]? = nil,
-        categoryInfos: [FilterCategoryInfo]? = nil
+        categoryInfos: [FilterCategoryInfo]? = nil,
+        savingsGoalId: UUID? = nil,
+        savingsGoalName: String? = nil,
+        defaultSortOption: TransactionSortOption = .newestFirst
     ) {
         self.title = title
         self.startDate = startDate
@@ -83,5 +92,8 @@ struct TransactionFilterConfig: Sendable, Equatable {
         self.dateRangeDescription = dateRangeDescription
         self.categoryIds = categoryIds
         self.categoryInfos = categoryInfos
+        self.savingsGoalId = savingsGoalId
+        self.savingsGoalName = savingsGoalName
+        self.defaultSortOption = defaultSortOption
     }
 }

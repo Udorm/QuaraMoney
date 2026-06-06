@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+private struct BackdateTarget: Identifiable, Equatable {
+    let id = UUID()
+    let date: Date
+}
+
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: HomeViewModel
@@ -8,6 +13,7 @@ struct HomeView: View {
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
     @State private var shouldScan = false
+    @State private var backdateTarget: BackdateTarget?
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
     
     init(modelContext: ModelContext) {
@@ -18,6 +24,18 @@ struct HomeView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 transactionList
+            }
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                Button {
+                    shouldScan = false
+                    showingAddTransaction = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .modifier(AddTransactionFABStyle())
+                .controlSize(.large)
+                .padding(.trailing)
+                .padding(.bottom, 8)
             }
             .navigationTitle(L10n.Home.title)
             .searchable(text: $viewModel.searchText)
@@ -33,6 +51,9 @@ struct HomeView: View {
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
             }
+            .sheet(item: $backdateTarget) { target in
+                AddTransactionContainer(transaction: nil, isNewTransaction: true, initialDate: target.date)
+            }
             .onChange(of: showingAddTransaction) { oldValue, newValue in
                 if !newValue {
                     viewModel.refreshData()
@@ -43,8 +64,13 @@ struct HomeView: View {
                      viewModel.refreshData()
                 }
             }
+            .onChange(of: backdateTarget) { oldValue, newValue in
+                if newValue == nil {
+                    viewModel.refreshData()
+                }
+            }
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button {
                         shouldScan = true
                         showingAddTransaction = true
@@ -52,14 +78,19 @@ struct HomeView: View {
                         Image(systemName: "doc.text.viewfinder")
                     }
                     .accessibilityLabel("Scan receipt")
+                }
 
-                    Button {
-                        shouldScan = false
-                        showingAddTransaction = true
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Menu {
+                        Picker(selection: $viewModel.sortOption, label: Text(L10n.Sort.title)) {
+                            ForEach(TransactionSortOption.allCases) { option in
+                                Text(option.displayName).tag(option)
+                            }
+                        }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "arrow.up.arrow.down")
                     }
-                    .accessibilityLabel("Add transaction")
+                    .accessibilityLabel("Sort transactions")
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
@@ -71,9 +102,44 @@ struct HomeView: View {
                         showPeriodFilter: false
                     )
                 }
-                
             }
         }
+    }
+
+    private var currentPeriodText: String {
+        switch viewModel.selectedTab {
+        case .month(let date):
+            let calendar = Calendar.current
+            if calendar.isDate(date, equalTo: Date(), toGranularity: .month) {
+                return L10n.Filter.thisMonth
+            } else if let lastMonth = calendar.date(byAdding: .month, value: -1, to: Date()),
+                      calendar.isDate(date, equalTo: lastMonth, toGranularity: .month) {
+                return L10n.Filter.lastMonth
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM yyyy"
+                return formatter.string(from: date)
+            }
+        case .custom:
+            let start = viewModel.customStartDate.formatted(.dateTime.month(.abbreviated).day())
+            let end = viewModel.customEndDate.formatted(.dateTime.month(.abbreviated).day().year())
+            return "\(start) – \(end)"
+        }
+    }
+
+    private var summaryHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            if viewModel.selectedWallet != nil {
+                Text(viewModel.filterDescription)
+                    .font(.app(.subheadline))
+            }
+            Spacer()
+            Text(currentPeriodText)
+                .font(.app(.subheadline))
+                .foregroundStyle(viewModel.selectedWallet != nil ? .secondary : .primary)
+        }
+        .textCase(nil)
+        .padding(.top, -8)  // Tighten the gap between the picker section and the summary card
     }
 
     private var transactionList: some View {
@@ -83,7 +149,7 @@ struct HomeView: View {
                     selectedTab: $viewModel.selectedTab,
                     months: Array(viewModel.availableMonths.suffix(3))
                 )
-                
+
                 if case .custom = viewModel.selectedTab {
                     HStack {
                         Spacer()
@@ -102,28 +168,41 @@ struct HomeView: View {
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             .listRowBackground(Color.clear)
-            
-            
+
             // Summary Section
-            if viewModel.selectedWallet != nil {
-                Section(header: Text(viewModel.filterDescription).font(.app(.subheadline)).textCase(nil)) {
-                    FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
-                }
-            } else {
-                Section {
-                     FinancialSummaryCards(income: viewModel.incomeTotal, expense: viewModel.expenseTotal)
-                }
+            Section(header: summaryHeader) {
+                FinancialSummaryCards(
+                    income: viewModel.incomeTotal,
+                    expense: viewModel.expenseTotal,
+                    dailySections: viewModel.dailySections,
+                    startDate: viewModel.currentStartDate,
+                    endDate: viewModel.currentEndDate,
+                    previousPeriodCumulative: viewModel.previousPeriodCumulative
+                )
             }
 
-            // Daily Transactions
-            ForEach(viewModel.dailySections) { section in
-                Section(header: DailyHeader(section: section)) {
-                    ForEach(section.transactions) { txn in
-                        HomeTransactionRow(
-                            transaction: txn,
-                            onEdit: { transactionToEdit = txn },
-                            onDelete: { viewModel.deleteTransaction(txn) }
-                        )
+            // Daily Transactions or sorted flat list
+            if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
+                ForEach(viewModel.sortedTransactions) { txn in
+                    HomeTransactionRow(
+                        transaction: txn,
+                        onEdit: { transactionToEdit = txn },
+                        onDelete: { viewModel.deleteTransaction(txn) }
+                    )
+                }
+            } else {
+                ForEach(viewModel.dailySections) { section in
+                    Section(header: DailyHeader(section: section, onAddTapped: {
+                        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: section.date) ?? section.date
+                        backdateTarget = BackdateTarget(date: noon)
+                    })) {
+                        ForEach(section.transactions) { txn in
+                            HomeTransactionRow(
+                                transaction: txn,
+                                onEdit: { transactionToEdit = txn },
+                                onDelete: { viewModel.deleteTransaction(txn) }
+                            )
+                        }
                     }
                 }
             }
@@ -165,49 +244,29 @@ struct HomeTransactionRow: View {
         }
     }
 }
-
-// Wrapper to handle ViewModel creation
-struct AddTransactionContainer: View {
-    @Environment(\.modelContext) private var modelContext
-    let transaction: Transaction?
-    let isNewTransaction: Bool
-    let startWithScanner: Bool
-    
-    init(transaction: Transaction? = nil, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
-        self.transaction = transaction
-        self.isNewTransaction = isNewTransaction
-        self.startWithScanner = startWithScanner
-    }
-    
-    var body: some View {
-        AddTransactionView(
-            viewModel: AddTransactionViewModel(
-                dataService: SwiftDataService(modelContext: modelContext),
-                initialWallet: nil,
-                transaction: transaction
-            ),
-            isNewTransaction: isNewTransaction,
-            startWithScanner: startWithScanner
-        )
-    }
-}
 struct DailyHeader: View {
     let section: DailyTransactionSection
-    
+    var onAddTapped: (() -> Void)? = nil
+
     var body: some View {
         HStack {
             Text(section.date.formatted(date: .long, time: .omitted))
                 .font(.app(.headline))
             Spacer()
-            // Here we want to see the daily total in the DASHBOARD currency, likely.
-            // The view model already calculated dailyTotal in the preferred currency.
             Text(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+            if let onAddTapped {
+                Button(action: onAddTapped) {
+                    Image(systemName: "plus.circle")
+                        .font(.subheadline)
+                }
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add transaction on \(section.date.formatted(date: .long, time: .omitted))")
+            }
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(section.date.formatted(date: .long, time: .omitted)), daily total \(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))")
     }
 }
 
@@ -218,6 +277,20 @@ struct DailyHeader: View {
 // I will verify if I can import or redefine.
 // Let's use a simple one here for now.
 
+
+private struct AddTransactionFABStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .buttonStyle(.glassProminent)
+                .clipShape(.circle)
+        } else {
+            content
+                .buttonStyle(.borderedProminent)
+                .clipShape(.circle)
+        }
+    }
+}
 
 #Preview("HomeView") {
     let configuration = ModelConfiguration(isStoredInMemoryOnly: true)

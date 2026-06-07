@@ -204,29 +204,52 @@ struct TransactionProcessor {
     
     /// Fetches transactions and computes all derived data in a single pass.
     /// Runs on a background context and returns Sendable data.
+    /// Pass `walletIds` for multi-wallet filtering; empty set means all wallets.
     nonisolated static func fetchAndProcess(
         context: ModelContext,
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
+        walletIds: Set<UUID> = [],
         rates: [String: Double],
         targetCurrency: String,
         searchText: String? = nil,
         sortOption: TransactionSortOption = .newestFirst,
         calculateReferenceLine: Bool = false
     ) -> ProcessedTransactionDataID {
-        
+        // Resolve effective wallet filter: walletIds takes precedence over legacy walletId.
+        let effectiveWalletIds: Set<UUID>
+        if !walletIds.isEmpty {
+            effectiveWalletIds = walletIds
+        } else if let id = walletId {
+            effectiveWalletIds = [id]
+        } else {
+            effectiveWalletIds = []
+        }
+
+        // For the predicate, use a single ID when possible (efficient index scan).
+        let descriptorWalletId: UUID? = effectiveWalletIds.count == 1 ? effectiveWalletIds.first : nil
+
         let sortDescending = sortOption != .oldestFirst
         let descriptor = makeDescriptor(
             startDate: startDate,
             endDate: endDate,
-            walletId: walletId,
+            walletId: descriptorWalletId,
             sortDescending: sortDescending
         )
-        
+
         do {
             var transactions = try context.fetch(descriptor)
-            
+
+            // Multi-wallet post-filter: when more than one wallet is selected, the predicate
+            // fetches all wallets (descriptorWalletId is nil), so we filter in memory.
+            if effectiveWalletIds.count > 1 {
+                transactions = transactions.filter {
+                    effectiveWalletIds.contains($0.sourceWallet?.id ?? UUID()) ||
+                    effectiveWalletIds.contains($0.destinationWallet?.id ?? UUID())
+                }
+            }
+
             // Apply search filter in-memory
             if let searchText = searchText?.trimmingCharacters(in: .whitespacesAndNewlines), !searchText.isEmpty {
                 transactions = transactions.filter { txn in
@@ -235,7 +258,7 @@ struct TransactionProcessor {
                     return noteMatch || categoryMatch
                 }
             }
-            
+
             // Perform in-memory sorting
             switch sortOption {
             case .newestFirst:
@@ -261,25 +284,25 @@ struct TransactionProcessor {
                     return a1 < a2
                 }
             }
-            
+
             let totals = calculateTotals(transactions, rates: rates, targetCurrency: targetCurrency)
             let sections = groupByDay(transactions, rates: rates, targetCurrency: targetCurrency, sortAscending: sortOption == .oldestFirst)
             let sortedIds = transactions.map { $0.persistentModelID }
-            
+
             let referenceLine: [Decimal]
             if calculateReferenceLine {
                 referenceLine = calculatePreviousPeriodCumulative(
                     context: context,
                     startDate: startDate,
                     endDate: endDate,
-                    walletId: walletId,
+                    walletIds: effectiveWalletIds,
                     rates: rates,
                     targetCurrency: targetCurrency
                 )
             } else {
                 referenceLine = []
             }
-            
+
             return ProcessedTransactionDataID(
                 incomeTotal: totals.income,
                 expenseTotal: totals.expense,
@@ -304,27 +327,46 @@ struct TransactionProcessor {
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
+        walletIds: Set<UUID> = [],
         rates: [String: Double],
         targetCurrency: String
     ) -> [Decimal] {
+        // Resolve effective filter (walletIds takes precedence).
+        let effectiveWalletIds: Set<UUID>
+        if !walletIds.isEmpty {
+            effectiveWalletIds = walletIds
+        } else if let id = walletId {
+            effectiveWalletIds = [id]
+        } else {
+            effectiveWalletIds = []
+        }
+
         let calendar = Calendar.current
-        
+
         // Shift the selected range back by exactly 1 month
         guard let refStartDate = calendar.date(byAdding: .month, value: -1, to: startDate),
               let refEndDate = calendar.date(byAdding: .month, value: -1, to: endDate) else {
             return []
         }
-        
+
+        let descriptorWalletId: UUID? = effectiveWalletIds.count == 1 ? effectiveWalletIds.first : nil
         let descriptor = makeDescriptor(
             startDate: refStartDate,
             endDate: refEndDate,
-            walletId: walletId,
+            walletId: descriptorWalletId,
             sortDescending: false, // Chronological
             excludeArchivedWallets: true
         )
-        
+
         do {
-            let transactions = try context.fetch(descriptor)
+            var transactions = try context.fetch(descriptor)
+
+            if effectiveWalletIds.count > 1 {
+                transactions = transactions.filter {
+                    effectiveWalletIds.contains($0.sourceWallet?.id ?? UUID()) ||
+                    effectiveWalletIds.contains($0.destinationWallet?.id ?? UUID())
+                }
+            }
             
             let expenseTransactions = transactions.filter { txn in
                 !txn.excludeFromReports && (txn.type == .expense || (txn.type == .adjustment && txn.amount < 0))

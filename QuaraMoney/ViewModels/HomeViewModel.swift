@@ -43,7 +43,7 @@ class HomeViewModel {
         didSet { searchSubject.send(searchText) }
     }
 
-    var selectedWallet: Wallet? {
+    var selectedWalletIds: Set<UUID> = [] {
         didSet { refreshData() }
     }
 
@@ -60,8 +60,9 @@ class HomeViewModel {
     var currentEndDate: Date { endDate }
 
     var filterDescription: String {
-        let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
-        return walletDesc
+        if selectedWalletIds.isEmpty { return "filter.allWallets".localized }
+        if selectedWalletIds.count == 1 { return "filter.allWallets".localized } // fallback; callers should resolve names
+        return "analysis.pro.filter.nSelected".localized(with: selectedWalletIds.count)
     }
 
     var incomeTotal: Decimal = 0
@@ -125,7 +126,7 @@ class HomeViewModel {
     func refreshData() {
         let start = startDate
         let end = endDate
-        let walletId = selectedWallet?.id
+        let walletIds = selectedWalletIds
         let search = searchText
         let currentSortOption = sortOption
 
@@ -140,7 +141,7 @@ class HomeViewModel {
                 context: context,
                 startDate: start,
                 endDate: end,
-                walletId: walletId,
+                walletIds: walletIds,
                 rates: rates,
                 targetCurrency: preferredCurrency,
                 searchText: search,
@@ -208,7 +209,7 @@ class HomeViewModel {
 
     var isFilterActive: Bool {
         if case .month(let date) = selectedTab {
-            return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) || selectedWallet != nil
+            return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) || !selectedWalletIds.isEmpty
         }
         return true // Custom is active
     }
@@ -216,7 +217,7 @@ class HomeViewModel {
     func resetFilters() {
         let currentMonthStart = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date()))!
         selectedTab = .month(currentMonthStart) // Back to today/this month
-        selectedWallet = nil
+        selectedWalletIds = []
         searchText = ""
     }
 }

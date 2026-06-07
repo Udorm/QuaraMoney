@@ -29,12 +29,32 @@ final class ProAnalyticsViewModel {
         didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
 
-    var selectedWallet: Wallet? {
-        didSet { refreshData() }
+    /// Every non-period filter dimension (type, wallets, categories, amount range, exclusions).
+    /// Single source of truth — the filter sheet and chip bar both mutate this.
+    var filter: DashboardFilter = .default {
+        didSet {
+            guard filter != oldValue else { return }
+            persistFilter()
+            refreshData()
+        }
     }
 
-    var selectedTransactionType: TransactionTypeFilter = .expense {
-        didSet { refreshData() }
+    /// Convenience read accessor used by chart cards that only care about the type.
+    var selectedTransactionType: TransactionTypeFilter { filter.transactionType }
+
+    /// The single selected wallet id when exactly one is chosen — used for drill-down configs.
+    var singleSelectedWalletId: UUID? {
+        filter.walletIds.count == 1 ? filter.walletIds.first : nil
+    }
+
+    // MARK: - Layout
+
+    /// Which dashboard sections are visible and in what order. Persisted across launches.
+    var layout: DashboardLayout = .default {
+        didSet {
+            guard layout != oldValue else { return }
+            persistLayout()
+        }
     }
 
     var currentReferenceDate: Date = Date()
@@ -52,22 +72,80 @@ final class ProAnalyticsViewModel {
 
     var preferredCurrency: String { CurrencyManager.shared.preferredCurrencyCode }
 
-    var filterDescription: String {
-        let periodDesc = selectedPeriod.description(
+    var periodDescription: String {
+        selectedPeriod.description(
             referenceDate: currentReferenceDate,
             customStart: customStartDate,
             customEnd: customEndDate
         )
-        let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
-        return "\(periodDesc) • \(walletDesc)"
     }
 
+    /// Compact one-line summary of the period + the most salient active filters,
+    /// reused as the drill-down sheet subtitle.
+    var filterDescription: String {
+        var parts: [String] = [periodDescription]
+        switch filter.walletIds.count {
+        case 0: break
+        case 1: parts.append("analysis.pro.filter.oneWallet".localized)
+        default: parts.append("analysis.pro.filter.nWallets".localized(with: filter.walletIds.count))
+        }
+        if !filter.categoryIds.isEmpty {
+            parts.append("analysis.pro.filter.nCategories".localized(with: filter.categoryIds.count))
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    private let layoutDefaultsKey = "proDashboardLayout.v1"
+    private let filterDefaultsKey = "proDashboardFilter.v1"
+
     init() {
+        loadLayout()
+        loadFilter()
         updateDateRange()
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshData() }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Persistence
+
+    private func persistLayout() {
+        if let data = try? JSONEncoder().encode(layout) {
+            UserDefaults.standard.set(data, forKey: layoutDefaultsKey)
+        }
+    }
+
+    private func loadLayout() {
+        guard let data = UserDefaults.standard.data(forKey: layoutDefaultsKey),
+              var decoded = try? JSONDecoder().decode(DashboardLayout.self, from: data) else { return }
+        decoded.reconcileWithKnownSections()
+        layout = decoded
+    }
+
+    private func persistFilter() {
+        if let data = try? JSONEncoder().encode(filter) {
+            UserDefaults.standard.set(data, forKey: filterDefaultsKey)
+        }
+    }
+
+    private func loadFilter() {
+        guard let data = UserDefaults.standard.data(forKey: filterDefaultsKey),
+              let decoded = try? JSONDecoder().decode(DashboardFilter.self, from: data) else { return }
+        filter = decoded
+    }
+
+    /// Toggles a section's visibility from the customize sheet.
+    func toggleSection(_ section: DashboardSection) {
+        if layout.hidden.contains(section) {
+            layout.hidden.remove(section)
+        } else {
+            layout.hidden.insert(section)
+        }
+    }
+
+    func resetLayout() {
+        layout = .default
     }
 
     func configure(modelContext: ModelContext) {
@@ -132,9 +210,8 @@ final class ProAnalyticsViewModel {
         let end = endDate
         let prevStart = prevStartDate
         let prevEnd = prevEndDate
-        let walletId = selectedWallet?.id
+        let activeFilter = filter
         let periodGrouping = grouping
-        let type = selectedTransactionType
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         let now = Date()
@@ -150,9 +227,8 @@ final class ProAnalyticsViewModel {
                 endDate: end,
                 prevStartDate: prevStart,
                 prevEndDate: prevEnd,
-                walletId: walletId,
+                filter: activeFilter,
                 grouping: periodGrouping,
-                transactionType: type,
                 rates: rates,
                 targetCurrency: preferredCurrency,
                 now: now

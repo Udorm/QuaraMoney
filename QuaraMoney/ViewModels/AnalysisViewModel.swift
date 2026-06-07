@@ -28,7 +28,7 @@ class AnalysisViewModel {
         didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     
-    var selectedWallet: Wallet? {
+    var selectedWalletIds: Set<UUID> = [] {
         didSet { refreshData() }
     }
     
@@ -72,16 +72,23 @@ class AnalysisViewModel {
     var categoryStats: [CategoryStat] = []
     
     var isFilterActive: Bool {
-        return selectedPeriod != .day || selectedWallet != nil
+        return selectedPeriod != .day || !selectedWalletIds.isEmpty
     }
-    
+
     var filterDescription: String {
         let periodDesc = selectedPeriod.description(
             referenceDate: currentReferenceDate,
             customStart: customStartDate,
             customEnd: customEndDate
         )
-        let walletDesc = selectedWallet?.name ?? "filter.allWallets".localized
+        let walletDesc: String
+        if selectedWalletIds.isEmpty {
+            walletDesc = "filter.allWallets".localized
+        } else if selectedWalletIds.count == 1 {
+            walletDesc = "filter.allWallets".localized // resolved by caller with wallet names
+        } else {
+            walletDesc = "analysis.pro.filter.nSelected".localized(with: selectedWalletIds.count)
+        }
         return "\(periodDesc) • \(walletDesc)"
     }
     
@@ -126,26 +133,26 @@ class AnalysisViewModel {
         // Capture values for background task
         let start = self.startDate
         let end = self.endDate
-        let walletId = selectedWallet?.id
+        let walletIds = selectedWalletIds
         let periodGrouping = self.grouping
         let method = selectedTransactionType // "expense" or "income"
-        
+
         let container = modelContext?.container
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
-        
+
         guard let container = container else { return }
-        
+
         Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
-            
-            async let nw = Self.computeNetWorth(container: container, walletId: walletId, rates: rates, targetCurrency: preferredCurrency)
-            
+
+            async let nw = Self.computeNetWorth(container: container, walletIds: walletIds, rates: rates, targetCurrency: preferredCurrency)
+
             let result = AnalysisDataProcessor.processTransactions(
                 context: context,
                 startDate: start,
                 endDate: end,
-                walletId: walletId,
+                walletIds: walletIds,
                 grouping: periodGrouping,
                 transactionType: method,
                 rates: rates,
@@ -181,23 +188,23 @@ class AnalysisViewModel {
         }
     }
     
-    nonisolated private static func computeNetWorth(container: ModelContainer, walletId: UUID?, rates: [String: Double], targetCurrency: String) -> Decimal {
+    nonisolated private static func computeNetWorth(container: ModelContainer, walletIds: Set<UUID>, rates: [String: Double], targetCurrency: String) -> Decimal {
         let context = ModelContext(container)
         do {
             let descriptor = FetchDescriptor<Wallet>()
             let wallets = try context.fetch(descriptor)
-            
+
             var totalNW: Decimal = 0
-            let walletsToSum = walletId == nil ? wallets : wallets.filter { $0.id == walletId }
-            
+            let walletsToSum = walletIds.isEmpty ? wallets : wallets.filter { walletIds.contains($0.id) }
+
             for wallet in walletsToSum {
                 let balance = wallet.balance
                 let converted = Self.convert(amount: balance, from: wallet.currencyCode, to: targetCurrency, rates: rates)
                 totalNW += converted
             }
-            
+
             return totalNW
-            
+
         } catch {
             return 0
         }

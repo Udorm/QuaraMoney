@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct QuaraMoneyApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var languageManager = LanguageManager.shared
     @StateObject private var errorService = ErrorService.shared
     @StateObject private var securityManager = SecurityManager.shared

@@ -69,6 +69,25 @@ struct HomeView: View {
                     viewModel.refreshData()
                 }
             }
+            // Warm launch: app was in background, user tapped the Home Screen quick action.
+            // ContentView switches to tab 0 simultaneously; wait 0.4 s for that animation
+            // to settle before presenting the sheet (presenting from a non-visible tab is
+            // silently ignored by UIKit).
+            .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
+                shouldScan = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    showingAddTransaction = true
+                }
+            }
+            // Cold launch: shortcut opened the app from scratch; HomeView picks up the
+            // pending action after the splash/auth sequence has settled (1.5 s buffer).
+            .task {
+                guard AppDelegate.pendingShortcutType == AppDelegate.ShortcutType.addTransaction else { return }
+                AppDelegate.pendingShortcutType = nil
+                try? await Task.sleep(for: .milliseconds(1500))
+                shouldScan = false
+                showingAddTransaction = true
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -94,7 +113,7 @@ struct HomeView: View {
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
-                        selectedWallet: $viewModel.selectedWallet,
+                        selectedWalletIds: $viewModel.selectedWalletIds,
                         customStartDate: $viewModel.customStartDate,
                         customEndDate: $viewModel.customEndDate,
                         wallets: wallets,
@@ -129,17 +148,25 @@ struct HomeView: View {
 
     private var summaryHeader: some View {
         HStack(alignment: .firstTextBaseline) {
-            if viewModel.selectedWallet != nil {
-                Text(viewModel.filterDescription)
+            if !viewModel.selectedWalletIds.isEmpty {
+                Text(walletFilterDescription)
                     .font(.app(.subheadline))
             }
             Spacer()
             Text(currentPeriodText)
                 .font(.app(.subheadline))
-                .foregroundStyle(viewModel.selectedWallet != nil ? .secondary : .primary)
+                .foregroundStyle(!viewModel.selectedWalletIds.isEmpty ? .secondary : .primary)
         }
         .textCase(nil)
         .padding(.top, -8)  // Tighten the gap between the picker section and the summary card
+    }
+
+    private var walletFilterDescription: String {
+        let ids = viewModel.selectedWalletIds
+        if ids.count == 1, let wallet = wallets.first(where: { ids.contains($0.id) }) {
+            return wallet.name
+        }
+        return "analysis.pro.filter.nSelected".localized(with: ids.count)
     }
 
     private var transactionList: some View {

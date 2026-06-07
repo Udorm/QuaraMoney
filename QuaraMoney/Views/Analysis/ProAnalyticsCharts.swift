@@ -174,7 +174,14 @@ struct ProNetTrendCard: View {
 
 struct ProCategoryCard: View {
     var vm: ProAnalyticsViewModel
+    var wallets: [Wallet] = []
     @State private var selected: ProAnalyticsProcessor.CategorySlice?
+
+    /// Name of the single selected wallet, when exactly one is active (for drill-down titles).
+    private var singleWalletName: String? {
+        guard let id = vm.singleSelectedWalletId else { return nil }
+        return wallets.first { $0.id == id }?.name
+    }
 
     private var categories: [ProAnalyticsProcessor.CategorySlice] { vm.result.categories }
     private var total: Decimal { categories.reduce(0) { $0 + $1.amount } }
@@ -243,8 +250,8 @@ struct ProCategoryCard: View {
                         title: stat.name,
                         startDate: vm.startDate,
                         endDate: vm.endDate,
-                        walletId: vm.selectedWallet?.id,
-                        walletName: vm.selectedWallet?.name,
+                        walletId: vm.singleSelectedWalletId,
+                        walletName: singleWalletName,
                         categoryId: stat.id,
                         categoryName: stat.name,
                         categoryIcon: stat.icon,

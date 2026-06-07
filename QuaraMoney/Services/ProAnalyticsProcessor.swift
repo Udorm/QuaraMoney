@@ -103,22 +103,22 @@ struct ProAnalyticsProcessor {
         endDate: Date,
         prevStartDate: Date,
         prevEndDate: Date,
-        walletId: UUID?,
+        filter: DashboardFilter,
         grouping: TimeGrouping,
-        transactionType: TransactionTypeFilter,
         rates: [String: Double],
         targetCurrency: String,
         now: Date
     ) -> Result {
         let calendar = Calendar.current
-        let selectedType: TransactionType = (transactionType == .income) ? .income : .expense
+        let selectedType: TransactionType = (filter.transactionType == .income) ? .income : .expense
 
-        // Current-period transactions (ascending so daily series stay ordered).
+        // Fetch the whole period (no wallet predicate — multi-wallet membership is filtered
+        // in-memory below) ascending so daily series stay ordered.
         let descriptor = TransactionProcessor.makeDescriptor(
-            startDate: startDate, endDate: endDate, walletId: walletId, sortDescending: false
+            startDate: startDate, endDate: endDate, walletId: nil, sortDescending: false
         )
         let prevDescriptor = TransactionProcessor.makeDescriptor(
-            startDate: prevStartDate, endDate: prevEndDate, walletId: walletId, sortDescending: false
+            startDate: prevStartDate, endDate: prevEndDate, walletId: nil, sortDescending: false
         )
 
         let transactions = (try? context.fetch(descriptor)) ?? []
@@ -135,10 +135,11 @@ struct ProAnalyticsProcessor {
         var dayAgg: [Date: Decimal] = [:]
 
         for txn in transactions {
-            if txn.excludeFromReports { continue }
             guard txn.type == .income || txn.type == .expense else { continue }
 
             let amount = convert(txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
+            guard passesFilters(txn, convertedAmount: amount, filter: filter) else { continue }
+
             let bucketDate = bucketKey(for: txn.date, grouping: grouping, calendar: calendar)
 
             if txn.type == .income {
@@ -179,12 +180,13 @@ struct ProAnalyticsProcessor {
             dayAgg[day, default: 0] += amount
         }
 
-        // Previous-period totals (only need income/expense sums for deltas).
+        // Previous-period totals (only need income/expense sums for deltas) — same filters applied.
         var prevIncome: Decimal = 0
         var prevExpense: Decimal = 0
         for txn in prevTransactions {
-            if txn.excludeFromReports { continue }
+            guard txn.type == .income || txn.type == .expense else { continue }
             let amount = convert(txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
+            guard passesFilters(txn, convertedAmount: amount, filter: filter) else { continue }
             if txn.type == .income { prevIncome += amount }
             else if txn.type == .expense { prevExpense += amount }
         }
@@ -220,7 +222,7 @@ struct ProAnalyticsProcessor {
             .sorted { $0.date < $1.date }
 
         // Net worth across the relevant wallets.
-        let netWorth = computeNetWorth(context: context, walletId: walletId, rates: rates, targetCurrency: targetCurrency)
+        let netWorth = computeNetWorth(context: context, walletIds: filter.walletIds, rates: rates, targetCurrency: targetCurrency)
 
         // Average daily spend over elapsed days within the period.
         let elapsedEnd = min(endDate, now)
@@ -290,16 +292,40 @@ struct ProAnalyticsProcessor {
         return result
     }
 
-    nonisolated private static func computeNetWorth(context: ModelContext, walletId: UUID?, rates: [String: Double], targetCurrency: String) -> Decimal {
+    nonisolated private static func computeNetWorth(context: ModelContext, walletIds: Set<UUID>, rates: [String: Double], targetCurrency: String) -> Decimal {
         do {
             let wallets = try context.fetch(FetchDescriptor<Wallet>())
-            let relevant = walletId == nil ? wallets.filter { !$0.isArchived } : wallets.filter { $0.id == walletId }
+            let relevant = walletIds.isEmpty
+                ? wallets.filter { !$0.isArchived }
+                : wallets.filter { walletIds.contains($0.id) }
             return relevant.reduce(Decimal.zero) { total, wallet in
                 total + convert(wallet.balance, from: wallet.currencyCode, to: targetCurrency, rates: rates)
             }
         } catch {
             return 0
         }
+    }
+
+    /// Applies the dashboard's wallet / category / amount / exclusion constraints to a single
+    /// transaction. The transaction type is intentionally *not* checked here so income and
+    /// expense totals (and the cash-flow chart) can both be tallied in one pass.
+    nonisolated private static func passesFilters(_ txn: Transaction, convertedAmount: Decimal, filter: DashboardFilter) -> Bool {
+        if txn.excludeFromReports && !filter.includeExcluded { return false }
+
+        if !filter.walletIds.isEmpty {
+            let sourceMatch = txn.sourceWallet.map { filter.walletIds.contains($0.id) } ?? false
+            let destMatch = txn.destinationWallet.map { filter.walletIds.contains($0.id) } ?? false
+            if !sourceMatch && !destMatch { return false }
+        }
+
+        if !filter.categoryIds.isEmpty {
+            guard let categoryId = txn.category?.id, filter.categoryIds.contains(categoryId) else { return false }
+        }
+
+        if let minAmount = filter.minAmount, convertedAmount < minAmount { return false }
+        if let maxAmount = filter.maxAmount, convertedAmount > maxAmount { return false }
+
+        return true
     }
 
     nonisolated private static func convert(_ amount: Decimal, from source: String, to target: String, rates: [String: Double]) -> Decimal {

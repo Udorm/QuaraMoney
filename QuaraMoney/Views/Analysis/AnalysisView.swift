@@ -380,8 +380,8 @@ struct CategoryBreakdownChart: View {
                         title: stat.name,
                         startDate: vm.startDate,
                         endDate: vm.endDate,
-                        walletId: vm.selectedWallet?.id,
-                        walletName: vm.selectedWallet?.name,
+                        walletId: vm.selectedWalletIds.count == 1 ? vm.selectedWalletIds.first : nil,
+                        walletName: nil,
                         categoryId: stat.id,
                         categoryName: stat.name,
                         categoryIcon: stat.icon,
@@ -410,7 +410,7 @@ private struct AnalysisFilterButton: View {
     var body: some View {
         FilterSheetButton(
             selectedPeriod: $vm.selectedPeriod,
-            selectedWallet: $vm.selectedWallet,
+            selectedWalletIds: $vm.selectedWalletIds,
             customStartDate: $vm.customStartDate,
             customEndDate: $vm.customEndDate,
             wallets: wallets,

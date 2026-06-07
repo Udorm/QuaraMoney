@@ -35,22 +35,40 @@ struct AnalysisDataProcessor {
         context: ModelContext,
         startDate: Date,
         endDate: Date,
-        walletId: UUID?,
+        walletId: UUID? = nil,
+        walletIds: Set<UUID> = [],
         grouping: TimeGrouping,
         transactionType: TransactionTypeFilter,
         rates: [String: Double],
         targetCurrency: String
     ) -> AnalysisResult {
-        
+        // Resolve effective wallet filter (walletIds takes precedence over legacy walletId).
+        let effectiveWalletIds: Set<UUID>
+        if !walletIds.isEmpty {
+            effectiveWalletIds = walletIds
+        } else if let id = walletId {
+            effectiveWalletIds = [id]
+        } else {
+            effectiveWalletIds = []
+        }
+
+        let descriptorWalletId: UUID? = effectiveWalletIds.count == 1 ? effectiveWalletIds.first : nil
         let descriptor = TransactionProcessor.makeDescriptor(
             startDate: startDate,
             endDate: endDate,
-            walletId: walletId,
-            sortDescending: false 
+            walletId: descriptorWalletId,
+            sortDescending: false
         )
-        
+
         do {
-            let transactions = try context.fetch(descriptor)
+            var transactions = try context.fetch(descriptor)
+
+            if effectiveWalletIds.count > 1 {
+                transactions = transactions.filter {
+                    effectiveWalletIds.contains($0.sourceWallet?.id ?? UUID()) ||
+                    effectiveWalletIds.contains($0.destinationWallet?.id ?? UUID())
+                }
+            }
             
             var totalIncome: Decimal = 0
             var totalExpense: Decimal = 0

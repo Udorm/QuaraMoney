@@ -91,6 +91,9 @@ struct iOS18ContentView: View {
                 showCreateWallet = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
+            selectedTab = 0
+        }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 .interactiveDismissDisabled()
@@ -172,12 +175,15 @@ struct LegacyContentView: View {
                 showCreateWallet = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
+            selectedTab = 0
+        }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 .interactiveDismissDisabled()
         }
     }
-    
+
     @ViewBuilder
     private func detailView(for tab: Int) -> some View {
         switch tab {

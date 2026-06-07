@@ -111,7 +111,7 @@ struct BudgetListView: View {
                 
                 FilterSheetButton(
                     selectedPeriod: $filterPeriod,
-                    selectedWallet: .constant(nil),
+                    selectedWalletIds: .constant([]),
                     customStartDate: .constant(Date()),
                     customEndDate: .constant(Date()),
                     wallets: [],

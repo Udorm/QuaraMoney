@@ -10,8 +10,11 @@ struct ProAnalyticsView: View {
     @Binding var proMode: Bool
     @Environment(\.modelContext) private var modelContext
     @State private var vm = ProAnalyticsViewModel()
+    @State private var showFilterSheet = false
+    @State private var showCustomizeSheet = false
 
     @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(sort: \Category.name) private var categories: [Category]
 
     var body: some View {
         NavigationStack {
@@ -19,28 +22,21 @@ struct ProAnalyticsView: View {
                 LazyVStack(spacing: 16) {
                     ProPeriodHeader(vm: vm)
 
-                    ProOverviewCard(vm: vm)
-
-                    ProCashFlowCard(vm: vm)
-
-                    ProNetTrendCard(vm: vm)
-
-                    ProCategoryCard(vm: vm)
-
-                    ProPatternsCard(vm: vm)
-
-                    if vm.grouping != .hour {
-                        ProHeatmapCard(vm: vm)
+                    ProActiveFiltersBar(vm: vm, wallets: wallets, categories: categories) {
+                        showFilterSheet = true
                     }
 
-                    if !vm.result.merchants.isEmpty {
-                        ProMerchantsCard(vm: vm)
+                    ForEach(vm.layout.visibleSections) { section in
+                        sectionView(section)
                     }
 
-                    ProInsightsCard(vm: vm)
+                    if vm.layout.visibleSections.isEmpty {
+                        ProAllHiddenPlaceholder { showCustomizeSheet = true }
+                    }
                 }
                 .padding(.vertical)
                 .animation(.easeInOut(duration: 0.25), value: vm.currentReferenceDate)
+                .animation(.easeInOut(duration: 0.2), value: vm.layout)
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
@@ -49,13 +45,45 @@ struct ProAnalyticsView: View {
                     AnalyticsModePicker(proMode: $proMode)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    ProAnalysisFilterButton(vm: vm, wallets: wallets)
+                    Button {
+                        showCustomizeSheet = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.app(.title3))
+                    }
+                    ProDashboardFilterButton(filter: vm.filter) {
+                        showFilterSheet = true
+                    }
                 }
+            }
+            .sheet(isPresented: $showFilterSheet) {
+                ProDashboardFilterSheet(vm: vm, wallets: wallets, categories: categories)
+            }
+            .sheet(isPresented: $showCustomizeSheet) {
+                ProCustomizeSheet(vm: vm)
             }
             .onAppear {
                 vm.configure(modelContext: modelContext)
                 vm.refreshData()
             }
+        }
+    }
+
+    /// Maps a configured section to its card, honoring runtime guards (heatmap needs day-or-coarser
+    /// grouping; merchants only render when location data exists).
+    @ViewBuilder
+    private func sectionView(_ section: DashboardSection) -> some View {
+        switch section {
+        case .overview:  ProOverviewCard(vm: vm)
+        case .cashFlow:  ProCashFlowCard(vm: vm)
+        case .netTrend:  ProNetTrendCard(vm: vm)
+        case .category:  ProCategoryCard(vm: vm, wallets: wallets)
+        case .patterns:  ProPatternsCard(vm: vm)
+        case .heatmap:
+            if vm.grouping != .hour { ProHeatmapCard(vm: vm) }
+        case .merchants:
+            if !vm.result.merchants.isEmpty { ProMerchantsCard(vm: vm) }
+        case .insights:  ProInsightsCard(vm: vm)
         }
     }
 }
@@ -399,38 +427,197 @@ struct ProInsightsCard: View {
     }
 }
 
-// MARK: - Filter Button
+// MARK: - Filter Button (toolbar)
 
-/// Pro dashboard filter: wallet + transaction type (period is controlled by the header picker).
-struct ProAnalysisFilterButton: View {
-    @Bindable var vm: ProAnalyticsViewModel
-    var wallets: [Wallet]
-
-    @State private var pendingTransactionType: TransactionTypeFilter = .expense
+/// Toolbar filter button with a count badge reflecting how many constraints are active.
+struct ProDashboardFilterButton: View {
+    let filter: DashboardFilter
+    let action: () -> Void
 
     var body: some View {
-        FilterSheetButton(
-            selectedPeriod: $vm.selectedPeriod,
-            selectedWallet: $vm.selectedWallet,
-            customStartDate: $vm.customStartDate,
-            customEndDate: $vm.customEndDate,
-            wallets: wallets,
-            showPeriodFilter: false,
-            onApply: {
-                vm.selectedTransactionType = pendingTransactionType
-            }
-        ) {
-            Section("analysis.transactionType".localized) {
-                Picker("analysis.transactionType".localized, selection: $pendingTransactionType) {
-                    Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
-                    Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .symbolVariant(filter.hasActiveConstraints ? .fill : .none)
+                    .font(.app(.title3))
+                    .foregroundStyle(filter.hasActiveConstraints ? Color.accentColor : .primary)
+
+                if filter.activeConstraintCount > 0 {
+                    Text("\(filter.activeConstraintCount)")
+                        .appFont(.caption2, weight: .bold)
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Circle().fill(Color.red))
+                        .offset(x: 7, y: -7)
                 }
-                .pickerStyle(.segmented)
             }
         }
-        .onAppear { pendingTransactionType = vm.selectedTransactionType }
-        .onChange(of: vm.selectedTransactionType) { _, newValue in
-            pendingTransactionType = newValue
+    }
+}
+
+// MARK: - Active Filters Chip Bar
+
+/// Horizontally scrollable, tappable summary of every active filter. Tapping a chip removes
+/// that constraint; the leading "Filters" chip opens the full sheet.
+struct ProActiveFiltersBar: View {
+    @Bindable var vm: ProAnalyticsViewModel
+    var wallets: [Wallet]
+    var categories: [Category]
+    var openFilters: () -> Void
+
+    private var typeLabel: String {
+        vm.filter.transactionType == .income
+            ? L10n.Transaction.TransactionType.income
+            : L10n.Transaction.TransactionType.expense
+    }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Type toggle chip — always present, taps cycle expense ⇄ income.
+                Chip(
+                    systemImage: vm.filter.transactionType == .income ? "arrow.down.left" : "arrow.up.right",
+                    text: typeLabel,
+                    tint: vm.filter.transactionType == .income ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor,
+                    style: .solid
+                ) {
+                    vm.filter.transactionType = vm.filter.transactionType == .income ? .expense : .income
+                }
+
+                // Wallet chips (iterate the sorted query for stable order)
+                ForEach(wallets.filter { vm.filter.walletIds.contains($0.id) }) { wallet in
+                    Chip(systemImage: wallet.icon.isEmpty ? "creditcard" : wallet.icon, text: wallet.name, removable: true) {
+                        vm.filter.walletIds.remove(wallet.id)
+                    }
+                }
+
+                // Category chips
+                ForEach(categories.filter { vm.filter.categoryIds.contains($0.id) }) { category in
+                    Chip(systemImage: category.icon.isEmpty ? "tag" : category.icon, text: category.name, removable: true) {
+                        vm.filter.categoryIds.remove(category.id)
+                    }
+                }
+
+                // Amount range chip
+                if vm.filter.minAmount != nil || vm.filter.maxAmount != nil {
+                    Chip(systemImage: "dollarsign.circle", text: amountRangeText, removable: true) {
+                        vm.filter.minAmount = nil
+                        vm.filter.maxAmount = nil
+                    }
+                }
+
+                // Include-excluded chip
+                if vm.filter.includeExcluded {
+                    Chip(systemImage: "eye", text: "analysis.pro.filter.includeExcluded".localized, removable: true) {
+                        vm.filter.includeExcluded = false
+                    }
+                }
+
+                // Clear-all chip
+                if vm.filter.hasActiveConstraints {
+                    Chip(systemImage: "xmark.circle.fill", text: "analysis.pro.filter.clearAll".localized, tint: .secondary, style: .tinted) {
+                        vm.filter.clearConstraints()
+                    }
+                }
+
+                // Add-filter chip
+                Chip(systemImage: "plus", text: "analysis.pro.filter.add".localized, tint: .accentColor, style: .tinted, action: openFilters)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private var amountRangeText: String {
+        let currency = vm.preferredCurrency
+        switch (vm.filter.minAmount, vm.filter.maxAmount) {
+        case let (min?, max?):
+            return "\(min.formattedAmountShort(for: currency)) – \(max.formattedAmountShort(for: currency))"
+        case let (min?, nil):
+            return "≥ \(min.formattedAmountShort(for: currency))"
+        case let (nil, max?):
+            return "≤ \(max.formattedAmountShort(for: currency))"
+        default:
+            return ""
+        }
+    }
+
+    /// Small pill used in the filter bar.
+    private struct Chip: View {
+        enum Style { case solid, tinted, outline }
+        let systemImage: String
+        let text: String
+        var tint: Color = .accentColor
+        var removable: Bool = false
+        var style: Style = .outline
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                HStack(spacing: 5) {
+                    Image(systemName: systemImage)
+                        .appFont(.caption2, weight: .semibold)
+                    Text(text)
+                        .appFont(.caption, weight: .medium)
+                        .lineLimit(1)
+                    if removable {
+                        Image(systemName: "xmark")
+                            .appFont(.caption2, weight: .bold)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(background)
+                .foregroundStyle(foreground)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().strokeBorder(style == .outline ? Color(.separator) : .clear, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        @ViewBuilder private var background: some View {
+            switch style {
+            case .solid:   tint
+            case .tinted:  tint.opacity(0.15)
+            case .outline: Color(.secondarySystemGroupedBackground)
+            }
+        }
+
+        private var foreground: Color {
+            switch style {
+            case .solid:   return .white
+            case .tinted:  return tint
+            case .outline: return .primary
+            }
+        }
+    }
+}
+
+// MARK: - All-Hidden Placeholder
+
+struct ProAllHiddenPlaceholder: View {
+    let onCustomize: () -> Void
+
+    var body: some View {
+        ProCard {
+            VStack(spacing: 12) {
+                Image(systemName: "square.grid.3x3.fill")
+                    .appFont(.largeTitle)
+                    .foregroundStyle(.tertiary)
+                Text("analysis.pro.allHidden.title".localized)
+                    .appFont(.headline)
+                Text("analysis.pro.allHidden.message".localized)
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("analysis.pro.customize".localized, action: onCustomize)
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
     }
 }

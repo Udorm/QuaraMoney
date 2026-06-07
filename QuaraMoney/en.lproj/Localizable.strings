@@ -775,6 +775,32 @@
 "analysis.pro.insight.projection" = "At this pace, you'll reach about %@ by period end.";
 "analysis.pro.insight.topPlace" = "Most spent at %@ (%@).";
 
+// Pro dashboard — interactive filters & customization
+"filter.startDate" = "Start Date";
+"filter.endDate" = "End Date";
+"filter.category" = "Category";
+"analysis.pro.section.overview" = "Overview";
+"analysis.pro.section.category" = "Categories";
+"analysis.pro.customize" = "Customize";
+"analysis.pro.customize.subtitle" = "Toggle visibility and drag to reorder your dashboard sections.";
+"analysis.pro.allHidden.title" = "No Sections Visible";
+"analysis.pro.allHidden.message" = "You've hidden every section. Turn some back on to see your insights.";
+"analysis.pro.filter.title" = "Filters";
+"analysis.pro.filter.reset" = "Reset";
+"analysis.pro.filter.add" = "Add Filter";
+"analysis.pro.filter.clearAll" = "Clear All";
+"analysis.pro.filter.oneWallet" = "1 wallet";
+"analysis.pro.filter.nWallets" = "%d wallets";
+"analysis.pro.filter.nCategories" = "%d categories";
+"analysis.pro.filter.nSelected" = "%d selected";
+"analysis.pro.filter.allCategories" = "All Categories";
+"analysis.pro.filter.noCategories" = "No categories for this type yet.";
+"analysis.pro.filter.min" = "Minimum";
+"analysis.pro.filter.max" = "Maximum";
+"analysis.pro.filter.amountRange" = "Amount Range (%@)";
+"analysis.pro.filter.includeExcluded" = "Include Excluded Transactions";
+"analysis.pro.filter.includeExcluded.subtitle" = "Count transactions marked \"exclude from reports\".";
+
 "security.lockedTitle" = "QuaraMoney is Locked";
 "security.lockedMessage" = "Authenticate to view your finances.";
 "security.unlock" = "Unlock";

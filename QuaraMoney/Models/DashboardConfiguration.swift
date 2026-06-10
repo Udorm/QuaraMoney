@@ -57,12 +57,15 @@ struct DashboardFilter: Equatable, Sendable, Codable {
 /// Every configurable widget on the Pro dashboard. The raw value is the stable persistence key.
 enum DashboardSection: String, CaseIterable, Identifiable, Codable, Sendable {
     case overview
-    case cashFlow
-    case netTrend
-    case category
+    case budgets
+    /// Merged cash-flow bars + cumulative net trend (raw value kept for layout persistence).
+    case flow = "cashFlow"
+    /// Merged category breakdown + top movers (raw value kept for layout persistence).
+    case categories = "category"
     case patterns
     case heatmap
     case merchants
+    case largest
     case insights
 
     var id: String { rawValue }
@@ -70,27 +73,29 @@ enum DashboardSection: String, CaseIterable, Identifiable, Codable, Sendable {
     /// Localized title shown in the customize sheet.
     var title: String {
         switch self {
-        case .overview:  return "analysis.pro.section.overview".localized
-        case .cashFlow:  return "analysis.pro.cashFlow".localized
-        case .netTrend:  return "analysis.pro.netTrend".localized
-        case .category:  return "analysis.pro.section.category".localized
-        case .patterns:  return "analysis.pro.weekdayPattern".localized
-        case .heatmap:   return "analysis.pro.heatmap".localized
-        case .merchants: return "analysis.pro.topPlaces".localized
-        case .insights:  return "analysis.pro.insights".localized
+        case .overview:   return "analysis.pro.section.overview".localized
+        case .budgets:    return "budget.title".localized
+        case .flow:       return "analysis.pro.cashFlow".localized
+        case .categories: return "analysis.pro.section.category".localized
+        case .patterns:   return "analysis.pro.weekdayPattern".localized
+        case .heatmap:    return "analysis.pro.heatmap".localized
+        case .merchants:  return "analysis.pro.topPlaces".localized
+        case .largest:    return "analysis.pro.largest".localized
+        case .insights:   return "analysis.pro.insights".localized
         }
     }
 
     var systemImage: String {
         switch self {
-        case .overview:  return "rectangle.3.group.fill"
-        case .cashFlow:  return "arrow.left.arrow.right"
-        case .netTrend:  return "chart.xyaxis.line"
-        case .category:  return "chart.pie.fill"
-        case .patterns:  return "calendar"
-        case .heatmap:   return "square.grid.3x3.fill"
-        case .merchants: return "mappin.and.ellipse"
-        case .insights:  return "sparkles"
+        case .overview:   return "rectangle.3.group.fill"
+        case .budgets:    return "gauge.with.needle"
+        case .flow:       return "arrow.left.arrow.right"
+        case .categories: return "chart.pie.fill"
+        case .patterns:   return "calendar"
+        case .heatmap:    return "square.grid.3x3.fill"
+        case .merchants:  return "mappin.and.ellipse"
+        case .largest:    return "list.number"
+        case .insights:   return "sparkles"
         }
     }
 }
@@ -105,6 +110,30 @@ struct DashboardLayout: Equatable, Codable, Sendable {
     var hidden: Set<DashboardSection>
 
     static let `default` = DashboardLayout(order: DashboardSection.allCases, hidden: [])
+
+    init(order: [DashboardSection], hidden: Set<DashboardSection>) {
+        self.order = order
+        self.hidden = hidden
+    }
+
+    private enum CodingKeys: String, CodingKey { case order, hidden }
+
+    /// Lossy decoding: raw values for sections that no longer exist (e.g. merged or removed
+    /// cards) are silently dropped instead of failing the whole layout, so the user keeps
+    /// their customizations across app updates.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let orderRaw = try container.decode([String].self, forKey: .order)
+        let hiddenRaw = try container.decode(Set<String>.self, forKey: .hidden)
+        order = orderRaw.compactMap(DashboardSection.init(rawValue:))
+        hidden = Set(hiddenRaw.compactMap(DashboardSection.init(rawValue:)))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(order.map(\.rawValue), forKey: .order)
+        try container.encode(Set(hidden.map(\.rawValue)), forKey: .hidden)
+    }
 
     /// Sections to render, in user order, excluding hidden ones.
     var visibleSections: [DashboardSection] {

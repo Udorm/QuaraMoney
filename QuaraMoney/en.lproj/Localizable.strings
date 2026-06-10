@@ -800,6 +800,22 @@
 "analysis.pro.filter.amountRange" = "Amount Range (%@)";
 "analysis.pro.filter.includeExcluded" = "Include Excluded Transactions";
 "analysis.pro.filter.includeExcluded.subtitle" = "Count transactions marked \"exclude from reports\".";
+"analysis.pro.movers" = "Top Movers";
+"analysis.pro.movers.subtitle" = "Biggest changes vs. last period";
+"analysis.pro.movers.was" = "Last period: %@";
+"analysis.pro.largest" = "Largest Transactions";
+"analysis.pro.largest.subtitle" = "Biggest single transactions this period";
+"analysis.pro.totalNet" = "Net Total";
+"analysis.pro.cumulative" = "Cumulative Net";
+"analysis.pro.uncategorized" = "Uncategorized";
+"analysis.pro.average" = "Average";
+"analysis.pro.insight.moverUp" = "%@ jumped %@ vs. last period.";
+"analysis.pro.insight.moverDown" = "%@ dropped %@ vs. last period.";
+"analysis.pro.budgets.subtitle" = "How your active budgets are doing";
+"analysis.pro.patterns.avgCaption" = "Avg %@ per day";
+"analysis.pro.activeDays" = "%d active days";
+"analysis.pro.flow.caption" = "%@ in · %@ out";
+"analysis.pro.insights.count" = "%d insights";
 
 "security.lockedTitle" = "QuaraMoney is Locked";
 "security.lockedMessage" = "Authenticate to view your finances.";

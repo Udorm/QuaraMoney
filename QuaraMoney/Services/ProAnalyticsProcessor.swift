@@ -40,8 +40,16 @@ struct ProAnalyticsProcessor {
         let weekdayTotals: [WeekdayStat]
         let dailySpend: [DaySpend]
 
+        // Period-over-period category movement and biggest single transactions
+        let categoryDeltas: [CategoryDelta]
+        let largestTransactions: [TransactionHighlight]
+
+        // Active budgets and their own-period progress (independent of the dashboard period)
+        let budgetStatuses: [BudgetStatus]
+
         // Highlights
         let avgDailySpend: Decimal
+        let prevAvgDailySpend: Decimal
         /// Projected end-of-period total for the selected type, when the period contains "now".
         let projectedTotal: Decimal?
 
@@ -53,7 +61,9 @@ struct ProAnalyticsProcessor {
             prevIncome: 0, prevExpense: 0, netWorth: 0,
             flowBuckets: [], categories: [], merchants: [],
             weekdayTotals: [], dailySpend: [],
-            avgDailySpend: 0, projectedTotal: nil
+            categoryDeltas: [], largestTransactions: [],
+            budgetStatuses: [],
+            avgDailySpend: 0, prevAvgDailySpend: 0, projectedTotal: nil
         )
     }
 
@@ -95,6 +105,41 @@ struct ProAnalyticsProcessor {
         let amount: Decimal
     }
 
+    /// Period-over-period change for one category (selected type only).
+    struct CategoryDelta: Identifiable, Sendable {
+        let id: UUID
+        let name: String
+        let icon: String
+        let colorHex: String
+        let current: Decimal
+        let previous: Decimal
+        var change: Decimal { current - previous }
+    }
+
+    /// One of the biggest single transactions in the period (already converted).
+    struct TransactionHighlight: Identifiable, Sendable {
+        let id: UUID
+        let date: Date
+        let amount: Decimal
+        let note: String?
+        let categoryName: String?
+        let categoryIcon: String?
+        let categoryColorHex: String?
+    }
+
+    /// Progress of one active budget over its **own** period (amounts in target currency).
+    struct BudgetStatus: Identifiable, Sendable {
+        let id: UUID
+        let name: String
+        let spent: Decimal
+        let limit: Decimal
+        let periodStart: Date
+        let periodEnd: Date
+        let categoryInfos: [FilterCategoryInfo]
+        var fraction: Double { limit > 0 ? (spent / limit).doubleValue : 0 }
+        var remaining: Decimal { limit - spent }
+    }
+
     // MARK: - Processing
 
     nonisolated static func process(
@@ -133,6 +178,7 @@ struct ProAnalyticsProcessor {
         var merchantAgg: [String: (amount: Decimal, name: String, count: Int)] = [:]
         var weekdayAgg: [Int: Decimal] = [:]
         var dayAgg: [Date: Decimal] = [:]
+        var topTransactions: [TransactionHighlight] = []
 
         for txn in transactions {
             guard txn.type == .income || txn.type == .expense else { continue }
@@ -178,17 +224,39 @@ struct ProAnalyticsProcessor {
 
             let day = calendar.startOfDay(for: txn.date)
             dayAgg[day, default: 0] += amount
+
+            // Keep a running top-5 of the biggest single transactions.
+            topTransactions.append(TransactionHighlight(
+                id: txn.id,
+                date: txn.date,
+                amount: amount,
+                note: txn.note,
+                categoryName: txn.category?.name,
+                categoryIcon: txn.category?.icon,
+                categoryColorHex: txn.category?.colorHex
+            ))
+            if topTransactions.count > 5 {
+                topTransactions.sort { $0.amount > $1.amount }
+                topTransactions.removeLast(topTransactions.count - 5)
+            }
         }
 
-        // Previous-period totals (only need income/expense sums for deltas) — same filters applied.
+        // Previous-period totals (income/expense sums for deltas + per-category totals for
+        // the Top Movers card) — same filters applied.
         var prevIncome: Decimal = 0
         var prevExpense: Decimal = 0
+        var prevCategoryAgg: [UUID: (amount: Decimal, name: String, icon: String, color: String)] = [:]
         for txn in prevTransactions {
             guard txn.type == .income || txn.type == .expense else { continue }
             let amount = convert(txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
             guard passesFilters(txn, convertedAmount: amount, filter: filter) else { continue }
             if txn.type == .income { prevIncome += amount }
             else if txn.type == .expense { prevExpense += amount }
+
+            if txn.type == selectedType, let cat = txn.category {
+                let prev = prevCategoryAgg[cat.id]?.amount ?? 0
+                prevCategoryAgg[cat.id] = (prev + amount, cat.name, cat.icon, cat.colorHex)
+            }
         }
 
         // Flow buckets, sorted ascending.
@@ -221,14 +289,39 @@ struct ProAnalyticsProcessor {
             .map { DaySpend(date: $0.key, amount: $0.value) }
             .sorted { $0.date < $1.date }
 
+        // Top movers: categories with the biggest absolute change vs. the previous period.
+        let allCategoryIds = Set(categoryAgg.keys).union(prevCategoryAgg.keys)
+        let categoryDeltas = allCategoryIds
+            .compactMap { id -> CategoryDelta? in
+                let current = categoryAgg[id]
+                let previous = prevCategoryAgg[id]
+                guard let meta = current ?? previous else { return nil }
+                let delta = CategoryDelta(
+                    id: id, name: meta.name, icon: meta.icon, colorHex: meta.color,
+                    current: current?.amount ?? 0, previous: previous?.amount ?? 0
+                )
+                return delta.change == 0 ? nil : delta
+            }
+            .sorted { abs($0.change) > abs($1.change) }
+
+        let largestTransactions = topTransactions.sorted { $0.amount > $1.amount }
+
         // Net worth across the relevant wallets.
         let netWorth = computeNetWorth(context: context, walletIds: filter.walletIds, rates: rates, targetCurrency: targetCurrency)
+
+        // Active budget progress over each budget's own period.
+        let budgetStatuses = computeBudgetStatuses(context: context, rates: rates, targetCurrency: targetCurrency)
 
         // Average daily spend over elapsed days within the period.
         let elapsedEnd = min(endDate, now)
         let totalDays = max(1, daysBetween(startDate, endDate, calendar: calendar))
         let elapsedDays = max(1, min(totalDays, daysBetween(startDate, elapsedEnd, calendar: calendar)))
         let avgDailySpend = selectedTotal / Decimal(elapsedDays)
+
+        // Previous period's daily average over its full length, for comparison badges.
+        let prevSelectedTotal = (selectedType == .income) ? prevIncome : prevExpense
+        let prevTotalDays = max(1, daysBetween(prevStartDate, prevEndDate, calendar: calendar))
+        let prevAvgDailySpend = prevSelectedTotal / Decimal(prevTotalDays)
 
         // Projection: only meaningful when the period is currently in progress.
         var projectedTotal: Decimal? = nil
@@ -248,7 +341,11 @@ struct ProAnalyticsProcessor {
             merchants: merchants,
             weekdayTotals: weekdayTotals,
             dailySpend: dailySpend,
+            categoryDeltas: categoryDeltas,
+            largestTransactions: largestTransactions,
+            budgetStatuses: budgetStatuses,
             avgDailySpend: avgDailySpend,
+            prevAvgDailySpend: prevAvgDailySpend,
             projectedTotal: projectedTotal
         )
     }
@@ -304,6 +401,66 @@ struct ProAnalyticsProcessor {
         } catch {
             return 0
         }
+    }
+
+    /// Computes spent-vs-limit for every currently-active budget over its **own** period
+    /// (not the dashboard period). Mirrors `BudgetCalculator.spendingByBudget` semantics —
+    /// expense only, no event-linked or report-excluded transactions, category match —
+    /// but uses the per-call `rates` so it can run off the main actor.
+    nonisolated private static func computeBudgetStatuses(
+        context: ModelContext,
+        rates: [String: Double],
+        targetCurrency: String
+    ) -> [BudgetStatus] {
+        guard let budgets = try? context.fetch(FetchDescriptor<Budget>()) else { return [] }
+        let active = budgets.filter { $0.isActive }
+        guard !active.isEmpty else { return [] }
+
+        // One fetch spanning the union of all active budget periods.
+        guard let minStart = active.map({ $0.periodDateRange.start }).min(),
+              let maxEnd = active.map({ $0.periodDateRange.end }).max() else { return [] }
+        let descriptor = TransactionProcessor.makeDescriptor(
+            startDate: minStart, endDate: maxEnd, walletId: nil, sortDescending: false
+        )
+        let transactions = (try? context.fetch(descriptor)) ?? []
+
+        return active.map { budget -> BudgetStatus in
+            let range = budget.periodDateRange
+            let categoryIds = Set(budget.trackedCategoryIds) // empty → total budget
+
+            var spent: Decimal = 0
+            var periodIncome: Decimal = 0 // in budget currency, for percent-of-income limits
+            for txn in transactions {
+                guard txn.event == nil, !txn.excludeFromReports,
+                      txn.date >= range.start, txn.date < range.end else { continue }
+                if txn.type == .expense {
+                    if categoryIds.isEmpty || txn.category.map({ categoryIds.contains($0.id) }) == true {
+                        spent += convert(txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
+                    }
+                } else if txn.type == .income, case .percentOfIncome = budget.amountType {
+                    periodIncome += convert(txn.amount, from: txn.currencyCode, to: budget.currencyCode, rates: rates)
+                }
+            }
+
+            let rawLimit: Decimal
+            if case .percentOfIncome = budget.amountType {
+                rawLimit = budget.calculateEffectiveLimit(income: periodIncome)
+            } else {
+                rawLimit = budget.effectiveLimit
+            }
+            let limit = convert(rawLimit, from: budget.currencyCode, to: targetCurrency, rates: rates)
+
+            return BudgetStatus(
+                id: budget.id,
+                name: budget.displayName,
+                spent: spent,
+                limit: limit,
+                periodStart: range.start,
+                periodEnd: range.end,
+                categoryInfos: budget.trackedCategoryInfos
+            )
+        }
+        .sorted { $0.fraction > $1.fraction }
     }
 
     /// Applies the dashboard's wallet / category / amount / exclusion constraints to a single

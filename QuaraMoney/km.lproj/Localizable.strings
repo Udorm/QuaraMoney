@@ -800,6 +800,22 @@
 "analysis.pro.filter.amountRange" = "ចន្លោះទឹកប្រាក់ (%@)";
 "analysis.pro.filter.includeExcluded" = "រាប់បញ្ចូលប្រតិបត្តិការដែលបានដកចេញ";
 "analysis.pro.filter.includeExcluded.subtitle" = "រាប់បញ្ចូលប្រតិបត្តិការដែលបានសម្គាល់ថា \"ដកចេញពីរបាយការណ៍\"។";
+"analysis.pro.movers" = "បំរែបំរួលធំបំផុត";
+"analysis.pro.movers.subtitle" = "ការប្រែប្រួលធំបំផុតធៀបនឹងរយៈពេលមុន";
+"analysis.pro.movers.was" = "រយៈពេលមុន៖ %@";
+"analysis.pro.largest" = "ប្រតិបត្តិការធំបំផុត";
+"analysis.pro.largest.subtitle" = "ប្រតិបត្តិការតែមួយធំបំផុតក្នុងរយៈពេលនេះ";
+"analysis.pro.totalNet" = "សរុបសុទ្ធ";
+"analysis.pro.cumulative" = "សុទ្ធបង្គរ";
+"analysis.pro.uncategorized" = "គ្មានប្រភេទ";
+"analysis.pro.average" = "មធ្យម";
+"analysis.pro.insight.moverUp" = "%@ បានកើនឡើង %@ ធៀបនឹងរយៈពេលមុន។";
+"analysis.pro.insight.moverDown" = "%@ បានថយចុះ %@ ធៀបនឹងរយៈពេលមុន។";
+"analysis.pro.budgets.subtitle" = "ស្ថានភាពថវិកាសកម្មរបស់អ្នក";
+"analysis.pro.patterns.avgCaption" = "ជាមធ្យម %@ ក្នុងមួយថ្ងៃ";
+"analysis.pro.activeDays" = "%d ថ្ងៃសកម្ម";
+"analysis.pro.flow.caption" = "%@ ចូល · %@ ចេញ";
+"analysis.pro.insights.count" = "ការយល់ដឹង %d";
 
 "security.lockedTitle" = "QuaraMoney ត្រូវបានចាក់សោ";
 "security.unlock" = "ដោះសោ";

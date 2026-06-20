@@ -446,7 +446,8 @@ final class CSVImportService {
             transaction.category = category
             transaction.sourceWallet = wallet ?? defaultWallet
             transaction.note = note
-            
+            transaction.tags = TransactionTagParser.tags(in: note)
+
             modelContext.insert(transaction)
             batchBuffer.append(transaction)
             successCount += 1

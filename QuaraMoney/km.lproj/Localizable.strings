@@ -74,6 +74,7 @@
 "transaction.amount" = "ចំនួនទឹកប្រាក់";
 "transaction.note" = "បន្ថែមកំណត់ចំណាំ...";
 "transaction.rate" = "អត្រា";
+"transaction.tag.add" = "បន្ថែមស្លាក %@";
 "transaction.type" = "ប្រភេទ";
 "transaction.date" = "កាលបរិច្ឆេទ";
 "transaction.fromWallet" = "ពីកាបូប";
@@ -816,6 +817,8 @@
 "analysis.pro.activeDays" = "%d ថ្ងៃសកម្ម";
 "analysis.pro.flow.caption" = "%@ ចូល · %@ ចេញ";
 "analysis.pro.insights.count" = "ការយល់ដឹង %d";
+"analysis.pro.lastPeriod" = "រយៈពេលមុន";
+"analysis.pro.thisPeriod" = "រយៈពេលនេះ";
 
 "security.lockedTitle" = "QuaraMoney ត្រូវបានចាក់សោ";
 "security.unlock" = "ដោះសោ";

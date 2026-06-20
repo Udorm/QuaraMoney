@@ -74,6 +74,7 @@
 "transaction.amount" = "Amount";
 "transaction.note" = "Add note...";
 "transaction.rate" = "Rate";
+"transaction.tag.add" = "Add tag %@";
 "transaction.type" = "Type";
 "transaction.date" = "Date";
 "transaction.fromWallet" = "From Wallet";
@@ -816,6 +817,8 @@
 "analysis.pro.activeDays" = "%d active days";
 "analysis.pro.flow.caption" = "%@ in · %@ out";
 "analysis.pro.insights.count" = "%d insights";
+"analysis.pro.lastPeriod" = "Last period";
+"analysis.pro.thisPeriod" = "This period";
 
 "security.lockedTitle" = "QuaraMoney is Locked";
 "security.lockedMessage" = "Authenticate to view your finances.";

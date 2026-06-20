@@ -178,6 +178,7 @@ class AddTransactionViewModel: BaseViewModel {
         }
         
         transaction.note = note.isEmpty ? nil : note
+        transaction.tags = TransactionTagParser.tags(in: note)
         transaction.sourceWallet = wallet
         transaction.updatedAt = Date()
         

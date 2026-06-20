@@ -13,6 +13,12 @@ final class Transaction {
     var type: TransactionType
     var date: Date
     var note: String?
+
+    /// Tags extracted from `note` (`#hashtag` syntax, stored without the `#`).
+    /// Derived on every save by `TransactionTagParser` — the note text remains
+    /// the single source the user edits; this array exists for fast suggestion
+    /// lookups and future filtering. Defaulted so legacy rows migrate lightweight.
+    var tags: [String] = []
     
     // Feature: Exclude from reports
     var excludeFromReports: Bool = false

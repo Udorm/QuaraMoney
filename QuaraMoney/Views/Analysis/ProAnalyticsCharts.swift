@@ -441,6 +441,8 @@ struct ProCategoriesCard: View {
                 if movers.isEmpty {
                     ProEmptyChart()
                 } else {
+                    moversChart
+
                     VStack(spacing: 0) {
                         ForEach(movers) { delta in
                             Button {
@@ -609,6 +611,91 @@ struct ProCategoriesCard: View {
     /// For expenses, spending less is good; for income, earning more is good.
     private func isGood(_ delta: ProAnalyticsProcessor.CategoryDelta) -> Bool {
         vm.selectedTransactionType == .income ? delta.change > 0 : delta.change < 0
+    }
+
+    /// Dumbbell ("before → after") chart: per category, a gray dot marks last period's
+    /// total, a colored dot marks this period's, and the connecting segment — colored by
+    /// whether the move is good or bad — *is* the change. Shows both reference values,
+    /// which the rows below only state as text.
+    private var moversChart: some View {
+        let maxValue = movers.map { max($0.current, $0.previous) }.max() ?? 0
+        let domainMax = max(maxValue.doubleValue * 1.08, 1)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            // Manual legend: previous (gray) → current (filled).
+            HStack(spacing: 14) {
+                HStack(spacing: 5) {
+                    Circle().fill(Color(.systemGray3)).frame(width: 8, height: 8)
+                    Text("analysis.pro.lastPeriod".localized)
+                        .appFont(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 5) {
+                    Circle().fill(Color.primary).frame(width: 8, height: 8)
+                    Text("analysis.pro.thisPeriod".localized)
+                        .appFont(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Chart {
+                ForEach(movers) { delta in
+                    let color = isGood(delta) ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+
+                    RuleMark(
+                        xStart: .value("analysis.pro.lastPeriod".localized, delta.previous.doubleValue),
+                        xEnd: .value("analysis.pro.thisPeriod".localized, delta.current.doubleValue),
+                        y: .value("analysis.pro.section.category".localized, delta.name)
+                    )
+                    .foregroundStyle(color.opacity(0.45))
+                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+
+                    PointMark(
+                        x: .value("analysis.pro.lastPeriod".localized, delta.previous.doubleValue),
+                        y: .value("analysis.pro.section.category".localized, delta.name)
+                    )
+                    .foregroundStyle(Color(.systemGray3))
+                    .symbolSize(70)
+
+                    PointMark(
+                        x: .value("analysis.pro.thisPeriod".localized, delta.current.doubleValue),
+                        y: .value("analysis.pro.section.category".localized, delta.name)
+                    )
+                    .foregroundStyle(color)
+                    .symbolSize(110)
+                }
+            }
+            .chartXScale(domain: 0...domainMax)
+            .chartYScale(domain: movers.map(\.name))
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisValueLabel {
+                        if let name = value.as(String.self) {
+                            Text(name)
+                                .font(.app(.caption2))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .frame(maxWidth: 76, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.secondary.opacity(0.15))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v.formattedAmountShort(for: vm.preferredCurrency))
+                                .font(.app(.caption2))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .frame(height: CGFloat(movers.count) * 38)
+        }
     }
 
     @ViewBuilder

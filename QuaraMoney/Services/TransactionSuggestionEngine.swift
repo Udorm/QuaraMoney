@@ -54,6 +54,14 @@ struct ScoredCategory: Identifiable {
     var id: UUID { category.id }
 }
 
+struct ScoredTag: Identifiable {
+    /// Display spelling (most recently used casing wins).
+    let tag: String
+    let score: Double
+    let lastUsed: Date?
+    var id: String { tag.lowercased() }
+}
+
 /// Recency-weighted, contextual ranking for the wallet/category quick-pickers on Add Transaction.
 ///
 /// Replaces the old all-time `transactions.count` sort. Each candidate is scored in a single
@@ -137,6 +145,65 @@ enum TransactionSuggestionEngine {
                 isHighlighted: index == 0 && highlightTop
             )
         }
+    }
+
+    /// Ranks note `#tags` seen in past transactions for the Add Transaction
+    /// tag-suggestion chips. Unlike wallets/categories, tags have no model —
+    /// candidates are discovered from the transactions themselves, so the
+    /// caller supplies the source set (typically a recent date-range fetch).
+    ///
+    /// Each transaction's contextual weight (recency × weekday × hour ×
+    /// wallet/category co-occurrence × location) is credited to every tag it
+    /// carries; same scoring model as the other rankers.
+    @MainActor
+    static func rankTags(
+        in transactions: [Transaction],
+        type: TransactionType,
+        selectedWallet: Wallet?,
+        selectedCategory: Category?,
+        location: SuggestionLocationContext?,
+        now: Date = Date(),
+        weights: SuggestionWeights = .default
+    ) -> [ScoredTag] {
+        struct Accum { var display: String; var score: Double; var lastUsed: Date? }
+        var byKey: [String: Accum] = [:]
+
+        for txn in transactions where txn.type == type {
+            let ageDays = max(0, now.timeIntervalSince(txn.date) / 86_400)
+            guard ageDays <= weights.windowDays else { continue }
+
+            // Stored array is authoritative; fall back to parsing the note for
+            // rows written by paths that predate (or bypass) tag extraction.
+            let tags = txn.tags.isEmpty ? TransactionTagParser.tags(in: txn.note) : txn.tags
+            guard !tags.isEmpty else { continue }
+
+            var weight = pow(0.5, ageDays / weights.halfLifeDays)
+            weight *= weekdayBoost(txn.date, now: now, weights: weights)
+            weight *= hourBoost(txn.date, now: now, weights: weights)
+            if let selectedCategory, txn.category?.id == selectedCategory.id { weight *= weights.pair }
+            if let selectedWallet, txn.sourceWallet?.id == selectedWallet.id { weight *= weights.pair }
+            weight *= locationBoost(txn, location: location, weights: weights)
+
+            for tag in tags {
+                let key = tag.lowercased()
+                var acc = byKey[key] ?? Accum(display: tag, score: 0, lastUsed: nil)
+                acc.score += weight
+                if acc.lastUsed == nil || txn.date > acc.lastUsed! {
+                    acc.lastUsed = txn.date
+                    acc.display = tag
+                }
+                byKey[key] = acc
+            }
+        }
+
+        return byKey.values
+            .map { ScoredTag(tag: $0.display, score: $0.score, lastUsed: $0.lastUsed) }
+            .sorted { lhs, rhs in
+                orderedBefore(
+                    lScore: lhs.score, lDate: lhs.lastUsed, lName: lhs.tag,
+                    rScore: rhs.score, rDate: rhs.lastUsed, rName: rhs.tag
+                )
+            }
     }
 
     // MARK: - Scoring

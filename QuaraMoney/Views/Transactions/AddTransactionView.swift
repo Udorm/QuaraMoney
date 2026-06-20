@@ -21,9 +21,15 @@ struct AddTransactionView: View {
     @State private var showLocationPicker = false
     @State private var isFetchingCurrentLocation = false
 
+    @Environment(\.modelContext) private var modelContext
+
     // Suggestion engine: cached, contextual rankings (recomputed on context changes, not every body pass)
     @State private var scoredWallets: [ScoredWallet] = []
     @State private var scoredCategories: [ScoredCategory] = []
+    @State private var scoredTags: [ScoredTag] = []
+    /// Recent transactions used as the tag-candidate pool. Fetched once on
+    /// appear (tags aren't queryable via #Predicate — they're a Codable array).
+    @State private var tagSourceTransactions: [Transaction] = []
     /// Device current-location spatial key, fetched in the background for ranking ONLY.
     /// Never written to the transaction's location field.
     @State private var backgroundLocationKey: String?
@@ -120,6 +126,67 @@ struct AddTransactionView: View {
             selectedWallet: viewModel.selectedWallet,
             location: location
         )
+        scoredTags = TransactionSuggestionEngine.rankTags(
+            in: tagSourceTransactions,
+            type: viewModel.type,
+            selectedWallet: viewModel.selectedWallet,
+            selectedCategory: viewModel.selectedCategory,
+            location: location
+        )
+    }
+
+    // MARK: - Tag suggestions
+
+    /// Chips to show under the note field. While the user is typing a `#token`
+    /// at the end of the note, suggestions narrow to prefix matches; otherwise
+    /// the contextual top tags show. Tags already present in the note are
+    /// excluded so chips always represent something new to insert.
+    private var suggestedTagChips: [ScoredTag] {
+        guard !scoredTags.isEmpty else { return [] }
+
+        let activeToken = isNoteFieldFocused
+            ? TransactionTagParser.activeTagToken(in: viewModel.note)
+            : nil
+        var existing = Set(TransactionTagParser.tags(in: viewModel.note).map { $0.lowercased() })
+        if let activeToken, !activeToken.isEmpty {
+            // The token being typed parses as a "complete" tag — don't let it
+            // suppress its own completions.
+            existing.remove(activeToken.lowercased())
+        }
+
+        let candidates = scoredTags.filter { scored in
+            let key = scored.tag.lowercased()
+            guard !existing.contains(key) else { return false }
+            if let activeToken, !activeToken.isEmpty {
+                return key.hasPrefix(activeToken.lowercased())
+            }
+            return true
+        }
+        return Array(candidates.prefix(8))
+    }
+
+    /// Inserts a suggested tag into the note: completes the `#token` being
+    /// typed when there is one, otherwise appends `#tag` to the end.
+    private func insertTag(_ tag: String) {
+        var note = viewModel.note
+        if isNoteFieldFocused, let token = TransactionTagParser.activeTagToken(in: note) {
+            note.removeLast(token.count + 1) // the partial token and its "#"
+        } else if !note.isEmpty, note.last?.isWhitespace != true {
+            note += " "
+        }
+        note += "#\(tag) "
+        viewModel.note = note
+        HapticManager.shared.selection()
+    }
+
+    /// Fetches the recent noted transactions the tag ranker mines for candidates.
+    /// Date-range only (indexed); tag extraction happens in the engine.
+    private func loadTagSourceTransactions() {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date()) ?? .distantPast
+        let descriptor = FetchDescriptor<Transaction>(
+            predicate: #Predicate { $0.date >= cutoff && $0.note != nil }
+        )
+        tagSourceTransactions = (try? modelContext.fetch(descriptor)) ?? []
     }
 
     /// Fetches the device's current location in the background to bias suggestions.
@@ -371,6 +438,7 @@ struct AddTransactionView: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
+                loadTagSourceTransactions()
                 recomputeSuggestions()
                 // Preselect the top contextually-ranked wallet
                 if viewModel.selectedWallet == nil, let wallet = scoredWallets.first?.wallet ?? wallets.first {
@@ -694,13 +762,38 @@ struct AddTransactionView: View {
                 }
             }
 
-            // Note Field
+            // Note Field — supports inline #tags; suggestions render below.
             Label {
                 TextField(L10n.Transaction.note, text: $viewModel.note)
                     .focused($isNoteFieldFocused)
                     .submitLabel(.done)
             } icon: {
                 fieldIcon("note.text", color: .gray)
+            }
+
+            // Tag suggestion chips: contextual top tags by default; switches to
+            // prefix-matched autocomplete while a `#token` is being typed.
+            if !suggestedTagChips.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(suggestedTagChips) { scored in
+                            Button {
+                                insertTag(scored.tag)
+                            } label: {
+                                Text("#\(scored.tag)")
+                                    .font(.app(.footnote, weight: .medium))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("transaction.tag.add".localized(with: scored.tag))
+                        }
+                    }
+                }
+                .listRowSeparator(.hidden, edges: .top)
             }
 
             // Location Row — tappable label opens the picker; trailing circle is a one-tap current-location shortcut.

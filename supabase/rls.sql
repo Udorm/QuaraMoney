@@ -13,7 +13,8 @@ begin
     'wallets','categories','events','recurring_rules','savings_goals','debts',
     'transactions','transaction_locations','budgets','budget_categories',
     'event_members','event_ledger_transactions','event_ledger_participants',
-    'event_settlement_snapshots','event_wallet_export_records'
+    'event_settlement_snapshots','event_settlement_transfers',
+    'event_wallet_export_records'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);

@@ -1,30 +1,15 @@
--- QuaraMoney — canonical Postgres schema
--- Generated for the SwiftData → Supabase migration. See MIGRATION.md.
---
--- Conventions:
---   * id            uuid PRIMARY KEY — client-generated (matches SwiftData UUIDs)
---   * user_id       uuid NOT NULL    — owner, FK to auth.users; drives RLS
---   * created_at    timestamptz
---   * updated_at    timestamptz      — LWW sync key (trigger keeps it honest)
---   * deleted_at    timestamptz NULL — soft delete / tombstone (NULL = live)
---   * money         numeric(19,4)    — NEVER float; decode as string in Swift
---   * minor units   bigint           — event ledger (Int64)
---   * enums         text + CHECK     — store the Swift rawValue
---
--- Apply with: supabase db push   (or paste into the SQL editor / MCP apply_migration)
+-- QuaraMoney — canonical Postgres schema (full-fidelity, all 15 entities + join).
+-- Source of truth is the applied Supabase migrations; this file mirrors them.
+-- Conventions: money = numeric (decode as STRING in Swift); Int64 minor units =
+-- bigint; enums = text; Storage blobs = *_path; soft delete = deleted_at;
+-- updated_at = LWW key (trigger-maintained). needsSync is LOCAL-only (not here).
 
--- ---------------------------------------------------------------------------
--- Extensions
--- ---------------------------------------------------------------------------
-create extension if not exists "pgcrypto"; -- gen_random_uuid (server-side fallback)
+create extension if not exists "pgcrypto";
 
--- ---------------------------------------------------------------------------
--- updated_at trigger (server backstop; client also sets it for LWW)
--- ---------------------------------------------------------------------------
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
-set search_path = ''               -- pinned: avoids function_search_path_mutable advisor
+set search_path = ''
 as $$
 begin
   new.updated_at := now();
@@ -32,225 +17,282 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- wallets
--- ---------------------------------------------------------------------------
 create table if not exists public.wallets (
-  id            uuid primary key,
-  user_id       uuid not null references auth.users (id) on delete cascade,
-  name          text not null,
-  currency_code text not null check (char_length(currency_code) = 3),
-  icon          text not null,
-  color_hex     text not null,
-  is_archived   boolean not null default false,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now(),
-  deleted_at    timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  currency_code text not null,
+  icon text not null,
+  color_hex text not null,
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- categories
--- ---------------------------------------------------------------------------
 create table if not exists public.categories (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  name        text not null,
-  icon        text,
-  color_hex   text,
-  type        text not null check (type in ('income','expense')),
-  is_system   boolean not null default false,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  icon text,
+  color_hex text,
+  type text not null,
+  is_system boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- events  (group expense splitting; single-owner for now)
--- ---------------------------------------------------------------------------
 create table if not exists public.events (
-  id           uuid primary key,
-  user_id      uuid not null references auth.users (id) on delete cascade,
-  name         text not null,
-  ledger_mode  text not null default 'isolatedV1' check (ledger_mode in ('legacyLinked','isolatedV1')),
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now(),
-  deleted_at   timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  start_date timestamptz not null,
+  end_date timestamptz,
+  total_budget numeric(19,4),
+  cover_image_path text,
+  notes text,
+  icon text not null default 'party.popper',
+  color_hex text not null default '007AFF',
+  location text,
+  status text not null default 'planned',
+  currency_code text not null default 'USD',
+  ledger_revision bigint not null default 0,
+  confirmed_settlement_revision bigint,
+  ledger_mode text not null default 'isolatedV1',
+  latitude double precision,
+  longitude double precision,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- recurring_rules
--- ---------------------------------------------------------------------------
 create table if not exists public.recurring_rules (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  category_id uuid references public.categories (id) on delete set null,
-  wallet_id   uuid references public.wallets (id) on delete set null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  amount numeric(19,4) not null,
+  currency_code text not null,
+  frequency text not null,
+  start_date timestamptz not null,
+  next_due_date timestamptz not null,
+  is_active boolean not null default true,
+  wallet_id uuid references public.wallets(id) on delete set null,
+  category_id uuid references public.categories(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- savings_goals
--- ---------------------------------------------------------------------------
 create table if not exists public.savings_goals (
-  id               uuid primary key,
-  user_id          uuid not null references auth.users (id) on delete cascade,
-  linked_wallet_id uuid references public.wallets (id) on delete set null,
-  created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now(),
-  deleted_at       timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  goal_description text,
+  target_amount numeric(19,4) not null,
+  current_amount numeric(19,4) not null default 0,
+  currency_code text not null,
+  target_date timestamptz,
+  created_date timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  icon_name text not null,
+  color_hex text not null,
+  is_completed boolean not null default false,
+  completed_date timestamptz,
+  auto_contribute_enabled boolean not null default false,
+  auto_contribute_amount numeric(19,4),
+  auto_contribute_period_raw text,
+  priority integer not null default 0,
+  linked_wallet_id uuid references public.wallets(id) on delete set null,
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- debts
--- ---------------------------------------------------------------------------
 create table if not exists public.debts (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  person_name text not null,
+  total_amount numeric(19,4) not null,
+  currency_code text not null,
+  due_date timestamptz,
+  type text not null,
+  note text,
+  date_created timestamptz not null default now(),
+  is_completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- transactions  (core table)
--- ---------------------------------------------------------------------------
 create table if not exists public.transactions (
-  id                   uuid primary key,
-  user_id              uuid not null references auth.users (id) on delete cascade,
-  type                 text not null check (type in ('income','expense','transfer','adjustment')),
-  date                 timestamptz not null,
-  note                 text,
-  tags                 text[] not null default '{}',
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  type text not null,
+  date timestamptz not null,
+  note text,
+  tags text[] not null default '{}',
   exclude_from_reports boolean not null default false,
-
-  amount               numeric(19,4) not null,
-  currency_code        text not null check (char_length(currency_code) = 3),
-  exchange_rate        numeric(19,8) not null default 1,
-  stored_rate          numeric(19,8),
-
-  photo_path           text,                -- Supabase Storage object path
-
-  -- Relationships (FK delete rules mirror SwiftData @Relationship)
-  category_id          uuid references public.categories (id)   on delete restrict, -- .deny
-  event_id             uuid references public.events (id)       on delete set null, -- .nullify
-  source_wallet_id     uuid references public.wallets (id)      on delete cascade,  -- .cascade
-  destination_wallet_id uuid references public.wallets (id)     on delete set null, -- .nullify
-  recurring_rule_id    uuid references public.recurring_rules (id) on delete cascade,
-  debt_id              uuid references public.debts (id)        on delete cascade,
-  savings_goal_id      uuid references public.savings_goals (id) on delete set null,
-
-  created_at           timestamptz not null default now(),
-  updated_at           timestamptz not null default now(),
-  deleted_at           timestamptz
+  amount numeric(19,4) not null,
+  currency_code text not null,
+  exchange_rate numeric(19,8) not null default 1,
+  stored_rate numeric(19,8),
+  photo_path text,
+  category_id uuid references public.categories(id) on delete restrict,
+  event_id uuid references public.events(id) on delete set null,
+  source_wallet_id uuid references public.wallets(id) on delete cascade,
+  destination_wallet_id uuid references public.wallets(id) on delete set null,
+  recurring_rule_id uuid references public.recurring_rules(id) on delete cascade,
+  debt_id uuid references public.debts(id) on delete cascade,
+  savings_goal_id uuid references public.savings_goals(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- transaction_locations  (1:1 with transaction, cascade)
--- ---------------------------------------------------------------------------
 create table if not exists public.transaction_locations (
-  id             uuid primary key,
-  user_id        uuid not null references auth.users (id) on delete cascade,
-  transaction_id uuid not null references public.transactions (id) on delete cascade,
-  latitude       double precision,
-  longitude      double precision,
-  name           text,
-  address        text,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  deleted_at     timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  transaction_id uuid references public.transactions(id) on delete cascade,
+  display_name text,
+  full_address text,
+  short_address text,
+  latitude double precision not null,
+  longitude double precision not null,
+  horizontal_accuracy_meters double precision,
+  captured_at timestamptz not null default now(),
+  source_raw text not null,
+  apple_place_id text,
+  alternate_apple_place_ids text,
+  point_of_interest_category_raw text,
+  locality text,
+  administrative_area text,
+  country_code text,
+  normalized_spatial_key text,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- budgets
--- ---------------------------------------------------------------------------
 create table if not exists public.budgets (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  category_id uuid references public.categories (id) on delete set null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text,
+  amount_limit numeric(19,4) not null,
+  currency_code text not null default 'USD',
+  period_type_raw text not null default 'monthly',
+  start_date timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  custom_end_date timestamptz,
+  month integer not null default 1,
+  year integer not null default 2026,
+  is_recurring boolean not null default false,
+  rollover_excess boolean not null default false,
+  rollover_amount numeric(19,4) not null default 0,
+  amount_type_data jsonb,
+  alert_at_50 boolean not null default false,
+  alert_at_80 boolean not null default true,
+  alert_at_100 boolean not null default true,
+  alert_on_projected_overspend boolean not null default false,
+  last_alert_triggered_date timestamptz,
+  last_alert_threshold integer not null default 0,
+  budget_category_type_raw text,
+  category_id uuid references public.categories(id) on delete set null,
+  deleted_at timestamptz
 );
 
--- budgets ↔ categories many-to-many (Budget.categories array)
 create table if not exists public.budget_categories (
-  budget_id   uuid not null references public.budgets (id) on delete cascade,
-  category_id uuid not null references public.categories (id) on delete cascade,
-  user_id     uuid not null references auth.users (id) on delete cascade,
+  budget_id uuid not null references public.budgets(id) on delete cascade,
+  category_id uuid not null references public.categories(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
   primary key (budget_id, category_id)
 );
 
--- ---------------------------------------------------------------------------
--- event_members
--- ---------------------------------------------------------------------------
 create table if not exists public.event_members (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  event_id    uuid not null references public.events (id) on delete cascade,
-  name        text not null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  name text not null,
+  avatar_path text,
+  avatar_icon text,
+  color_hex text not null default '#007AFF',
+  is_archived boolean not null default false,
+  is_local_user boolean not null default false,
+  is_budget_pool boolean not null default false,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- event_ledger_transactions  (amounts as Int64 minor units → bigint)
--- ---------------------------------------------------------------------------
 create table if not exists public.event_ledger_transactions (
-  id            uuid primary key,
-  user_id       uuid not null references auth.users (id) on delete cascade,
-  event_id      uuid not null references public.events (id) on delete cascade,
-  amount_minor  bigint not null,
-  currency_code text not null check (char_length(currency_code) = 3),
-  split_type    text not null check (split_type in ('equal','custom','payerOnly')),
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now(),
-  deleted_at    timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  kind text not null,
+  title text not null,
+  amount_minor bigint not null,
+  paid_source text not null,
+  paid_by_member_id uuid,
+  split_type text not null,
+  date timestamptz not null,
+  note text,
+  category_id uuid,
+  category_name text,
+  category_icon text,
+  category_color_hex text,
+  is_split_all boolean not null default false,
+  is_deleted boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- event_ledger_participants
--- ---------------------------------------------------------------------------
 create table if not exists public.event_ledger_participants (
-  id             uuid primary key,
-  user_id        uuid not null references auth.users (id) on delete cascade,
-  transaction_id uuid not null references public.event_ledger_transactions (id) on delete cascade,
-  member_id      uuid references public.event_members (id) on delete set null,
-  share_minor    bigint,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  deleted_at     timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  transaction_id uuid references public.event_ledger_transactions(id) on delete cascade,
+  member_id uuid not null,
+  event_member_id uuid references public.event_members(id) on delete set null,
+  order_index integer not null default 0,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- event_settlement_snapshots
--- ---------------------------------------------------------------------------
 create table if not exists public.event_settlement_snapshots (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  event_id    uuid not null references public.events (id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  ledger_revision bigint not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- event_wallet_export_records
--- ---------------------------------------------------------------------------
+create table if not exists public.event_settlement_transfers (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  snapshot_id uuid references public.event_settlement_snapshots(id) on delete cascade,
+  from_member_id uuid not null,
+  to_member_id uuid not null,
+  amount_minor bigint not null,
+  sequence integer not null default 0,
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 create table if not exists public.event_wallet_export_records (
-  id          uuid primary key,
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  event_id    uuid not null references public.events (id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_id uuid references public.events(id) on delete cascade,
+  snapshot_id uuid references public.event_settlement_snapshots(id) on delete set null,
+  member_id uuid not null,
+  wallet_transaction_id uuid not null,
+  amount_minor bigint not null,
+  direction text not null,
+  export_type text not null default 'settlement',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
--- ---------------------------------------------------------------------------
--- Triggers: keep updated_at fresh on every UPDATE
--- ---------------------------------------------------------------------------
+-- updated_at triggers
 do $$
 declare t text;
 begin
@@ -258,7 +300,8 @@ begin
     'wallets','categories','events','recurring_rules','savings_goals','debts',
     'transactions','transaction_locations','budgets','event_members',
     'event_ledger_transactions','event_ledger_participants',
-    'event_settlement_snapshots','event_wallet_export_records'
+    'event_settlement_snapshots','event_settlement_transfers',
+    'event_wallet_export_records'
   ]
   loop
     execute format(
@@ -268,13 +311,20 @@ begin
   end loop;
 end$$;
 
--- ---------------------------------------------------------------------------
--- Indexes for sync pull (updated_at) + common lookups
--- ---------------------------------------------------------------------------
-create index if not exists idx_transactions_user_updated on public.transactions (user_id, updated_at);
-create index if not exists idx_transactions_user_date    on public.transactions (user_id, date);
-create index if not exists idx_wallets_user_updated      on public.wallets (user_id, updated_at);
-create index if not exists idx_categories_user_updated   on public.categories (user_id, updated_at);
-create index if not exists idx_budgets_user_updated      on public.budgets (user_id, updated_at);
-create index if not exists idx_debts_user_updated        on public.debts (user_id, updated_at);
-create index if not exists idx_events_user_updated       on public.events (user_id, updated_at);
+-- sync-pull / lookup indexes
+create index if not exists idx_transactions_user_updated on public.transactions(user_id, updated_at);
+create index if not exists idx_transactions_user_date    on public.transactions(user_id, date);
+create index if not exists idx_wallets_user_updated      on public.wallets(user_id, updated_at);
+create index if not exists idx_categories_user_updated   on public.categories(user_id, updated_at);
+create index if not exists idx_budgets_user_updated      on public.budgets(user_id, updated_at);
+create index if not exists idx_debts_user_updated        on public.debts(user_id, updated_at);
+create index if not exists idx_events_user_updated       on public.events(user_id, updated_at);
+create index if not exists idx_recurring_user_updated    on public.recurring_rules(user_id, updated_at);
+create index if not exists idx_savings_user_updated      on public.savings_goals(user_id, updated_at);
+create index if not exists idx_txlocations_user_updated  on public.transaction_locations(user_id, updated_at);
+create index if not exists idx_evmembers_user_updated    on public.event_members(user_id, updated_at);
+create index if not exists idx_evledgertx_user_updated   on public.event_ledger_transactions(user_id, updated_at);
+create index if not exists idx_evparticipants_user_updated on public.event_ledger_participants(user_id, updated_at);
+create index if not exists idx_evsnapshots_user_updated  on public.event_settlement_snapshots(user_id, updated_at);
+create index if not exists idx_evtransfers_user_updated  on public.event_settlement_transfers(user_id, updated_at);
+create index if not exists idx_evexports_user_updated    on public.event_wallet_export_records(user_id, updated_at);

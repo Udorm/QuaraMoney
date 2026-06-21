@@ -65,6 +65,14 @@ final class SyncEngine: ObservableObject {
         await syncNow(context: context)
     }
 
+    /// Flushes pending local changes while the current account is still signed in.
+    /// Call before sign-out so an account switch (which wipes the local cache)
+    /// can't lose un-pushed edits. Uses the context registered by `enableAutoSync`.
+    func flushBeforeSignOut() async {
+        guard let context = autoSyncContext else { return }
+        await syncIfOperational(context: context)
+    }
+
     private func handleLocalSave() {
         // Ignore the engine's own writes; only react to genuine local edits.
         guard !SyncMutationTracker.isApplyingSyncChanges,
@@ -156,6 +164,65 @@ final class SyncEngine: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    // MARK: - Account scoping
+
+    private static let localOwnerKey = "localStoreOwnerID.v1"
+
+    private static let allTableNames = [
+        "wallets", "categories", "events", "recurring_rules", "savings_goals", "debts",
+        "transactions", "transaction_locations", "budgets", "budget_categories",
+        "event_members", "event_ledger_transactions", "event_ledger_participants",
+        "event_settlement_snapshots", "event_settlement_transfers", "event_wallet_export_records"
+    ]
+
+    /// Ensures the local cache belongs to the currently signed-in account. If a
+    /// *different* account previously owned the local data, that data is already
+    /// in the cloud, so we wipe the local cache and reset sync state before
+    /// adopting the new account. Prevents cross-account data leakage when users
+    /// switch accounts on the same device.
+    ///
+    /// Call on sign-in, before syncing. The wipe runs under the sync-write guard
+    /// so it does NOT create deletion tombstones (which would delete the previous
+    /// account's *cloud* rows).
+    func reconcileAccountIfNeeded(context: ModelContext) {
+        guard let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return }
+        let owner = UserDefaults.standard.string(forKey: Self.localOwnerKey).flatMap(UUID.init(uuidString:))
+        if let owner, owner != uid {
+            SyncMutationTracker.isApplyingSyncChanges = true
+            defer { SyncMutationTracker.isApplyingSyncChanges = false }
+            wipeLocalData(context: context)
+            resetSyncState()
+            lastSyncDate = nil
+        }
+        UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+    }
+
+    /// Bulk-deletes all synced models locally (children before parents to respect
+    /// the Category→Transaction `.deny` rule). The on-disk store is a cache; the
+    /// data remains in the cloud for the previous account.
+    private func wipeLocalData(context: ModelContext) {
+        let orderedChildFirst: [any PersistentModel.Type] = [
+            TransactionLocation.self, Transaction.self,
+            EventWalletExportRecord.self, EventSettlementTransfer.self, EventSettlementSnapshot.self,
+            EventLedgerParticipant.self, EventLedgerTransaction.self, EventMember.self,
+            Budget.self, RecurringRule.self, SavingsGoal.self, Debt.self, Event.self,
+            Category.self, Wallet.self
+        ]
+        for type in orderedChildFirst {
+            try? context.delete(model: type)
+        }
+        try? context.save()
+    }
+
+    private func resetSyncState() {
+        for table in Self.allTableNames {
+            UserDefaults.standard.removeObject(forKey: Self.cursorKey(table))
+        }
+        SyncDeletionQueue.clear()
+        hasCompletedInitialSync = false
+        UserDefaults.standard.set(false, forKey: "hasCompletedInitialSync.v1")
     }
 
     // MARK: - Push

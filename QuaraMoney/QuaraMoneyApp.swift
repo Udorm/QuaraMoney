@@ -180,7 +180,10 @@ struct QuaraMoneyApp: App {
             }
             .onChange(of: authManager.state) { _, _ in
                 if authManager.isSignedIn {
-                    // Initial full sync + start live updates once signed in.
+                    // If a different account previously owned this device's local
+                    // data, clear it before adopting the new account (prevents
+                    // cross-account data mixing). Then sync + start live updates.
+                    SyncEngine.shared.reconcileAccountIfNeeded(context: sharedModelContainer.mainContext)
                     Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
                     SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
                 } else {

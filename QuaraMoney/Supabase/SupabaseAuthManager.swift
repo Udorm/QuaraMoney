@@ -119,6 +119,9 @@ final class SupabaseAuthManager: ObservableObject {
         guard let client else { return }
         beginWork()
         defer { isWorking = false }
+        // Flush any pending local changes while still authenticated, so a later
+        // account switch (which clears the local cache) can't lose un-pushed edits.
+        await SyncEngine.shared.flushBeforeSignOut()
         do {
             try await client.auth.signOut()
         } catch {

@@ -61,6 +61,11 @@ enum SyncDeletionQueue {
         save(entries)
     }
 
+    /// Drops all queued deletions (used when switching accounts on a device).
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     private static func save(_ entries: [Entry]) {
         UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: key)
     }

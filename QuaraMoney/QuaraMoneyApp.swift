@@ -179,9 +179,12 @@ struct QuaraMoneyApp: App {
                 }
             }
             .onChange(of: authManager.state) { _, _ in
-                // Initial full sync once a session is (re)established.
                 if authManager.isSignedIn {
+                    // Initial full sync + start live updates once signed in.
                     Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
+                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
+                } else {
+                    SyncRealtime.shared.stop()
                 }
             }
             .preferredColorScheme(selectedTheme.colorScheme)
@@ -224,13 +227,16 @@ struct QuaraMoneyApp: App {
                     // Lock when leaving the foreground (no-op unless the user
                     // enabled app-lock in Settings).
                     securityManager.lockApp()
+                    // Release the Realtime connection while backgrounded.
+                    SyncRealtime.shared.stop()
                 case .active:
                     // Returning to the foreground: prompt for biometrics if locked.
                     if securityManager.isAppLocked {
                         securityManager.authenticate()
                     }
-                    // Pull any changes from other devices on foreground.
+                    // Pull any changes from other devices, then resume live updates.
                     Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
+                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
                 @unknown default:
                     break
                 }

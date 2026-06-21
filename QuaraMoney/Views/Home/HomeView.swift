@@ -24,6 +24,9 @@ struct HomeView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 transactionList
+                    .refreshable {
+                        await SyncEngine.shared.syncIfOperational(context: modelContext)
+                    }
             }
             .safeAreaInset(edge: .bottom, alignment: .trailing) {
                 Button {

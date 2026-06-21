@@ -171,9 +171,17 @@ struct QuaraMoneyApp: App {
                 // Track local edits so the sync engine can detect changes.
                 // Harmless when sync is off (just stamps local metadata).
                 SyncMutationTracker.start(mainContext: sharedModelContainer.mainContext)
+                // Auto-sync after local edits (debounced); no-op when sync is off.
+                SyncEngine.shared.enableAutoSync(context: sharedModelContainer.mainContext)
                 // Restore an existing session on launch when sync is enabled.
                 if SupabaseFeatureFlags.isSyncEnabled {
                     authManager.start()
+                }
+            }
+            .onChange(of: authManager.state) { _, _ in
+                // Initial full sync once a session is (re)established.
+                if authManager.isSignedIn {
+                    Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
                 }
             }
             .preferredColorScheme(selectedTheme.colorScheme)
@@ -221,6 +229,8 @@ struct QuaraMoneyApp: App {
                     if securityManager.isAppLocked {
                         securityManager.authenticate()
                     }
+                    // Pull any changes from other devices on foreground.
+                    Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
                 @unknown default:
                     break
                 }

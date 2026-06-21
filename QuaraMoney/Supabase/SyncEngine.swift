@@ -24,7 +24,50 @@ final class SyncEngine: ObservableObject {
     @Published private(set) var lastSyncDate: Date?
     @Published var lastError: String?
 
+    private var autoSyncStarted = false
+    private var autoSyncContext: ModelContext?
+    private var debounceTask: Task<Void, Never>?
+
     private init() {}
+
+    // MARK: - Auto-sync triggers
+
+    /// Wires automatic sync: a debounced push after local saves. Idempotent.
+    /// Safe to call when sync is off — `syncNow` guards on `isOperational`.
+    func enableAutoSync(context: ModelContext) {
+        guard !autoSyncStarted else { return }
+        autoSyncStarted = true
+        autoSyncContext = context
+        NotificationCenter.default.addObserver(
+            forName: ModelContext.didSave,
+            object: context,
+            queue: nil
+        ) { _ in
+            MainActor.assumeIsolated {
+                SyncEngine.shared.handleLocalSave()
+            }
+        }
+    }
+
+    /// Triggers a sync only when sync is enabled, configured, and signed in.
+    /// Use for foreground / post-sign-in triggers.
+    func syncIfOperational(context: ModelContext) async {
+        guard SupabaseFeatureFlags.isOperational else { return }
+        await syncNow(context: context)
+    }
+
+    private func handleLocalSave() {
+        // Ignore the engine's own writes; only react to genuine local edits.
+        guard !SyncMutationTracker.isApplyingSyncChanges,
+              SupabaseFeatureFlags.isOperational,
+              let context = autoSyncContext else { return }
+        debounceTask?.cancel()
+        debounceTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let self, let ctx = self.autoSyncContext else { return }
+            await self.syncNow(context: ctx)
+        }
+    }
 
     enum SyncError: LocalizedError {
         case notOperational

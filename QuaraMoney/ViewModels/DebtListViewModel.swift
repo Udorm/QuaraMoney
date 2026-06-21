@@ -23,12 +23,33 @@ final class DebtListViewModel {
         filteredDebts(allDebts).filter { $0.isCompleted }
     }
     
+    /// Sum of outstanding balances owed to the user, converted to the
+    /// preferred currency so multi-currency debts aggregate correctly.
     func totalOwedToMe(_ allDebts: [Debt]) -> Decimal {
-        allDebts.filter { $0.type == .owedToMe }.reduce(0) { $0 + $1.remainingAmount }
+        convertedRemaining(allDebts.filter { $0.type == .owedToMe })
     }
 
+    /// Sum of outstanding balances the user owes, in the preferred currency.
     func totalIOwe(_ allDebts: [Debt]) -> Decimal {
-        allDebts.filter { $0.type == .iOwe }.reduce(0) { $0 + $1.remainingAmount }
+        convertedRemaining(allDebts.filter { $0.type == .iOwe })
+    }
+
+    /// Net position (owed to me − I owe) in the preferred currency.
+    func netPosition(_ allDebts: [Debt]) -> Decimal {
+        totalOwedToMe(allDebts) - totalIOwe(allDebts)
+    }
+
+    private func convertedRemaining(_ debts: [Debt]) -> Decimal {
+        let preferred = CurrencyManager.shared.preferredCurrencyCode
+        let rates = CurrencyManager.shared.rates
+        return debts.reduce(0) { sum, debt in
+            sum + CurrencyManager.convert(
+                amount: debt.displayRemaining,
+                from: debt.currencyCode,
+                to: preferred,
+                rates: rates
+            )
+        }
     }
 
     /// Number of wallet transactions that would be deleted along with this debt

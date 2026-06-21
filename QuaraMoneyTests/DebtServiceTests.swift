@@ -181,4 +181,86 @@ final class DebtServiceTests: XCTestCase {
         XCTAssertNotNil(debt.dueDate)
         XCTAssertEqual(debt.note, "Updated")
     }
+
+    func testUpdatePrincipalAmount() throws {
+        let debt = try service.createDebt(
+            person: "Alice",
+            amount: Decimal(100),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            sourceWallet: nil
+        )
+
+        try service.updateDebt(debt, person: "Alice", dueDate: nil, note: nil, newPrincipalAmount: Decimal(150))
+
+        XCTAssertEqual(debt.currentTotalAmount, Decimal(150))
+        XCTAssertEqual(debt.remainingAmount, Decimal(150))
+        XCTAssertEqual(debt.totalAmount, Decimal(150))
+    }
+
+    func testUpdatePrincipalBelowPaidThrows() throws {
+        let debt = try service.createDebt(
+            person: "Alice",
+            amount: Decimal(100),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            sourceWallet: nil
+        )
+        try service.recordRepayment(for: debt, amount: Decimal(60), sourceWallet: nil)
+
+        XCTAssertThrowsError(
+            try service.updateDebt(debt, person: "Alice", dueDate: nil, note: nil, newPrincipalAmount: Decimal(50))
+        ) { error in
+            XCTAssertEqual(error as? DebtServiceError, .amountBelowPaid)
+        }
+    }
+
+    // MARK: - Currency-aware ledger (approach A)
+
+    /// A repayment recorded in a different currency than the debt must be
+    /// converted into the debt's currency before it counts against the balance.
+    func testCrossCurrencyRepaymentConvertsToDebtCurrency() throws {
+        // $100 USD owed to me.
+        let debt = try service.createDebt(
+            person: "Alice",
+            amount: Decimal(100),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            sourceWallet: nil
+        )
+
+        // Repayment of 4000 KHR ≈ $1 USD at the reference rate (KHR = 4000/USD).
+        let repayment = Transaction(amount: Decimal(4000), currencyCode: "KHR", date: Date(), type: .income)
+        repayment.debt = debt
+        context.insert(repayment)
+
+        XCTAssertEqual(debt.amountPaid, Decimal(1))
+        XCTAssertEqual(debt.remainingAmount, Decimal(99))
+    }
+
+    /// `reconcile()` re-derives the cached total and completion flag from the
+    /// live transactions after a linked transaction is edited directly.
+    func testReconcileUpdatesTotalAndCompletion() throws {
+        let debt = try service.createDebt(
+            person: "Alice",
+            amount: Decimal(100),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            sourceWallet: nil
+        )
+        try service.recordRepayment(for: debt, amount: Decimal(100), sourceWallet: nil)
+        XCTAssertTrue(debt.isCompleted)
+
+        // Simulate editing the principal advance up to $200 from the main editor.
+        debt.principalTransaction?.amount = Decimal(200)
+        debt.reconcile()
+
+        XCTAssertEqual(debt.totalAmount, Decimal(200))
+        XCTAssertEqual(debt.remainingAmount, Decimal(100))
+        XCTAssertFalse(debt.isCompleted)
+    }
 }

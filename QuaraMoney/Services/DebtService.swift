@@ -8,6 +8,8 @@ enum DebtServiceError: LocalizedError {
     case repaymentExceedsRemaining
     case cannotMarkCompletedWithRemainingBalance
     case cannotMarkActiveWhenPaidOff
+    case amountNotEditable
+    case amountBelowPaid
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +23,10 @@ enum DebtServiceError: LocalizedError {
             return "Cannot mark completed while a remaining balance exists."
         case .cannotMarkActiveWhenPaidOff:
             return "Cannot mark active when the debt is already paid off."
+        case .amountNotEditable:
+            return "debt.editAmountLocked".localized
+        case .amountBelowPaid:
+            return "debt.amountBelowPaid".localized
         }
     }
 }
@@ -39,7 +45,8 @@ final class DebtService {
         currency: String,
         dueDate: Date?,
         note: String?,
-        sourceWallet: Wallet?
+        sourceWallet: Wallet?,
+        date: Date = Date()
     ) throws -> Debt {
         try validatePerson(person)
         try validateAmount(amount)
@@ -61,11 +68,12 @@ final class DebtService {
                 dueDate: dueDate,
                 note: note
             )
+            debt.dateCreated = date
 
             let transaction = Transaction(
                 amount: amount,
                 currencyCode: currency,
-                date: Date(),
+                date: date,
                 type: .expense
             )
             transaction.note = "Lent to \(trimmedPerson)"
@@ -90,7 +98,8 @@ final class DebtService {
         currency: String,
         dueDate: Date?,
         note: String?,
-        destinationWallet: Wallet?
+        destinationWallet: Wallet?,
+        date: Date = Date()
     ) throws -> Debt {
         try validatePerson(person)
         try validateAmount(amount)
@@ -112,11 +121,12 @@ final class DebtService {
                 dueDate: dueDate,
                 note: note
             )
+            debt.dateCreated = date
 
             let transaction = Transaction(
                 amount: amount,
                 currencyCode: currency,
-                date: Date(),
+                date: date,
                 type: .income
             )
             transaction.note = "Borrowed from \(trimmedPerson)"
@@ -139,7 +149,8 @@ final class DebtService {
         for debt: Debt,
         amount: Decimal,
         sourceWallet: Wallet?,
-        date: Date = Date()
+        date: Date = Date(),
+        note: String? = nil
     ) throws {
         try validateAmount(amount)
         let tolerance: Decimal = 0.000001
@@ -179,7 +190,8 @@ final class DebtService {
                 date: date,
                 type: transactionType
             )
-            transaction.note = "Repayment: \(debt.personName)"
+            let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            transaction.note = (trimmedNote?.isEmpty == false) ? trimmedNote : "Repayment: \(debt.personName)"
             transaction.category = category
             transaction.sourceWallet = sourceWallet
             transaction.debt = debt
@@ -197,7 +209,9 @@ final class DebtService {
         _ debt: Debt,
         person: String,
         dueDate: Date?,
-        note: String?
+        note: String?,
+        newPrincipalAmount: Decimal? = nil,
+        date: Date? = nil
     ) throws {
         try validatePerson(person)
         let trimmedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -206,12 +220,63 @@ final class DebtService {
             debt.personName = trimmedPerson
             debt.dueDate = dueDate
             debt.note = note
-            try persistChanges(affectedWallet: nil)
+
+            var affectedWallet: Wallet?
+            if let newAmount = newPrincipalAmount {
+                affectedWallet = try applyPrincipalAmount(newAmount, to: debt)
+            }
+
+            // The debt's date maps to its initial advance transaction's date
+            // (plus the sort key) so it stays consistent in the ledger timeline.
+            if let date {
+                debt.dateCreated = date
+                debt.principalTransaction?.date = date
+            }
+
+            debt.updatedAt = Date()
+            try persistChanges(affectedWallet: affectedWallet)
         } catch {
             modelContext.rollback()
             throw error
         }
     }
+
+    /// The system category used for repayments on this debt, fetched or created.
+    /// Exposed so the shared transaction editor can tag a repayment correctly.
+    func repaymentCategory(for debt: Debt) throws -> Category {
+        switch debt.type {
+        case .owedToMe:
+            return try fetchOrCreateSystemCategory(name: "Debt Collection", type: .income, icon: "tray.and.arrow.down.fill", color: "#34C759")
+        case .iOwe:
+            return try fetchOrCreateSystemCategory(name: "Loan Repayment", type: .expense, icon: "tray.and.arrow.up.fill", color: "#007AFF")
+        }
+    }
+
+    /// Adjusts the single principal (initial advance) transaction of a debt.
+    /// Only safe when exactly one principal transaction exists; multiple
+    /// advances or recorded repayments lock the amount to preserve ledger
+    /// integrity. Returns the wallet whose balance cache must be invalidated.
+    @discardableResult
+    private func applyPrincipalAmount(_ newAmount: Decimal, to debt: Debt) throws -> Wallet? {
+        try validateAmount(newAmount)
+
+        guard let principal = debt.principalTransaction else {
+            throw DebtServiceError.amountNotEditable
+        }
+
+        let tolerance: Decimal = 0.000001
+        guard newAmount + tolerance >= debt.amountPaid else {
+            throw DebtServiceError.amountBelowPaid
+        }
+
+        guard newAmount != principal.amount else { return nil }
+
+        principal.amount = newAmount
+        debt.totalAmount = newAmount
+        debt.isCompleted = (newAmount - debt.amountPaid) <= tolerance
+        return principal.sourceWallet
+    }
+
 
     func syncCompletionStatus(for debt: Debt) throws {
         let tolerance: Decimal = 0.000001

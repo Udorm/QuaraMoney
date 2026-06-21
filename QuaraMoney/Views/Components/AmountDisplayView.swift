@@ -5,13 +5,18 @@ struct AmountDisplayView: View {
     @Binding var currencyCode: String
     let expression: String
     let isEditing: Bool
+    /// When false, the currency segmented picker is replaced with a static,
+    /// non-interactive currency label (used where the currency is fixed, e.g.
+    /// recording a repayment against an existing debt).
+    let showsCurrencyPicker: Bool
     var onTap: (() -> Void)? = nil
 
-    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, onTap: (() -> Void)? = nil) {
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, showsCurrencyPicker: Bool = true, onTap: (() -> Void)? = nil) {
         self.amount = amount
         self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
+        self.showsCurrencyPicker = showsCurrencyPicker
         self.onTap = onTap
     }
     
@@ -102,8 +107,17 @@ struct AmountDisplayView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            CurrencySegmentedPicker(currencyCode: $currencyCode)
-            
+            if showsCurrencyPicker {
+                CurrencySegmentedPicker(currencyCode: $currencyCode)
+            } else {
+                Text(currencyCode)
+                    .font(.app(.caption, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 32)
+                    .background(Color(.tertiarySystemFill), in: Capsule())
+            }
+
             // Main amount/expression display & calculation preview
             VStack(spacing: 4) {
                 HStack(alignment: .center, spacing: 4) {

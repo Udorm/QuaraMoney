@@ -35,7 +35,7 @@ class AddTransactionViewModel: BaseViewModel {
     private var existingTransaction: Transaction?
     var isEditing: Bool { existingTransaction != nil }
     
-    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil) {
+    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil) {
         self.selectedWallet = initialWallet
         self.selectedEvent = initialEvent
         self.existingTransaction = transaction
@@ -72,6 +72,20 @@ class AddTransactionViewModel: BaseViewModel {
             } else {
                 self.selectedCategory = txn.category
             }
+        } else if let debt = initialDebt {
+            // New repayment for a debt/loan: preconfigure the entry to match the
+            // debt (type, currency, managed category) and pre-fill the remaining
+            // balance so the user only adjusts if paying a different amount.
+            self.debt = debt
+            self.type = debt.type == .owedToMe ? .income : .expense
+            self.selectedCurrencyCode = debt.currencyCode
+            self.selectedCategory = initialCategory
+            let remaining = debt.remainingAmount
+            if remaining > 0 {
+                self.evaluatedAmount = remaining
+                self.expression = formatDecimalForExpression(remaining)
+            }
+            updateTransactionCurrencyExchangeRate()
         } else if let wallet = initialWallet {
             self.selectedCurrencyCode = wallet.currencyCode
         }
@@ -98,7 +112,9 @@ class AddTransactionViewModel: BaseViewModel {
             guard let dest = destinationWallet else { return false }
             if dest.id == selectedWallet?.id { return false }
         } else {
-            guard selectedCategory != nil else { return false }
+            // Debt-linked transactions use a managed system category (hidden in
+            // the editor), so a manual category selection isn't required.
+            guard selectedCategory != nil || debt != nil else { return false }
         }
         return true
     }
@@ -216,7 +232,14 @@ class AddTransactionViewModel: BaseViewModel {
         // Event entries are now isolated in EventLedgerTransaction.
         // Keep wallet transactions detached from events to avoid double-accounting.
         transaction.event = nil
-        
+
+        // Link to a debt/loan (a new repayment recorded via the shared editor),
+        // then re-derive the debt's cached fields so its total and completion
+        // state stay consistent with the live ledger. For non-debt transactions
+        // `debt` is nil, leaving the relationship untouched.
+        transaction.debt = debt
+        transaction.debt?.reconcile()
+
         if existingTransaction == nil {
             dataService.insert(transaction)
         }
@@ -227,6 +250,11 @@ class AddTransactionViewModel: BaseViewModel {
             // Invalidate wallet balance caches only after a confirmed save.
             wallet.invalidateBalanceCache()
             destinationWallet?.invalidateBalanceCache()
+            // Debt-linked saves broadcast an update so debt/list views refresh
+            // promptly (mirrors the previous DebtService.recordRepayment path).
+            if debt != nil {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            }
             return true
         } catch {
             HapticManager.shared.notification(type: .error)

@@ -38,8 +38,22 @@ class CurrencyManager: ObservableObject {
         get { UserDefaults.standard.double(forKey: "lastRatesFetchDate") }
         set { UserDefaults.standard.set(newValue, forKey: "lastRatesFetchDate") }
     }
-    private let ratesCacheKey = "cachedRates"
-    
+    nonisolated static let ratesCacheKey = "cachedRates"
+    private var ratesCacheKey: String { Self.ratesCacheKey }
+
+    /// The current exchange rates read without main-actor isolation: the cached
+    /// daily rates when available, otherwise the static fallback table. Lets
+    /// models (e.g. `Debt`) convert amounts using the same real rates the app
+    /// fetched, instead of crude approximations.
+    nonisolated static var currentRates: [String: Double] {
+        if let data = UserDefaults.standard.data(forKey: ratesCacheKey),
+           let decoded = try? JSONDecoder().decode([String: Double].self, from: data),
+           !decoded.isEmpty {
+            return decoded
+        }
+        return fallbackRates
+    }
+
     private let recentCurrenciesKey = "recentCurrencies"
     
     private init() {

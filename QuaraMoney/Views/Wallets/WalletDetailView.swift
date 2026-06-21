@@ -186,6 +186,7 @@ struct WalletDetailView: View {
         .sheet(item: $transactionToEdit) { txn in
             AddTransactionContainer(transaction: txn, isNewTransaction: false, initialWallet: viewModel.wallet)
         }
+        .debtDeletionBlockedAlert($viewModel.blockedDeletionMessage)
         .onAppear {
             viewModel.fetchTransactions()
         }

@@ -20,4 +20,10 @@ class HapticManager {
         let generator = UISelectionFeedbackGenerator()
         generator.selectionChanged()
     }
+
+    // Convenience wrappers so callers (e.g. view models without a UIKit import)
+    // can trigger notification haptics without referencing UIKit enum cases.
+    func success() { notification(type: .success) }
+    func warning() { notification(type: .warning) }
+    func error() { notification(type: .error) }
 }

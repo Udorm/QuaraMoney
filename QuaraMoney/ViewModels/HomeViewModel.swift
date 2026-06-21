@@ -189,7 +189,18 @@ class HomeViewModel {
         self.sortedTransactions = resolvedTransactions
     }
 
+    /// Set when a debt-anchor deletion is blocked; drives a redirect alert.
+    var blockedDeletionMessage: String?
+
     func deleteTransaction(_ transaction: Transaction) {
+        // A debt's sole advance can't be deleted here — it would orphan the
+        // debt. Send the user to the Debts screen to delete the whole record.
+        if transaction.isDebtAnchor {
+            blockedDeletionMessage = "debt.cannotDeleteAnchor".localized(with: transaction.debt?.personName ?? "")
+            HapticManager.shared.warning()
+            return
+        }
+
         // Invalidate wallet caches before deleting
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()

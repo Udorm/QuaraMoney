@@ -605,6 +605,43 @@
 "debt.noTransactions" = "មិនទាន់មានកត់ត្រាប្រតិបត្តិការទេ។";
 "debt.none" = "គ្មាន";
 
+// MARK: - Debt Redesign
+"debt.netPosition" = "សមតុល្យសុទ្ធ";
+"debt.youAreOwed" = "គេជំពាក់អ្នក";
+"debt.youOwe" = "អ្នកជំពាក់គេ";
+"debt.owesYou" = "ជំពាក់អ្នក";
+"debt.settled" = "បានសង";
+"debt.fullyPaid" = "បានសងពេញ";
+"debt.allSettled" = "បានសងអស់ហើយ";
+"debt.allSettledDescription" = "អ្នកគ្មានបំណុលឬប្រាក់កម្ចីដែលនៅសល់ទេ។";
+"debt.overdue" = "ហួសកំណត់";
+"debt.due" = "កំណត់";
+"debt.noDueDate" = "គ្មានកាលកំណត់";
+"debt.payRemaining" = "សងចំនួនដែលនៅសល់";
+"debt.markActive" = "សម្គាល់ថាសកម្ម";
+"debt.paidOfTotal" = "%1$@ ក្នុង %2$@";
+"debt.fromWallet" = "ពីកាបូប";
+"debt.toWallet" = "ទៅកាបូប";
+"debt.walletOptional" = "កាបូប (ស្រេចចិត្ត)";
+"debt.trackOnly" = "តាមដានតែប៉ុណ្ណោះ";
+"debt.editAmountLocked" = "ចំនួនទឹកប្រាក់ត្រូវបានចាក់សោ នៅពេលមានការសងវិញ ឬមានការផ្តល់ប្រាក់ច្រើនជាងម្តង។";
+"debt.amountBelowPaid" = "ចំនួនទឹកប្រាក់មិនអាចតិចជាងចំនួនដែលបានសងរួចទេ។";
+"debt.activeSection" = "សកម្ម";
+"debt.completedSection" = "បានសង";
+"debt.who" = "នរណា";
+"debt.recordPaymentFor" = "កត់ត្រាការសងសម្រាប់ %@";
+"debt.paymentAddsToWallet" = "បន្ថែម %1$@ ទៅ %2$@ (ចំណូល)។";
+"debt.paymentDeductsFromWallet" = "កាត់ %1$@ ពី %2$@ (ចំណាយ)។";
+"debt.lendAddsToWallet" = "បន្ថែម %1$@ ទៅ %2$@ (ចំណូល)។";
+"debt.lendDeductsFromWallet" = "កាត់ %1$@ ពី %2$@ (ចំណាយ)។";
+"debt.willRecordOnly" = "កត់ត្រាសម្រាប់តាមដានតែប៉ុណ្ណោះ — មិនប៉ះពាល់កាបូបទេ។";
+"debt.setDueDate" = "កំណត់កាលបរិច្ឆេទ";
+"debt.progress" = "វឌ្ឍនភាព";
+"debt.viewDebt" = "មើល";
+"debt.paymentNote" = "កំណត់ចំណាំ (ស្រេចចិត្ត)";
+"debt.linkedTransaction" = "ភ្ជាប់ទៅនឹងបំណុល";
+"debt.cannotDeleteAnchor" = "នេះជាធាតុដើមនៃបំណុលរបស់ %@។ ដើម្បីលុបវា សូមលុបបំណុលនៅក្នុង បំណុល និងប្រាក់កម្ចី។";
+
 // MARK: - Transaction Additions
 "transaction.balanceAdjustment" = "ការកែសម្រួលសមតុល្យ";
 "transaction.time" = "ពេលវេលា";
@@ -614,6 +651,8 @@
 "transaction.allCategories" = "ប្រភេទទាំងអស់";
 "transaction.linkedToDebt" = "ភ្ជាប់ជាមួយបំណុល";
 "transaction.linkedToLoan" = "ភ្ជាប់ជាមួយកម្ចី";
+"transaction.debtLocked.title" = "ភ្ជាប់ជាមួយបំណុល";
+"transaction.debtLocked.message" = "ការកែប្រែនៅទីនេះនឹងធ្វើបច្ចុប្បន្នភាពបំណុលរបស់ %@ ដោយស្វ័យប្រវត្តិ។ មានតែប្រភេទ និងប្រភេទចំណាត់ថ្នាក់ប៉ុណ្ណោះដែលថេរ។";
 
 // MARK: - Budget Analysis Additions
 "budget.performance" = "ដំណើរការថវិកា";

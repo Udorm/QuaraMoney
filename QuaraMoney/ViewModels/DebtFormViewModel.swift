@@ -5,13 +5,17 @@ import SwiftData
 @MainActor
 final class DebtFormViewModel {
     var personName = ""
-    var amountText = ""
+    var expression = ""
+    var evaluatedAmount: Decimal = 0
     var currencyCode: String = CurrencyManager.shared.preferredCurrencyCode
     var type: DebtType = .iOwe
+    var date: Date = Date()
     var dueDate: Date = Date()
     var hasDueDate = false
     var note = ""
     var selectedWallet: Wallet?
+
+    private let originalDate: Date
 
     var errorMessage: String?
     var showError = false
@@ -19,28 +23,47 @@ final class DebtFormViewModel {
     var isSaving = false
 
     let debtToEdit: Debt?
+    private let originalAmount: Decimal
 
-    var isEditing: Bool {
-        debtToEdit != nil
+    var isEditing: Bool { debtToEdit != nil }
+
+    /// On edit, the principal amount can only be changed when there is a single
+    /// advance and no repayments have split it. New debts are always editable.
+    var canEditAmount: Bool {
+        guard let debtToEdit else { return true }
+        return debtToEdit.canEditPrincipalAmount
     }
 
     var amount: Decimal? {
-        parseAmount(amountText)
+        evaluatedAmount > 0 ? evaluatedAmount : nil
     }
 
     var isValid: Bool {
         !personName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        (amount ?? 0) > 0
+        evaluatedAmount > 0 &&
+        // A wallet is required when creating (track-only removed); not editable on edit.
+        (isEditing || selectedWallet != nil)
     }
 
     init(debt: Debt? = nil) {
         self.debtToEdit = debt
 
-        guard let debt else { return }
+        guard let debt else {
+            self.originalAmount = 0
+            self.originalDate = Date()
+            return
+        }
         personName = debt.personName
-        amountText = debt.totalAmount.formatted(.number)
+        evaluatedAmount = debt.totalAmount
+        expression = DebtFormViewModel.formatExpression(debt.totalAmount)
+        originalAmount = debt.totalAmount
         currencyCode = debt.currencyCode
         type = debt.type
+        // The debt's date is its initial advance transaction's date, falling
+        // back to the stored creation date.
+        let resolvedDate = debt.principalTransaction?.date ?? debt.dateCreated
+        date = resolvedDate
+        originalDate = resolvedDate
         dueDate = debt.dueDate ?? Date()
         hasDueDate = debt.dueDate != nil
         note = debt.note ?? ""
@@ -60,11 +83,15 @@ final class DebtFormViewModel {
             let noteValue = normalizedNote.isEmpty ? nil : normalizedNote
 
             if let debtToEdit {
+                let newAmount: Decimal? = (canEditAmount && amount != originalAmount) ? amount : nil
+                let newDate: Date? = (date != originalDate) ? date : nil
                 try service.updateDebt(
                     debtToEdit,
                     person: personName,
                     dueDate: hasDueDate ? dueDate : nil,
-                    note: noteValue
+                    note: noteValue,
+                    newPrincipalAmount: newAmount,
+                    date: newDate
                 )
                 return true
             }
@@ -76,7 +103,8 @@ final class DebtFormViewModel {
                     currency: currencyCode,
                     dueDate: hasDueDate ? dueDate : nil,
                     note: noteValue,
-                    sourceWallet: selectedWallet
+                    sourceWallet: selectedWallet,
+                    date: date
                 )
             } else {
                 _ = try service.createLoan(
@@ -85,7 +113,8 @@ final class DebtFormViewModel {
                     currency: currencyCode,
                     dueDate: hasDueDate ? dueDate : nil,
                     note: noteValue,
-                    destinationWallet: selectedWallet
+                    destinationWallet: selectedWallet,
+                    date: date
                 )
             }
 
@@ -97,18 +126,10 @@ final class DebtFormViewModel {
         }
     }
 
-    private func parseAmount(_ text: String) -> Decimal? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        let formatter = NumberFormatter()
-        formatter.locale = .current
-        formatter.numberStyle = .decimal
-        if let number = formatter.number(from: trimmed) {
-            return number.decimalValue
-        }
-
-        let normalized = trimmed.replacingOccurrences(of: ",", with: ".")
-        return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX"))
+    private static func formatExpression(_ value: Decimal) -> String {
+        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
+        return doubleValue.truncatingRemainder(dividingBy: 1) == 0
+            ? String(format: "%.0f", doubleValue)
+            : String(format: "%.2f", doubleValue)
     }
 }

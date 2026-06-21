@@ -51,6 +51,7 @@ struct HomeView: View {
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
             }
+            .debtDeletionBlockedAlert($viewModel.blockedDeletionMessage)
             .sheet(item: $backdateTarget) { target in
                 AddTransactionContainer(transaction: nil, isNewTransaction: true, initialDate: target.date)
             }

@@ -605,6 +605,43 @@
 "debt.noTransactions" = "No transactions recorded yet.";
 "debt.none" = "None";
 
+// MARK: - Debt Redesign
+"debt.netPosition" = "Net Position";
+"debt.youAreOwed" = "You're owed";
+"debt.youOwe" = "You owe";
+"debt.owesYou" = "Owes you";
+"debt.settled" = "Settled";
+"debt.fullyPaid" = "Fully Paid";
+"debt.allSettled" = "All settled up";
+"debt.allSettledDescription" = "You have no outstanding debts or loans.";
+"debt.overdue" = "Overdue";
+"debt.due" = "Due";
+"debt.noDueDate" = "No due date";
+"debt.payRemaining" = "Pay Remaining";
+"debt.markActive" = "Mark as Active";
+"debt.paidOfTotal" = "%1$@ of %2$@";
+"debt.fromWallet" = "From Wallet";
+"debt.toWallet" = "To Wallet";
+"debt.walletOptional" = "Wallet (Optional)";
+"debt.trackOnly" = "Track only";
+"debt.editAmountLocked" = "Amount is locked once there are repayments or more than one advance.";
+"debt.amountBelowPaid" = "Amount can't be less than the amount already paid.";
+"debt.activeSection" = "Active";
+"debt.completedSection" = "Settled";
+"debt.who" = "Who";
+"debt.recordPaymentFor" = "Record a payment for %@";
+"debt.paymentAddsToWallet" = "Adds %1$@ to %2$@ (Income).";
+"debt.paymentDeductsFromWallet" = "Deducts %1$@ from %2$@ (Expense).";
+"debt.lendAddsToWallet" = "Adds %1$@ to %2$@ (Income).";
+"debt.lendDeductsFromWallet" = "Deducts %1$@ from %2$@ (Expense).";
+"debt.willRecordOnly" = "Recorded for tracking only — no wallet is affected.";
+"debt.setDueDate" = "Set a due date";
+"debt.progress" = "Progress";
+"debt.viewDebt" = "View";
+"debt.paymentNote" = "Note (optional)";
+"debt.linkedTransaction" = "Linked to a Debt";
+"debt.cannotDeleteAnchor" = "This is the original entry for %@'s debt. To remove it, delete the debt from Debts & Loans.";
+
 // MARK: - Transaction Additions
 "transaction.balanceAdjustment" = "Balance Adjustment";
 "transaction.time" = "Time";
@@ -614,6 +651,8 @@
 "transaction.allCategories" = "All Categories";
 "transaction.linkedToDebt" = "Linked to Debt";
 "transaction.linkedToLoan" = "Linked to Loan";
+"transaction.debtLocked.title" = "Linked to a debt";
+"transaction.debtLocked.message" = "Edits here update %@'s debt automatically. Only the entry type and category are fixed.";
 
 // MARK: - Budget Analysis Additions
 "budget.performance" = "Budget Performance";

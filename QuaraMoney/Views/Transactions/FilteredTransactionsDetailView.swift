@@ -85,6 +85,7 @@ struct FilteredTransactionsDetailView: View {
         .sheet(item: $transactionToEdit) { txn in
             AddTransactionContainer(transaction: txn, isNewTransaction: false)
         }
+        .debtDeletionBlockedAlert($vm.blockedDeletionMessage)
     }
 
     // MARK: - Filter Summary Card

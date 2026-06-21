@@ -20,6 +20,7 @@ struct AddTransactionView: View {
     @State private var showScanner = false
     @State private var showLocationPicker = false
     @State private var isFetchingCurrentLocation = false
+    @State private var showDebtSheet = false
 
     @Environment(\.modelContext) private var modelContext
 
@@ -47,6 +48,12 @@ struct AddTransactionView: View {
         self.startWithScanner = startWithScanner
     }
     
+    /// True when editing a transaction that belongs to a debt/loan. Such entries
+    /// are read-only here — the user manages them from the Debts & Loans screen
+    /// so the debt's derived ledger (totals, repayments) can't be silently
+    /// corrupted by changing the amount, type, or currency.
+    private var isDebtLinked: Bool { viewModel.debt != nil }
+
     private var filteredCategories: [Category] {
         categories.filter { $0.type == viewModel.type }
     }
@@ -280,25 +287,38 @@ struct AddTransactionView: View {
                                 }
                             )
                         }
-                        
-                        // MARK: - Linked Debt Indicator
+
+                        // MARK: - Linked Debt (single combined indicator + open button)
                         if let debt = viewModel.debt {
                             Section {
-                                HStack {
-                                    Image(systemName: debt.type == .owedToMe ? "arrow.up.right.circle.fill" : "arrow.down.left.circle.fill")
-                                        .foregroundStyle(debt.type == .owedToMe ? .red : .green)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(debt.type == .owedToMe ? "transaction.linkedToDebt".localized : "transaction.linkedToLoan".localized)
-                                            .font(.app(.caption2))
+                                Button {
+                                    showDebtSheet = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: debt.type == .owedToMe ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
+                                            .font(.app(.title3))
+                                            .foregroundStyle(debt.type.accentColor)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(debt.type == .owedToMe ? "transaction.linkedToDebt".localized : "transaction.linkedToLoan".localized)
+                                                .font(.app(.caption2))
+                                                .foregroundStyle(.secondary)
+                                            Text(debt.personName)
+                                                .font(.app(.subheadline, weight: .semibold))
+                                                .foregroundStyle(.primary)
+                                        }
+                                        Spacer()
+                                        Text("debt.viewDebt".localized)
+                                            .font(.app(.caption, weight: .medium))
+                                            .foregroundStyle(.tint)
+                                        Image(systemName: "chevron.right")
+                                            .font(.app(.caption2, weight: .semibold))
                                             .foregroundStyle(.secondary)
-                                        Text(debt.personName)
-                                            .font(.app(.subheadline, weight: .semibold))
                                     }
-                                    Spacer()
-                                    Image(systemName: "lock.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+                            } footer: {
+                                Text("transaction.debtLocked.message".localized(with: debt.personName))
                             }
                         }
                         
@@ -351,7 +371,9 @@ struct AddTransactionView: View {
                                     viewModel.selectedSavingsGoal = matchingGoals.first
                                 }
                             }
-                        } else if viewModel.type != .adjustment {
+                        } else if viewModel.type != .adjustment && !isDebtLinked {
+                            // Category is hidden for debt-linked transactions —
+                            // it's a managed system category and not editable.
                             Section(L10n.Category.title) {
                                 categorySection
                             }
@@ -385,13 +407,17 @@ struct AddTransactionView: View {
                     .background(Color(.systemGroupedBackground))
                 }
             }
+            .navigationTitle(isDebtLinked ? (viewModel.debt?.personName ?? "") : "")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    transactionTypeSelector
+                // Type isn't relevant/editable for a debt-linked transaction — hide it.
+                if !isDebtLinked {
+                    ToolbarItem(placement: .principal) {
+                        transactionTypeSelector
+                    }
                 }
-                
+
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()
@@ -437,6 +463,13 @@ struct AddTransactionView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showDebtSheet) {
+                if let debt = viewModel.debt {
+                    NavigationStack {
+                        DebtDetailView(debt: debt)
+                    }
+                }
+            }
             .onAppear {
                 loadTagSourceTransactions()
                 recomputeSuggestions()
@@ -463,6 +496,13 @@ struct AddTransactionView: View {
             .onChange(of: viewModel.selectedWallet) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedCategory) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedLocation) { _, _ in recomputeSuggestions() }
+            .onChange(of: viewModel.selectedCurrencyCode) { _, _ in
+                // Re-value the transaction against its wallet when the currency
+                // changes (e.g. editing a debt transaction's currency).
+                if viewModel.type != .transfer {
+                    viewModel.updateTransactionCurrencyExchangeRate()
+                }
+            }
             .background(Color(.systemGroupedBackground))
         }
     }
@@ -528,6 +568,20 @@ struct AddTransactionView: View {
         return "1 \(viewModel.selectedCurrencyCode) ≈ \(rateString) \(wallet.currencyCode)"
     }
     
+    /// Selects a source wallet and refreshes the appropriate exchange rate:
+    /// transfers use the source→destination rate, while income/expense use the
+    /// transaction-currency→wallet-currency rate so a wallet in a different
+    /// currency (e.g. a debt in USD paid from a KHR wallet) is valued correctly.
+    private func selectWallet(_ wallet: Wallet) {
+        viewModel.selectedWallet = wallet
+        viewModel.syncCurrencyToWallet()
+        if viewModel.type == .transfer {
+            viewModel.updateExchangeRate()
+        } else {
+            viewModel.updateTransactionCurrencyExchangeRate()
+        }
+    }
+
     // MARK: - Wallet Selector
     private var walletSelector: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -538,9 +592,7 @@ struct AddTransactionView: View {
                             wallet: wallet,
                             isSelected: viewModel.selectedWallet?.id == wallet.id
                         ) {
-                            viewModel.selectedWallet = wallet
-                            viewModel.syncCurrencyToWallet()
-                            viewModel.updateExchangeRate()
+                            selectWallet(wallet)
                         }
                     }
 
@@ -590,9 +642,7 @@ struct AddTransactionView: View {
             wallets: wallets,
             selectedWalletID: viewModel.selectedWallet?.id,
             onSelect: { wallet in
-                viewModel.selectedWallet = wallet
-                viewModel.syncCurrencyToWallet()
-                viewModel.updateExchangeRate()
+                selectWallet(wallet)
                 showAllWallets = false
             },
             onDismiss: { showAllWallets = false }

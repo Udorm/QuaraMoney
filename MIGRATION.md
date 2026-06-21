@@ -1,8 +1,25 @@
 # QuaraMoney — SwiftData → Supabase Migration
 
-Status: **Phase 0 complete ✅ — starting Phase 1 (auth)**
+Status: **Phase 1 complete ✅ (build+test green) — pending live sign-in test**
 Owner: Udorm Phon
 Last updated: 2026-06-21
+
+### Phase 1 — done (code) & verified (build/test)
+- `SupabaseAuthManager` (observable: email/password sign-up & sign-in, magic
+  link, sign-out, session restore via `authStateChanges`, deep-link callback).
+  Sessions persist in Keychain automatically (supabase-swift default).
+- `quaramoney://auth-callback` URL scheme in Info.plist; app handles `.onOpenURL`.
+- `SupabaseManager` client configured with `redirectToURL`.
+- UI: Settings → **Cloud Sync & Account** → `CloudSyncSettingsView` (master
+  toggle = kill-switch; email/password form + magic-link; account + sign-out).
+- No forced login gate yet (by design) — app still launches into local mode when
+  sync is off. Build + full test suite green.
+
+**⚠️ Before live sign-in works, do these in the Supabase dashboard (Auth):**
+1. **URL Configuration → Redirect URLs:** add `quaramoney://auth-callback`
+   (needed for magic link / email confirmation to return to the app).
+2. For quick email/password testing: **Providers → Email → turn OFF "Confirm
+   email"** (reversible; re-enable before launch once deep links are validated).
 
 ### Phase 0 — done & verified
 - Supabase project `czhkvtmpebeowipawqjk` (region ap-northeast-2 / Seoul).

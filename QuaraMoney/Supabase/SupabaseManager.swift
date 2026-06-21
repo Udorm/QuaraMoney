@@ -17,7 +17,13 @@ final class SupabaseManager: Sendable {
 
     private init() {
         if SupabaseConfig.isConfigured, let url = SupabaseConfig.url {
-            client = SupabaseClient(supabaseURL: url, supabaseKey: SupabaseConfig.anonKey)
+            client = SupabaseClient(
+                supabaseURL: url,
+                supabaseKey: SupabaseConfig.anonKey,
+                options: .init(
+                    auth: .init(redirectToURL: SupabaseConfig.authCallbackURL)
+                )
+            )
         } else {
             client = nil
             #if DEBUG

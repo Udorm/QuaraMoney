@@ -14,6 +14,7 @@ struct QuaraMoneyApp: App {
     @StateObject private var languageManager = LanguageManager.shared
     @StateObject private var errorService = ErrorService.shared
     @StateObject private var securityManager = SecurityManager.shared
+    @StateObject private var authManager = SupabaseAuthManager.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
@@ -160,6 +161,18 @@ struct QuaraMoneyApp: App {
             // Force view recreation when language changes
             .id(languageManager.fontRefreshID)
             .environmentObject(languageManager)
+            .environmentObject(authManager)
+            .onOpenURL { url in
+                // Auth callbacks (magic link / email confirmation) for the
+                // quaramoney:// scheme. No-op when sync is off / unconfigured.
+                authManager.handleCallback(url)
+            }
+            .task {
+                // Restore an existing session on launch when sync is enabled.
+                if SupabaseFeatureFlags.isSyncEnabled {
+                    authManager.start()
+                }
+            }
             .preferredColorScheme(selectedTheme.colorScheme)
             .task {
                 // Deferred from init() — runs after first frame renders

@@ -99,11 +99,19 @@ final class SyncEngine: ObservableObject {
             // Push parents → children.
             try await pushWallets(context, client, uid)
             try await pushCategories(context, client, uid)
+            try await pushEvents(context, client, uid)
+            try await pushDebts(context, client, uid)
+            try await pushSavingsGoals(context, client, uid)
+            try await pushRecurringRules(context, client, uid)
             try await pushTransactions(context, client, uid)
 
             // Pull parents → children.
             try await pullWallets(context, client, uid)
             try await pullCategories(context, client, uid)
+            try await pullEvents(context, client, uid)
+            try await pullDebts(context, client, uid)
+            try await pullSavingsGoals(context, client, uid)
+            try await pullRecurringRules(context, client, uid)
             try await pullTransactions(context, client, uid)
 
             lastSyncDate = Date()
@@ -148,12 +156,75 @@ final class SyncEngine: ObservableObject {
                 currency_code: t.currencyCode, exchange_rate: t.exchangeRate, stored_rate: t.storedRate,
                 photo_path: nil, // Storage upload added in a later increment
                 category_id: t.category?.id,
-                event_id: nil, source_wallet_id: t.sourceWallet?.id,
+                event_id: t.event?.id,
+                source_wallet_id: t.sourceWallet?.id,
                 destination_wallet_id: t.destinationWallet?.id,
-                recurring_rule_id: nil, debt_id: nil, savings_goal_id: nil,
+                recurring_rule_id: t.recurringRule?.id,
+                debt_id: t.debt?.id,
+                savings_goal_id: t.savingsGoal?.id,
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt)
         }
         try await client.from("transactions").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<Event>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { e in
+            SyncEventRow(id: e.id, user_id: uid, title: e.title, start_date: e.startDate, end_date: e.endDate,
+                         total_budget: e.totalBudget, cover_image_path: nil, notes: e.notes, icon: e.icon,
+                         color_hex: e.colorHex, location: e.location, status: e.status, currency_code: e.currencyCode,
+                         ledger_revision: e.ledgerRevision, confirmed_settlement_revision: e.confirmedSettlementRevision,
+                         ledger_mode: e.ledgerMode.rawValue, latitude: e.latitude, longitude: e.longitude,
+                         updated_at: e.updatedAt, deleted_at: e.deletedAt)
+        }
+        try await client.from("events").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<Debt>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { d in
+            SyncDebtRow(id: d.id, user_id: uid, person_name: d.personName, total_amount: d.totalAmount,
+                        currency_code: d.currencyCode, due_date: d.dueDate, type: d.type.rawValue, note: d.note,
+                        date_created: d.dateCreated, is_completed: d.isCompleted, created_at: d.createdAt,
+                        updated_at: d.updatedAt, deleted_at: d.deletedAt)
+        }
+        try await client.from("debts").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { g in
+            SyncSavingsGoalRow(id: g.id, user_id: uid, name: g.name, goal_description: g.goalDescription,
+                               target_amount: g.targetAmount, current_amount: g.currentAmount,
+                               currency_code: g.currencyCode, target_date: g.targetDate, created_date: g.createdDate,
+                               updated_at: g.updatedAt, icon_name: g.iconName, color_hex: g.colorHex,
+                               is_completed: g.isCompleted, completed_date: g.completedDate,
+                               auto_contribute_enabled: g.autoContributeEnabled,
+                               auto_contribute_amount: g.autoContributeAmount,
+                               auto_contribute_period_raw: g.autoContributePeriod?.rawValue,
+                               priority: g.priority, linked_wallet_id: g.linkedWallet?.id, deleted_at: g.deletedAt)
+        }
+        try await client.from("savings_goals").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { r in
+            SyncRecurringRuleRow(id: r.id, user_id: uid, name: r.name, amount: r.amount,
+                                 currency_code: r.currencyCode, frequency: r.frequency.rawValue,
+                                 start_date: r.startDate, next_due_date: r.nextDueDate, is_active: r.isActive,
+                                 wallet_id: r.wallet?.id, category_id: r.category?.id,
+                                 updated_at: r.updatedAt, deleted_at: r.deletedAt)
+        }
+        try await client.from("recurring_rules").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -230,8 +301,109 @@ final class SyncEngine: ObservableObject {
             t.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
             t.sourceWallet = try row.source_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
             t.destinationWallet = try row.destination_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
+            t.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            t.recurringRule = try row.recurring_rule_id.flatMap { try fetchByID(RecurringRule.self, id: $0, in: context) }
+            t.debt = try row.debt_id.flatMap { try fetchByID(Debt.self, id: $0, in: context) }
+            t.savingsGoal = try row.savings_goal_id.flatMap { try fetchByID(SavingsGoal.self, id: $0, in: context) }
             t.createdAt = row.created_at; t.updatedAt = row.updated_at
             t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventRow] = try await fetchChanged("events", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
+                let new = Event(title: row.title, startDate: row.start_date)
+                new.id = row.id
+                context.insert(new)
+                return new
+            }()
+            if e.needsSync && e.updatedAt > row.updated_at { return }
+            e.title = row.title; e.startDate = row.start_date; e.endDate = row.end_date
+            e.totalBudget = row.total_budget; e.notes = row.notes; e.icon = row.icon
+            e.colorHex = row.color_hex; e.location = row.location; e.status = row.status
+            e.currencyCode = row.currency_code; e.ledgerRevision = row.ledger_revision
+            e.confirmedSettlementRevision = row.confirmed_settlement_revision
+            e.ledgerMode = EventLedgerMode(rawValue: row.ledger_mode) ?? .isolatedV1
+            e.latitude = row.latitude; e.longitude = row.longitude
+            e.updatedAt = row.updated_at; e.deletedAt = row.deleted_at
+            e.syncUserID = row.user_id; e.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncDebtRow] = try await fetchChanged("debts", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let d = try fetchByID(Debt.self, id: row.id, in: context) ?? {
+                let new = Debt(personName: row.person_name, totalAmount: row.total_amount,
+                               currencyCode: row.currency_code, type: DebtType(rawValue: row.type) ?? .iOwe,
+                               dueDate: row.due_date, note: row.note)
+                new.id = row.id
+                context.insert(new)
+                return new
+            }()
+            if d.needsSync && d.updatedAt > row.updated_at { return }
+            d.personName = row.person_name; d.totalAmount = row.total_amount; d.currencyCode = row.currency_code
+            d.dueDate = row.due_date; d.type = DebtType(rawValue: row.type) ?? d.type; d.note = row.note
+            d.dateCreated = row.date_created; d.isCompleted = row.is_completed
+            d.createdAt = row.created_at; d.updatedAt = row.updated_at; d.deletedAt = row.deleted_at
+            d.syncUserID = row.user_id; d.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncSavingsGoalRow] = try await fetchChanged("savings_goals", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let g = try fetchByID(SavingsGoal.self, id: row.id, in: context) ?? {
+                let new = SavingsGoal(name: row.name, targetAmount: row.target_amount,
+                                      currencyCode: row.currency_code, targetDate: row.target_date,
+                                      iconName: row.icon_name, colorHex: row.color_hex)
+                new.id = row.id
+                context.insert(new)
+                return new
+            }()
+            if g.needsSync && g.updatedAt > row.updated_at { return }
+            g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
+            g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
+            g.createdDate = row.created_date; g.updatedAt = row.updated_at; g.iconName = row.icon_name
+            g.colorHex = row.color_hex; g.isCompleted = row.is_completed; g.completedDate = row.completed_date
+            g.autoContributeEnabled = row.auto_contribute_enabled
+            g.autoContributeAmount = row.auto_contribute_amount
+            g.autoContributePeriod = row.auto_contribute_period_raw.flatMap { BudgetPeriodType(rawValue: $0) }
+            g.priority = row.priority
+            g.linkedWallet = try row.linked_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
+            g.deletedAt = row.deleted_at; g.syncUserID = row.user_id; g.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncRecurringRuleRow] = try await fetchChanged("recurring_rules", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
+                let new = RecurringRule(name: row.name, amount: row.amount, currencyCode: row.currency_code,
+                                        frequency: Frequency(rawValue: row.frequency) ?? .monthly,
+                                        startDate: row.start_date)
+                new.id = row.id
+                context.insert(new)
+                return new
+            }()
+            if r.needsSync && r.updatedAt > row.updated_at { return }
+            r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
+            r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
+            r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.isActive = row.is_active
+            r.wallet = try row.wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
+            r.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
+            r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
+            r.syncUserID = row.user_id; r.needsSync = false
         }
         try context.save()
     }
@@ -273,6 +445,14 @@ final class SyncEngine: ObservableObject {
             return try context.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.id == id })).first as? T
         } else if T.self == Transaction.self {
             return try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == Event.self {
+            return try context.fetch(FetchDescriptor<Event>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == Debt.self {
+            return try context.fetch(FetchDescriptor<Debt>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == SavingsGoal.self {
+            return try context.fetch(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == RecurringRule.self {
+            return try context.fetch(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.id == id })).first as? T
         }
         return nil
     }
@@ -310,3 +490,7 @@ protocol SyncOwned: AnyObject {
 extension Wallet: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension Category: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension Transaction: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension Event: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension Debt: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension SavingsGoal: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension RecurringRule: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }

@@ -119,13 +119,19 @@ final class SupabaseAuthManager: ObservableObject {
         guard let client else { return }
         beginWork()
         defer { isWorking = false }
-        // Flush any pending local changes while still authenticated, so a later
-        // account switch (which clears the local cache) can't lose un-pushed edits.
+        // Flush pending changes while still authenticated. Only wipe the local
+        // cache on sign-out if that flush succeeded and the data is in the cloud,
+        // so an offline sign-out can't lose un-synced edits.
         await SyncEngine.shared.flushBeforeSignOut()
+        let safeToWipe = SyncEngine.shared.lastError == nil && SyncEngine.shared.hasCompletedInitialSync
         do {
             try await client.auth.signOut()
         } catch {
             errorMessage = error.localizedDescription
+        }
+        if safeToWipe {
+            // Shared-device privacy: clear local data so it's not visible after logout.
+            SyncEngine.shared.wipeForSignOut()
         }
     }
 

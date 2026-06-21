@@ -73,6 +73,19 @@ final class SyncEngine: ObservableObject {
         await syncIfOperational(context: context)
     }
 
+    /// Clears the local cache on sign-out (shared-device privacy). Guarded so it
+    /// creates no tombstones (the cloud copy is untouched). Caller must ensure
+    /// pending changes were flushed first, so nothing un-synced is lost.
+    func wipeForSignOut() {
+        guard let context = autoSyncContext else { return }
+        SyncMutationTracker.isApplyingSyncChanges = true
+        defer { SyncMutationTracker.isApplyingSyncChanges = false }
+        wipeLocalData(context: context)
+        resetSyncState()
+        lastSyncDate = nil
+        UserDefaults.standard.removeObject(forKey: Self.localOwnerKey)
+    }
+
     private func handleLocalSave() {
         // Ignore the engine's own writes; only react to genuine local edits.
         guard !SyncMutationTracker.isApplyingSyncChanges,

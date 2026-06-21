@@ -24,6 +24,15 @@ final class SyncEngine: ObservableObject {
     @Published private(set) var lastSyncDate: Date?
     @Published var lastError: String?
 
+    /// Whether the first full sync (the one-time upload of pre-existing local data)
+    /// has completed. Persisted so it survives relaunches.
+    @Published private(set) var hasCompletedInitialSync =
+        UserDefaults.standard.bool(forKey: "hasCompletedInitialSync.v1")
+
+    /// True during the very first sync — the UI shows a "setting up" state since
+    /// uploading an existing dataset can take a moment.
+    var isInitialSyncInProgress: Bool { isSyncing && !hasCompletedInitialSync }
+
     private var autoSyncStarted = false
     private var autoSyncContext: ModelContext?
     private var debounceTask: Task<Void, Never>?
@@ -140,6 +149,10 @@ final class SyncEngine: ObservableObject {
             try await pullTransactionLocations(context, client, uid)
 
             lastSyncDate = Date()
+            if !hasCompletedInitialSync {
+                hasCompletedInitialSync = true
+                UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
+            }
         } catch {
             lastError = error.localizedDescription
         }

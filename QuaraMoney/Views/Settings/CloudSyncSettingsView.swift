@@ -44,7 +44,7 @@ struct CloudSyncSettingsView: View {
                                 Task { await sync.syncNow(context: modelContext) }
                             } label: {
                                 HStack {
-                                    Text("Sync Now")
+                                    Text(sync.isInitialSyncInProgress ? "Setting up cloud sync…" : "Sync Now")
                                     if sync.isSyncing {
                                         Spacer()
                                         ProgressView()
@@ -52,6 +52,11 @@ struct CloudSyncSettingsView: View {
                                 }
                             }
                             .disabled(sync.isSyncing)
+
+                            if sync.isInitialSyncInProgress {
+                                Text("Uploading your existing data for the first time. Keep the app open.")
+                                    .foregroundStyle(.secondary)
+                            }
 
                             if let last = sync.lastSyncDate {
                                 LabeledContent("Last synced",

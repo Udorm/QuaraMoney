@@ -139,3 +139,91 @@ struct SyncRecurringRuleRow: Codable, Sendable {
     var updated_at: Date
     var deleted_at: Date?
 }
+
+struct SyncEventMemberRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var event_id: UUID?
+    var name: String
+    var avatar_path: String?
+    var avatar_icon: String?
+    var color_hex: String
+    var is_archived: Bool
+    var is_local_user: Bool
+    var is_budget_pool: Bool
+    var sort_order: Int
+    var created_at: Date
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncEventLedgerTransactionRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var event_id: UUID?
+    var kind: String
+    var title: String
+    var amount_minor: Int64
+    var paid_source: String
+    var paid_by_member_id: UUID?
+    var split_type: String
+    var date: Date
+    var note: String?
+    var category_id: UUID?
+    var category_name: String?
+    var category_icon: String?
+    var category_color_hex: String?
+    var is_split_all: Bool
+    var is_deleted: Bool
+    var created_at: Date
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncEventLedgerParticipantRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var transaction_id: UUID?
+    var member_id: UUID
+    var event_member_id: UUID?
+    var order_index: Int
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncEventSettlementSnapshotRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var event_id: UUID?
+    var ledger_revision: Int64
+    var created_at: Date
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncEventSettlementTransferRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var snapshot_id: UUID?
+    var from_member_id: UUID
+    var to_member_id: UUID
+    var amount_minor: Int64
+    var sequence: Int
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncEventWalletExportRecordRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var event_id: UUID?
+    var snapshot_id: UUID?
+    var member_id: UUID
+    var wallet_transaction_id: UUID
+    var amount_minor: Int64
+    var direction: String
+    var export_type: String
+    var created_at: Date
+    var updated_at: Date
+    var deleted_at: Date?
+}

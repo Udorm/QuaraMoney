@@ -103,6 +103,12 @@ final class SyncEngine: ObservableObject {
             try await pushDebts(context, client, uid)
             try await pushSavingsGoals(context, client, uid)
             try await pushRecurringRules(context, client, uid)
+            try await pushEventMembers(context, client, uid)
+            try await pushEventLedgerTransactions(context, client, uid)
+            try await pushEventLedgerParticipants(context, client, uid)
+            try await pushEventSettlementSnapshots(context, client, uid)
+            try await pushEventSettlementTransfers(context, client, uid)
+            try await pushEventWalletExportRecords(context, client, uid)
             try await pushTransactions(context, client, uid)
 
             // Pull parents → children.
@@ -112,6 +118,12 @@ final class SyncEngine: ObservableObject {
             try await pullDebts(context, client, uid)
             try await pullSavingsGoals(context, client, uid)
             try await pullRecurringRules(context, client, uid)
+            try await pullEventMembers(context, client, uid)
+            try await pullEventLedgerTransactions(context, client, uid)
+            try await pullEventLedgerParticipants(context, client, uid)
+            try await pullEventSettlementSnapshots(context, client, uid)
+            try await pullEventSettlementTransfers(context, client, uid)
+            try await pullEventWalletExportRecords(context, client, uid)
             try await pullTransactions(context, client, uid)
 
             lastSyncDate = Date()
@@ -225,6 +237,88 @@ final class SyncEngine: ObservableObject {
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
         try await client.from("recurring_rules").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventMember>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { m in
+            SyncEventMemberRow(id: m.id, user_id: uid, event_id: m.event?.id, name: m.name,
+                               avatar_path: nil, avatar_icon: m.avatarIcon, color_hex: m.colorHex,
+                               is_archived: m.isArchived, is_local_user: m.isLocalUser,
+                               is_budget_pool: m.isBudgetPool, sort_order: m.sortOrder,
+                               created_at: m.createdAt, updated_at: m.updatedAt, deleted_at: m.deletedAt)
+        }
+        try await client.from("event_members").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventLedgerTransaction>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { t in
+            SyncEventLedgerTransactionRow(id: t.id, user_id: uid, event_id: t.event?.id, kind: t.kind.rawValue,
+                                          title: t.title, amount_minor: t.amountMinor, paid_source: t.paidSource.rawValue,
+                                          paid_by_member_id: t.paidByMemberId, split_type: t.splitType.rawValue,
+                                          date: t.date, note: t.note, category_id: t.categoryId,
+                                          category_name: t.categoryName, category_icon: t.categoryIcon,
+                                          category_color_hex: t.categoryColorHex, is_split_all: t.isSplitAll,
+                                          is_deleted: t.isDeleted, created_at: t.createdAt, updated_at: t.updatedAt,
+                                          deleted_at: t.deletedAt)
+        }
+        try await client.from("event_ledger_transactions").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventLedgerParticipants(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventLedgerParticipant>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { p in
+            SyncEventLedgerParticipantRow(id: p.id, user_id: uid, transaction_id: p.transaction?.id,
+                                          member_id: p.memberId, event_member_id: p.member?.id,
+                                          order_index: p.orderIndex, updated_at: p.updatedAt, deleted_at: p.deletedAt)
+        }
+        try await client.from("event_ledger_participants").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventSettlementSnapshots(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventSettlementSnapshot>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { s in
+            SyncEventSettlementSnapshotRow(id: s.id, user_id: uid, event_id: s.event?.id,
+                                           ledger_revision: s.ledgerRevision, created_at: s.createdAt,
+                                           updated_at: s.updatedAt, deleted_at: s.deletedAt)
+        }
+        try await client.from("event_settlement_snapshots").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventSettlementTransfers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventSettlementTransfer>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { t in
+            SyncEventSettlementTransferRow(id: t.id, user_id: uid, snapshot_id: t.snapshot?.id,
+                                           from_member_id: t.fromMemberId, to_member_id: t.toMemberId,
+                                           amount_minor: t.amountMinor, sequence: t.sequence,
+                                           updated_at: t.updatedAt, deleted_at: t.deletedAt)
+        }
+        try await client.from("event_settlement_transfers").upsert(rows).execute()
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushEventWalletExportRecords(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { r in
+            SyncEventWalletExportRecordRow(id: r.id, user_id: uid, event_id: r.event?.id, snapshot_id: r.snapshot?.id,
+                                           member_id: r.memberId, wallet_transaction_id: r.walletTransactionId,
+                                           amount_minor: r.amountMinor, direction: r.direction.rawValue,
+                                           export_type: r.exportType.rawValue, created_at: r.createdAt,
+                                           updated_at: r.updatedAt, deleted_at: r.deletedAt)
+        }
+        try await client.from("event_wallet_export_records").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -408,6 +502,158 @@ final class SyncEngine: ObservableObject {
         try context.save()
     }
 
+    private func pullEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventMemberRow] = try await fetchChanged("event_members", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventMember.self, id: row.id, in: context)
+            let m: EventMember
+            if let existing { m = existing } else {
+                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                m = EventMember(name: row.name, event: ev)
+                m.id = row.id
+                context.insert(m)
+            }
+            if m.needsSync && m.updatedAt > row.updated_at { return }
+            m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
+            m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
+            m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
+            m.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventLedgerTransactionRow] = try await fetchChanged("event_ledger_transactions", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context)
+            let t: EventLedgerTransaction
+            if let existing { t = existing } else {
+                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                t = EventLedgerTransaction(
+                    kind: EventLedgerTransactionKind(rawValue: row.kind) ?? .expense, title: row.title,
+                    amountMinor: row.amount_minor, paidSource: EventExpensePaidSource(rawValue: row.paid_source) ?? .member,
+                    paidByMemberId: row.paid_by_member_id, splitType: EventSplitType(rawValue: row.split_type) ?? .equal,
+                    date: row.date, note: row.note, categoryId: row.category_id, categoryName: row.category_name,
+                    categoryIcon: row.category_icon, categoryColorHex: row.category_color_hex, event: ev)
+                t.id = row.id
+                context.insert(t)
+            }
+            if t.needsSync && t.updatedAt > row.updated_at { return }
+            t.kind = EventLedgerTransactionKind(rawValue: row.kind) ?? t.kind
+            t.title = row.title; t.amountMinor = row.amount_minor
+            t.paidSource = EventExpensePaidSource(rawValue: row.paid_source) ?? t.paidSource
+            t.paidByMemberId = row.paid_by_member_id
+            t.splitType = EventSplitType(rawValue: row.split_type) ?? t.splitType
+            t.date = row.date; t.note = row.note; t.categoryId = row.category_id
+            t.categoryName = row.category_name; t.categoryIcon = row.category_icon
+            t.categoryColorHex = row.category_color_hex; t.isSplitAll = row.is_split_all; t.isDeleted = row.is_deleted
+            t.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            t.createdAt = row.created_at; t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
+            t.syncUserID = row.user_id; t.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEventLedgerParticipants(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventLedgerParticipantRow] = try await fetchChanged("event_ledger_participants", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context)
+            let p: EventLedgerParticipant
+            if let existing { p = existing } else {
+                let txn = try row.transaction_id.flatMap { try fetchByID(EventLedgerTransaction.self, id: $0, in: context) }
+                let mem = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
+                p = EventLedgerParticipant(memberId: row.member_id, orderIndex: row.order_index, transaction: txn, member: mem)
+                p.id = row.id
+                context.insert(p)
+            }
+            if p.needsSync && p.updatedAt > row.updated_at { return }
+            p.memberId = row.member_id; p.orderIndex = row.order_index
+            p.transaction = try row.transaction_id.flatMap { try fetchByID(EventLedgerTransaction.self, id: $0, in: context) }
+            p.member = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
+            p.updatedAt = row.updated_at; p.deletedAt = row.deleted_at
+            p.syncUserID = row.user_id; p.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEventSettlementSnapshots(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventSettlementSnapshotRow] = try await fetchChanged("event_settlement_snapshots", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context)
+            let s: EventSettlementSnapshot
+            if let existing { s = existing } else {
+                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                s = EventSettlementSnapshot(ledgerRevision: row.ledger_revision, event: ev)
+                s.id = row.id
+                context.insert(s)
+            }
+            if s.needsSync && s.updatedAt > row.updated_at { return }
+            s.ledgerRevision = row.ledger_revision
+            s.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
+            s.syncUserID = row.user_id; s.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEventSettlementTransfers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventSettlementTransferRow] = try await fetchChanged("event_settlement_transfers", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context)
+            let t: EventSettlementTransfer
+            if let existing { t = existing } else {
+                let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+                t = EventSettlementTransfer(fromMemberId: row.from_member_id, toMemberId: row.to_member_id,
+                                            amountMinor: row.amount_minor, sequence: row.sequence, snapshot: snap)
+                t.id = row.id
+                context.insert(t)
+            }
+            if t.needsSync && t.updatedAt > row.updated_at { return }
+            t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
+            t.amountMinor = row.amount_minor; t.sequence = row.sequence
+            t.snapshot = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+            t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
+            t.syncUserID = row.user_id; t.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullEventWalletExportRecords(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncEventWalletExportRecordRow] = try await fetchChanged("event_wallet_export_records", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context)
+            let r: EventWalletExportRecord
+            if let existing { r = existing } else {
+                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+                r = EventWalletExportRecord(memberId: row.member_id, walletTransactionId: row.wallet_transaction_id,
+                                            amountMinor: row.amount_minor,
+                                            direction: EventWalletExportDirection(rawValue: row.direction) ?? .expense,
+                                            exportType: EventWalletExportType(rawValue: row.export_type) ?? .settlement,
+                                            event: ev, snapshot: snap)
+                r.id = row.id
+                context.insert(r)
+            }
+            if r.needsSync && r.updatedAt > row.updated_at { return }
+            r.memberId = row.member_id; r.walletTransactionId = row.wallet_transaction_id
+            r.amountMinor = row.amount_minor
+            r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
+            r.exportType = EventWalletExportType(rawValue: row.export_type) ?? r.exportType
+            r.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            r.snapshot = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+            r.createdAt = row.created_at; r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
+            r.syncUserID = row.user_id; r.needsSync = false
+        }
+        try context.save()
+    }
+
     // MARK: - Helpers
 
     private func fetchChanged<Row: Decodable>(_ table: String, _ client: SupabaseClient, _ uid: UUID) async throws -> [Row] {
@@ -453,6 +699,18 @@ final class SyncEngine: ObservableObject {
             return try context.fetch(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.id == id })).first as? T
         } else if T.self == RecurringRule.self {
             return try context.fetch(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventMember.self {
+            return try context.fetch(FetchDescriptor<EventMember>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventLedgerTransaction.self {
+            return try context.fetch(FetchDescriptor<EventLedgerTransaction>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventLedgerParticipant.self {
+            return try context.fetch(FetchDescriptor<EventLedgerParticipant>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventSettlementSnapshot.self {
+            return try context.fetch(FetchDescriptor<EventSettlementSnapshot>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventSettlementTransfer.self {
+            return try context.fetch(FetchDescriptor<EventSettlementTransfer>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == EventWalletExportRecord.self {
+            return try context.fetch(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.id == id })).first as? T
         }
         return nil
     }
@@ -494,3 +752,9 @@ extension Event: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } 
 extension Debt: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension SavingsGoal: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension RecurringRule: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventMember: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventLedgerTransaction: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventLedgerParticipant: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventSettlementSnapshot: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventSettlementTransfer: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension EventWalletExportRecord: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }

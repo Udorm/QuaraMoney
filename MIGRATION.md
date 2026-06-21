@@ -8,7 +8,11 @@ Last updated: 2026-06-21
 - Sync metadata added to all 15 `@Model` types: `syncUserID: UUID?`,
   `deletedAt: Date?`, `needsSync: Bool = true`, plus `updatedAt` on the 7 models
   that lacked it. All additions optional/defaulted ⇒ lightweight migration.
-- `SchemaV2` + `.lightweight(SchemaV1 → SchemaV2)` stage; app uses `SchemaV2`.
+- Sync metadata migrates via **automatic lightweight inference under SchemaV1**
+  (additive optional/defaulted fields). A second `VersionedSchema` was reverted:
+  pointing it at the same live types yields identical checksums → SwiftData
+  crashes with "Duplicate version checksums detected". The next *non-additive*
+  change needs a real `SchemaV2` with copied snapshot model definitions.
 - Verified: clean build + full test suite green; app launches with no
   corrupt-store recovery; sync columns confirmed present in the actual SQLite
   store (ZSYNCUSERID/ZDELETEDAT/ZNEEDSSYNC/ZUPDATEDAT).

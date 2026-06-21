@@ -43,7 +43,7 @@ struct QuaraMoneyApp: App {
     // Derive the active schema from the versioned baseline so the container and
     // the migration plan can never drift apart. Bump this to the latest
     // VersionedSchema when SchemaV2 is introduced.
-    private static let modelSchema = Schema(versionedSchema: SchemaV2.self)
+    private static let modelSchema = Schema(versionedSchema: SchemaV1.self)
 
     private static func makeModelContainer() -> ModelContainer {
         let modelConfiguration = ModelConfiguration(schema: modelSchema, isStoredInMemoryOnly: false)

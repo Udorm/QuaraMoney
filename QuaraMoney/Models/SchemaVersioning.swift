@@ -31,33 +31,27 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
-/// V2 schema — adds Supabase sync metadata to every model:
-/// `syncUserID`, `updatedAt` (where missing), `deletedAt` (soft-delete tombstone),
-/// and `needsSync` (local outbox flag). All additions are optional or defaulted,
-/// so V1 → V2 is a **lightweight, non-destructive** migration (no data loss).
-enum SchemaV2: VersionedSchema {
-    static var versionIdentifier: Schema.Version = Schema.Version(2, 0, 0)
-
-    static var models: [any PersistentModel.Type] {
-        // Same model set as V1; the types now carry sync metadata.
-        SchemaV1.models
-    }
-}
-
 // MARK: - Migration Plan
 
 /// Migration plan that SwiftData uses to migrate between schema versions.
-/// Add new MigrationStages here as the schema evolves.
+///
+/// NOTE on the Supabase sync metadata (`syncUserID`, `updatedAt`, `deletedAt`,
+/// `needsSync`): these were **additive, optional/defaulted** properties, so they
+/// migrate automatically and non-destructively via SwiftData's lightweight
+/// inference under the existing `SchemaV1` version — the same way earlier fields
+/// (e.g. `Transaction.tags`, `storedRate`) were added.
+///
+/// A second `VersionedSchema` was intentionally NOT introduced: because both
+/// versions would reference the same live model types they produce identical
+/// checksums, which SwiftData rejects ("Duplicate version checksums detected").
+/// The next **non-additive** change must add a real `SchemaV2` containing copied
+/// (snapshot) model definitions plus an explicit `MigrationStage`.
 enum QuaraMoneySchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self]
+        [SchemaV1.self]
     }
 
     static var stages: [MigrationStage] {
-        // V1 → V2: purely additive (sync metadata). Lightweight = SwiftData adds
-        // the new columns with their defaults; existing rows are preserved.
-        [
-            .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
-        ]
+        []
     }
 }

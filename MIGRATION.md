@@ -1,8 +1,24 @@
 # QuaraMoney — SwiftData → Supabase Migration
 
-Status: **Phase 1 complete ✅ (build+test green) — pending live sign-in test**
+Status: **Phase 2 complete ✅ — auth verified live; sync metadata in place**
 Owner: Udorm Phon
 Last updated: 2026-06-21
+
+### Phase 2 — done & verified
+- Sync metadata added to all 15 `@Model` types: `syncUserID: UUID?`,
+  `deletedAt: Date?`, `needsSync: Bool = true`, plus `updatedAt` on the 7 models
+  that lacked it. All additions optional/defaulted ⇒ lightweight migration.
+- `SchemaV2` + `.lightweight(SchemaV1 → SchemaV2)` stage; app uses `SchemaV2`.
+- Verified: clean build + full test suite green; app launches with no
+  corrupt-store recovery; sync columns confirmed present in the actual SQLite
+  store (ZSYNCUSERID/ZDELETEDAT/ZNEEDSSYNC/ZUPDATEDAT).
+- ⚠️ Not yet exercised: a real V1→V2 data migration (no V1 store on the test
+  simulator). Design is additive-lightweight (safe) + corrupt-store backup net.
+- Phase 1 auth confirmed live: account in Supabase `auth.users`, signed in OK.
+
+### Phase 3 (next) — sync engine
+Must also bump `updatedAt` + set `needsSync = true` on every local mutation
+(SwiftData save hook / repository), or LWW won't detect changes.
 
 ### Phase 1 — done (code) & verified (build/test)
 - `SupabaseAuthManager` (observable: email/password sign-up & sign-in, magic

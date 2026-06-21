@@ -5,6 +5,12 @@ import Foundation
 @Model
 final class SavingsGoal {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var name: String
     var goalDescription: String?
     var targetAmount: Decimal

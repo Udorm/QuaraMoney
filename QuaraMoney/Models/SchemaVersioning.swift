@@ -31,19 +31,33 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
+/// V2 schema — adds Supabase sync metadata to every model:
+/// `syncUserID`, `updatedAt` (where missing), `deletedAt` (soft-delete tombstone),
+/// and `needsSync` (local outbox flag). All additions are optional or defaulted,
+/// so V1 → V2 is a **lightweight, non-destructive** migration (no data loss).
+enum SchemaV2: VersionedSchema {
+    static var versionIdentifier: Schema.Version = Schema.Version(2, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        // Same model set as V1; the types now carry sync metadata.
+        SchemaV1.models
+    }
+}
+
 // MARK: - Migration Plan
 
 /// Migration plan that SwiftData uses to migrate between schema versions.
 /// Add new MigrationStages here as the schema evolves.
 enum QuaraMoneySchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self]
+        [SchemaV1.self, SchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
-        // No migrations yet — V1 is the baseline.
-        // Future example:
-        // .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
-        []
+        // V1 → V2: purely additive (sync metadata). Lightweight = SwiftData adds
+        // the new columns with their defaults; existing rows are preserved.
+        [
+            .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
+        ]
     }
 }

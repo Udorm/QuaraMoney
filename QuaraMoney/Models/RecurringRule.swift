@@ -4,6 +4,13 @@ import Foundation
 @Model
 final class RecurringRule {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var name: String // e.g., "Netflix Subscription"
     var amount: Decimal
     var currencyCode: String

@@ -19,6 +19,13 @@ enum EventSettlementStatus: String, CaseIterable, Identifiable {
 @Model
 final class Event {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var title: String
     var startDate: Date
     var endDate: Date?

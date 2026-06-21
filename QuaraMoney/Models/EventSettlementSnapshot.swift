@@ -4,6 +4,13 @@ import Foundation
 @Model
 final class EventSettlementSnapshot {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var ledgerRevision: Int64
     var createdAt: Date
     
@@ -22,6 +29,13 @@ final class EventSettlementSnapshot {
 @Model
 final class EventSettlementTransfer {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var fromMemberId: UUID
     var toMemberId: UUID
     var amountMinor: Int64

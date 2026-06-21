@@ -18,6 +18,13 @@ enum EventWalletExportType: String, Codable, CaseIterable, Identifiable {
 @Model
 final class EventWalletExportRecord {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var memberId: UUID
     var walletTransactionId: UUID
     var amountMinor: Int64

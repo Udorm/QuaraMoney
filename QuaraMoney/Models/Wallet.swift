@@ -4,6 +4,12 @@ import Foundation
 @Model
 final class Wallet {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var name: String
     var currencyCode: String // e.g., "USD", "KHR"
     var icon: String // SF Symbol name

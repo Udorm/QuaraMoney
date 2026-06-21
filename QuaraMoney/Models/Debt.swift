@@ -19,6 +19,12 @@ enum DebtType: String, Codable, CaseIterable, Identifiable {
 @Model
 final class Debt {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var personName: String
     var totalAmount: Decimal
     var currencyCode: String

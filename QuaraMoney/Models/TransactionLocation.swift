@@ -13,6 +13,12 @@ enum TransactionLocationSource: String, Codable, CaseIterable {
 final class TransactionLocation {
     var id: UUID
 
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var displayName: String?
     var fullAddress: String?
     var shortAddress: String?

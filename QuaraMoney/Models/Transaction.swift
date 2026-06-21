@@ -10,6 +10,12 @@ final class Transaction {
     #Index<Transaction>([\.date])
 
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var type: TransactionType
     var date: Date
     var note: String?

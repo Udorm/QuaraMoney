@@ -155,7 +155,7 @@ final class SyncEngine: ObservableObject {
                       icon: w.icon, color_hex: w.colorHex, is_archived: w.isArchived,
                       created_at: w.createdAt, updated_at: w.updatedAt, deleted_at: w.deletedAt)
         }
-        try await client.from("wallets").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "wallets", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -167,7 +167,7 @@ final class SyncEngine: ObservableObject {
                         type: c.type.rawValue, is_system: c.isSystem,
                         created_at: c.createdAt, updated_at: c.updatedAt, deleted_at: c.deletedAt)
         }
-        try await client.from("categories").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "categories", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -196,7 +196,7 @@ final class SyncEngine: ObservableObject {
                 savings_goal_id: t.savingsGoal?.id,
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
-        try await client.from("transactions").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "transactions", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -219,7 +219,7 @@ final class SyncEngine: ObservableObject {
                          ledger_mode: e.ledgerMode.rawValue, latitude: e.latitude, longitude: e.longitude,
                          updated_at: e.updatedAt, deleted_at: e.deletedAt))
         }
-        try await client.from("events").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "events", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -232,7 +232,7 @@ final class SyncEngine: ObservableObject {
                         date_created: d.dateCreated, is_completed: d.isCompleted, created_at: d.createdAt,
                         updated_at: d.updatedAt, deleted_at: d.deletedAt)
         }
-        try await client.from("debts").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "debts", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -250,7 +250,7 @@ final class SyncEngine: ObservableObject {
                                auto_contribute_period_raw: g.autoContributePeriod?.rawValue,
                                priority: g.priority, linked_wallet_id: g.linkedWallet?.id, deleted_at: g.deletedAt)
         }
-        try await client.from("savings_goals").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "savings_goals", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -264,7 +264,7 @@ final class SyncEngine: ObservableObject {
                                  wallet_id: r.wallet?.id, category_id: r.category?.id,
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
-        try await client.from("recurring_rules").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "recurring_rules", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -286,7 +286,7 @@ final class SyncEngine: ObservableObject {
                                            sort_order: m.sortOrder, created_at: m.createdAt,
                                            updated_at: m.updatedAt, deleted_at: m.deletedAt))
         }
-        try await client.from("event_members").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_members", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -303,7 +303,7 @@ final class SyncEngine: ObservableObject {
                                           is_deleted: t.isDeleted, created_at: t.createdAt, updated_at: t.updatedAt,
                                           deleted_at: t.deletedAt)
         }
-        try await client.from("event_ledger_transactions").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_ledger_transactions", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -315,7 +315,7 @@ final class SyncEngine: ObservableObject {
                                           member_id: p.memberId, event_member_id: p.member?.id,
                                           order_index: p.orderIndex, updated_at: p.updatedAt, deleted_at: p.deletedAt)
         }
-        try await client.from("event_ledger_participants").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_ledger_participants", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -327,7 +327,7 @@ final class SyncEngine: ObservableObject {
                                            ledger_revision: s.ledgerRevision, created_at: s.createdAt,
                                            updated_at: s.updatedAt, deleted_at: s.deletedAt)
         }
-        try await client.from("event_settlement_snapshots").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_settlement_snapshots", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -340,7 +340,7 @@ final class SyncEngine: ObservableObject {
                                            amount_minor: t.amountMinor, sequence: t.sequence,
                                            updated_at: t.updatedAt, deleted_at: t.deletedAt)
         }
-        try await client.from("event_settlement_transfers").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_settlement_transfers", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -354,7 +354,7 @@ final class SyncEngine: ObservableObject {
                                            export_type: r.exportType.rawValue, created_at: r.createdAt,
                                            updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
-        try await client.from("event_wallet_export_records").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "event_wallet_export_records", client)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -376,7 +376,7 @@ final class SyncEngine: ObservableObject {
                           budget_category_type_raw: b.budgetCategoryType?.rawValue,
                           category_id: b.category?.id, deleted_at: b.deletedAt)
         }
-        try await client.from("budgets").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "budgets", client)
         // Rebuild each budget's category join rows (delete then insert current set).
         for b in pending {
             try await client.from("budget_categories").delete().eq("budget_id", value: b.id.uuidString).execute()
@@ -413,7 +413,7 @@ final class SyncEngine: ObservableObject {
                                        normalized_spatial_key: loc.normalizedSpatialKey,
                                        updated_at: loc.updatedAt, deleted_at: loc.deletedAt)
         }
-        try await client.from("transaction_locations").upsert(rows).execute()
+        try await upsertInChunks(rows, to: "transaction_locations", client)
         markSynced(pairs.map { $0.1 }, uid: uid, context: context)
     }
 
@@ -915,12 +915,38 @@ final class SyncEngine: ObservableObject {
 
     // MARK: - Helpers
 
+    /// Page size for pull/push (PostgREST caps responses at ~1000 rows).
+    private static let pageSize = 1000
+
+    /// Fetches all rows for `table` changed since its cursor, paginating so large
+    /// datasets (e.g. first sync) aren't silently truncated.
     private func fetchChanged<Row: Decodable>(_ table: String, _ client: SupabaseClient, _ uid: UUID) async throws -> [Row] {
-        var query = client.from(table).select().eq("user_id", value: uid.uuidString)
-        if let cursor = Self.cursorString(for: table) {
-            query = query.gt("updated_at", value: cursor)
+        let cursor = Self.cursorString(for: table)
+        var all: [Row] = []
+        var offset = 0
+        while true {
+            var filter = client.from(table).select().eq("user_id", value: uid.uuidString)
+            if let cursor { filter = filter.gt("updated_at", value: cursor) }
+            let page: [Row] = try await filter
+                .order("updated_at", ascending: true)
+                .range(from: offset, to: offset + Self.pageSize - 1)
+                .execute().value
+            all.append(contentsOf: page)
+            if page.count < Self.pageSize { break }
+            offset += Self.pageSize
         }
-        return try await query.execute().value
+        return all
+    }
+
+    /// Upserts rows in chunks so a large first push isn't one oversized request.
+    private func upsertInChunks<R: Encodable & Sendable>(_ rows: [R], to table: String, _ client: SupabaseClient) async throws {
+        guard !rows.isEmpty else { return }
+        var index = 0
+        while index < rows.count {
+            let chunk = Array(rows[index..<min(index + Self.pageSize, rows.count)])
+            try await client.from(table).upsert(chunk).execute()
+            index += Self.pageSize
+        }
     }
 
     /// Applies pulled rows under the sync-write guard and advances the cursor.

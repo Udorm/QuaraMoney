@@ -11,7 +11,7 @@ import Foundation
 // Phase 3c slice: core entities only (wallets, categories, transactions). The
 // remaining 12 entities follow in subsequent increments.
 
-struct SyncWalletRow: Codable, Sendable {
+nonisolated struct SyncWalletRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var name: String
@@ -24,7 +24,7 @@ struct SyncWalletRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncCategoryRow: Codable, Sendable {
+nonisolated struct SyncCategoryRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var name: String
@@ -37,7 +37,7 @@ struct SyncCategoryRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncTransactionRow: Codable, Sendable {
+nonisolated struct SyncTransactionRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var type: String
@@ -62,7 +62,7 @@ struct SyncTransactionRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventRow: Codable, Sendable {
+nonisolated struct SyncEventRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var title: String
@@ -85,7 +85,7 @@ struct SyncEventRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncDebtRow: Codable, Sendable {
+nonisolated struct SyncDebtRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var person_name: String
@@ -101,7 +101,7 @@ struct SyncDebtRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncSavingsGoalRow: Codable, Sendable {
+nonisolated struct SyncSavingsGoalRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var name: String
@@ -124,7 +124,7 @@ struct SyncSavingsGoalRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncRecurringRuleRow: Codable, Sendable {
+nonisolated struct SyncRecurringRuleRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var name: String
@@ -140,7 +140,7 @@ struct SyncRecurringRuleRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventMemberRow: Codable, Sendable {
+nonisolated struct SyncEventMemberRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var event_id: UUID?
@@ -157,7 +157,7 @@ struct SyncEventMemberRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventLedgerTransactionRow: Codable, Sendable {
+nonisolated struct SyncEventLedgerTransactionRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var event_id: UUID?
@@ -180,7 +180,7 @@ struct SyncEventLedgerTransactionRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventLedgerParticipantRow: Codable, Sendable {
+nonisolated struct SyncEventLedgerParticipantRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var transaction_id: UUID?
@@ -191,7 +191,7 @@ struct SyncEventLedgerParticipantRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventSettlementSnapshotRow: Codable, Sendable {
+nonisolated struct SyncEventSettlementSnapshotRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var event_id: UUID?
@@ -201,7 +201,7 @@ struct SyncEventSettlementSnapshotRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventSettlementTransferRow: Codable, Sendable {
+nonisolated struct SyncEventSettlementTransferRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var snapshot_id: UUID?
@@ -213,7 +213,7 @@ struct SyncEventSettlementTransferRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncEventWalletExportRecordRow: Codable, Sendable {
+nonisolated struct SyncEventWalletExportRecordRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var event_id: UUID?
@@ -228,7 +228,7 @@ struct SyncEventWalletExportRecordRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncTransactionLocationRow: Codable, Sendable {
+nonisolated struct SyncTransactionLocationRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var transaction_id: UUID?
@@ -251,7 +251,7 @@ struct SyncTransactionLocationRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncBudgetRow: Codable, Sendable {
+nonisolated struct SyncBudgetRow: Codable, Sendable {
     var id: UUID
     var user_id: UUID
     var name: String?
@@ -279,7 +279,7 @@ struct SyncBudgetRow: Codable, Sendable {
     var deleted_at: Date?
 }
 
-struct SyncBudgetCategoryRow: Codable, Sendable {
+nonisolated struct SyncBudgetCategoryRow: Codable, Sendable {
     var budget_id: UUID
     var category_id: UUID
     var user_id: UUID

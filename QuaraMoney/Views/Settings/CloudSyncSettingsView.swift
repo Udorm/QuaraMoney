@@ -63,8 +63,8 @@ struct CloudSyncSettingsView: View {
                         } header: {
                             Text("Sync")
                         } footer: {
-                            Text("Beta: syncs wallets, categories, and transactions. " +
-                                 "More data types are being added.")
+                            Text("Beta: syncs your wallets, categories, transactions, events, " +
+                                 "budgets, debts, savings goals, and more across your devices.")
                         }
                     } else {
                         AuthFormView()

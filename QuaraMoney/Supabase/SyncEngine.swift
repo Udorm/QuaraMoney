@@ -110,6 +110,8 @@ final class SyncEngine: ObservableObject {
             try await pushEventSettlementTransfers(context, client, uid)
             try await pushEventWalletExportRecords(context, client, uid)
             try await pushTransactions(context, client, uid)
+            try await pushBudgets(context, client, uid)
+            try await pushTransactionLocations(context, client, uid)
 
             // Pull parents → children.
             try await pullWallets(context, client, uid)
@@ -125,6 +127,8 @@ final class SyncEngine: ObservableObject {
             try await pullEventSettlementTransfers(context, client, uid)
             try await pullEventWalletExportRecords(context, client, uid)
             try await pullTransactions(context, client, uid)
+            try await pullBudgets(context, client, uid)
+            try await pullTransactionLocations(context, client, uid)
 
             lastSyncDate = Date()
         } catch {
@@ -320,6 +324,65 @@ final class SyncEngine: ObservableObject {
         }
         try await client.from("event_wallet_export_records").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync }))
+        guard !pending.isEmpty else { return }
+        let rows = pending.map { b in
+            SyncBudgetRow(id: b.id, user_id: uid, name: b.name, amount_limit: b.amountLimit,
+                          currency_code: b.currencyCode, period_type_raw: b.periodType.rawValue,
+                          start_date: b.startDate, created_at: b.createdAt, updated_at: b.updatedAt,
+                          custom_end_date: b.customEndDate, month: b.month, year: b.year,
+                          is_recurring: b.isRecurring, rollover_excess: b.rolloverExcess,
+                          rollover_amount: b.rolloverAmount,
+                          amount_type_data: b.amountType.encode().flatMap { String(data: $0, encoding: .utf8) },
+                          alert_at_50: b.alertAt50, alert_at_80: b.alertAt80, alert_at_100: b.alertAt100,
+                          alert_on_projected_overspend: b.alertOnProjectedOverspend,
+                          last_alert_triggered_date: b.lastAlertTriggeredDate,
+                          last_alert_threshold: b.lastAlertThreshold,
+                          budget_category_type_raw: b.budgetCategoryType?.rawValue,
+                          category_id: b.category?.id, deleted_at: b.deletedAt)
+        }
+        try await client.from("budgets").upsert(rows).execute()
+        // Rebuild each budget's category join rows (delete then insert current set).
+        for b in pending {
+            try await client.from("budget_categories").delete().eq("budget_id", value: b.id.uuidString).execute()
+            let joins = (b.categories ?? []).map {
+                SyncBudgetCategoryRow(budget_id: b.id, category_id: $0.id, user_id: uid)
+            }
+            if !joins.isEmpty {
+                try await client.from("budget_categories").insert(joins).execute()
+            }
+        }
+        markSynced(pending, uid: uid, context: context)
+    }
+
+    private func pushTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        // Locations have no back-reference, so gather them via their owning transactions.
+        let txns = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.location != nil }))
+        let pairs = txns.compactMap { t -> (Transaction, TransactionLocation)? in
+            guard let loc = t.location, loc.needsSync else { return nil }
+            return (t, loc)
+        }
+        guard !pairs.isEmpty else { return }
+        let rows = pairs.map { (t, loc) in
+            SyncTransactionLocationRow(id: loc.id, user_id: uid, transaction_id: t.id,
+                                       display_name: loc.displayName, full_address: loc.fullAddress,
+                                       short_address: loc.shortAddress, latitude: loc.latitude,
+                                       longitude: loc.longitude,
+                                       horizontal_accuracy_meters: loc.horizontalAccuracyMeters,
+                                       captured_at: loc.capturedAt, source_raw: loc.sourceRaw,
+                                       apple_place_id: loc.applePlaceID,
+                                       alternate_apple_place_ids: loc.alternateApplePlaceIDs,
+                                       point_of_interest_category_raw: loc.pointOfInterestCategoryRaw,
+                                       locality: loc.locality, administrative_area: loc.administrativeArea,
+                                       country_code: loc.countryCode,
+                                       normalized_spatial_key: loc.normalizedSpatialKey,
+                                       updated_at: loc.updatedAt, deleted_at: loc.deletedAt)
+        }
+        try await client.from("transaction_locations").upsert(rows).execute()
+        markSynced(pairs.map { $0.1 }, uid: uid, context: context)
     }
 
     private func markSynced(_ models: [any SyncTrackable], uid: UUID, context: ModelContext) {
@@ -654,6 +717,75 @@ final class SyncEngine: ObservableObject {
         try context.save()
     }
 
+    private func pullBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncBudgetRow] = try await fetchChanged("budgets", client, uid)
+        guard !rows.isEmpty else { return }
+        // Category join rows (no cursor; small set). Map budget → category ids.
+        let joinRows: [SyncBudgetCategoryRow] = try await client.from("budget_categories")
+            .select().eq("user_id", value: uid.uuidString).execute().value
+        let joinMap = Dictionary(grouping: joinRows, by: { $0.budget_id }).mapValues { $0.map(\.category_id) }
+        try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(Budget.self, id: row.id, in: context)
+            let b: Budget
+            if let existing { b = existing } else {
+                b = Budget(amountLimit: row.amount_limit)
+                b.id = row.id
+                context.insert(b)
+            }
+            if b.needsSync && b.updatedAt > row.updated_at { return }
+            b.name = row.name; b.amountLimit = row.amount_limit; b.currencyCode = row.currency_code
+            b.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
+            b.startDate = row.start_date; b.createdAt = row.created_at; b.updatedAt = row.updated_at
+            b.customEndDate = row.custom_end_date; b.month = row.month; b.year = row.year
+            b.isRecurring = row.is_recurring; b.rolloverExcess = row.rollover_excess
+            b.rolloverAmount = row.rollover_amount
+            b.alertAt50 = row.alert_at_50; b.alertAt80 = row.alert_at_80; b.alertAt100 = row.alert_at_100
+            b.alertOnProjectedOverspend = row.alert_on_projected_overspend
+            b.lastAlertTriggeredDate = row.last_alert_triggered_date
+            b.lastAlertThreshold = row.last_alert_threshold
+            b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
+            b.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
+            b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
+            if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
+               let amountType = BudgetAmountType.decode(from: data) {
+                b.amountType = amountType
+            }
+            b.deletedAt = row.deleted_at; b.syncUserID = row.user_id; b.needsSync = false
+        }
+        try context.save()
+    }
+
+    private func pullTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let rows: [SyncTransactionLocationRow] = try await fetchChanged("transaction_locations", client, uid)
+        guard !rows.isEmpty else { return }
+        try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+            let existing = try fetchByID(TransactionLocation.self, id: row.id, in: context)
+            let loc: TransactionLocation
+            if let existing { loc = existing } else {
+                loc = TransactionLocation(latitude: row.latitude, longitude: row.longitude,
+                                          source: TransactionLocationSource(rawValue: row.source_raw) ?? .manual)
+                loc.id = row.id
+                context.insert(loc)
+            }
+            if loc.needsSync && loc.updatedAt > row.updated_at { return }
+            loc.displayName = row.display_name; loc.fullAddress = row.full_address
+            loc.shortAddress = row.short_address; loc.latitude = row.latitude; loc.longitude = row.longitude
+            loc.horizontalAccuracyMeters = row.horizontal_accuracy_meters; loc.capturedAt = row.captured_at
+            loc.sourceRaw = row.source_raw; loc.applePlaceID = row.apple_place_id
+            loc.alternateApplePlaceIDs = row.alternate_apple_place_ids
+            loc.pointOfInterestCategoryRaw = row.point_of_interest_category_raw
+            loc.locality = row.locality; loc.administrativeArea = row.administrative_area
+            loc.countryCode = row.country_code; loc.normalizedSpatialKey = row.normalized_spatial_key
+            loc.updatedAt = row.updated_at; loc.deletedAt = row.deleted_at
+            loc.syncUserID = row.user_id; loc.needsSync = false
+            // Link to its owning transaction.
+            if let tid = row.transaction_id, let t = try fetchByID(Transaction.self, id: tid, in: context) {
+                t.location = loc
+            }
+        }
+        try context.save()
+    }
+
     // MARK: - Helpers
 
     private func fetchChanged<Row: Decodable>(_ table: String, _ client: SupabaseClient, _ uid: UUID) async throws -> [Row] {
@@ -711,6 +843,10 @@ final class SyncEngine: ObservableObject {
             return try context.fetch(FetchDescriptor<EventSettlementTransfer>(predicate: #Predicate { $0.id == id })).first as? T
         } else if T.self == EventWalletExportRecord.self {
             return try context.fetch(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == Budget.self {
+            return try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.id == id })).first as? T
+        } else if T.self == TransactionLocation.self {
+            return try context.fetch(FetchDescriptor<TransactionLocation>(predicate: #Predicate { $0.id == id })).first as? T
         }
         return nil
     }
@@ -758,3 +894,5 @@ extension EventLedgerParticipant: SyncOwned { func assignOwner(_ uid: UUID) { sy
 extension EventSettlementSnapshot: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension EventSettlementTransfer: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
 extension EventWalletExportRecord: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension Budget: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension TransactionLocation: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }

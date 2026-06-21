@@ -227,3 +227,60 @@ struct SyncEventWalletExportRecordRow: Codable, Sendable {
     var updated_at: Date
     var deleted_at: Date?
 }
+
+struct SyncTransactionLocationRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var transaction_id: UUID?
+    var display_name: String?
+    var full_address: String?
+    var short_address: String?
+    var latitude: Double
+    var longitude: Double
+    var horizontal_accuracy_meters: Double?
+    var captured_at: Date
+    var source_raw: String
+    var apple_place_id: String?
+    var alternate_apple_place_ids: String?
+    var point_of_interest_category_raw: String?
+    var locality: String?
+    var administrative_area: String?
+    var country_code: String?
+    var normalized_spatial_key: String?
+    var updated_at: Date
+    var deleted_at: Date?
+}
+
+struct SyncBudgetRow: Codable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var name: String?
+    var amount_limit: Decimal
+    var currency_code: String
+    var period_type_raw: String
+    var start_date: Date
+    var created_at: Date
+    var updated_at: Date
+    var custom_end_date: Date?
+    var month: Int
+    var year: Int
+    var is_recurring: Bool
+    var rollover_excess: Bool
+    var rollover_amount: Decimal
+    var amount_type_data: String?
+    var alert_at_50: Bool
+    var alert_at_80: Bool
+    var alert_at_100: Bool
+    var alert_on_projected_overspend: Bool
+    var last_alert_triggered_date: Date?
+    var last_alert_threshold: Int
+    var budget_category_type_raw: String?
+    var category_id: UUID?
+    var deleted_at: Date?
+}
+
+struct SyncBudgetCategoryRow: Codable, Sendable {
+    var budget_id: UUID
+    var category_id: UUID
+    var user_id: UUID
+}

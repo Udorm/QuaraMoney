@@ -185,7 +185,7 @@ create table if not exists public.budgets (
   is_recurring boolean not null default false,
   rollover_excess boolean not null default false,
   rollover_amount numeric(19,4) not null default 0,
-  amount_type_data jsonb,
+  amount_type_data text,
   alert_at_50 boolean not null default false,
   alert_at_80 boolean not null default true,
   alert_at_100 boolean not null default true,

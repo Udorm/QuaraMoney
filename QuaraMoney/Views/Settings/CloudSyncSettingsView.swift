@@ -7,6 +7,8 @@ import SwiftUI
 /// actual data sync is added in later phases.
 struct CloudSyncSettingsView: View {
     @EnvironmentObject private var auth: SupabaseAuthManager
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var sync = SyncEngine.shared
     @AppStorage("isSupabaseSyncEnabled") private var syncEnabled = false
 
     var body: some View {
@@ -34,7 +36,35 @@ struct CloudSyncSettingsView: View {
                             Button("Sign Out", role: .destructive) {
                                 Task { await auth.signOut() }
                             }
-                            .disabled(auth.isWorking)
+                            .disabled(auth.isWorking || sync.isSyncing)
+                        }
+
+                        Section {
+                            Button {
+                                Task { await sync.syncNow(context: modelContext) }
+                            } label: {
+                                HStack {
+                                    Text("Sync Now")
+                                    if sync.isSyncing {
+                                        Spacer()
+                                        ProgressView()
+                                    }
+                                }
+                            }
+                            .disabled(sync.isSyncing)
+
+                            if let last = sync.lastSyncDate {
+                                LabeledContent("Last synced",
+                                               value: last.formatted(date: .abbreviated, time: .shortened))
+                            }
+                            if let error = sync.lastError {
+                                Text(error).foregroundStyle(.red)
+                            }
+                        } header: {
+                            Text("Sync")
+                        } footer: {
+                            Text("Beta: syncs wallets, categories, and transactions. " +
+                                 "More data types are being added.")
                         }
                     } else {
                         AuthFormView()

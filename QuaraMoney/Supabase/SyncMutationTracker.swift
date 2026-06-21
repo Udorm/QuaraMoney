@@ -4,6 +4,7 @@ import SwiftData
 /// Models that carry Supabase sync metadata. All conformers already declare
 /// `updatedAt` and `needsSync` (added in Phase 2), so the conformances are empty.
 protocol SyncTrackable: AnyObject {
+    var id: UUID { get }
     var updatedAt: Date { get set }
     var needsSync: Bool { get set }
 }
@@ -67,6 +68,13 @@ enum SyncMutationTracker {
         for case let model as SyncTrackable in context.changedModelsArray {
             model.updatedAt = now
             model.needsSync = true
+        }
+        // Record deletions (incl. cascade-deleted children) as tombstones so the
+        // sync engine can propagate them to the server.
+        for model in context.deletedModelsArray {
+            guard let trackable = model as? SyncTrackable,
+                  let table = SyncTableRegistry.tableName(for: model) else { continue }
+            SyncDeletionQueue.enqueue(table: table, id: trackable.id)
         }
     }
 }

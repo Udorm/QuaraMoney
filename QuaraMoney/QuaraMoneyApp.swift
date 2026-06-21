@@ -168,6 +168,9 @@ struct QuaraMoneyApp: App {
                 authManager.handleCallback(url)
             }
             .task {
+                // Track local edits so the sync engine can detect changes.
+                // Harmless when sync is off (just stamps local metadata).
+                SyncMutationTracker.start(mainContext: sharedModelContainer.mainContext)
                 // Restore an existing session on launch when sync is enabled.
                 if SupabaseFeatureFlags.isSyncEnabled {
                     authManager.start()

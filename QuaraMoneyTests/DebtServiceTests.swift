@@ -13,6 +13,11 @@ final class DebtServiceTests: XCTestCase {
         container = TestModelContainer.create()
         context = container.mainContext
         service = DebtService(modelContext: context)
+        // Cross-currency assertions assume the canonical reference rates
+        // (KHR = 4000/USD). `Debt` converts via `CurrencyManager.currentRates`,
+        // which prefers live rates cached in UserDefaults. Clear that cache so the
+        // tests are deterministic regardless of any live rates fetched earlier.
+        UserDefaults.standard.removeObject(forKey: CurrencyManager.ratesCacheKey)
     }
 
     override func tearDown() {

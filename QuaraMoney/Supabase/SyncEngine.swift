@@ -174,12 +174,19 @@ final class SyncEngine: ObservableObject {
     private func pushTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
-        let rows = pending.map { t in
-            SyncTransactionRow(
+        var rows: [SyncTransactionRow] = []
+        rows.reserveCapacity(pending.count)
+        for t in pending {
+            var photoPath: String?
+            if let data = t.photoData {
+                photoPath = imagePath(uid, "transactions", t.id)
+                try await uploadImage(data, to: photoPath!, client) // throws → sync retries (needsSync kept)
+            }
+            rows.append(SyncTransactionRow(
                 id: t.id, user_id: uid, type: t.type.rawValue, date: t.date, note: t.note,
                 tags: t.tags, exclude_from_reports: t.excludeFromReports, amount: t.amount,
                 currency_code: t.currencyCode, exchange_rate: t.exchangeRate, stored_rate: t.storedRate,
-                photo_path: nil, // Storage upload added in a later increment
+                photo_path: photoPath,
                 category_id: t.category?.id,
                 event_id: t.event?.id,
                 source_wallet_id: t.sourceWallet?.id,
@@ -187,7 +194,7 @@ final class SyncEngine: ObservableObject {
                 recurring_rule_id: t.recurringRule?.id,
                 debt_id: t.debt?.id,
                 savings_goal_id: t.savingsGoal?.id,
-                created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt)
+                created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
         try await client.from("transactions").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
@@ -196,13 +203,21 @@ final class SyncEngine: ObservableObject {
     private func pushEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Event>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
-        let rows = pending.map { e in
-            SyncEventRow(id: e.id, user_id: uid, title: e.title, start_date: e.startDate, end_date: e.endDate,
-                         total_budget: e.totalBudget, cover_image_path: nil, notes: e.notes, icon: e.icon,
-                         color_hex: e.colorHex, location: e.location, status: e.status, currency_code: e.currencyCode,
-                         ledger_revision: e.ledgerRevision, confirmed_settlement_revision: e.confirmedSettlementRevision,
+        var rows: [SyncEventRow] = []
+        rows.reserveCapacity(pending.count)
+        for e in pending {
+            var coverPath: String?
+            if let data = e.coverImageData {
+                coverPath = imagePath(uid, "events", e.id)
+                try await uploadImage(data, to: coverPath!, client)
+            }
+            rows.append(SyncEventRow(id: e.id, user_id: uid, title: e.title, start_date: e.startDate,
+                         end_date: e.endDate, total_budget: e.totalBudget, cover_image_path: coverPath,
+                         notes: e.notes, icon: e.icon, color_hex: e.colorHex, location: e.location,
+                         status: e.status, currency_code: e.currencyCode, ledger_revision: e.ledgerRevision,
+                         confirmed_settlement_revision: e.confirmedSettlementRevision,
                          ledger_mode: e.ledgerMode.rawValue, latitude: e.latitude, longitude: e.longitude,
-                         updated_at: e.updatedAt, deleted_at: e.deletedAt)
+                         updated_at: e.updatedAt, deleted_at: e.deletedAt))
         }
         try await client.from("events").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
@@ -256,12 +271,20 @@ final class SyncEngine: ObservableObject {
     private func pushEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventMember>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
-        let rows = pending.map { m in
-            SyncEventMemberRow(id: m.id, user_id: uid, event_id: m.event?.id, name: m.name,
-                               avatar_path: nil, avatar_icon: m.avatarIcon, color_hex: m.colorHex,
-                               is_archived: m.isArchived, is_local_user: m.isLocalUser,
-                               is_budget_pool: m.isBudgetPool, sort_order: m.sortOrder,
-                               created_at: m.createdAt, updated_at: m.updatedAt, deleted_at: m.deletedAt)
+        var rows: [SyncEventMemberRow] = []
+        rows.reserveCapacity(pending.count)
+        for m in pending {
+            var avatarPath: String?
+            if let data = m.avatarData {
+                avatarPath = imagePath(uid, "event_members", m.id)
+                try await uploadImage(data, to: avatarPath!, client)
+            }
+            rows.append(SyncEventMemberRow(id: m.id, user_id: uid, event_id: m.event?.id, name: m.name,
+                                           avatar_path: avatarPath, avatar_icon: m.avatarIcon,
+                                           color_hex: m.colorHex, is_archived: m.isArchived,
+                                           is_local_user: m.isLocalUser, is_budget_pool: m.isBudgetPool,
+                                           sort_order: m.sortOrder, created_at: m.createdAt,
+                                           updated_at: m.updatedAt, deleted_at: m.deletedAt))
         }
         try await client.from("event_members").upsert(rows).execute()
         markSynced(pending, uid: uid, context: context)
@@ -470,11 +493,13 @@ final class SyncEngine: ObservableObject {
     private func pullTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncTransactionRow] = try await fetchChanged("transactions", client, uid)
         guard !rows.isEmpty else { return }
+        var pendingPhotoDownloads: [(UUID, String)] = []
         try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Transaction.self, id: row.id, in: context) { context.delete(existing) }
                 return
             }
+            if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
             let t = try fetchByID(Transaction.self, id: row.id, in: context) ?? {
                 let new = Transaction(amount: row.amount, currencyCode: row.currency_code,
                                       date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
@@ -500,16 +525,24 @@ final class SyncEngine: ObservableObject {
             t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
         }
         try context.save()
+        // Download receipt images for rows that have a path but no local data.
+        for (id, path) in pendingPhotoDownloads {
+            guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
+            if let data = try? await downloadImage(path, client) { t.photoData = data }
+        }
+        if !pendingPhotoDownloads.isEmpty { try context.save() }
     }
 
     private func pullEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventRow] = try await fetchChanged("events", client, uid)
         guard !rows.isEmpty else { return }
+        var pendingCoverDownloads: [(UUID, String)] = []
         try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Event.self, id: row.id, in: context) { context.delete(existing) }
                 return
             }
+            if let path = row.cover_image_path { pendingCoverDownloads.append((row.id, path)) }
             let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
                 let new = Event(title: row.title, startDate: row.start_date)
                 new.id = row.id
@@ -528,6 +561,11 @@ final class SyncEngine: ObservableObject {
             e.syncUserID = row.user_id; e.needsSync = false
         }
         try context.save()
+        for (id, path) in pendingCoverDownloads {
+            guard let e = try fetchByID(Event.self, id: id, in: context), e.coverImageData == nil else { continue }
+            if let data = try? await downloadImage(path, client) { e.coverImageData = data }
+        }
+        if !pendingCoverDownloads.isEmpty { try context.save() }
     }
 
     private func pullDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -618,11 +656,13 @@ final class SyncEngine: ObservableObject {
     private func pullEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventMemberRow] = try await fetchChanged("event_members", client, uid)
         guard !rows.isEmpty else { return }
+        var pendingAvatarDownloads: [(UUID, String)] = []
         try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventMember.self, id: row.id, in: context) { context.delete(dead) }
                 return
             }
+            if let path = row.avatar_path { pendingAvatarDownloads.append((row.id, path)) }
             let existing = try fetchByID(EventMember.self, id: row.id, in: context)
             let m: EventMember
             if let existing { m = existing } else {
@@ -639,6 +679,11 @@ final class SyncEngine: ObservableObject {
             m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
         }
         try context.save()
+        for (id, path) in pendingAvatarDownloads {
+            guard let m = try fetchByID(EventMember.self, id: id, in: context), m.avatarData == nil else { continue }
+            if let data = try? await downloadImage(path, client) { m.avatarData = data }
+        }
+        if !pendingAvatarDownloads.isEmpty { try context.save() }
     }
 
     private func pullEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -930,6 +975,23 @@ final class SyncEngine: ObservableObject {
             return try context.fetch(FetchDescriptor<TransactionLocation>(predicate: #Predicate { $0.id == id })).first as? T
         }
         return nil
+    }
+
+    // MARK: - Storage (images)
+
+    /// Storage object path. The first folder MUST be the lowercased user id to
+    /// satisfy the receipts-bucket RLS policy (compares to auth.uid()::text).
+    private func imagePath(_ uid: UUID, _ folder: String, _ id: UUID) -> String {
+        "\(uid.uuidString.lowercased())/\(folder)/\(id.uuidString.lowercased()).jpg"
+    }
+
+    private func uploadImage(_ data: Data, to path: String, _ client: SupabaseClient) async throws {
+        _ = try await client.storage.from("receipts").upload(
+            path, data: data, options: FileOptions(contentType: "image/jpeg", upsert: true))
+    }
+
+    private func downloadImage(_ path: String, _ client: SupabaseClient) async throws -> Data {
+        try await client.storage.from("receipts").download(path: path)
     }
 
     // MARK: - Cursor persistence (per table, UserDefaults)

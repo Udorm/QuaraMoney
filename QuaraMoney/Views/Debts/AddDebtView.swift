@@ -9,7 +9,7 @@ struct AddDebtView: View {
     @State private var showKeyboard: Bool
     @FocusState private var isNameFocused: Bool
 
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     init(debtToEdit: Debt? = nil) {
         let vm = DebtFormViewModel(debt: debtToEdit)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import CoreData
 
 /// Models that carry Supabase sync metadata. All conformers already declare
 /// `updatedAt` and `needsSync` (added in Phase 2), so the conformances are empty.
@@ -7,6 +8,19 @@ protocol SyncTrackable: AnyObject {
     var id: UUID { get }
     var updatedAt: Date { get set }
     var needsSync: Bool { get set }
+    var deletedAt: Date? { get set }
+}
+
+extension SyncTrackable {
+    /// Soft-deletes the model: it remains a row (a tombstone) so the deletion can
+    /// sync as an ordinary field change. Reads must filter `deletedAt == nil`.
+    func markSoftDeleted(_ date: Date = Date()) {
+        deletedAt = date
+        updatedAt = date
+        needsSync = true
+    }
+
+    var isSoftDeleted: Bool { deletedAt != nil }
 }
 
 extension Wallet: SyncTrackable {}
@@ -47,13 +61,47 @@ enum SyncMutationTracker {
         guard !started else { return }
         started = true
         observedContext = mainContext
+        
+        // Observe SwiftData saves to stamp insertions/updates
         NotificationCenter.default.addObserver(
             forName: ModelContext.willSave,
             object: mainContext,
-            queue: nil // synchronous: run inside the save, on the saving thread
+            queue: nil
         ) { _ in
             MainActor.assumeIsolated {
                 stampPendingChanges()
+            }
+        }
+        
+        // Observe Core Data saves to safely capture deletions without property-access crashes on invalidated models
+        NotificationCenter.default.addObserver(
+            forName: .NSManagedObjectContextWillSave,
+            object: nil,
+            queue: nil
+        ) { notification in
+            MainActor.assumeIsolated {
+                handleCoreDataWillSave(notification)
+            }
+        }
+    }
+
+    private static func handleCoreDataWillSave(_ notification: Notification) {
+        guard !isApplyingSyncChanges,
+              let moc = notification.object as? NSManagedObjectContext else { return }
+        
+        #if DEBUG
+        print("Core Data willSave: \(moc.deletedObjects.count) deleted objects")
+        #endif
+        
+        for obj in moc.deletedObjects {
+            guard let entityName = obj.entity.name,
+                  let table = SyncTableRegistry.tableName(forEntityName: entityName) else { continue }
+            guard obj.entity.attributesByName.keys.contains("id") else { continue }
+            if let id = obj.value(forKey: "id") as? UUID {
+                #if DEBUG
+                print("Core Data willSave tracking deletion: \(table) - \(id)")
+                #endif
+                SyncDeletionQueue.enqueue(table: table, id: id)
             }
         }
     }
@@ -61,20 +109,20 @@ enum SyncMutationTracker {
     private static func stampPendingChanges() {
         guard !isApplyingSyncChanges, let context = observedContext else { return }
         let now = Date()
-        for case let model as SyncTrackable in context.insertedModelsArray {
-            model.updatedAt = now
-            model.needsSync = true
+        
+        let deletedIdentifiers = Set(context.deletedModelsArray.map { $0.persistentModelID })
+        
+        for model in context.insertedModelsArray {
+            guard let trackable = model as? SyncTrackable else { continue }
+            guard !deletedIdentifiers.contains(model.persistentModelID) else { continue }
+            trackable.updatedAt = now
+            trackable.needsSync = true
         }
-        for case let model as SyncTrackable in context.changedModelsArray {
-            model.updatedAt = now
-            model.needsSync = true
-        }
-        // Record deletions (incl. cascade-deleted children) as tombstones so the
-        // sync engine can propagate them to the server.
-        for model in context.deletedModelsArray {
-            guard let trackable = model as? SyncTrackable,
-                  let table = SyncTableRegistry.tableName(for: model) else { continue }
-            SyncDeletionQueue.enqueue(table: table, id: trackable.id)
+        for model in context.changedModelsArray {
+            guard let trackable = model as? SyncTrackable else { continue }
+            guard !deletedIdentifiers.contains(model.persistentModelID) else { continue }
+            trackable.updatedAt = now
+            trackable.needsSync = true
         }
     }
 }

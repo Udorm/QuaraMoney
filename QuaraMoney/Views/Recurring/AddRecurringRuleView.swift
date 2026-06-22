@@ -5,8 +5,8 @@ struct AddRecurringRuleView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     
     @State private var name: String = ""
     @State private var amountString: String = ""

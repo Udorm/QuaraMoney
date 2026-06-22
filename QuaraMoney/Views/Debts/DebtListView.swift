@@ -3,7 +3,7 @@ import SwiftData
 
 struct DebtListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Debt.dateCreated, order: .reverse) private var allDebts: [Debt]
+    @Query(filter: #Predicate<Debt> { $0.deletedAt == nil }, sort: \Debt.dateCreated, order: .reverse) private var allDebts: [Debt]
 
     @State private var viewModel = DebtListViewModel()
 
@@ -63,6 +63,7 @@ struct DebtListView: View {
             }
         }
         .navigationTitle(L10n.Debt.title)
+        .syncPullToRefresh(modelContext)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {

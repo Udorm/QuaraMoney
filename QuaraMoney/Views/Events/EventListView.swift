@@ -3,7 +3,7 @@ import SwiftData
 
 struct EventListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Event.startDate) private var events: [Event]
+    @Query(filter: #Predicate<Event> { $0.deletedAt == nil }, sort: \Event.startDate) private var events: [Event]
     
     @State private var showingAddEvent = false
     
@@ -76,6 +76,7 @@ struct EventListView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle(L10n.Event.title)
+            .syncPullToRefresh(modelContext)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showingAddEvent = true }) {
@@ -100,8 +101,10 @@ struct EventListView: View {
     
     private func deleteEvents(at offsets: IndexSet, source: [Event]) {
         for index in offsets {
-            modelContext.delete(source[index])
+            SoftDeleteService.deleteEvent(source[index])
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 

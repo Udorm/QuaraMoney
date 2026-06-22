@@ -13,7 +13,7 @@ struct DefaultDataService {
     nonisolated static func seedDefaultCategories(modelContext: ModelContext, data: [DefaultCategoryData]) {
         do {
             // Check if categories already exist
-            let descriptor = FetchDescriptor<Category>()
+            let descriptor = FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil })
             let existingCount = try modelContext.fetchCount(descriptor)
             
             guard existingCount == 0 else { return }
@@ -43,7 +43,7 @@ struct DefaultDataService {
         do {
             // Check if category with this name and type already exists
             var descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate { $0.name == name && $0.type == type }
+                predicate: #Predicate { $0.name == name && $0.type == type && $0.deletedAt == nil }
             )
             descriptor.fetchLimit = 1
             
@@ -71,7 +71,7 @@ struct DefaultDataService {
         do {
             // Check if category with this name and type already exists
             var descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate { $0.name == name && $0.type == type }
+                predicate: #Predicate { $0.name == name && $0.type == type && $0.deletedAt == nil }
             )
             descriptor.fetchLimit = 1
             

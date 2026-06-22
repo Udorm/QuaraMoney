@@ -84,3 +84,22 @@ create policy "receipts_delete_own" on storage.objects
     bucket_id = 'receipts'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- Enable Realtime for all synced tables
+alter publication supabase_realtime add table
+  public.wallets,
+  public.categories,
+  public.events,
+  public.recurring_rules,
+  public.savings_goals,
+  public.debts,
+  public.transactions,
+  public.transaction_locations,
+  public.budgets,
+  public.budget_categories,
+  public.event_members,
+  public.event_ledger_transactions,
+  public.event_ledger_participants,
+  public.event_settlement_snapshots,
+  public.event_settlement_transfers,
+  public.event_wallet_export_records;

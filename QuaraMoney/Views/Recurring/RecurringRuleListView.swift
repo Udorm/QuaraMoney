@@ -3,7 +3,7 @@ import SwiftData
 
 struct RecurringRuleListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \RecurringRule.nextDueDate) private var rules: [RecurringRule]
+    @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil }, sort: \RecurringRule.nextDueDate) private var rules: [RecurringRule]
     
     @State private var showingAddRule = false
     
@@ -35,6 +35,7 @@ struct RecurringRuleListView: View {
                 .onDelete(perform: deleteRule)
             }
             .navigationTitle(L10n.Recurring.title)
+            .syncPullToRefresh(modelContext)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     HStack {
@@ -70,8 +71,10 @@ struct RecurringRuleListView: View {
     private func deleteRule(at offsets: IndexSet) {
         for index in offsets {
             let rule = rules[index]
-            modelContext.delete(rule)
+            SoftDeleteService.delete(rule)
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 #Preview {

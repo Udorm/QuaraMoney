@@ -327,7 +327,7 @@ final class DebtService {
         icon: String,
         color: String
     ) throws -> Category {
-        let allCategories = try modelContext.fetch(FetchDescriptor<Category>())
+        let allCategories = try modelContext.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil }))
 
         if let existing = allCategories.first(where: { $0.name == name && $0.type == type && $0.isSystem }) {
             return existing

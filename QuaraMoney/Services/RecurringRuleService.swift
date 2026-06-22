@@ -4,7 +4,7 @@ import SwiftData
 struct RecurringRuleService {
     nonisolated static func checkAndGenerateTransactions(modelContext: ModelContext) async {
         // Fetch all active rules
-        let descriptor = FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.isActive })
+        let descriptor = FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.isActive && $0.deletedAt == nil })
         
         do {
             let rules = try modelContext.fetch(descriptor)

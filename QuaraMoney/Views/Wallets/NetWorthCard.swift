@@ -2,6 +2,9 @@ import SwiftUI
 
 struct NetWorthCard: View {
     let wallets: [Wallet]
+    /// Bumped by the parent on `.dataDidUpdate` so the total recomputes after
+    /// balances change (the `@Transient` balance cache isn't observed by SwiftUI).
+    var refreshToken: Int = 0
     @ObservedObject private var currencyManager = CurrencyManager.shared
     
     var totalNetWorth: Decimal {

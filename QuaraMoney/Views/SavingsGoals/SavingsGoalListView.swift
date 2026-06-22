@@ -3,7 +3,12 @@ import SwiftData
 
 struct SavingsGoalListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: [SortDescriptor(\SavingsGoal.priority), SortDescriptor(\SavingsGoal.createdDate)]) private var goals: [SavingsGoal]
+    @Query private var goals: [SavingsGoal]
+
+    init() {
+        let notDeleted = #Predicate<SavingsGoal> { $0.deletedAt == nil }
+        _goals = Query(filter: notDeleted, sort: [SortDescriptor(\SavingsGoal.priority), SortDescriptor(\SavingsGoal.createdDate)])
+    }
 
     @State private var viewModel = SavingsGoalListViewModel()
     @State private var showAddGoal = false
@@ -80,6 +85,7 @@ struct SavingsGoalListView: View {
             }
         }
         .navigationTitle(L10n.Savings.title)
+        .syncPullToRefresh(modelContext)
         .searchable(text: $viewModel.searchText)
         .searchToolbarBehavior(.minimize)
         .toolbar {
@@ -99,9 +105,11 @@ struct SavingsGoalListView: View {
     private func deleteGoals(at offsets: IndexSet, from source: [SavingsGoal]) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(source[index])
+                SoftDeleteService.delete(source[index])
             }
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 

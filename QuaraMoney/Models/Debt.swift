@@ -87,9 +87,13 @@ final class Debt {
         type == .owedToMe ? .expense : .income
     }
 
+    /// Linked transactions excluding soft-deleted tombstones.
+    private var activeTransactions: [Transaction] {
+        (transactions ?? []).filter { $0.deletedAt == nil }
+    }
+
     var amountPaid: Decimal {
-        guard let transactions = transactions else { return 0 }
-        return transactions
+        return activeTransactions
             .filter { $0.type == repaymentType }
             .reduce(0) { $0 + amountInDebtCurrency($1) }
     }
@@ -103,9 +107,7 @@ final class Debt {
     // So Total Debt = Sum of all Expenses (if owedToMe).
     
     var currentTotalAmount: Decimal {
-        guard let transactions = transactions else { return totalAmount } // Fallback
-
-        let totalAdvanced = transactions
+        let totalAdvanced = activeTransactions
             .filter { $0.type == advanceType }
             .reduce(0) { $0 + amountInDebtCurrency($1) }
         // If no advance transactions yet (e.g. just created), fall back to the
@@ -134,7 +136,7 @@ final class Debt {
     /// The single initial-advance transaction, if the debt has exactly one
     /// (no top-ups). Used to decide whether the principal amount is editable.
     var principalTransaction: Transaction? {
-        let advances = (transactions ?? []).filter { $0.type == advanceType }
+        let advances = activeTransactions.filter { $0.type == advanceType }
         return advances.count == 1 ? advances.first : nil
     }
 
@@ -156,7 +158,7 @@ final class Debt {
     func reconcile() {
         let tolerance: Decimal = 0.000001
         // Keep the stored principal in sync (in this debt's currency).
-        if (transactions ?? []).contains(where: { $0.type == advanceType }) {
+        if activeTransactions.contains(where: { $0.type == advanceType }) {
             totalAmount = currentTotalAmount
         }
         isCompleted = remainingAmount <= tolerance

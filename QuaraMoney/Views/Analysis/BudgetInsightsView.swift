@@ -5,9 +5,9 @@ import Charts
 /// Analytics dashboard showing budget health metrics and insights
 struct BudgetInsightsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var budgets: [Budget]
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var budgets: [Budget]
     // Budgets only consider non-event transactions — scope the query accordingly.
-    @Query(filter: #Predicate<Transaction> { $0.event == nil }) private var transactions: [Transaction]
+    @Query(filter: #Predicate<Transaction> { $0.event == nil && $0.deletedAt == nil }) private var transactions: [Transaction]
 
     @State private var selectedTimeRange: InsightTimeRange = .sixMonths
     

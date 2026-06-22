@@ -8,7 +8,7 @@ struct ProfileView: View {
     @AppStorage("userAvatarPath") private var avatarPath: String = ""
     @AppStorage("appInstallDate") private var installDateTimestamp: Double = 0
     
-    @Query private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
 
     // Only the count is needed — fetch it instead of materializing every
     // Transaction object (and its relationships) just to call `.count`.
@@ -187,7 +187,7 @@ struct ProfileView: View {
     }
     
     private func refreshTransactionCount() {
-        transactionCount = (try? modelContext.fetchCount(FetchDescriptor<Transaction>())) ?? transactionCount
+        transactionCount = (try? modelContext.fetchCount(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil }))) ?? transactionCount
     }
 
     // MARK: - Quick Stats Card

@@ -7,7 +7,7 @@ struct EditBudgetView: View {
     
     @Bindable var budget: Budget
     
-    @Query(sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     
     // MARK: - Form State (initialized from budget)
     

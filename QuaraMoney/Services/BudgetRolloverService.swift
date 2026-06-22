@@ -120,7 +120,7 @@ struct BudgetRolloverService {
         }
         
         do {
-            let allTransactions = try modelContext.fetch(descriptor)
+            let allTransactions = try modelContext.fetch(descriptor).filter { $0.deletedAt == nil }
             if budget.isTotalBudget {
                 return allTransactions
             } else {
@@ -138,7 +138,7 @@ struct BudgetRolloverService {
     // MARK: - Data Fetching
     
     nonisolated private static func fetchAllBudgets(modelContext: ModelContext) -> [Budget] {
-        let descriptor = FetchDescriptor<Budget>()
+        let descriptor = FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil })
         do {
             return try modelContext.fetch(descriptor)
         } catch {

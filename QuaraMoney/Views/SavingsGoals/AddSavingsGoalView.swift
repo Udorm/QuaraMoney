@@ -5,7 +5,7 @@ struct AddSavingsGoalView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @Query(sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     @State private var selectedTemplate: SavingsGoalTemplate?
     @State private var name: String = ""

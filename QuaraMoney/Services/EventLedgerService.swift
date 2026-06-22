@@ -198,9 +198,9 @@ final class EventLedgerService {
             member.isArchived = true
             member.updatedAt = Date()
         } else {
-            modelContext.delete(member)
+            member.markSoftDeleted()
         }
-        
+
         bumpLedgerRevision(for: event)
         try save()
     }
@@ -385,7 +385,7 @@ final class EventLedgerService {
         
         let allLinks = try fetchParticipantLinks(eventId: event.id)
         for link in allLinks where link.transaction?.id == transaction.id {
-            modelContext.delete(link)
+            link.markSoftDeleted()
         }
         
         if kind == .expense {
@@ -426,7 +426,8 @@ final class EventLedgerService {
     
     func deleteTransaction(_ transaction: EventLedgerTransaction) throws {
         guard let event = transaction.event else { return }
-        modelContext.delete(transaction)
+        transaction.participants?.forEach { $0.markSoftDeleted() }
+        transaction.markSoftDeleted()
         bumpLedgerRevision(for: event)
         try save()
     }
@@ -698,7 +699,7 @@ final class EventLedgerService {
     
     private func fetchMembers(eventId: UUID) throws -> [EventMember] {
         let descriptor = FetchDescriptor<EventMember>(
-            predicate: #Predicate { $0.event?.id == eventId },
+            predicate: #Predicate { $0.event?.id == eventId && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]
         )
         return try modelContext.fetch(descriptor)
@@ -706,7 +707,7 @@ final class EventLedgerService {
     
     private func fetchMember(by id: UUID) throws -> EventMember? {
         let predicate = #Predicate<EventMember> { member in
-            member.id == id
+            member.id == id && member.deletedAt == nil
         }
         let descriptor = FetchDescriptor<EventMember>(predicate: predicate)
         return try modelContext.fetch(descriptor).first
@@ -714,7 +715,7 @@ final class EventLedgerService {
     
     private func fetchLedgerTransactions(eventId: UUID) throws -> [EventLedgerTransaction] {
         let descriptor = FetchDescriptor<EventLedgerTransaction>(
-            predicate: #Predicate { $0.event?.id == eventId },
+            predicate: #Predicate { $0.event?.id == eventId && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )
         return try modelContext.fetch(descriptor)
@@ -722,7 +723,7 @@ final class EventLedgerService {
     
     private func fetchParticipantLinks(eventId: UUID) throws -> [EventLedgerParticipant] {
         let descriptor = FetchDescriptor<EventLedgerParticipant>(
-            predicate: #Predicate { $0.transaction?.event?.id == eventId },
+            predicate: #Predicate { $0.transaction?.event?.id == eventId && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.orderIndex)]
         )
         return try modelContext.fetch(descriptor)
@@ -748,7 +749,7 @@ final class EventLedgerService {
     
     private func fetchSettlementSnapshots(eventId: UUID) throws -> [EventSettlementSnapshot] {
         let descriptor = FetchDescriptor<EventSettlementSnapshot>(
-            predicate: #Predicate { $0.event?.id == eventId },
+            predicate: #Predicate { $0.event?.id == eventId && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
         return try modelContext.fetch(descriptor)
@@ -756,7 +757,7 @@ final class EventLedgerService {
     
     private func fetchSettlementTransfers(snapshotId: UUID) throws -> [EventSettlementTransfer] {
         let descriptor = FetchDescriptor<EventSettlementTransfer>(
-            predicate: #Predicate { $0.snapshot?.id == snapshotId },
+            predicate: #Predicate { $0.snapshot?.id == snapshotId && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.sequence)]
         )
         return try modelContext.fetch(descriptor)
@@ -764,13 +765,13 @@ final class EventLedgerService {
     
     private func fetchExportRecords(eventId: UUID) throws -> [EventWalletExportRecord] {
         let descriptor = FetchDescriptor<EventWalletExportRecord>(
-            predicate: #Predicate { $0.event?.id == eventId }
+            predicate: #Predicate { $0.event?.id == eventId && $0.deletedAt == nil }
         )
         return try modelContext.fetch(descriptor)
     }
     
     private func fetchOrCreateSettlementCategory(type: TransactionType) throws -> Category {
-        let allCategories = try modelContext.fetch(FetchDescriptor<Category>())
+        let allCategories = try modelContext.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil }))
         if let existing = allCategories.first(where: { $0.isSystem && $0.type == type && $0.name == "Event Settlement" }) {
             return existing
         }
@@ -792,7 +793,7 @@ final class EventLedgerService {
     }
     
     private func fetchOrCreateEventExpenseCategory() throws -> Category {
-        let allCategories = try modelContext.fetch(FetchDescriptor<Category>())
+        let allCategories = try modelContext.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil }))
         if let existing = allCategories.first(where: { $0.isSystem && $0.type == .expense && $0.name == "Event Expense" }) {
             return existing
         }

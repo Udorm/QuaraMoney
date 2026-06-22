@@ -14,7 +14,7 @@ struct HomeView: View {
     @State private var isSearchPresented = false
     @State private var shouldScan = false
     @State private var backdateTarget: BackdateTarget?
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
     
     init(modelContext: ModelContext) {
         _viewModel = State(wrappedValue: HomeViewModel(modelContext: modelContext))
@@ -329,7 +329,7 @@ private struct AddTransactionFABStyle: ViewModifier {
     let context = container.mainContext
 
     // Seed minimal preview data if empty
-    if try! context.fetch(FetchDescriptor<Wallet>()).isEmpty {
+    if try! context.fetch(FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })).isEmpty {
         let wallet = Wallet(name: "Personal", currencyCode: "USD", icon: "wallet.pass", colorHex: "#4F46E5")
         let groceries = Category(name: "Groceries", icon: "cart", colorHex: "#EF4444", type: .expense)
         let salary = Category(name: "Salary", icon: "banknote", colorHex: "#10B981", type: .income)

@@ -3,10 +3,10 @@ import SwiftData
 
 struct BudgetListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: [SortDescriptor(\Budget.startDate, order: .reverse)]) private var budgets: [Budget]
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: [SortDescriptor(\Budget.startDate, order: .reverse)]) private var budgets: [Budget]
     // Budgets only ever consider non-event transactions; scope the query so we
     // don't materialize the entire event ledger alongside personal transactions.
-    @Query(filter: #Predicate<Transaction> { $0.event == nil }) private var transactions: [Transaction]
+    @Query(filter: #Predicate<Transaction> { $0.event == nil && $0.deletedAt == nil }) private var transactions: [Transaction]
     @State private var showAddBudget = false
     @State private var filterPeriod: BudgetFilterPeriod = .active
     @State private var showRecurringOnly = false
@@ -99,6 +99,7 @@ struct BudgetListView: View {
             }
         }
         .navigationTitle(L10n.Budget.title)
+        .syncPullToRefresh(modelContext)
         .searchable(text: $searchText)
         .searchToolbarBehavior(.minimize)
         .toolbar {
@@ -145,10 +146,12 @@ struct BudgetListView: View {
             for index in offsets {
                 let budgetToDelete = filteredBudgets[index]
                 if let actualIndex = budgets.firstIndex(where: { $0.id == budgetToDelete.id }) {
-                    modelContext.delete(budgets[actualIndex])
+                    SoftDeleteService.delete(budgets[actualIndex])
                 }
             }
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 

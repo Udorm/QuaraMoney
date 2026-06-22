@@ -169,6 +169,7 @@ struct TransactionProcessor {
         if let walletId = walletId {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
+                    txn.deletedAt == nil &&
                     txn.date >= start && txn.date < end &&
                     txn.event == nil &&
                     (txn.sourceWallet?.id == walletId || txn.destinationWallet?.id == walletId)
@@ -178,6 +179,7 @@ struct TransactionProcessor {
         } else if excludeArchivedWallets {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
+                    txn.deletedAt == nil &&
                     txn.date >= start && txn.date < end &&
                     txn.event == nil &&
                     txn.sourceWallet?.isArchived != true
@@ -187,6 +189,7 @@ struct TransactionProcessor {
         } else {
             descriptor = FetchDescriptor<Transaction>(
                 predicate: #Predicate { txn in
+                    txn.deletedAt == nil &&
                     txn.date >= start && txn.date < end &&
                     txn.event == nil
                 },

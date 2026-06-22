@@ -56,7 +56,7 @@ class CSVExportService {
             // If data is huge, we should optimize predicates.
             // Let's try to use Predicate if possible, or mixed.
             
-            let descriptor = FetchDescriptor<Transaction>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+            let descriptor = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.deletedAt == nil }, sortBy: [SortDescriptor(\Transaction.date, order: .reverse)])
             let allTransactions = try modelContext.fetch(descriptor)
             
             var filtered = allTransactions.filter { $0.event == nil }

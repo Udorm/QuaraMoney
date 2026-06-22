@@ -56,6 +56,9 @@
 "wallet.deleteRelatedTransactionsWarning" = "Deleting this wallet will also delete all %d related transactions. This action cannot be undone.";
 "wallet.archiveInstead" = "Archive Instead";
 "wallet.deleteAnyway" = "Delete Anyway";
+"wallet.moveTransactions" = "Move Transactions…";
+"wallet.moveTransactionsTitle" = "Move Transactions";
+"wallet.moveTransactionsPrompt" = "Choose a wallet to receive the transactions from “%@”. The wallet will then be deleted.";
 "wallet.restore" = "Restore";
 "wallet.archived" = "Archived";
 "wallet.noArchivedWallets" = "No archived wallets";

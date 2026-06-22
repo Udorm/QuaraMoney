@@ -201,11 +201,8 @@ class HomeViewModel {
             return
         }
 
-        // Invalidate wallet caches before deleting
-        transaction.sourceWallet?.invalidateBalanceCache()
-        transaction.destinationWallet?.invalidateBalanceCache()
-
-        modelContext.delete(transaction)
+        // Soft-delete (tombstone) so the deletion replicates to other devices.
+        SoftDeleteService.deleteTransaction(transaction)
         do {
             try modelContext.save()
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)

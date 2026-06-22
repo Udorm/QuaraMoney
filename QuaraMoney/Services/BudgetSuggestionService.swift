@@ -211,7 +211,7 @@ class BudgetSuggestionService {
         )
         
         do {
-            return try modelContext.fetch(descriptor)
+            return try modelContext.fetch(descriptor).filter { $0.deletedAt == nil }
         } catch {
             #if DEBUG
             print("Error fetching transactions: \(error)")
@@ -241,7 +241,7 @@ class BudgetSuggestionService {
         )
         
         do {
-            return try modelContext.fetch(descriptor)
+            return try modelContext.fetch(descriptor).filter { $0.deletedAt == nil }
         } catch {
             #if DEBUG
             print("Error fetching transactions: \(error)")

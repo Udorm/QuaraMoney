@@ -23,6 +23,28 @@ enum SyncTableRegistry {
         default: return nil
         }
     }
+
+    static func tableName(forEntityName entityName: String) -> String? {
+        switch entityName {
+        case "Wallet": return "wallets"
+        case "Category": return "categories"
+        case "Transaction": return "transactions"
+        case "Event": return "events"
+        case "Debt": return "debts"
+        case "SavingsGoal": return "savings_goals"
+        case "RecurringRule": return "recurring_rules"
+        case "EventMember": return "event_members"
+        case "EventLedgerTransaction": return "event_ledger_transactions"
+        case "EventLedgerParticipant": return "event_ledger_participants"
+        case "EventSettlementSnapshot": return "event_settlement_snapshots"
+        case "EventSettlementTransfer": return "event_settlement_transfers"
+        case "EventWalletExportRecord": return "event_wallet_export_records"
+        case "Budget": return "budgets"
+        case "TransactionLocation": return "transaction_locations"
+        default: return nil
+        }
+    }
+
 }
 
 /// Durable queue of locally-deleted rows awaiting a server tombstone (deleted_at).

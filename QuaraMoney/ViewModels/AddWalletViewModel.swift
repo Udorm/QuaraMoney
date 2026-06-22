@@ -70,7 +70,8 @@ class AddWalletViewModel: BaseViewModel {
     
     func deleteWallet() {
         guard let wallet = walletToEdit else { return }
-        dataService.delete(wallet)
+        // Soft-delete (tombstone) so the deletion replicates to other devices.
+        SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }

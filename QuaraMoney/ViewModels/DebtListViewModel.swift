@@ -55,19 +55,16 @@ final class DebtListViewModel {
     /// Number of wallet transactions that would be deleted along with this debt
     /// (Debt.transactions is a `.cascade` relationship).
     func linkedTransactionCount(_ debt: Debt) -> Int {
-        debt.transactions?.count ?? 0
+        (debt.transactions ?? []).filter { $0.deletedAt == nil }.count
     }
 
     /// Deletes a debt and its cascade-linked transactions, invalidating the
     /// balance caches of every wallet those transactions touched so balances
     /// don't silently go stale.
     func deleteDebt(_ debt: Debt, context: ModelContext) {
-        for txn in debt.transactions ?? [] {
-            txn.sourceWallet?.invalidateBalanceCache()
-            txn.destinationWallet?.invalidateBalanceCache()
-        }
-
-        context.delete(debt)
+        // Soft-delete the debt and its cascade-linked transactions (tombstones
+        // replicate; balance caches are invalidated inside deleteTransaction).
+        SoftDeleteService.deleteDebt(debt)
         do {
             try context.save()
         } catch {

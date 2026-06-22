@@ -48,8 +48,8 @@ final class SyncEngine: ObservableObject {
         autoSyncStarted = true
         autoSyncContext = context
         NotificationCenter.default.addObserver(
-            forName: ModelContext.didSave,
-            object: context,
+            forName: .dataDidUpdate,
+            object: nil,
             queue: nil
         ) { _ in
             MainActor.assumeIsolated {
@@ -61,7 +61,11 @@ final class SyncEngine: ObservableObject {
     /// Triggers a sync only when sync is enabled, configured, and signed in.
     /// Use for foreground / post-sign-in triggers.
     func syncIfOperational(context: ModelContext) async {
-        guard SupabaseFeatureFlags.isOperational else { return }
+        print("[SyncEngine] syncIfOperational called. isOperational: \(SupabaseFeatureFlags.isOperational)")
+        guard SupabaseFeatureFlags.isOperational else {
+            print("[SyncEngine] syncIfOperational skipped: not operational")
+            return
+        }
         await syncNow(context: context)
     }
 
@@ -91,10 +95,12 @@ final class SyncEngine: ObservableObject {
         guard !SyncMutationTracker.isApplyingSyncChanges,
               SupabaseFeatureFlags.isOperational,
               let context = autoSyncContext else { return }
+        print("[SyncEngine] handleLocalSave called. Debouncing auto-sync.")
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled, let self, let ctx = self.autoSyncContext else { return }
+            print("[SyncEngine] Debounced auto-sync trigger firing.")
             await self.syncNow(context: ctx)
         }
     }
@@ -111,19 +117,28 @@ final class SyncEngine: ObservableObject {
     }
 
     func syncNow(context: ModelContext) async {
-        guard !isSyncing else { return }
+        print("[SyncEngine] syncNow called. isSyncing: \(isSyncing)")
+        guard !isSyncing else {
+            print("[SyncEngine] syncNow ignored: already syncing")
+            return
+        }
         guard SupabaseFeatureFlags.isOperational, let client = SupabaseManager.shared.client else {
+            print("[SyncEngine] syncNow failed: not operational")
             lastError = SyncError.notOperational.errorDescription
             return
         }
         guard let uid = client.auth.currentUser?.id else {
+            print("[SyncEngine] syncNow failed: no user")
             lastError = SyncError.noUser.errorDescription
             return
         }
 
         isSyncing = true
         lastError = nil
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            print("[SyncEngine] syncNow finished (isSyncing set to false)")
+        }
 
         // Hold the sync-write guard for the whole operation so none of the
         // engine's own writes (pull-applied rows, post-push needsSync clearing,
@@ -169,11 +184,18 @@ final class SyncEngine: ObservableObject {
             try await pullBudgets(context, client, uid)
             try await pullTransactionLocations(context, client, uid)
 
+            // Pulled edits/deletions can change balances; the @Transient cache on
+            // existing Wallet instances won't notice, so refresh them all.
+            invalidateAllWalletBalanceCaches(context)
+
             lastSyncDate = Date()
             if !hasCompletedInitialSync {
                 hasCompletedInitialSync = true
                 UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
             }
+            
+            // Post notification so active view models re-fetch updated data from the context
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
         } catch {
             lastError = error.localizedDescription
         }
@@ -524,6 +546,14 @@ final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Clears every wallet's cached balance after a pull so soft-deleted /
+    /// edited / reassigned transactions are reflected immediately.
+    private func invalidateAllWalletBalanceCaches(_ context: ModelContext) {
+        if let wallets = try? context.fetch(FetchDescriptor<Wallet>()) {
+            wallets.forEach { $0.invalidateBalanceCache() }
+        }
+    }
+
     private func markSynced(_ models: [any SyncTrackable], uid: UUID, context: ModelContext) {
         // (sync-write guard is held for the whole syncNow operation)
         for case let m as (any SyncTrackable) in models {
@@ -540,12 +570,13 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "wallets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(Wallet.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(Wallet.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             let w = try fetchByID(Wallet.self, id: row.id, in: context) ?? {
                 let new = Wallet(name: row.name, currencyCode: row.currency_code, icon: row.icon, colorHex: row.color_hex)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -564,13 +595,14 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "categories", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(Category.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(Category.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             let c = try fetchByID(Category.self, id: row.id, in: context) ?? {
                 let new = Category(name: row.name, icon: row.icon ?? "", colorHex: row.color_hex ?? "",
                                    type: TransactionType(rawValue: row.type) ?? .expense, isSystem: row.is_system)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -589,7 +621,7 @@ final class SyncEngine: ObservableObject {
         var pendingPhotoDownloads: [(UUID, String)] = []
         try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(Transaction.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(Transaction.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
@@ -598,6 +630,7 @@ final class SyncEngine: ObservableObject {
                                       date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
                                       exchangeRate: row.exchange_rate)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -632,13 +665,14 @@ final class SyncEngine: ObservableObject {
         var pendingCoverDownloads: [(UUID, String)] = []
         try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(Event.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(Event.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             if let path = row.cover_image_path { pendingCoverDownloads.append((row.id, path)) }
             let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
                 let new = Event(title: row.title, startDate: row.start_date)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -666,7 +700,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(Debt.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(Debt.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             let d = try fetchByID(Debt.self, id: row.id, in: context) ?? {
@@ -674,6 +708,7 @@ final class SyncEngine: ObservableObject {
                                currencyCode: row.currency_code, type: DebtType(rawValue: row.type) ?? .iOwe,
                                dueDate: row.due_date, note: row.note)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -692,7 +727,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             let g = try fetchByID(SavingsGoal.self, id: row.id, in: context) ?? {
@@ -700,6 +735,7 @@ final class SyncEngine: ObservableObject {
                                       currencyCode: row.currency_code, targetDate: row.target_date,
                                       iconName: row.icon_name, colorHex: row.color_hex)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -723,7 +759,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) { context.delete(existing) }
+                if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) { existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false }
                 return
             }
             let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
@@ -731,6 +767,7 @@ final class SyncEngine: ObservableObject {
                                         frequency: Frequency(rawValue: row.frequency) ?? .monthly,
                                         startDate: row.start_date)
                 new.id = row.id
+                new.needsSync = false
                 context.insert(new)
                 return new
             }()
@@ -752,7 +789,7 @@ final class SyncEngine: ObservableObject {
         var pendingAvatarDownloads: [(UUID, String)] = []
         try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventMember.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventMember.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             if let path = row.avatar_path { pendingAvatarDownloads.append((row.id, path)) }
@@ -762,6 +799,7 @@ final class SyncEngine: ObservableObject {
                 let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
                 m = EventMember(name: row.name, event: ev)
                 m.id = row.id
+                m.needsSync = false
                 context.insert(m)
             }
             if m.needsSync && m.updatedAt > row.updated_at { return }
@@ -784,7 +822,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context)
@@ -798,6 +836,7 @@ final class SyncEngine: ObservableObject {
                     date: row.date, note: row.note, categoryId: row.category_id, categoryName: row.category_name,
                     categoryIcon: row.category_icon, categoryColorHex: row.category_color_hex, event: ev)
                 t.id = row.id
+                t.needsSync = false
                 context.insert(t)
             }
             if t.needsSync && t.updatedAt > row.updated_at { return }
@@ -821,7 +860,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context)
@@ -831,6 +870,7 @@ final class SyncEngine: ObservableObject {
                 let mem = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
                 p = EventLedgerParticipant(memberId: row.member_id, orderIndex: row.order_index, transaction: txn, member: mem)
                 p.id = row.id
+                p.needsSync = false
                 context.insert(p)
             }
             if p.needsSync && p.updatedAt > row.updated_at { return }
@@ -848,7 +888,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context)
@@ -857,6 +897,7 @@ final class SyncEngine: ObservableObject {
                 let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
                 s = EventSettlementSnapshot(ledgerRevision: row.ledger_revision, event: ev)
                 s.id = row.id
+                s.needsSync = false
                 context.insert(s)
             }
             if s.needsSync && s.updatedAt > row.updated_at { return }
@@ -873,7 +914,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context)
@@ -883,6 +924,7 @@ final class SyncEngine: ObservableObject {
                 t = EventSettlementTransfer(fromMemberId: row.from_member_id, toMemberId: row.to_member_id,
                                             amountMinor: row.amount_minor, sequence: row.sequence, snapshot: snap)
                 t.id = row.id
+                t.needsSync = false
                 context.insert(t)
             }
             if t.needsSync && t.updatedAt > row.updated_at { return }
@@ -900,7 +942,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context)
@@ -914,6 +956,7 @@ final class SyncEngine: ObservableObject {
                                             exportType: EventWalletExportType(rawValue: row.export_type) ?? .settlement,
                                             event: ev, snapshot: snap)
                 r.id = row.id
+                r.needsSync = false
                 context.insert(r)
             }
             if r.needsSync && r.updatedAt > row.updated_at { return }
@@ -938,7 +981,7 @@ final class SyncEngine: ObservableObject {
         let joinMap = Dictionary(grouping: joinRows, by: { $0.budget_id }).mapValues { $0.map(\.category_id) }
         try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(Budget.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(Budget.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(Budget.self, id: row.id, in: context)
@@ -946,6 +989,7 @@ final class SyncEngine: ObservableObject {
             if let existing { b = existing } else {
                 b = Budget(amountLimit: row.amount_limit)
                 b.id = row.id
+                b.needsSync = false
                 context.insert(b)
             }
             if b.needsSync && b.updatedAt > row.updated_at { return }
@@ -976,7 +1020,7 @@ final class SyncEngine: ObservableObject {
         guard !rows.isEmpty else { return }
         try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
-                if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) { context.delete(dead) }
+                if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) { dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false }
                 return
             }
             let existing = try fetchByID(TransactionLocation.self, id: row.id, in: context)
@@ -985,6 +1029,7 @@ final class SyncEngine: ObservableObject {
                 loc = TransactionLocation(latitude: row.latitude, longitude: row.longitude,
                                           source: TransactionLocationSource(rawValue: row.source_raw) ?? .manual)
                 loc.id = row.id
+                loc.needsSync = false
                 context.insert(loc)
             }
             if loc.needsSync && loc.updatedAt > row.updated_at { return }

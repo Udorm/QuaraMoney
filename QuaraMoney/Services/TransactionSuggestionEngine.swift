@@ -112,7 +112,7 @@ enum TransactionSuggestionEngine {
 
         struct Raw { let category: Category; let score: Double; let lastUsed: Date? }
         let raw = typed.map { category -> Raw in
-            let txns = (category.transactions ?? []).filter { $0.type == type }
+            let txns = (category.transactions ?? []).filter { $0.type == type && $0.deletedAt == nil }
             let (score, lastUsed) = accumulate(
                 txns,
                 now: now,
@@ -280,15 +280,15 @@ enum TransactionSuggestionEngine {
     private static func relevantTransactions(for wallet: Wallet, type: TransactionType) -> [Transaction] {
         switch type {
         case .expense, .income:
-            return (wallet.outgoingTransactions ?? []).filter { $0.type == type }
+            return (wallet.outgoingTransactions ?? []).filter { $0.type == type && $0.deletedAt == nil }
         case .transfer:
-            let outgoing = (wallet.outgoingTransactions ?? []).filter { $0.type == .transfer }
-            let incoming = wallet.incomingTransactions ?? []
+            let outgoing = (wallet.outgoingTransactions ?? []).filter { $0.type == .transfer && $0.deletedAt == nil }
+            let incoming = (wallet.incomingTransactions ?? []).filter { $0.deletedAt == nil }
             // Dedup by id defensively (a wallet is never both source and dest of one transfer).
             var seen = Set<UUID>()
             return (outgoing + incoming).filter { seen.insert($0.id).inserted }
         case .adjustment:
-            return (wallet.outgoingTransactions ?? []).filter { $0.type == .adjustment }
+            return (wallet.outgoingTransactions ?? []).filter { $0.type == .adjustment && $0.deletedAt == nil }
         }
     }
 

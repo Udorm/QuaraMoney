@@ -5,7 +5,7 @@ struct DebtDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var debt: Debt
 
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     @State private var paymentContext: DebtPaymentContext?
     @State private var showEditSheet = false
@@ -22,7 +22,7 @@ struct DebtDetailView: View {
     }
 
     private var debtTransactions: [Transaction] {
-        let list = debt.transactions ?? []
+        let list = (debt.transactions ?? []).filter { $0.deletedAt == nil }
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         let rates = CurrencyManager.shared.rates
 
@@ -244,9 +244,7 @@ struct DebtDetailView: View {
             return
         }
 
-        transaction.sourceWallet?.invalidateBalanceCache()
-        transaction.destinationWallet?.invalidateBalanceCache()
-        modelContext.delete(transaction)
+        SoftDeleteService.deleteTransaction(transaction)
 
         do {
             try modelContext.save()

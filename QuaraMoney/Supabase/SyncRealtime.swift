@@ -14,6 +14,16 @@ import Supabase
 final class SyncRealtime {
     static let shared = SyncRealtime()
 
+    /// Tables to watch. A `postgres_changes` binding must name a table — a
+    /// schema-only binding is silently dropped server-side and delivers nothing,
+    /// so we register one binding per synced table.
+    private static let watchedTables = [
+        "wallets", "categories", "events", "recurring_rules", "savings_goals", "debts",
+        "transactions", "transaction_locations", "budgets", "budget_categories",
+        "event_members", "event_ledger_transactions", "event_ledger_participants",
+        "event_settlement_snapshots", "event_settlement_transfers", "event_wallet_export_records"
+    ]
+
     private var channel: RealtimeChannelV2?
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
@@ -29,11 +39,41 @@ final class SyncRealtime {
         self.context = context
         let channel = client.channel("quaramoney-sync")
         self.channel = channel
-        let changes = channel.postgresChange(AnyAction.self, schema: "public")
+
+        // Register a per-table binding BEFORE subscribing (required ordering).
+        let streams = Self.watchedTables.map { table in
+            channel.postgresChange(AnyAction.self, schema: "public", table: table)
+        }
+
         observeTask = Task { [weak self] in
-            await channel.subscribe()
-            for await _ in changes {
-                self?.scheduleSync()
+            // Ensure the Realtime socket carries the user's JWT before binding, so
+            // RLS-protected postgres_changes are actually delivered (avoids a race
+            // where the channel subscribes with only the anon key).
+            await client.realtimeV2.setAuth()
+            do {
+                try await channel.subscribeWithError()
+            } catch {
+                print("[SyncRealtime] subscribe failed: \(error)")
+                return
+            }
+            print("[SyncRealtime] subscribed; watching \(streams.count) tables")
+
+            // Fan the per-table change streams into one resync trigger.
+            await withTaskGroup(of: Void.self) { group in
+                for stream in streams {
+                    group.addTask { [weak self] in
+                        for await change in stream {
+                            let kind: String
+                            switch change {
+                            case .insert: kind = "INSERT"
+                            case .update: kind = "UPDATE"
+                            case .delete: kind = "DELETE"
+                            }
+                            print("[SyncRealtime] remote \(kind) received; scheduling resync")
+                            await MainActor.run { self?.scheduleSync() }
+                        }
+                    }
+                }
             }
         }
     }

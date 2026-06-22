@@ -191,7 +191,7 @@ class AnalysisViewModel {
     nonisolated private static func computeNetWorth(container: ModelContainer, walletIds: Set<UUID>, rates: [String: Double], targetCurrency: String) -> Decimal {
         let context = ModelContext(container)
         do {
-            let descriptor = FetchDescriptor<Wallet>()
+            let descriptor = FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })
             let wallets = try context.fetch(descriptor)
 
             var totalNW: Decimal = 0

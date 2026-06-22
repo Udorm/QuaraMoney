@@ -21,7 +21,8 @@ class WalletListViewModel: BaseViewModel {
     func deleteWallet(at offsets: IndexSet, from currentWallets: [Wallet]) {
         for index in offsets {
             let wallet = currentWallets[index]
-            dataService.delete(wallet)
+            // Soft-delete (tombstone) so the deletion replicates to other devices.
+            SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
         }
     }
 }

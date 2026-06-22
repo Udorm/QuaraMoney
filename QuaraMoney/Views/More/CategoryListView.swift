@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct CategoryListView: View {
-    @Query(sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Environment(\.modelContext) private var modelContext
     @State private var showingAddCategory = false
     @State private var categoryToEdit: Category?
@@ -52,6 +52,7 @@ struct CategoryListView: View {
             }
         }
         .navigationTitle(L10n.Category.title)
+        .syncPullToRefresh(modelContext)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showingAddCategory = true }) {
@@ -70,13 +71,16 @@ struct CategoryListView: View {
     private func deleteCategory(at offsets: IndexSet, from list: [Category]) {
         for index in offsets {
             let category = list[index]
-            
+
             if category.isSystem {
                 continue // System categories cannot be deleted
             }
-            
-            modelContext.delete(category)
+
+            // Soft-delete; transactions are kept and become uncategorized.
+            SoftDeleteService.deleteCategory(category)
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 

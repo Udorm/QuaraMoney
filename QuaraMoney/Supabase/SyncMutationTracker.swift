@@ -68,17 +68,28 @@ enum SyncMutationTracker {
             object: mainContext,
             queue: nil
         ) { _ in
+            // Scoped to the main context, which always saves on the main thread;
+            // guard anyway so a stray off-main post can never trip the
+            // `assumeIsolated` precondition.
+            guard Thread.isMainThread else { return }
             MainActor.assumeIsolated {
                 stampPendingChanges()
             }
         }
-        
+
         // Observe Core Data saves to safely capture deletions without property-access crashes on invalidated models
         NotificationCenter.default.addObserver(
             forName: .NSManagedObjectContextWillSave,
             object: nil,
             queue: nil
         ) { notification in
+            // `object: nil` means this fires for EVERY context, on the thread that
+            // performs the save. Background contexts — the first-launch seeding
+            // task and the sync engine applying pulled rows — save off the main
+            // thread, where `MainActor.assumeIsolated` traps ("Block was expected
+            // to execute on queue main-thread"). Deletion tracking only concerns
+            // main-context (UI) edits, so ignore any save that isn't on main.
+            guard Thread.isMainThread else { return }
             MainActor.assumeIsolated {
                 handleCoreDataWillSave(notification)
             }

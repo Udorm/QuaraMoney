@@ -41,13 +41,16 @@ struct DefaultDataService {
     
     nonisolated static func ensureCategoryExists(modelContext: ModelContext, name: String, icon: String, colorHex: String, type: TransactionType) {
         do {
-            // Check if category with this name and type already exists
-            var descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate { $0.name == name && $0.type == type && $0.deletedAt == nil }
+            // Check if category with this name and type already exists.
+            // SwiftData can't lower a captured enum (`$0.type == type`) into a
+            // predicate — it throws `unsupportedPredicate` — so filter by name in
+            // the fetch and match `type` in Swift.
+            let descriptor = FetchDescriptor<Category>(
+                predicate: #Predicate { $0.name == name && $0.deletedAt == nil }
             )
-            descriptor.fetchLimit = 1
-            
-            if try modelContext.fetchCount(descriptor) == 0 {
+
+            let exists = try modelContext.fetch(descriptor).contains { $0.type == type }
+            if !exists {
                 let category = Category(
                     name: name,
                     icon: icon,
@@ -69,13 +72,15 @@ struct DefaultDataService {
     
     nonisolated static func ensureSystemCategoryExists(modelContext: ModelContext, name: String, icon: String, colorHex: String, type: TransactionType) {
         do {
-            // Check if category with this name and type already exists
-            var descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate { $0.name == name && $0.type == type && $0.deletedAt == nil }
+            // Check if category with this name and type already exists.
+            // SwiftData can't lower a captured enum (`$0.type == type`) into a
+            // predicate — it throws `unsupportedPredicate` — so filter by name in
+            // the fetch and match `type` in Swift.
+            let descriptor = FetchDescriptor<Category>(
+                predicate: #Predicate { $0.name == name && $0.deletedAt == nil }
             )
-            descriptor.fetchLimit = 1
-            
-            if let existing = try modelContext.fetch(descriptor).first {
+
+            if let existing = try modelContext.fetch(descriptor).first(where: { $0.type == type }) {
                 if !existing.isSystem {
                     existing.isSystem = true
                     #if DEBUG

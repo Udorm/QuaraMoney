@@ -33,6 +33,15 @@ final class SyncEngine: ObservableObject {
     /// uploading an existing dataset can take a moment.
     var isInitialSyncInProgress: Bool { isSyncing && !hasCompletedInitialSync }
 
+    // MARK: - First sign-in conflict
+
+    /// Raised when this device has pre-existing local data AND the cloud already
+    /// holds data for the newly signed-in account. Sync is blocked until resolved.
+    /// `.resolving` is held while the chosen resolution's wipe + sync runs, so the
+    /// modal stays up and ordinary sync triggers remain gated until it finishes.
+    enum ConflictState: Equatable { case none, pendingUserDecision, resolving }
+    @Published private(set) var conflictState: ConflictState = .none
+
     private var autoSyncStarted = false
     private var autoSyncContext: ModelContext?
     private var debounceTask: Task<Void, Never>?
@@ -52,7 +61,11 @@ final class SyncEngine: ObservableObject {
             object: nil,
             queue: nil
         ) { _ in
-            MainActor.assumeIsolated {
+            // `.dataDidUpdate` may be posted from background work (the detached
+            // first-launch seeding task, sync apply, etc.), so we can't assume
+            // main-thread isolation here — hop onto the main actor to schedule
+            // the debounced sync instead of trapping via `assumeIsolated`.
+            Task { @MainActor in
                 SyncEngine.shared.handleLocalSave()
             }
         }
@@ -60,10 +73,15 @@ final class SyncEngine: ObservableObject {
 
     /// Triggers a sync only when sync is enabled, configured, and signed in.
     /// Use for foreground / post-sign-in triggers.
+    /// No-ops while a first-sign-in conflict awaits user resolution.
     func syncIfOperational(context: ModelContext) async {
         print("[SyncEngine] syncIfOperational called. isOperational: \(SupabaseFeatureFlags.isOperational)")
         guard SupabaseFeatureFlags.isOperational else {
             print("[SyncEngine] syncIfOperational skipped: not operational")
+            return
+        }
+        guard conflictState == .none else {
+            print("[SyncEngine] syncIfOperational skipped: conflict resolution pending")
             return
         }
         await syncNow(context: context)
@@ -88,6 +106,134 @@ final class SyncEngine: ObservableObject {
         resetSyncState()
         lastSyncDate = nil
         UserDefaults.standard.removeObject(forKey: Self.localOwnerKey)
+    }
+
+    // MARK: - First sign-in conflict detection & resolution
+
+    /// Checks whether this first-ever sign-in creates a conflict: local store has
+    /// data AND the cloud already has data for this account. Only fires when
+    /// `localOwnerKey` is nil (device never associated with any account before).
+    ///
+    /// Returns `true` and sets `conflictState = .pendingUserDecision` when both
+    /// sides have data — the caller must skip sync and wait for the user to decide.
+    /// Returns `false` when no conflict exists; normal sync may proceed.
+    func checkFirstSignInConflict(context: ModelContext) async -> Bool {
+        guard UserDefaults.standard.string(forKey: Self.localOwnerKey) == nil else { return false }
+        guard SupabaseFeatureFlags.isOperational,
+              let client = SupabaseManager.shared.client,
+              let uid = client.auth.currentUser?.id else { return false }
+
+        // No local data — no conflict. Stamp ownership so this check doesn't
+        // re-run on every subsequent sign-in.
+        var descriptor = FetchDescriptor<Wallet>()
+        descriptor.fetchLimit = 1
+        guard let localWallets = try? context.fetch(descriptor), !localWallets.isEmpty else {
+            UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+            return false
+        }
+
+        // Cloud data check. Use do/catch so a network failure is never
+        // misidentified as "cloud empty" — we'll retry on the next sign-in.
+        struct IDOnly: Decodable { let id: UUID }
+        let cloudRows: [IDOnly]
+        do {
+            cloudRows = try await client.from("wallets")
+                .select("id")
+                .eq("user_id", value: uid.uuidString)
+                .limit(1)
+                .execute().value
+        } catch {
+            print("[SyncEngine] checkFirstSignInConflict: cloud query failed — will retry: \(error)")
+            return false
+        }
+
+        guard !cloudRows.isEmpty else {
+            // Cloud is empty — no conflict. Stamp ownership and allow normal sync.
+            UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+            return false
+        }
+
+        // Both device and cloud have data — ask the user.
+        // localOwnerKey is intentionally NOT stamped here; resolution functions
+        // stamp it once the user decides, so a force-quit retriggers this check.
+        conflictState = .pendingUserDecision
+        return true
+    }
+
+    /// Resolves the conflict by discarding local data and pulling everything from
+    /// the cloud. Call when the user chooses "Use cloud data".
+    func resolveUseCloud() async {
+        guard let context = autoSyncContext,
+              let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return }
+        conflictState = .resolving
+        do {
+            SyncMutationTracker.isApplyingSyncChanges = true
+            wipeLocalData(context: context)
+            resetSyncState()
+            SyncMutationTracker.isApplyingSyncChanges = false
+        }
+        UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+        // Call syncNow directly: syncIfOperational is gated while resolving.
+        await syncNow(context: context)
+        finishResolution()
+    }
+
+    /// Resolves the conflict by deleting all cloud data for this account and
+    /// uploading the device's local data. Call when the user chooses "Keep this
+    /// device's data".
+    func resolveKeepLocal() async {
+        guard let context = autoSyncContext,
+              let client = SupabaseManager.shared.client,
+              let uid = client.auth.currentUser?.id else { return }
+        conflictState = .resolving
+
+        // Wipe the cloud copy child → parent so foreign keys don't block deletes.
+        for table in Self.childFirstTableNames {
+            do {
+                try await client.from(table).delete().eq("user_id", value: uid.uuidString).execute()
+            } catch {
+                print("[SyncEngine] resolveKeepLocal: failed to clear cloud table \(table): \(error)")
+            }
+        }
+        SyncDeletionQueue.clear()
+
+        // Force every local row to push, regardless of its prior sync state —
+        // this device's data is now the source of truth. Clearing cursors too so
+        // the subsequent pull re-establishes them from the freshly pushed rows.
+        resetSyncState()
+        forceAllLocalNeedsSync(context: context)
+
+        UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+        // Call syncNow directly: syncIfOperational is gated while resolving.
+        await syncNow(context: context)
+        finishResolution()
+    }
+
+    /// Settles `conflictState` after a resolution's sync. On success the modal
+    /// dismisses; on failure it returns to the decision screen so the surfaced
+    /// `lastError` is visible and the user can retry.
+    private func finishResolution() {
+        conflictState = (lastError == nil) ? .none : .pendingUserDecision
+    }
+
+    /// Flags every local synced row `needsSync = true` so the next push uploads
+    /// the full dataset. Runs under the sync-write guard so the mutation tracker
+    /// doesn't also rewrite `updatedAt` on every record.
+    private func forceAllLocalNeedsSync(context: ModelContext) {
+        SyncMutationTracker.isApplyingSyncChanges = true
+        defer { SyncMutationTracker.isApplyingSyncChanges = false }
+        func flag<T: PersistentModel & SyncTrackable>(_ type: T.Type) {
+            if let rows = try? context.fetch(FetchDescriptor<T>()) {
+                for row in rows { row.needsSync = true }
+            }
+        }
+        flag(Wallet.self); flag(Category.self); flag(Event.self); flag(Debt.self)
+        flag(SavingsGoal.self); flag(RecurringRule.self); flag(EventMember.self)
+        flag(EventLedgerTransaction.self); flag(EventLedgerParticipant.self)
+        flag(EventSettlementSnapshot.self); flag(EventSettlementTransfer.self)
+        flag(EventWalletExportRecord.self); flag(Transaction.self)
+        flag(Budget.self); flag(TransactionLocation.self)
+        try? context.save()
     }
 
     private func handleLocalSave() {
@@ -212,6 +358,16 @@ final class SyncEngine: ObservableObject {
         "event_settlement_snapshots", "event_settlement_transfers", "event_wallet_export_records"
     ]
 
+    /// Tables ordered child → parent, so a bulk cloud delete doesn't trip foreign
+    /// keys (mirrors `wipeLocalData`'s model order; join table before its parent).
+    private static let childFirstTableNames = [
+        "transaction_locations", "transactions",
+        "event_wallet_export_records", "event_settlement_transfers", "event_settlement_snapshots",
+        "event_ledger_participants", "event_ledger_transactions", "event_members",
+        "budget_categories", "budgets", "recurring_rules", "savings_goals", "debts", "events",
+        "categories", "wallets"
+    ]
+
     /// Ensures the local cache belongs to the currently signed-in account. If a
     /// *different* account previously owned the local data, that data is already
     /// in the cloud, so we wipe the local cache and reset sync state before
@@ -224,13 +380,16 @@ final class SyncEngine: ObservableObject {
     func reconcileAccountIfNeeded(context: ModelContext) {
         guard let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return }
         let owner = UserDefaults.standard.string(forKey: Self.localOwnerKey).flatMap(UUID.init(uuidString:))
-        if let owner, owner != uid {
-            SyncMutationTracker.isApplyingSyncChanges = true
-            defer { SyncMutationTracker.isApplyingSyncChanges = false }
-            wipeLocalData(context: context)
-            resetSyncState()
-            lastSyncDate = nil
-        }
+        // nil owner = first sign-in; checkFirstSignInConflict handles ownership
+        // claiming for that case so we don't stomp the nil before it can check.
+        guard let owner else { return }
+        guard owner != uid else { return }
+        // Different account owned this device — wipe and take ownership now.
+        SyncMutationTracker.isApplyingSyncChanges = true
+        defer { SyncMutationTracker.isApplyingSyncChanges = false }
+        wipeLocalData(context: context)
+        resetSyncState()
+        lastSyncDate = nil
         UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
     }
 

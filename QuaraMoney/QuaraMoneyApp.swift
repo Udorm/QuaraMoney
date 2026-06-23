@@ -15,6 +15,7 @@ struct QuaraMoneyApp: App {
     @StateObject private var errorService = ErrorService.shared
     @StateObject private var securityManager = SecurityManager.shared
     @StateObject private var authManager = SupabaseAuthManager.shared
+    @ObservedObject private var syncEngine = SyncEngine.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
@@ -180,14 +181,30 @@ struct QuaraMoneyApp: App {
             }
             .onChange(of: authManager.state) { _, _ in
                 if authManager.isSignedIn {
+                    let context = sharedModelContainer.mainContext
                     // If a different account previously owned this device's local
                     // data, clear it before adopting the new account (prevents
-                    // cross-account data mixing). Then sync + start live updates.
-                    SyncEngine.shared.reconcileAccountIfNeeded(context: sharedModelContainer.mainContext)
-                    Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
-                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
+                    // cross-account data mixing).
+                    SyncEngine.shared.reconcileAccountIfNeeded(context: context)
+                    Task {
+                        // On first-ever sign-in: check whether both the device and
+                        // cloud have existing data. If so, pause sync and show the
+                        // conflict resolution sheet (Realtime is also deferred to
+                        // prevent a premature sync during the decision window).
+                        let hasConflict = await SyncEngine.shared.checkFirstSignInConflict(context: context)
+                        if !hasConflict {
+                            await SyncEngine.shared.syncIfOperational(context: context)
+                            SyncRealtime.shared.start(context: context)
+                        }
+                    }
                 } else {
                     SyncRealtime.shared.stop()
+                }
+            }
+            .onChange(of: syncEngine.conflictState) { _, newState in
+                // Conflict resolved — start Realtime now (was deferred above).
+                if newState == .none && authManager.isSignedIn {
+                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
                 }
             }
             .preferredColorScheme(selectedTheme.colorScheme)
@@ -207,6 +224,12 @@ struct QuaraMoneyApp: App {
                         errorService.dismiss()
                     }
                 )
+            }
+            .sheet(isPresented: Binding(
+                get: { syncEngine.conflictState != .none },
+                set: { _ in }
+            )) {
+                DataConflictResolutionView()
             }
             .overlay {
                 if showPrivacyOverlay {

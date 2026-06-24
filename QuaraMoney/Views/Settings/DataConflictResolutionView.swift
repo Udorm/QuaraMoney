@@ -70,6 +70,24 @@ struct DataConflictResolutionView: View {
                         }
                     }
 
+                    // Non-destructive escape hatch: defer the decision. Turns cloud
+                    // sync off (app stays fully local) and leaves both datasets
+                    // untouched; the user can re-enable sync in Settings later and
+                    // will be asked again.
+                    VStack(spacing: 6) {
+                        Button("Decide Later") {
+                            syncEngine.deferConflictDecision()
+                        }
+                        .appFont(size: 16, weight: .semibold)
+                        .disabled(isResolving)
+
+                        Text("Turns off cloud sync for now — nothing is deleted. You can turn it back on anytime in Settings.")
+                            .appFont(size: 12)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .opacity(isResolving ? 0.5 : 1)
+
                     if isResolving {
                         VStack(spacing: 8) {
                             ProgressView()

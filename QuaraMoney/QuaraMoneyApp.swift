@@ -384,9 +384,16 @@ struct QuaraMoneyApp: App {
                 preferredCurrency: preferredCurrency
             )
             
+            // Seed/ensure default categories ONLY on a device that has never been
+            // claimed by a cloud account. Once the device is account-owned,
+            // categories are authoritative in the cloud and arrive via sync;
+            // auto-seeding here would re-create them with fresh random UUIDs after
+            // any sync wipe (e.g. "Use Cloud Data") and push duplicates back up —
+            // the root cause of recurring category duplication.
+            if !SyncEngine.isLocalStoreAccountOwned {
             // Seed default categories if needed
             DefaultDataService.seedDefaultCategories(modelContext: context, data: defaultCategories)
-            
+
             // Ensure System Categories for Debt & Loan
             // 1. Debt (Lending out money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
@@ -473,7 +480,8 @@ struct QuaraMoneyApp: App {
                     type: type
                 )
             }
-            
+            } // end: seed only when the device is not yet account-owned
+
             do {
                 try context.save()
             } catch {

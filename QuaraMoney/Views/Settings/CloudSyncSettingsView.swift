@@ -81,7 +81,22 @@ struct CloudSyncSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { if syncEnabled { auth.start() } }
         .onChange(of: syncEnabled) { _, enabled in
-            if enabled { auth.start() }
+            guard enabled else { return }
+            auth.start()
+            // If the user is already signed in (e.g. they previously chose "Decide
+            // Later", which turns sync off but keeps the session), re-running the
+            // first-sign-in conflict check here is essential: the app-level check is
+            // keyed on an auth-state change, which won't fire on a pure re-enable.
+            // Without this, re-enabling could auto-push local data and re-duplicate.
+            if auth.isSignedIn {
+                Task {
+                    let hasConflict = await SyncEngine.shared.checkFirstSignInConflict(context: modelContext)
+                    if !hasConflict {
+                        await SyncEngine.shared.syncIfOperational(context: modelContext)
+                        SyncRealtime.shared.start(context: modelContext)
+                    }
+                }
+            }
         }
     }
 }

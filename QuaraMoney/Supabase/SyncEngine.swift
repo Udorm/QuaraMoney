@@ -46,6 +46,18 @@ final class SyncEngine: ObservableObject {
     private var autoSyncContext: ModelContext?
     private var debounceTask: Task<Void, Never>?
 
+    /// Held true while the first-sign-in conflict check is in flight (it does a
+    /// network round-trip). Set synchronously before the `await` so no auto-sync
+    /// can push local data in the gap before the check either clears it (no
+    /// conflict) or raises `conflictState = .pendingUserDecision` (conflict).
+    private var isAwaitingInitialConflictCheck = false
+
+    /// Set true during a `syncNow` whenever a pull fetches rows changed on the
+    /// server since our cursor. Gates the completion broadcast so an idle sync
+    /// (nothing pushed, nothing pulled) stays silent and doesn't needlessly wake
+    /// every view-model observer.
+    private var didApplyRemoteChanges = false
+
     private init() {}
 
     // MARK: - Auto-sync triggers
@@ -60,7 +72,15 @@ final class SyncEngine: ObservableObject {
             forName: .dataDidUpdate,
             object: nil,
             queue: nil
-        ) { _ in
+        ) { notification in
+            // Ignore the engine's OWN completion broadcast (posted with
+            // `object: self` at the end of `syncNow`). Without this filter the
+            // sync self-triggers: the post is handled asynchronously (see the
+            // main-actor hop below), by which point `syncNow` has returned and
+            // its `defer` cleared `isApplyingSyncChanges`, so `handleLocalSave`
+            // mistakes the engine's broadcast for a fresh user edit and schedules
+            // another sync — a loop that runs every ~2s with no real changes.
+            guard !(notification.object is SyncEngine) else { return }
             // `.dataDidUpdate` may be posted from background work (the detached
             // first-launch seeding task, sync apply, etc.), so we can't assume
             // main-thread isolation here — hop onto the main actor to schedule
@@ -123,31 +143,36 @@ final class SyncEngine: ObservableObject {
               let client = SupabaseManager.shared.client,
               let uid = client.auth.currentUser?.id else { return false }
 
+        // Block all auto-sync for the duration of this (network) check, so a local
+        // save can't push before we know whether there's a conflict to resolve.
+        isAwaitingInitialConflictCheck = true
+        defer { isAwaitingInitialConflictCheck = false }
+
         // No local data — no conflict. Stamp ownership so this check doesn't
         // re-run on every subsequent sign-in.
-        var descriptor = FetchDescriptor<Wallet>()
-        descriptor.fetchLimit = 1
-        guard let localWallets = try? context.fetch(descriptor), !localWallets.isEmpty else {
+        //
+        // "Local data" must mean anything a sync would PUSH, not just wallets:
+        // default categories are seeded on every fresh install (with fresh random
+        // UUIDs), so on a returning sign-in they'd be uploaded and DUPLICATED
+        // against the account's existing categories. Checking only wallets missed
+        // the common "fresh install, no wallets yet, only default categories" case
+        // and silently pushed those duplicates. Treat categories as local data too.
+        guard localHasSyncableData(context) else {
             UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
             return false
         }
 
         // Cloud data check. Use do/catch so a network failure is never
         // misidentified as "cloud empty" — we'll retry on the next sign-in.
-        struct IDOnly: Decodable { let id: UUID }
-        let cloudRows: [IDOnly]
+        let cloudHasData: Bool
         do {
-            cloudRows = try await client.from("wallets")
-                .select("id")
-                .eq("user_id", value: uid.uuidString)
-                .limit(1)
-                .execute().value
+            cloudHasData = try await cloudHasSyncableData(client, uid)
         } catch {
             print("[SyncEngine] checkFirstSignInConflict: cloud query failed — will retry: \(error)")
             return false
         }
 
-        guard !cloudRows.isEmpty else {
+        guard cloudHasData else {
             // Cloud is empty — no conflict. Stamp ownership and allow normal sync.
             UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
             return false
@@ -158,6 +183,37 @@ final class SyncEngine: ObservableObject {
         // stamp it once the user decides, so a force-quit retriggers this check.
         conflictState = .pendingUserDecision
         return true
+    }
+
+    /// True when the device holds any data a sync would push. Checks categories
+    /// (seeded on every fresh install) and wallets — either is enough to make a
+    /// first sign-in a potential merge conflict. Filters tombstones.
+    private func localHasSyncableData(_ context: ModelContext) -> Bool {
+        var catDesc = FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil })
+        catDesc.fetchLimit = 1
+        if let cats = try? context.fetch(catDesc), !cats.isEmpty { return true }
+
+        var walletDesc = FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })
+        walletDesc.fetchLimit = 1
+        if let wallets = try? context.fetch(walletDesc), !wallets.isEmpty { return true }
+
+        return false
+    }
+
+    /// True when the cloud already holds categories or wallets for this account.
+    /// Throws on a network error so the caller can distinguish "empty" from
+    /// "couldn't check" and avoid pushing duplicates into an unknown cloud state.
+    private func cloudHasSyncableData(_ client: SupabaseClient, _ uid: UUID) async throws -> Bool {
+        struct IDOnly: Decodable { let id: UUID }
+        for table in ["categories", "wallets"] {
+            let rows: [IDOnly] = try await client.from(table)
+                .select("id")
+                .eq("user_id", value: uid.uuidString)
+                .limit(1)
+                .execute().value
+            if !rows.isEmpty { return true }
+        }
+        return false
     }
 
     /// Resolves the conflict by discarding local data and pulling everything from
@@ -209,6 +265,22 @@ final class SyncEngine: ObservableObject {
         finishResolution()
     }
 
+    /// Dismisses the conflict without choosing a side and turns cloud sync off, so
+    /// the app reverts to fully local until the user re-enables it. Neither dataset
+    /// is touched. `localOwnerKey` is intentionally left unstamped so the conflict
+    /// is re-detected the next time the user enables sync and signs in.
+    ///
+    /// Disables the flag BEFORE clearing `conflictState` so the app's
+    /// `conflictState == .none` observer can't (re)start Realtime — `isOperational`
+    /// is already false by then.
+    func deferConflictDecision() {
+        guard conflictState == .pendingUserDecision else { return }
+        SupabaseFeatureFlags.isSyncEnabled = false
+        SyncRealtime.shared.stop()
+        lastError = nil
+        conflictState = .none
+    }
+
     /// Settles `conflictState` after a resolution's sync. On success the modal
     /// dismisses; on failure it returns to the decision screen so the surfaced
     /// `lastError` is visible and the user can retry.
@@ -238,8 +310,14 @@ final class SyncEngine: ObservableObject {
 
     private func handleLocalSave() {
         // Ignore the engine's own writes; only react to genuine local edits.
+        // Also stand down while a first-sign-in conflict is unresolved: an
+        // auto-sync here would push local data (e.g. freshly seeded default
+        // categories) before the user has chosen a side — the resolver runs its
+        // own controlled sync once a choice is made.
         guard !SyncMutationTracker.isApplyingSyncChanges,
               SupabaseFeatureFlags.isOperational,
+              conflictState == .none,
+              !isAwaitingInitialConflictCheck,
               let context = autoSyncContext else { return }
         print("[SyncEngine] handleLocalSave called. Debouncing auto-sync.")
         debounceTask?.cancel()
@@ -268,6 +346,14 @@ final class SyncEngine: ObservableObject {
             print("[SyncEngine] syncNow ignored: already syncing")
             return
         }
+        // Hard stop while the first-sign-in conflict modal is up: nothing may push
+        // or pull until the user resolves it. The resolvers set `conflictState` to
+        // `.resolving` (not `.pendingUserDecision`) before calling this, so their
+        // own sync still runs.
+        guard conflictState != .pendingUserDecision, !isAwaitingInitialConflictCheck else {
+            print("[SyncEngine] syncNow blocked: first-sign-in conflict pending/checking")
+            return
+        }
         guard SupabaseFeatureFlags.isOperational, let client = SupabaseManager.shared.client else {
             print("[SyncEngine] syncNow failed: not operational")
             lastError = SyncError.notOperational.errorDescription
@@ -291,6 +377,8 @@ final class SyncEngine: ObservableObject {
         // remote deletions) get re-flagged as local edits by the mutation tracker.
         SyncMutationTracker.isApplyingSyncChanges = true
         defer { SyncMutationTracker.isApplyingSyncChanges = false }
+
+        didApplyRemoteChanges = false
 
         do {
             // Propagate local deletions first (set deleted_at on the server).
@@ -340,8 +428,12 @@ final class SyncEngine: ObservableObject {
                 UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
             }
             
-            // Post notification so active view models re-fetch updated data from the context
-            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            // Refresh active view models only when a pull actually applied remote
+            // changes — an idle no-op sync shouldn't churn the UI. Tagged with
+            // `object: self` so auto-sync ignores it (see `enableAutoSync`).
+            if didApplyRemoteChanges {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+            }
         } catch {
             lastError = error.localizedDescription
         }
@@ -350,6 +442,17 @@ final class SyncEngine: ObservableObject {
     // MARK: - Account scoping
 
     private static let localOwnerKey = "localStoreOwnerID.v1"
+
+    /// True once this device's local store has been claimed by a cloud account
+    /// (first sign-in / conflict resolution completed). `nonisolated` so the
+    /// background launch-seeding task can read it without hopping to the main actor.
+    ///
+    /// Used to gate default-category seeding: an owned device must get its
+    /// categories from the cloud via sync, never re-seed them locally — otherwise
+    /// a re-seed after any sync wipe mints fresh random UUIDs and pushes duplicates.
+    nonisolated static var isLocalStoreAccountOwned: Bool {
+        UserDefaults.standard.string(forKey: localOwnerKey) != nil
+    }
 
     private static let allTableNames = [
         "wallets", "categories", "events", "recurring_rules", "savings_goals", "debts",
@@ -1232,6 +1335,9 @@ final class SyncEngine: ObservableObject {
             if page.count < Self.pageSize { break }
             offset += Self.pageSize
         }
+        // Any rows changed past our cursor count as remote changes to apply, so
+        // the completion broadcast (and a UI refresh) is warranted.
+        if !all.isEmpty { didApplyRemoteChanges = true }
         return all
     }
 

@@ -380,62 +380,89 @@ final class SyncEngine: ObservableObject {
 
         didApplyRemoteChanges = false
 
-        do {
-            // Propagate local deletions first (set deleted_at on the server).
-            try await pushDeletions(client)
+        // Each table step runs in its own do/catch and records a failure instead
+        // of aborting the rest of the sync. Before, a single throwing row (network
+        // blip mid-table, one constraint-violating or oversized row, a failed image
+        // upload) aborted every later table on every cycle — one poison row could
+        // wedge the whole sync. Now an isolated failure is surfaced via `lastError`
+        // while the other tables still sync; the failed table keeps its `needsSync`
+        // flags / cursor unchanged and simply retries next cycle.
+        var failures: [String] = []
+        func runStep(_ label: String, _ work: () async throws -> Void) async {
+            do { try await work() }
+            catch {
+                failures.append("\(label): \(error.localizedDescription)")
+                print("[SyncEngine] step failed — \(label): \(error)")
+            }
+        }
 
-            // Push parents → children.
-            try await pushWallets(context, client, uid)
-            try await pushCategories(context, client, uid)
-            try await pushEvents(context, client, uid)
-            try await pushDebts(context, client, uid)
-            try await pushSavingsGoals(context, client, uid)
-            try await pushRecurringRules(context, client, uid)
-            try await pushEventMembers(context, client, uid)
-            try await pushEventLedgerTransactions(context, client, uid)
-            try await pushEventLedgerParticipants(context, client, uid)
-            try await pushEventSettlementSnapshots(context, client, uid)
-            try await pushEventSettlementTransfers(context, client, uid)
-            try await pushEventWalletExportRecords(context, client, uid)
-            try await pushTransactions(context, client, uid)
-            try await pushBudgets(context, client, uid)
-            try await pushTransactionLocations(context, client, uid)
+        // Propagate local hard-deletes first (set deleted_at on the server).
+        await runStep("push deletions") { try await self.pushDeletions(client) }
 
-            // Pull parents → children.
-            try await pullWallets(context, client, uid)
-            try await pullCategories(context, client, uid)
-            try await pullEvents(context, client, uid)
-            try await pullDebts(context, client, uid)
-            try await pullSavingsGoals(context, client, uid)
-            try await pullRecurringRules(context, client, uid)
-            try await pullEventMembers(context, client, uid)
-            try await pullEventLedgerTransactions(context, client, uid)
-            try await pullEventLedgerParticipants(context, client, uid)
-            try await pullEventSettlementSnapshots(context, client, uid)
-            try await pullEventSettlementTransfers(context, client, uid)
-            try await pullEventWalletExportRecords(context, client, uid)
-            try await pullTransactions(context, client, uid)
-            try await pullBudgets(context, client, uid)
-            try await pullTransactionLocations(context, client, uid)
+        // Pull (parents → children) BEFORE pushing. This is what makes last-write-
+        // wins actually arbitrate a concurrent edit: pulling first lets a newer
+        // remote row overwrite a stale local row and clear its `needsSync` (so the
+        // push below skips it), while a genuinely newer local row stays flagged and
+        // wins on push. New local-only rows aren't touched by pull and still push.
+        await runStep("pull wallets") { try await self.pullWallets(context, client, uid) }
+        await runStep("pull categories") { try await self.pullCategories(context, client, uid) }
+        await runStep("pull events") { try await self.pullEvents(context, client, uid) }
+        await runStep("pull debts") { try await self.pullDebts(context, client, uid) }
+        await runStep("pull savings goals") { try await self.pullSavingsGoals(context, client, uid) }
+        await runStep("pull recurring rules") { try await self.pullRecurringRules(context, client, uid) }
+        await runStep("pull event members") { try await self.pullEventMembers(context, client, uid) }
+        await runStep("pull event ledger transactions") { try await self.pullEventLedgerTransactions(context, client, uid) }
+        await runStep("pull event ledger participants") { try await self.pullEventLedgerParticipants(context, client, uid) }
+        await runStep("pull event settlement snapshots") { try await self.pullEventSettlementSnapshots(context, client, uid) }
+        await runStep("pull event settlement transfers") { try await self.pullEventSettlementTransfers(context, client, uid) }
+        await runStep("pull event wallet export records") { try await self.pullEventWalletExportRecords(context, client, uid) }
+        await runStep("pull transactions") { try await self.pullTransactions(context, client, uid) }
+        await runStep("pull budgets") { try await self.pullBudgets(context, client, uid) }
+        await runStep("pull transaction locations") { try await self.pullTransactionLocations(context, client, uid) }
 
-            // Pulled edits/deletions can change balances; the @Transient cache on
-            // existing Wallet instances won't notice, so refresh them all.
-            invalidateAllWalletBalanceCaches(context)
+        // Push parents → children. Rows the pull just reconciled are no longer dirty.
+        await runStep("push wallets") { try await self.pushWallets(context, client, uid) }
+        await runStep("push categories") { try await self.pushCategories(context, client, uid) }
+        await runStep("push events") { try await self.pushEvents(context, client, uid) }
+        await runStep("push debts") { try await self.pushDebts(context, client, uid) }
+        await runStep("push savings goals") { try await self.pushSavingsGoals(context, client, uid) }
+        await runStep("push recurring rules") { try await self.pushRecurringRules(context, client, uid) }
+        await runStep("push event members") { try await self.pushEventMembers(context, client, uid) }
+        await runStep("push event ledger transactions") { try await self.pushEventLedgerTransactions(context, client, uid) }
+        await runStep("push event ledger participants") { try await self.pushEventLedgerParticipants(context, client, uid) }
+        await runStep("push event settlement snapshots") { try await self.pushEventSettlementSnapshots(context, client, uid) }
+        await runStep("push event settlement transfers") { try await self.pushEventSettlementTransfers(context, client, uid) }
+        await runStep("push event wallet export records") { try await self.pushEventWalletExportRecords(context, client, uid) }
+        await runStep("push transactions") { try await self.pushTransactions(context, client, uid) }
+        await runStep("push budgets") { try await self.pushBudgets(context, client, uid) }
+        await runStep("push transaction locations") { try await self.pushTransactionLocations(context, client, uid) }
 
+        // Retry any receipt/cover/avatar images that failed to download earlier.
+        // Self-healing: successes clear themselves, failures stay queued. Never
+        // counts as a sync failure (it can't block other data).
+        await drainImageDownloads(client, context)
+
+        // Pulled edits/deletions can change balances; the @Transient cache on
+        // existing Wallet instances won't notice, so refresh them all.
+        invalidateAllWalletBalanceCaches(context)
+
+        if failures.isEmpty {
             lastSyncDate = Date()
             if !hasCompletedInitialSync {
                 hasCompletedInitialSync = true
                 UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
             }
-            
-            // Refresh active view models only when a pull actually applied remote
-            // changes — an idle no-op sync shouldn't churn the UI. Tagged with
-            // `object: self` so auto-sync ignores it (see `enableAutoSync`).
-            if didApplyRemoteChanges {
-                NotificationCenter.default.post(name: .dataDidUpdate, object: self)
-            }
-        } catch {
-            lastError = error.localizedDescription
+        } else {
+            // Some tables failed; surface them but keep what succeeded. The initial
+            // sync isn't marked complete on a partial failure, so it retries.
+            lastError = failures.joined(separator: "\n")
+        }
+
+        // Refresh active view models only when a pull actually applied remote
+        // changes — an idle no-op sync shouldn't churn the UI. Tagged with
+        // `object: self` so auto-sync ignores it (see `enableAutoSync`).
+        if didApplyRemoteChanges {
+            NotificationCenter.default.post(name: .dataDidUpdate, object: self)
         }
     }
 
@@ -518,6 +545,7 @@ final class SyncEngine: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.cursorKey(table))
         }
         SyncDeletionQueue.clear()
+        SyncImageDownloadQueue.clear()
         hasCompletedInitialSync = false
         UserDefaults.standard.set(false, forKey: "hasCompletedInitialSync.v1")
     }
@@ -825,6 +853,25 @@ final class SyncEngine: ObservableObject {
         try? context.save()
     }
 
+    /// Resolves a pulled row's foreign-key reference, preserving an existing link
+    /// when the parent can't be found locally yet.
+    ///
+    /// The naive `row.fk_id.flatMap { fetchByID(...) }` returns nil in two very
+    /// different cases: (a) the remote genuinely cleared the reference, and (b) the
+    /// referenced parent simply isn't present locally yet — e.g. its own pull step
+    /// failed transiently this cycle (steps are now isolated, so one table failing
+    /// no longer stops the others). Case (b) would silently sever a still-valid
+    /// relationship and mark the child synced, so it never self-heals.
+    ///
+    /// This distinguishes them: a nil id clears the link; a non-nil id that resolves
+    /// updates it; a non-nil id that *doesn't* resolve keeps `current` (the prior
+    /// link) so a transient miss can't orphan an already-linked row.
+    private func resolveRef<T: PersistentModel>(_ type: T.Type, id: UUID?, current: T?, in context: ModelContext) throws -> T? {
+        guard let id else { return nil }                                  // remote cleared the reference
+        if let found = try fetchByID(type, id: id, in: context) { return found }
+        return current                                                    // parent missing → keep existing link
+    }
+
     // MARK: - Pull
 
     private func pullWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -902,13 +949,13 @@ final class SyncEngine: ObservableObject {
             t.excludeFromReports = row.exclude_from_reports
             t.amount = row.amount; t.currencyCode = row.currency_code
             t.exchangeRate = row.exchange_rate; t.storedRate = row.stored_rate
-            t.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
-            t.sourceWallet = try row.source_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
-            t.destinationWallet = try row.destination_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
-            t.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-            t.recurringRule = try row.recurring_rule_id.flatMap { try fetchByID(RecurringRule.self, id: $0, in: context) }
-            t.debt = try row.debt_id.flatMap { try fetchByID(Debt.self, id: $0, in: context) }
-            t.savingsGoal = try row.savings_goal_id.flatMap { try fetchByID(SavingsGoal.self, id: $0, in: context) }
+            t.category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
+            t.sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
+            t.destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
+            t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+            t.recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
+            t.debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
+            t.savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
             t.createdAt = row.created_at; t.updatedAt = row.updated_at
             t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
         }
@@ -916,7 +963,7 @@ final class SyncEngine: ObservableObject {
         // Download receipt images for rows that have a path but no local data.
         for (id, path) in pendingPhotoDownloads {
             guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
-            if let data = try? await downloadImage(path, client) { t.photoData = data }
+            await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
         }
         if !pendingPhotoDownloads.isEmpty { try context.save() }
     }
@@ -952,7 +999,7 @@ final class SyncEngine: ObservableObject {
         try context.save()
         for (id, path) in pendingCoverDownloads {
             guard let e = try fetchByID(Event.self, id: id, in: context), e.coverImageData == nil else { continue }
-            if let data = try? await downloadImage(path, client) { e.coverImageData = data }
+            await downloadAndStoreImage(path, kind: .eventCover, id: id, client, context)
         }
         if !pendingCoverDownloads.isEmpty { try context.save() }
     }
@@ -1010,7 +1057,7 @@ final class SyncEngine: ObservableObject {
             g.autoContributeAmount = row.auto_contribute_amount
             g.autoContributePeriod = row.auto_contribute_period_raw.flatMap { BudgetPeriodType(rawValue: $0) }
             g.priority = row.priority
-            g.linkedWallet = try row.linked_wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
+            g.linkedWallet = try resolveRef(Wallet.self, id: row.linked_wallet_id, current: g.linkedWallet, in: context)
             g.deletedAt = row.deleted_at; g.syncUserID = row.user_id; g.needsSync = false
         }
         try context.save()
@@ -1037,8 +1084,8 @@ final class SyncEngine: ObservableObject {
             r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
             r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
             r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.isActive = row.is_active
-            r.wallet = try row.wallet_id.flatMap { try fetchByID(Wallet.self, id: $0, in: context) }
-            r.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
+            r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
+            r.category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
             r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
             r.syncUserID = row.user_id; r.needsSync = false
         }
@@ -1068,13 +1115,13 @@ final class SyncEngine: ObservableObject {
             m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
             m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
             m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
-            m.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            m.event = try resolveRef(Event.self, id: row.event_id, current: m.event, in: context)
             m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
         }
         try context.save()
         for (id, path) in pendingAvatarDownloads {
             guard let m = try fetchByID(EventMember.self, id: id, in: context), m.avatarData == nil else { continue }
-            if let data = try? await downloadImage(path, client) { m.avatarData = data }
+            await downloadAndStoreImage(path, kind: .memberAvatar, id: id, client, context)
         }
         if !pendingAvatarDownloads.isEmpty { try context.save() }
     }
@@ -1110,7 +1157,7 @@ final class SyncEngine: ObservableObject {
             t.date = row.date; t.note = row.note; t.categoryId = row.category_id
             t.categoryName = row.category_name; t.categoryIcon = row.category_icon
             t.categoryColorHex = row.category_color_hex; t.isSplitAll = row.is_split_all; t.isDeleted = row.is_deleted
-            t.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
             t.createdAt = row.created_at; t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
             t.syncUserID = row.user_id; t.needsSync = false
         }
@@ -1137,8 +1184,8 @@ final class SyncEngine: ObservableObject {
             }
             if p.needsSync && p.updatedAt > row.updated_at { return }
             p.memberId = row.member_id; p.orderIndex = row.order_index
-            p.transaction = try row.transaction_id.flatMap { try fetchByID(EventLedgerTransaction.self, id: $0, in: context) }
-            p.member = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
+            p.transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
+            p.member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
             p.updatedAt = row.updated_at; p.deletedAt = row.deleted_at
             p.syncUserID = row.user_id; p.needsSync = false
         }
@@ -1164,7 +1211,7 @@ final class SyncEngine: ObservableObject {
             }
             if s.needsSync && s.updatedAt > row.updated_at { return }
             s.ledgerRevision = row.ledger_revision
-            s.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+            s.event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
             s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
             s.syncUserID = row.user_id; s.needsSync = false
         }
@@ -1192,7 +1239,7 @@ final class SyncEngine: ObservableObject {
             if t.needsSync && t.updatedAt > row.updated_at { return }
             t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
             t.amountMinor = row.amount_minor; t.sequence = row.sequence
-            t.snapshot = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+            t.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
             t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
             t.syncUserID = row.user_id; t.needsSync = false
         }
@@ -1226,8 +1273,8 @@ final class SyncEngine: ObservableObject {
             r.amountMinor = row.amount_minor
             r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
             r.exportType = EventWalletExportType(rawValue: row.export_type) ?? r.exportType
-            r.event = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-            r.snapshot = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+            r.event = try resolveRef(Event.self, id: row.event_id, current: r.event, in: context)
+            r.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: r.snapshot, in: context)
             r.createdAt = row.created_at; r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
             r.syncUserID = row.user_id; r.needsSync = false
         }
@@ -1266,7 +1313,7 @@ final class SyncEngine: ObservableObject {
             b.lastAlertTriggeredDate = row.last_alert_triggered_date
             b.lastAlertThreshold = row.last_alert_threshold
             b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
-            b.category = try row.category_id.flatMap { try fetchByID(Category.self, id: $0, in: context) }
+            b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
             b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
             if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
                let amountType = BudgetAmountType.decode(from: data) {
@@ -1421,6 +1468,57 @@ final class SyncEngine: ObservableObject {
 
     private func downloadImage(_ path: String, _ client: SupabaseClient) async throws -> Data {
         try await client.storage.from("receipts").download(path: path)
+    }
+
+    /// Downloads an image and stores it on its model. On success the matching
+    /// retry-queue entry is cleared; on failure it is enqueued durably so a later
+    /// sync retries instead of leaving the row permanently image-less (its cursor
+    /// has already advanced, so the row itself never re-pulls to trigger this).
+    private func downloadAndStoreImage(_ path: String, kind: SyncImageKind, id: UUID,
+                                       _ client: SupabaseClient, _ context: ModelContext) async {
+        let entry = SyncImageDownloadQueue.Entry(kind: kind, id: id, path: path)
+        do {
+            let data = try await downloadImage(path, client)
+            switch kind {
+            case .transactionPhoto:
+                if let t = try fetchByID(Transaction.self, id: id, in: context) { t.photoData = data }
+            case .eventCover:
+                if let e = try fetchByID(Event.self, id: id, in: context) { e.coverImageData = data }
+            case .memberAvatar:
+                if let m = try fetchByID(EventMember.self, id: id, in: context) { m.avatarData = data }
+            }
+            SyncImageDownloadQueue.remove(entry)
+        } catch {
+            print("[SyncEngine] image download failed (\(kind.rawValue) \(id)) — queued for retry: \(error)")
+            SyncImageDownloadQueue.enqueue(entry)
+        }
+    }
+
+    /// Retries every image that failed to download in an earlier sync. Runs at the
+    /// end of `syncNow`; successes clear themselves from the queue.
+    private func drainImageDownloads(_ client: SupabaseClient, _ context: ModelContext) async {
+        let pending = SyncImageDownloadQueue.all()
+        guard !pending.isEmpty else { return }
+        for entry in pending {
+            // Skip (and clear) if the row already has its image — a stale entry.
+            if imageAlreadyPresent(entry, context) {
+                SyncImageDownloadQueue.remove(entry)
+                continue
+            }
+            await downloadAndStoreImage(entry.path, kind: entry.kind, id: entry.id, client, context)
+        }
+        try? context.save()
+    }
+
+    private func imageAlreadyPresent(_ entry: SyncImageDownloadQueue.Entry, _ context: ModelContext) -> Bool {
+        switch entry.kind {
+        case .transactionPhoto:
+            return ((try? fetchByID(Transaction.self, id: entry.id, in: context)) ?? nil)?.photoData != nil
+        case .eventCover:
+            return ((try? fetchByID(Event.self, id: entry.id, in: context)) ?? nil)?.coverImageData != nil
+        case .memberAvatar:
+            return ((try? fetchByID(EventMember.self, id: entry.id, in: context)) ?? nil)?.avatarData != nil
+        }
     }
 
     // MARK: - Cursor persistence (per table, UserDefaults)

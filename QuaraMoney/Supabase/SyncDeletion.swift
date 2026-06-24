@@ -92,3 +92,51 @@ enum SyncDeletionQueue {
         UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: key)
     }
 }
+
+/// Which image a queued download belongs to, so the drainer can store it back on
+/// the right model.
+enum SyncImageKind: String, Codable {
+    case transactionPhoto, eventCover, memberAvatar
+}
+
+/// Durable queue of receipt/cover/avatar images that failed to download during a
+/// pull. The owning row is applied and its cursor advances regardless of the
+/// image, so a transient download failure would otherwise orphan the image
+/// forever (the row never re-pulls). Entries are retried at the end of each sync
+/// and removed once stored. Backed by UserDefaults to survive relaunches.
+enum SyncImageDownloadQueue {
+    struct Entry: Codable, Hashable {
+        let kind: SyncImageKind
+        let id: UUID
+        let path: String
+    }
+
+    private static let key = "pendingImageDownloads.v1"
+
+    static func enqueue(_ entry: Entry) {
+        var entries = all()
+        guard !entries.contains(entry) else { return }
+        entries.append(entry)
+        save(entries)
+    }
+
+    static func all() -> [Entry] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
+        return entries
+    }
+
+    static func remove(_ entry: Entry) {
+        var entries = all()
+        entries.removeAll { $0 == entry }
+        save(entries)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    private static func save(_ entries: [Entry]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: key)
+    }
+}

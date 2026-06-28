@@ -891,10 +891,20 @@ final class SyncEngine: ObservableObject {
     /// This distinguishes them: a nil id clears the link; a non-nil id that resolves
     /// updates it; a non-nil id that *doesn't* resolve keeps `current` (the prior
     /// link) so a transient miss can't orphan an already-linked row.
-    private func resolveRef<T: PersistentModel>(_ type: T.Type, id: UUID?, current: T?, in context: ModelContext) throws -> T? {
+    func resolveRef<T: PersistentModel>(_ type: T.Type, id: UUID?, current: T?, in context: ModelContext) throws -> T? {
         guard let id else { return nil }                                  // remote cleared the reference
         if let found = try fetchByID(type, id: id, in: context) { return found }
         return current                                                    // parent missing → keep existing link
+    }
+
+    /// Last-write-wins guard for a pulled row. Returns `true` when the local row
+    /// holds an un-pushed change *newer* than the incoming remote row, so the
+    /// remote change must be skipped: for a normal row the local value is kept;
+    /// for a remote tombstone the local edit wins over the delete. Pure and
+    /// side-effect-free so it can be unit-tested in isolation; called from every
+    /// pull site (both the delete branch and the normal-apply branch).
+    static func localChangeWins(localNeedsSync: Bool, localUpdatedAt: Date, remoteUpdatedAt: Date) -> Bool {
+        localNeedsSync && localUpdatedAt > remoteUpdatedAt
     }
 
     // MARK: - Pull
@@ -905,7 +915,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "wallets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Wallet.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -918,7 +928,7 @@ final class SyncEngine: ObservableObject {
                 return new
             }()
             // LWW: keep local if it has a newer un-pushed change.
-            if w.needsSync && w.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: w.needsSync, localUpdatedAt: w.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             w.name = row.name; w.currencyCode = row.currency_code; w.icon = row.icon
             w.colorHex = row.color_hex; w.isArchived = row.is_archived
             w.createdAt = row.created_at; w.updatedAt = row.updated_at
@@ -933,7 +943,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "categories", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Category.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -946,7 +956,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if c.needsSync && c.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: c.needsSync, localUpdatedAt: c.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             c.name = row.name; c.icon = row.icon ?? ""; c.colorHex = row.color_hex ?? ""
             c.type = TransactionType(rawValue: row.type) ?? c.type; c.isSystem = row.is_system
             c.createdAt = row.created_at; c.updatedAt = row.updated_at
@@ -962,7 +972,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Transaction.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -977,7 +987,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if t.needsSync && t.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             t.type = TransactionType(rawValue: row.type) ?? t.type
             t.date = row.date; t.note = row.note; t.tags = row.tags
             t.excludeFromReports = row.exclude_from_reports
@@ -1009,7 +1019,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Event.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -1022,7 +1032,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if e.needsSync && e.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: e.needsSync, localUpdatedAt: e.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             e.title = row.title; e.startDate = row.start_date; e.endDate = row.end_date
             e.totalBudget = row.total_budget; e.notes = row.notes; e.icon = row.icon
             e.colorHex = row.color_hex; e.location = row.location; e.status = row.status
@@ -1047,7 +1057,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(Debt.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -1061,7 +1071,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if d.needsSync && d.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: d.needsSync, localUpdatedAt: d.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             d.personName = row.person_name; d.totalAmount = row.total_amount; d.currencyCode = row.currency_code
             d.dueDate = row.due_date; d.type = DebtType(rawValue: row.type) ?? d.type; d.note = row.note
             d.dateCreated = row.date_created; d.isCompleted = row.is_completed
@@ -1077,7 +1087,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -1091,7 +1101,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if g.needsSync && g.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
             g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
             g.createdDate = row.created_date; g.updatedAt = row.updated_at; g.iconName = row.icon_name
@@ -1112,7 +1122,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) {
-                    if existing.needsSync && existing.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
                 }
                 return
@@ -1126,7 +1136,7 @@ final class SyncEngine: ObservableObject {
                 context.insert(new)
                 return new
             }()
-            if r.needsSync && r.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
             r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
             r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.isActive = row.is_active
@@ -1145,7 +1155,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventMember.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1160,7 +1170,7 @@ final class SyncEngine: ObservableObject {
                 m.needsSync = false
                 context.insert(m)
             }
-            if m.needsSync && m.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: m.needsSync, localUpdatedAt: m.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
             m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
             m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
@@ -1181,7 +1191,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1200,7 +1210,7 @@ final class SyncEngine: ObservableObject {
                 t.needsSync = false
                 context.insert(t)
             }
-            if t.needsSync && t.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             t.kind = EventLedgerTransactionKind(rawValue: row.kind) ?? t.kind
             t.title = row.title; t.amountMinor = row.amount_minor
             t.paidSource = EventExpensePaidSource(rawValue: row.paid_source) ?? t.paidSource
@@ -1222,7 +1232,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1237,7 +1247,7 @@ final class SyncEngine: ObservableObject {
                 p.needsSync = false
                 context.insert(p)
             }
-            if p.needsSync && p.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: p.needsSync, localUpdatedAt: p.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             p.memberId = row.member_id; p.orderIndex = row.order_index
             p.transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
             p.member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
@@ -1253,7 +1263,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1267,7 +1277,7 @@ final class SyncEngine: ObservableObject {
                 s.needsSync = false
                 context.insert(s)
             }
-            if s.needsSync && s.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: s.needsSync, localUpdatedAt: s.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             s.ledgerRevision = row.ledger_revision
             s.event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
             s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
@@ -1282,7 +1292,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1297,7 +1307,7 @@ final class SyncEngine: ObservableObject {
                 t.needsSync = false
                 context.insert(t)
             }
-            if t.needsSync && t.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
             t.amountMinor = row.amount_minor; t.sequence = row.sequence
             t.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
@@ -1313,7 +1323,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1332,7 +1342,7 @@ final class SyncEngine: ObservableObject {
                 r.needsSync = false
                 context.insert(r)
             }
-            if r.needsSync && r.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             r.memberId = row.member_id; r.walletTransactionId = row.wallet_transaction_id
             r.amountMinor = row.amount_minor
             r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
@@ -1355,7 +1365,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(Budget.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1368,7 +1378,7 @@ final class SyncEngine: ObservableObject {
                 b.needsSync = false
                 context.insert(b)
             }
-            if b.needsSync && b.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: b.needsSync, localUpdatedAt: b.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             b.name = row.name; b.amountLimit = row.amount_limit; b.currencyCode = row.currency_code
             b.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
             b.startDate = row.start_date; b.createdAt = row.created_at; b.updatedAt = row.updated_at
@@ -1397,7 +1407,7 @@ final class SyncEngine: ObservableObject {
         try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
             if row.deleted_at != nil {
                 if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) {
-                    if dead.needsSync && dead.updatedAt > row.updated_at { return }  // newer un-pushed local edit wins over a remote delete
+                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
                     dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
                 }
                 return
@@ -1411,7 +1421,7 @@ final class SyncEngine: ObservableObject {
                 loc.needsSync = false
                 context.insert(loc)
             }
-            if loc.needsSync && loc.updatedAt > row.updated_at { return }
+            if Self.localChangeWins(localNeedsSync: loc.needsSync, localUpdatedAt: loc.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             loc.displayName = row.display_name; loc.fullAddress = row.full_address
             loc.shortAddress = row.short_address; loc.latitude = row.latitude; loc.longitude = row.longitude
             loc.horizontalAccuracyMeters = row.horizontal_accuracy_meters; loc.capturedAt = row.captured_at
@@ -1484,7 +1494,7 @@ final class SyncEngine: ObservableObject {
     /// last-write-wins key and the pull cursor in a single (server) clock domain,
     /// so a skewed device clock can't make a freshly inserted row sort below other
     /// devices' cursors and go unpulled. Runs under the sync-write guard.
-    private func writeBackServerTimestamps<R: SyncServerRow>(_ returned: [R], to models: [any SyncTrackable]) {
+    func writeBackServerTimestamps<R: SyncServerRow>(_ returned: [R], to models: [any SyncTrackable]) {
         guard !returned.isEmpty else { return }
         let dates = Dictionary(returned.map { ($0.id, $0.updated_at) }, uniquingKeysWith: { first, _ in first })
         for m in models {

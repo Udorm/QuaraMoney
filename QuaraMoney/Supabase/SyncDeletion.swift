@@ -63,6 +63,11 @@ enum SyncDeletionQueue {
 
     private static let key = "pendingDeletions.v1"
 
+    /// Backing store. Defaults to `.standard` in production; tests point this at a
+    /// private `UserDefaults(suiteName:)` so they never touch the shared standard
+    /// domain (XCTest runs classes in parallel on one simulator clone).
+    nonisolated(unsafe) static var defaults: UserDefaults = .standard
+
     static func enqueue(table: String, id: UUID) {
         var entries = all()
         let entry = Entry(table: table, id: id)
@@ -72,7 +77,7 @@ enum SyncDeletionQueue {
     }
 
     static func all() -> [Entry] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = defaults.data(forKey: key),
               let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
         return entries
     }
@@ -85,11 +90,11 @@ enum SyncDeletionQueue {
 
     /// Drops all queued deletions (used when switching accounts on a device).
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        defaults.removeObject(forKey: key)
     }
 
     private static func save(_ entries: [Entry]) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: key)
+        defaults.set(try? JSONEncoder().encode(entries), forKey: key)
     }
 }
 
@@ -113,6 +118,11 @@ enum SyncImageDownloadQueue {
 
     private static let key = "pendingImageDownloads.v1"
 
+    /// Backing store. Defaults to `.standard` in production; tests point this at a
+    /// private `UserDefaults(suiteName:)` so they never touch the shared standard
+    /// domain (XCTest runs classes in parallel on one simulator clone).
+    nonisolated(unsafe) static var defaults: UserDefaults = .standard
+
     static func enqueue(_ entry: Entry) {
         var entries = all()
         guard !entries.contains(entry) else { return }
@@ -121,7 +131,7 @@ enum SyncImageDownloadQueue {
     }
 
     static func all() -> [Entry] {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = defaults.data(forKey: key),
               let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
         return entries
     }
@@ -133,10 +143,10 @@ enum SyncImageDownloadQueue {
     }
 
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        defaults.removeObject(forKey: key)
     }
 
     private static func save(_ entries: [Entry]) {
-        UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: key)
+        defaults.set(try? JSONEncoder().encode(entries), forKey: key)
     }
 }

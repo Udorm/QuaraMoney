@@ -522,6 +522,18 @@ enum L10n {
         static var emptyState: String { "recurring.emptyState".localized }
         static var createWalletFirst: String { "recurring.createWalletFirst".localized }
         
+        static var monthlyProgress: String { "recurring.monthlyProgress".localized }
+        static var expenses: String { "recurring.expenses".localized }
+        static var income: String { "recurring.income".localized }
+        static var noProgressThisMonth: String { "recurring.noProgressThisMonth".localized }
+        static func progressDetail(_ paid: String, _ expected: String) -> String {
+            "recurring.progressDetail".localized(with: paid, expected)
+        }
+        static var needsReview: String { "recurring.needsReview".localized }
+        static var thisMonth: String { "recurring.thisMonth".localized }
+        static var nextMonth: String { "recurring.nextMonth".localized }
+        static var later: String { "recurring.later".localized }
+        
         static func next(_ date: String) -> String {
             "recurring.next".localized(with: date)
         }
@@ -530,8 +542,44 @@ enum L10n {
         static var assignments: String { "recurring.assignments".localized }
         static var preview: String { "recurring.preview".localized }
         static var emptyTitle: String { "recurring.emptyTitle".localized }
+
+        static func generatedNote(_ name: String) -> String {
+            "recurring.generatedNote".localized(with: name)
+        }
+
+        static var type: String { "recurring.type".localized }
+        static var setEndDate: String { "recurring.setEndDate".localized }
+        static var endDate: String { "recurring.endDate".localized }
+        static var reminderToggle: String { "recurring.reminder.toggle".localized }
+        static var edit: String { "recurring.edit".localized }
+        static var editFutureNote: String { "recurring.editFutureNote".localized }
+        static var pause: String { "recurring.pause".localized }
+        static var resume: String { "recurring.resume".localized }
+        static var paused: String { "recurring.paused".localized }
+        static var post: String { "recurring.post".localized }
+        static var skip: String { "recurring.skip".localized }
+        static var editAndPost: String { "recurring.editAndPost".localized }
+        static var dueToday: String { "recurring.dueToday".localized }
+        static var overdue: String { "recurring.overdue".localized }
+        static var proposed: String { "recurring.proposed".localized }
+        static func dueCount(_ count: Int) -> String { "recurring.dueCount".localized(with: count) }
+
+        enum Review {
+            static var title: String { "recurring.review.title".localized }
+            static func banner(_ count: Int) -> String { "recurring.review.banner".localized(with: count) }
+            static var postAll: String { "recurring.review.postAll".localized }
+            static var skipAll: String { "recurring.review.skipAll".localized }
+            static var empty: String { "recurring.review.empty".localized }
+        }
+
+        enum Reminder {
+            static var title: String { "recurring.reminder.title".localized }
+            static func body(_ name: String, _ amount: String) -> String {
+                "recurring.reminder.body".localized(with: name, amount)
+            }
+        }
     }
-    
+
     // MARK: - Frequency
     enum Frequency {
         static var daily: String { "frequency.daily".localized }

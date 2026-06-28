@@ -679,8 +679,9 @@ final class SyncEngine: ObservableObject {
         guard !pending.isEmpty else { return }
         let rows = pending.map { r in
             SyncRecurringRuleRow(id: r.id, user_id: uid, name: r.name, amount: r.amount,
-                                 currency_code: r.currencyCode, frequency: r.frequency.rawValue,
-                                 start_date: r.startDate, next_due_date: r.nextDueDate, is_active: r.isActive,
+                                 currency_code: r.currencyCode, type: r.type.rawValue, frequency: r.frequency.rawValue,
+                                 start_date: r.startDate, next_due_date: r.nextDueDate, end_date: r.endDate,
+                                 is_active: r.isActive, reminders_enabled: r.remindersEnabled,
                                  wallet_id: r.wallet?.id, category_id: r.category?.id,
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
@@ -1130,7 +1131,8 @@ final class SyncEngine: ObservableObject {
             let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
                 let new = RecurringRule(name: row.name, amount: row.amount, currencyCode: row.currency_code,
                                         frequency: Frequency(rawValue: row.frequency) ?? .monthly,
-                                        startDate: row.start_date)
+                                        startDate: row.start_date,
+                                        type: TransactionType(rawValue: row.type) ?? .expense)
                 new.id = row.id
                 new.needsSync = false
                 context.insert(new)
@@ -1138,8 +1140,10 @@ final class SyncEngine: ObservableObject {
             }()
             if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
             r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
+            r.type = TransactionType(rawValue: row.type) ?? r.type
             r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
-            r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.isActive = row.is_active
+            r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
+            r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
             r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
             r.category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
             r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at

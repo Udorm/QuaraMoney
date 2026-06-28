@@ -130,10 +130,13 @@ nonisolated struct SyncRecurringRuleRow: Codable, Sendable {
     var name: String
     var amount: Decimal
     var currency_code: String
+    var type: String
     var frequency: String
     var start_date: Date
     var next_due_date: Date
+    @NullEncodable var end_date: Date?
     var is_active: Bool
+    var reminders_enabled: Bool
     @NullEncodable var wallet_id: UUID?
     @NullEncodable var category_id: UUID?
     var updated_at: Date

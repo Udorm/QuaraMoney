@@ -373,10 +373,13 @@ struct QuaraMoneyApp: App {
         // Perform heavy database operations in background (utility priority to avoid competing with UI)
         Task.detached(priority: .utility) {
             let context = ModelContext(container)
-            
-            // Check recurring transactions
-            await RecurringRuleService.checkAndGenerateTransactions(modelContext: context)
-            
+
+            // Recurring rules are confirm-before-post: they are NOT auto-generated
+            // on launch. Due occurrences surface in the Recurring review inbox.
+            // Refresh due-date reminders to match the current rules (the helper is
+            // @MainActor, so its ModelContext is created and used on the main actor).
+            await Self.rescheduleRecurringReminders(container)
+
             // Check budget rollovers
             BudgetRolloverService.checkAndProcessBudgetRollovers(
                 modelContext: context,
@@ -507,5 +510,12 @@ struct QuaraMoneyApp: App {
             // from each transaction's stored rate, not these live rates.
             await CurrencyManager.shared.fetchRates()
         }
+    }
+
+    /// Rebuilds recurring due-date reminders on launch. `@MainActor` so the
+    /// `ModelContext` is created and consumed entirely on the main actor.
+    @MainActor
+    private static func rescheduleRecurringReminders(_ container: ModelContainer) async {
+        await RecurringNotificationService.rescheduleAll(in: ModelContext(container))
     }
 }

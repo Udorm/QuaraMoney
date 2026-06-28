@@ -284,3 +284,31 @@ nonisolated struct SyncBudgetCategoryRow: Codable, Sendable {
     var category_id: UUID
     var user_id: UUID
 }
+
+// MARK: - Server-authoritative timestamp write-back
+
+/// A pushable row that carries the server's authoritative `updated_at`. After an
+/// upsert returns the stored representation, the push writes this value back onto
+/// the local model so local timestamps live in the same clock domain as the
+/// server's (the DB trigger stamps `updated_at` on every insert and update). The
+/// join table `SyncBudgetCategoryRow` has no timestamp and is excluded.
+protocol SyncServerRow: Codable, Sendable {
+    var id: UUID { get }
+    var updated_at: Date { get }
+}
+
+extension SyncWalletRow: SyncServerRow {}
+extension SyncCategoryRow: SyncServerRow {}
+extension SyncTransactionRow: SyncServerRow {}
+extension SyncEventRow: SyncServerRow {}
+extension SyncDebtRow: SyncServerRow {}
+extension SyncSavingsGoalRow: SyncServerRow {}
+extension SyncRecurringRuleRow: SyncServerRow {}
+extension SyncEventMemberRow: SyncServerRow {}
+extension SyncEventLedgerTransactionRow: SyncServerRow {}
+extension SyncEventLedgerParticipantRow: SyncServerRow {}
+extension SyncEventSettlementSnapshotRow: SyncServerRow {}
+extension SyncEventSettlementTransferRow: SyncServerRow {}
+extension SyncEventWalletExportRecordRow: SyncServerRow {}
+extension SyncTransactionLocationRow: SyncServerRow {}
+extension SyncBudgetRow: SyncServerRow {}

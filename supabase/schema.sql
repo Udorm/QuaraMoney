@@ -293,6 +293,12 @@ create table if not exists public.event_wallet_export_records (
 );
 
 -- updated_at triggers
+-- Fire on INSERT as well as UPDATE so updated_at is server-authoritative for
+-- every write. The sync engine uses updated_at as the last-write-wins key and as
+-- the pull cursor; if inserts kept the client-supplied value, a device with a
+-- behind clock could insert a row whose updated_at sorts below other devices'
+-- cursors and is never pulled. (Applied to prod via migration
+-- set_updated_at_on_insert_or_update.)
 do $$
 declare t text;
 begin
@@ -306,7 +312,7 @@ begin
   loop
     execute format(
       'drop trigger if exists set_updated_at on public.%I;
-       create trigger set_updated_at before update on public.%I
+       create trigger set_updated_at before insert or update on public.%I
        for each row execute function public.set_updated_at();', t, t);
   end loop;
 end$$;

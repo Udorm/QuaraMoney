@@ -560,7 +560,8 @@ final class SyncEngine: ObservableObject {
                       icon: w.icon, color_hex: w.colorHex, is_archived: w.isArchived,
                       created_at: w.createdAt, updated_at: w.updatedAt, deleted_at: w.deletedAt)
         }
-        try await upsertInChunks(rows, to: "wallets", client)
+        let returned = try await upsertInChunks(rows, to: "wallets", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -572,7 +573,8 @@ final class SyncEngine: ObservableObject {
                         type: c.type.rawValue, is_system: c.isSystem,
                         created_at: c.createdAt, updated_at: c.updatedAt, deleted_at: c.deletedAt)
         }
-        try await upsertInChunks(rows, to: "categories", client)
+        let returned = try await upsertInChunks(rows, to: "categories", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -601,7 +603,8 @@ final class SyncEngine: ObservableObject {
                 savings_goal_id: t.savingsGoal?.id,
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
-        try await upsertInChunks(rows, to: "transactions", client)
+        let returned = try await upsertInChunks(rows, to: "transactions", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -624,7 +627,8 @@ final class SyncEngine: ObservableObject {
                          ledger_mode: e.ledgerMode.rawValue, latitude: e.latitude, longitude: e.longitude,
                          updated_at: e.updatedAt, deleted_at: e.deletedAt))
         }
-        try await upsertInChunks(rows, to: "events", client)
+        let returned = try await upsertInChunks(rows, to: "events", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -637,7 +641,8 @@ final class SyncEngine: ObservableObject {
                         date_created: d.dateCreated, is_completed: d.isCompleted, created_at: d.createdAt,
                         updated_at: d.updatedAt, deleted_at: d.deletedAt)
         }
-        try await upsertInChunks(rows, to: "debts", client)
+        let returned = try await upsertInChunks(rows, to: "debts", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -655,7 +660,8 @@ final class SyncEngine: ObservableObject {
                                auto_contribute_period_raw: g.autoContributePeriod?.rawValue,
                                priority: g.priority, linked_wallet_id: g.linkedWallet?.id, deleted_at: g.deletedAt)
         }
-        try await upsertInChunks(rows, to: "savings_goals", client)
+        let returned = try await upsertInChunks(rows, to: "savings_goals", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -669,7 +675,8 @@ final class SyncEngine: ObservableObject {
                                  wallet_id: r.wallet?.id, category_id: r.category?.id,
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
-        try await upsertInChunks(rows, to: "recurring_rules", client)
+        let returned = try await upsertInChunks(rows, to: "recurring_rules", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -691,7 +698,8 @@ final class SyncEngine: ObservableObject {
                                            sort_order: m.sortOrder, created_at: m.createdAt,
                                            updated_at: m.updatedAt, deleted_at: m.deletedAt))
         }
-        try await upsertInChunks(rows, to: "event_members", client)
+        let returned = try await upsertInChunks(rows, to: "event_members", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -708,7 +716,8 @@ final class SyncEngine: ObservableObject {
                                           is_deleted: t.isDeleted, created_at: t.createdAt, updated_at: t.updatedAt,
                                           deleted_at: t.deletedAt)
         }
-        try await upsertInChunks(rows, to: "event_ledger_transactions", client)
+        let returned = try await upsertInChunks(rows, to: "event_ledger_transactions", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -720,7 +729,8 @@ final class SyncEngine: ObservableObject {
                                           member_id: p.memberId, event_member_id: p.member?.id,
                                           order_index: p.orderIndex, updated_at: p.updatedAt, deleted_at: p.deletedAt)
         }
-        try await upsertInChunks(rows, to: "event_ledger_participants", client)
+        let returned = try await upsertInChunks(rows, to: "event_ledger_participants", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -732,7 +742,8 @@ final class SyncEngine: ObservableObject {
                                            ledger_revision: s.ledgerRevision, created_at: s.createdAt,
                                            updated_at: s.updatedAt, deleted_at: s.deletedAt)
         }
-        try await upsertInChunks(rows, to: "event_settlement_snapshots", client)
+        let returned = try await upsertInChunks(rows, to: "event_settlement_snapshots", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -745,7 +756,8 @@ final class SyncEngine: ObservableObject {
                                            amount_minor: t.amountMinor, sequence: t.sequence,
                                            updated_at: t.updatedAt, deleted_at: t.deletedAt)
         }
-        try await upsertInChunks(rows, to: "event_settlement_transfers", client)
+        let returned = try await upsertInChunks(rows, to: "event_settlement_transfers", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -759,7 +771,8 @@ final class SyncEngine: ObservableObject {
                                            export_type: r.exportType.rawValue, created_at: r.createdAt,
                                            updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
-        try await upsertInChunks(rows, to: "event_wallet_export_records", client)
+        let returned = try await upsertInChunks(rows, to: "event_wallet_export_records", client)
+        writeBackServerTimestamps(returned, to: pending)
         markSynced(pending, uid: uid, context: context)
     }
 
@@ -781,7 +794,8 @@ final class SyncEngine: ObservableObject {
                           budget_category_type_raw: b.budgetCategoryType?.rawValue,
                           category_id: b.category?.id, deleted_at: b.deletedAt)
         }
-        try await upsertInChunks(rows, to: "budgets", client)
+        let returned = try await upsertInChunks(rows, to: "budgets", client)
+        writeBackServerTimestamps(returned, to: pending)
         // Rebuild each budget's category join rows (delete then insert current set).
         for b in pending {
             try await client.from("budget_categories").delete().eq("budget_id", value: b.id.uuidString).execute()
@@ -818,8 +832,10 @@ final class SyncEngine: ObservableObject {
                                        normalized_spatial_key: loc.normalizedSpatialKey,
                                        updated_at: loc.updatedAt, deleted_at: loc.deletedAt)
         }
-        try await upsertInChunks(rows, to: "transaction_locations", client)
-        markSynced(pairs.map { $0.1 }, uid: uid, context: context)
+        let returned = try await upsertInChunks(rows, to: "transaction_locations", client)
+        let locations = pairs.map { $0.1 }
+        writeBackServerTimestamps(returned, to: locations)
+        markSynced(locations, uid: uid, context: context)
     }
 
     /// Sets `deleted_at` on the server for each locally-deleted row, then clears
@@ -1388,14 +1404,37 @@ final class SyncEngine: ObservableObject {
         return all
     }
 
-    /// Upserts rows in chunks so a large first push isn't one oversized request.
-    private func upsertInChunks<R: Encodable & Sendable>(_ rows: [R], to table: String, _ client: SupabaseClient) async throws {
-        guard !rows.isEmpty else { return }
+    /// Upserts rows in chunks so a large first push isn't one oversized request,
+    /// returning the server's stored representation so the caller can write the
+    /// trigger-assigned `updated_at` back onto the local models.
+    @discardableResult
+    private func upsertInChunks<R: SyncServerRow>(_ rows: [R], to table: String, _ client: SupabaseClient) async throws -> [R] {
+        guard !rows.isEmpty else { return [] }
+        var returned: [R] = []
+        returned.reserveCapacity(rows.count)
         var index = 0
         while index < rows.count {
             let chunk = Array(rows[index..<min(index + Self.pageSize, rows.count)])
-            try await client.from(table).upsert(chunk).execute()
+            // `upsert` returns the stored rows by default (Prefer: return=representation).
+            let page: [R] = try await client.from(table).upsert(chunk).execute().value
+            returned.append(contentsOf: page)
             index += Self.pageSize
+        }
+        return returned
+    }
+
+    /// Writes the server-authoritative `updated_at` from an upsert's returned rows
+    /// back onto the just-pushed local models. Now that the DB trigger stamps
+    /// `updated_at` on insert as well as update, the server's value differs from
+    /// the device clock the row was created with; mirroring it locally keeps the
+    /// last-write-wins key and the pull cursor in a single (server) clock domain,
+    /// so a skewed device clock can't make a freshly inserted row sort below other
+    /// devices' cursors and go unpulled. Runs under the sync-write guard.
+    private func writeBackServerTimestamps<R: SyncServerRow>(_ returned: [R], to models: [any SyncTrackable]) {
+        guard !returned.isEmpty else { return }
+        let dates = Dictionary(returned.map { ($0.id, $0.updated_at) }, uniquingKeysWith: { first, _ in first })
+        for m in models {
+            if let d = dates[m.id] { m.updatedAt = d }
         }
     }
 

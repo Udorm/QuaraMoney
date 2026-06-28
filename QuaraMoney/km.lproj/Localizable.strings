@@ -359,6 +359,11 @@
 "recurring.type" = "ប្រភេទ";
 "recurring.setEndDate" = "កំណត់ថ្ងៃបញ្ចប់";
 "recurring.endDate" = "ថ្ងៃបញ្ចប់";
+"recurring.wallet" = "កាបូប";
+"recurring.nextPayment" = "ការទូទាត់បន្ទាប់";
+"recurring.startedOn" = "បានចាប់ផ្តើម";
+"recurring.ends" = "បញ្ចប់";
+"recurring.noEndDate" = "គ្មានថ្ងៃបញ្ចប់";
 "recurring.reminder.toggle" = "ការរំលឹកដល់កំណត់";
 "recurring.edit" = "កែសម្រួលច្បាប់";
 "recurring.editFutureNote" = "ការផ្លាស់ប្តូរអនុវត្តតែលើប្រតិបត្តិការដែលបង្កើតនៅពេលក្រោយ។ ប្រតិបត្តិការចាស់មិនរងផលប៉ះពាល់ទេ។";
@@ -383,6 +388,15 @@
 "frequency.weekly" = "ប្រចាំសប្ដាហ៍";
 "frequency.monthly" = "ប្រចាំខែ";
 "frequency.yearly" = "ប្រចាំឆ្នាំ";
+"frequency.everyNDays" = "រៀងរាល់ %lld ថ្ងៃ";
+"frequency.everyNWeeks" = "រៀងរាល់ %lld សប្ដាហ៍";
+"frequency.everyNMonths" = "រៀងរាល់ %lld ខែ";
+"frequency.everyNYears" = "រៀងរាល់ %lld ឆ្នាំ";
+"frequency.interval" = "ធ្វើម្ដងម្កាល";
+"frequency.unit.days" = "ថ្ងៃ";
+"frequency.unit.weeks" = "សប្ដាហ៍";
+"frequency.unit.months" = "ខែ";
+"frequency.unit.years" = "ឆ្នាំ";
 
 // MARK: - Settings (ការកំណត់)
 "settings.title" = "ការកំណត់";

@@ -26,7 +26,7 @@ struct SuggestionWeights {
     /// Minimum share of total score the top category must hold to be highlighted.
     var highlightShareThreshold: Double = 0.35
 
-    static let `default` = SuggestionWeights()
+    nonisolated static let `default` = SuggestionWeights()
 }
 
 /// A lightweight, resolved location used purely for ranking — never written to a transaction.

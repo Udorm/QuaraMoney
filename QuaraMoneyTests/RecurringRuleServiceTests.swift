@@ -46,12 +46,13 @@ final class RecurringRuleServiceTests: XCTestCase {
                           currency: String = "USD",
                           type: TransactionType = .expense,
                           frequency: Frequency = .monthly,
+                          interval: Int = 1,
                           start: Date,
                           nextDue: Date? = nil,
                           end: Date? = nil,
                           wallet: Wallet? = nil) -> RecurringRule {
         let rule = RecurringRule(name: "Netflix", amount: amount, currencyCode: currency,
-                                 frequency: frequency, startDate: start, type: type)
+                                 frequency: frequency, interval: interval, startDate: start, type: type)
         rule.nextDueDate = nextDue ?? start
         rule.endDate = end
         rule.wallet = wallet
@@ -75,6 +76,46 @@ final class RecurringRuleServiceTests: XCTestCase {
                        date(2026, 7, 15))
         XCTAssertEqual(RecurringRuleService.nextOccurrence(after: start, startDate: start, frequency: .yearly),
                        date(2027, 6, 15))
+    }
+
+    func testNextOccurrenceEveryTwoWeeks() {
+        let start = date(2026, 6, 15)
+        XCTAssertEqual(RecurringRuleService.nextOccurrence(after: start, startDate: start, frequency: .weekly, interval: 2),
+                       date(2026, 6, 29))
+    }
+
+    func testNextOccurrenceEveryThreeMonths() {
+        let start = date(2026, 6, 15)
+        XCTAssertEqual(RecurringRuleService.nextOccurrence(after: start, startDate: start, frequency: .monthly, interval: 3),
+                       date(2026, 9, 15))
+    }
+
+    func testNextOccurrenceEverySixMonths() {
+        let start = date(2026, 6, 15)
+        XCTAssertEqual(RecurringRuleService.nextOccurrence(after: start, startDate: start, frequency: .monthly, interval: 6),
+                       date(2026, 12, 15))
+    }
+
+    func testMonthEndAnchoringWithInterval() {
+        let start = date(2026, 1, 31)
+        // Next occurrence with interval = 2 months (March 31st)
+        let occ2 = RecurringRuleService.nextOccurrence(after: start, startDate: start, frequency: .monthly, interval: 2)!
+        XCTAssertEqual(occ2, date(2026, 3, 31))
+        
+        // Next occurrence with interval = 2 months from occ2 (May 31st)
+        let occ3 = RecurringRuleService.nextOccurrence(after: occ2, startDate: start, frequency: .monthly, interval: 2)!
+        XCTAssertEqual(occ3, date(2026, 5, 31))
+    }
+
+    func testPostAdvancesByInterval() {
+        let wallet = makeWallet()
+        let due = date(2026, 6, 1)
+        // Repeat every 2 months
+        let rule = makeRule(amount: 15, frequency: .monthly, interval: 2, start: due, nextDue: due, wallet: wallet)
+
+        let txn = RecurringRuleService.post(rule: rule, in: context)
+        XCTAssertNotNil(txn)
+        XCTAssertEqual(rule.nextDueDate, date(2026, 8, 1), "Schedule advances by 2 months")
     }
 
     /// A rule anchored on the 31st must not permanently drift to the 28th after
@@ -250,7 +291,7 @@ final class RecurringRuleServiceTests: XCTestCase {
         try? context.save()
 
         let host = UIHostingController(rootView:
-            NavigationStack { RecurringReviewView() }.modelContainer(container)
+            NavigationStack { RecurringReviewView(allRules: []) }.modelContainer(container)
         )
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = host

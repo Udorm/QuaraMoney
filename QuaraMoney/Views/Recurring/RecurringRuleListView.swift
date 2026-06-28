@@ -61,8 +61,9 @@ struct RecurringRuleListView: View {
         List {
             Section {
                 RecurringProgressHeaderView(modelContext: modelContext)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    .listRowInsets(EdgeInsets()) // Full-width card — aligns with sections below
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
             
             if !dueRules.isEmpty {
@@ -152,7 +153,7 @@ struct RecurringRuleListView: View {
         let manager = CurrencyManager.shared
         let target = manager.preferredCurrencyCode
         let converted: (RecurringRule) -> Decimal = { rule in
-            manager.convert(amount: rule.amount, from: rule.currencyCode, to: target) ?? rule.amount
+            manager.convert(amount: rule.amount, from: rule.currencyCode, to: target)
         }
         let expenses = rules.filter { $0.type == .expense }.reduce(Decimal(0)) { $0 + converted($1) }
         let incomes = rules.filter { $0.type == .income }.reduce(Decimal(0)) { $0 + converted($1) }
@@ -178,21 +179,23 @@ struct RecurringRuleListView: View {
     
     @ViewBuilder
     private func ruleRow(for rule: RecurringRule) -> some View {
-        RecurringRuleRow(rule: rule)
-            .contentShape(Rectangle())
-            .onTapGesture { editorTarget = .existing(rule) }
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) { delete(rule) } label: {
-                    Label(L10n.Common.delete, systemImage: "trash")
-                }
+        NavigationLink {
+            RecurringRuleDetailView(rule: rule)
+        } label: {
+            RecurringRuleRow(rule: rule)
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { delete(rule) } label: {
+                Label(L10n.Common.delete, systemImage: "trash")
             }
-            .swipeActions(edge: .leading) {
-                Button { togglePause(rule) } label: {
-                    Label(rule.isActive ? L10n.Recurring.pause : L10n.Recurring.resume,
-                          systemImage: rule.isActive ? "pause.circle" : "play.circle")
-                }
-                .tint(rule.isActive ? .orange : .green)
+        }
+        .swipeActions(edge: .leading) {
+            Button { togglePause(rule) } label: {
+                Label(rule.isActive ? L10n.Recurring.pause : L10n.Recurring.resume,
+                      systemImage: rule.isActive ? "pause.circle" : "play.circle")
             }
+            .tint(rule.isActive ? .orange : .green)
+        }
     }
     
     private func togglePause(_ rule: RecurringRule) {
@@ -235,8 +238,12 @@ enum EditorTarget: Identifiable {
 private struct RecurringRuleRow: View {
     let rule: RecurringRule
 
-    private var isOverdue: Bool {
-        rule.isActive && rule.nextDueDate <= Date()
+    private var tint: Color {
+        rule.type == .income ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+    }
+
+    private var icon: String {
+        rule.category?.icon ?? (rule.type == .income ? "arrow.down.left" : "arrow.up.right")
     }
 
     private var signedAmount: String {
@@ -244,16 +251,36 @@ private struct RecurringRuleRow: View {
         return rule.type == .income ? "+\(formatted)" : formatted
     }
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: rule.category?.icon ?? (rule.type == .income ? "arrow.down.left" : "arrow.up.right"))
-                .foregroundStyle(rule.type == .income ? .green : .red)
-                .frame(width: 24)
+    /// Relative due descriptor + color for the trailing chip.
+    private var dueState: (text: String, color: Color)? {
+        guard rule.isActive else { return nil }
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: Date())
+        if rule.nextDueDate < todayStart {
+            return (L10n.Recurring.overdue, .red)
+        } else if cal.isDateInToday(rule.nextDueDate) {
+            return (L10n.Recurring.dueToday, .orange)
+        }
+        return (rule.nextDueDate.formatted(date: .abbreviated, time: .omitted), .secondary)
+    }
 
-            VStack(alignment: .leading, spacing: 2) {
+    var body: some View {
+        HStack(spacing: 14) {
+            // Tinted icon badge
+            Image(systemName: icon)
+                .font(.app(.body, weight: .semibold))
+                .foregroundStyle(rule.isActive ? tint : Color.secondary)
+                .frame(width: 42, height: 42)
+                .background(
+                    (rule.isActive ? tint : Color.secondary).opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(rule.name)
                         .font(.app(.headline))
+                        .lineLimit(1)
                     if !rule.isActive {
                         Text(L10n.Recurring.paused)
                             .font(.app(.caption2, weight: .bold))
@@ -264,24 +291,31 @@ private struct RecurringRuleRow: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Text(rule.frequency.displayName)
+
+                if let due = dueState {
+                    HStack(spacing: 5) {
+                        Text(rule.frequency.displayName(interval: rule.interval))
+                            .foregroundStyle(.secondary)
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(due.text)
+                            .foregroundStyle(due.color)
+                    }
                     .font(.app(.caption))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(signedAmount)
-                    .font(.app(.body, weight: .semibold))
-                    .foregroundStyle(rule.type == .income ? Color.green : Color.primary)
-                
-                if rule.isActive {
-                    Text(L10n.Recurring.next(rule.nextDueDate.formatted(date: .numeric, time: .omitted)))
-                        .font(.app(.caption2))
-                        .foregroundStyle(isOverdue ? Color.red : Color.secondary)
+                    .lineLimit(1)
+                } else {
+                    Text(rule.frequency.displayName(interval: rule.interval))
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
+
+            Spacer(minLength: 8)
+
+            Text(signedAmount)
+                .font(.app(.body, weight: .semibold))
+                .foregroundStyle(rule.type == .income ? tint : Color.primary)
+                .lineLimit(1)
         }
         .padding(.vertical, 4)
     }

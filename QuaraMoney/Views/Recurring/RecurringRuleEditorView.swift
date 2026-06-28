@@ -31,6 +31,7 @@ struct RecurringRuleEditorView: View {
     /// wallet's currency (so a USD rule paid from a KHR wallet stays USD).
     @State private var currencyManuallySet: Bool = false
     @State private var showCurrencyPicker = false
+    @State private var interval: Int
 
     init(rule: RecurringRule? = nil) {
         self.rule = rule
@@ -38,6 +39,7 @@ struct RecurringRuleEditorView: View {
         _amountString = State(initialValue: rule.map { NSDecimalNumber(decimal: $0.amount).stringValue } ?? "")
         _type = State(initialValue: rule?.type ?? .expense)
         _frequency = State(initialValue: rule?.frequency ?? .monthly)
+        _interval = State(initialValue: rule?.interval ?? 1)
         _startDate = State(initialValue: rule?.startDate ?? Date())
         _hasEndDate = State(initialValue: rule?.endDate != nil)
         _endDate = State(initialValue: rule?.endDate ?? Date())
@@ -51,6 +53,15 @@ struct RecurringRuleEditorView: View {
     }
 
     private var isEditing: Bool { rule != nil }
+
+    private var frequencyUnitLabel: String {
+        switch frequency {
+        case .daily: return L10n.Frequency.Unit.days
+        case .weekly: return L10n.Frequency.Unit.weeks
+        case .monthly: return L10n.Frequency.Unit.months
+        case .yearly: return L10n.Frequency.Unit.years
+        }
+    }
 
     private var typedCategories: [Category] {
         categories.filter { $0.type == type }
@@ -89,6 +100,15 @@ struct RecurringRuleEditorView: View {
                     Picker(L10n.Recurring.frequency, selection: $frequency) {
                         ForEach(Frequency.allCases) { freq in
                             Text(freq.displayName).tag(freq)
+                        }
+                    }
+
+                    Stepper(value: $interval, in: 1...99) {
+                        HStack {
+                            Text(L10n.Frequency.interval)
+                            Spacer()
+                            Text("\(interval) \(frequencyUnitLabel)")
+                                .foregroundStyle(.secondary)
                         }
                     }
 
@@ -205,10 +225,11 @@ struct RecurringRuleEditorView: View {
         // rule). Editing other fields must NOT move nextDueDate — and must not
         // undo occurrences the user already skipped (skips advance nextDueDate
         // without creating a transaction, so "no transactions" ≠ "untouched").
-        let expectedFirstDue = RecurringRuleService.firstDueDate(startDate: cleanStartDate, frequency: frequency)
+        let expectedFirstDue = RecurringRuleService.firstDueDate(startDate: cleanStartDate, frequency: frequency, interval: interval)
         let scheduleChanged = !isEditing ||
                               rule?.startDate != cleanStartDate ||
-                              rule?.frequency != frequency
+                              rule?.frequency != frequency ||
+                              rule?.interval != interval
         let isResuming = isEditing && isActive && !(rule?.isActive ?? false)
 
         let target: RecurringRule
@@ -216,7 +237,7 @@ struct RecurringRuleEditorView: View {
             target = rule
         } else {
             target = RecurringRule(name: name, amount: amount, currencyCode: currencyCode,
-                                   frequency: frequency, startDate: cleanStartDate, type: type)
+                                   frequency: frequency, interval: interval, startDate: cleanStartDate, type: type)
             modelContext.insert(target)
         }
 
@@ -225,6 +246,7 @@ struct RecurringRuleEditorView: View {
         target.type = type
         target.currencyCode = currencyCode
         target.frequency = frequency
+        target.interval = interval
         target.startDate = cleanStartDate
         target.endDate = cleanEndDate
         target.remindersEnabled = remindersEnabled

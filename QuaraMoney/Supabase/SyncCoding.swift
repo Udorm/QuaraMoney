@@ -11,7 +11,7 @@ import Foundation
 /// value. Wrapping the property emits `null`, which PostgREST applies as a real
 /// `NULL`.
 @propertyWrapper
-nonisolated struct NullEncodable<T: Codable & Sendable>: Codable, Sendable {
+struct NullEncodable<T: Codable & Sendable>: Codable, Sendable {
     var wrappedValue: T?
 
     init(wrappedValue: T?) { self.wrappedValue = wrappedValue }

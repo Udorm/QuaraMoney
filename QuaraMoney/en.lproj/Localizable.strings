@@ -359,6 +359,11 @@
 "recurring.type" = "Type";
 "recurring.setEndDate" = "Set end date";
 "recurring.endDate" = "End Date";
+"recurring.wallet" = "Wallet";
+"recurring.nextPayment" = "Next Payment";
+"recurring.startedOn" = "Started";
+"recurring.ends" = "Ends";
+"recurring.noEndDate" = "No end date";
 "recurring.reminder.toggle" = "Due-date reminder";
 "recurring.edit" = "Edit Rule";
 "recurring.editFutureNote" = "Changes apply only to future generated transactions. Past transactions are not affected.";
@@ -383,6 +388,15 @@
 "frequency.weekly" = "Weekly";
 "frequency.monthly" = "Monthly";
 "frequency.yearly" = "Yearly";
+"frequency.everyNDays" = "Every %lld days";
+"frequency.everyNWeeks" = "Every %lld weeks";
+"frequency.everyNMonths" = "Every %lld months";
+"frequency.everyNYears" = "Every %lld years";
+"frequency.interval" = "Repeat every";
+"frequency.unit.days" = "days";
+"frequency.unit.weeks" = "weeks";
+"frequency.unit.months" = "months";
+"frequency.unit.years" = "years";
 
 // MARK: - Settings
 "settings.title" = "Settings";

@@ -586,6 +586,17 @@ enum L10n {
         static var weekly: String { "frequency.weekly".localized }
         static var monthly: String { "frequency.monthly".localized }
         static var yearly: String { "frequency.yearly".localized }
+        static func everyNDays(_ n: Int) -> String { String(format: "frequency.everyNDays".localized, n) }
+        static func everyNWeeks(_ n: Int) -> String { String(format: "frequency.everyNWeeks".localized, n) }
+        static func everyNMonths(_ n: Int) -> String { String(format: "frequency.everyNMonths".localized, n) }
+        static func everyNYears(_ n: Int) -> String { String(format: "frequency.everyNYears".localized, n) }
+        static var interval: String { "frequency.interval".localized }
+        enum Unit {
+            static var days: String { "frequency.unit.days".localized }
+            static var weeks: String { "frequency.unit.weeks".localized }
+            static var months: String { "frequency.unit.months".localized }
+            static var years: String { "frequency.unit.years".localized }
+        }
     }
     
     // MARK: - Settings

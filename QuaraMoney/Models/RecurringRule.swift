@@ -21,6 +21,10 @@ final class RecurringRule {
     var type: TransactionType = TransactionType.expense
 
     var frequency: Frequency
+    /// How many frequency-units between occurrences. `1` = every period (the
+    /// default), `2` = every other period, etc. Combined with `frequency` this
+    /// gives patterns like "every 2 weeks" or "every 6 months".
+    var interval: Int = 1
     var startDate: Date
     var nextDueDate: Date
 
@@ -42,15 +46,24 @@ final class RecurringRule {
     // `.nullify` (not `.cascade`): deleting a rule must NOT delete the
     // historical transactions it generated — those are real ledger entries.
     // The transactions simply lose their back-link to the deleted rule.
-    @Relationship(deleteRule: .nullify) var generatedTransactions: [Transaction]?
+    //
+    // The explicit `inverse:` is load-bearing: without it SwiftData treats this
+    // and `Transaction.recurringRule` as two independent relationships with
+    // separate backing stores. The posting path only ever sets the to-one side
+    // (`txn.recurringRule = rule`), so this array would otherwise stay empty and
+    // the rule-detail screen would show no (or only incidentally-linked)
+    // transactions. Declaring the inverse makes both sides share the single
+    // `Transaction.recurringRule` foreign key.
+    @Relationship(deleteRule: .nullify, inverse: \Transaction.recurringRule) var generatedTransactions: [Transaction]?
 
-    init(name: String, amount: Decimal, currencyCode: String, frequency: Frequency, startDate: Date, type: TransactionType = .expense) {
+    init(name: String, amount: Decimal, currencyCode: String, frequency: Frequency, interval: Int = 1, startDate: Date, type: TransactionType = .expense) {
         self.id = UUID()
         self.name = name
         self.amount = amount
         self.currencyCode = currencyCode
         self.type = type
         self.frequency = frequency
+        self.interval = interval
         self.startDate = startDate
         self.nextDueDate = startDate
     }

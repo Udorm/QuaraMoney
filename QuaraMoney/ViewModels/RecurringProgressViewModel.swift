@@ -71,7 +71,7 @@ final class RecurringProgressViewModel: BaseViewModel {
         
         if let transactions = try? modelContext.fetch(txDescriptor) {
             for txn in transactions where txn.recurringRule != nil {
-                let convertedAmount = currencyManager.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency) ?? txn.amount
+                let convertedAmount = currencyManager.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency)
                 if txn.type == .expense {
                     tempPaidExpenses += convertedAmount
                 } else if txn.type == .income {
@@ -97,7 +97,7 @@ final class RecurringProgressViewModel: BaseViewModel {
                     if let end = rule.endDate, due > end { break }
 
                     if due >= startOfMonth {
-                        let convertedAmount = currencyManager.convert(amount: rule.amount, from: rule.currencyCode, to: targetCurrency) ?? rule.amount
+                        let convertedAmount = currencyManager.convert(amount: rule.amount, from: rule.currencyCode, to: targetCurrency)
 
                         if rule.type == .expense {
                             tempPendingExpenses += convertedAmount
@@ -106,7 +106,7 @@ final class RecurringProgressViewModel: BaseViewModel {
                         }
                     }
 
-                    guard let next = RecurringRuleService.nextOccurrence(after: due, startDate: rule.startDate, frequency: rule.frequency) else { break }
+                    guard let next = RecurringRuleService.nextOccurrence(after: due, startDate: rule.startDate, frequency: rule.frequency, interval: rule.interval) else { break }
                     due = next
                     guardN += 1
                 }

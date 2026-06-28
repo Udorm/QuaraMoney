@@ -680,6 +680,7 @@ final class SyncEngine: ObservableObject {
         let rows = pending.map { r in
             SyncRecurringRuleRow(id: r.id, user_id: uid, name: r.name, amount: r.amount,
                                  currency_code: r.currencyCode, type: r.type.rawValue, frequency: r.frequency.rawValue,
+                                 interval: r.interval,
                                  start_date: r.startDate, next_due_date: r.nextDueDate, end_date: r.endDate,
                                  is_active: r.isActive, reminders_enabled: r.remindersEnabled,
                                  wallet_id: r.wallet?.id, category_id: r.category?.id,
@@ -1134,6 +1135,7 @@ final class SyncEngine: ObservableObject {
                                         startDate: row.start_date,
                                         type: TransactionType(rawValue: row.type) ?? .expense)
                 new.id = row.id
+                new.interval = row.interval
                 new.needsSync = false
                 context.insert(new)
                 return new
@@ -1142,6 +1144,7 @@ final class SyncEngine: ObservableObject {
             r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
             r.type = TransactionType(rawValue: row.type) ?? r.type
             r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
+            r.interval = row.interval
             r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
             r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
             r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Settings → Cloud Sync. The Phase 1 entry point for accounts.
 ///

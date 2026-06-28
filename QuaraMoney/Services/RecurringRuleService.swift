@@ -22,17 +22,18 @@ enum RecurringRuleService {
     /// `startDate + n·period`) rather than stepped from the previous due date,
     /// so a rule whose start day is the 31st does not permanently drift to the
     /// 28th after passing through February. Daily/weekly step incrementally.
-    static func nextOccurrence(after current: Date, startDate: Date, frequency: Frequency) -> Date? {
+    static func nextOccurrence(after current: Date, startDate: Date, frequency: Frequency, interval: Int = 1) -> Date? {
+        let step = max(1, interval)
         let cal = Calendar.current
         switch frequency {
         case .daily:
-            return cal.date(byAdding: .day, value: 1, to: current)
+            return cal.date(byAdding: .day, value: step, to: current)
         case .weekly:
-            return cal.date(byAdding: .weekOfYear, value: 1, to: current)
+            return cal.date(byAdding: .weekOfYear, value: step, to: current)
         case .monthly:
-            return anchoredNext(current: current, startDate: startDate, component: .month)
+            return anchoredNext(current: current, startDate: startDate, component: .month, step: step)
         case .yearly:
-            return anchoredNext(current: current, startDate: startDate, component: .year)
+            return anchoredNext(current: current, startDate: startDate, component: .year, step: step)
         }
     }
 
@@ -40,13 +41,15 @@ enum RecurringRuleService {
     /// strictly greater than `current`. The trailing `while` walks past any
     /// month-end clamping edge cases that could otherwise repeat a date and
     /// stall the schedule.
-    private static func anchoredNext(current: Date, startDate: Date, component: Calendar.Component) -> Date? {
+    private static func anchoredNext(current: Date, startDate: Date, component: Calendar.Component, step: Int = 1) -> Date? {
         let cal = Calendar.current
-        var n = max(0, cal.dateComponents([component], from: startDate, to: current).value(for: component) ?? 0) + 1
+        let rawN = max(0, cal.dateComponents([component], from: startDate, to: current).value(for: component) ?? 0)
+        // Round up to the next multiple of `step` that lands strictly after `current`.
+        var n = ((rawN / step) + 1) * step
         var guardN = 0
         while let candidate = cal.date(byAdding: component, value: n, to: startDate),
               candidate <= current, guardN < 1200 {
-            n += 1
+            n += step
             guardN += 1
         }
         return cal.date(byAdding: component, value: n, to: startDate)
@@ -56,12 +59,12 @@ enum RecurringRuleService {
     /// If `startDate` is in the past, we advance to the first occurrence 
     /// **on or after today** — we never silently backfill historical occurrences 
     /// the user did not schedule, but we will surface a payment due today.
-    static func firstDueDate(startDate: Date, frequency: Frequency, asOf now: Date = Date()) -> Date {
+    static func firstDueDate(startDate: Date, frequency: Frequency, interval: Int = 1, asOf now: Date = Date()) -> Date {
         let todayStart = Calendar.current.startOfDay(for: now)
         var due = startDate
         var guardN = 0
         while due < todayStart, guardN < 10_000 {
-            guard let next = nextOccurrence(after: due, startDate: startDate, frequency: frequency) else { break }
+            guard let next = nextOccurrence(after: due, startDate: startDate, frequency: frequency, interval: interval) else { break }
             due = next
             guardN += 1
         }
@@ -75,7 +78,7 @@ enum RecurringRuleService {
     static func resumedNextDueDate(for rule: RecurringRule, asOf now: Date = Date()) -> Date {
         let todayStart = Calendar.current.startOfDay(for: now)
         guard rule.nextDueDate < todayStart else { return rule.nextDueDate }
-        return firstDueDate(startDate: rule.startDate, frequency: rule.frequency, asOf: now)
+        return firstDueDate(startDate: rule.startDate, frequency: rule.frequency, interval: rule.interval, asOf: now)
     }
 
     // MARK: - Due detection (derived, never materialized)
@@ -115,7 +118,7 @@ enum RecurringRuleService {
         while due < tomorrowStart, guardN < 1000 {
             if let end = rule.endDate, due > end { break }
             count += 1
-            guard let next = nextOccurrence(after: due, startDate: rule.startDate, frequency: rule.frequency) else { break }
+            guard let next = nextOccurrence(after: due, startDate: rule.startDate, frequency: rule.frequency, interval: rule.interval) else { break }
             due = next
             guardN += 1
         }
@@ -228,7 +231,7 @@ enum RecurringRuleService {
     }
 
     private static func advanceNextDueDate(_ rule: RecurringRule) {
-        if let next = nextOccurrence(after: rule.nextDueDate, startDate: rule.startDate, frequency: rule.frequency) {
+        if let next = nextOccurrence(after: rule.nextDueDate, startDate: rule.startDate, frequency: rule.frequency, interval: rule.interval) {
             rule.nextDueDate = next
         }
     }

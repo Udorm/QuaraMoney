@@ -23,12 +23,23 @@ enum Frequency: String, Codable, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     
-    var displayName: String {
-        switch self {
-        case .daily: return L10n.Frequency.daily
-        case .weekly: return L10n.Frequency.weekly
-        case .monthly: return L10n.Frequency.monthly
-        case .yearly: return L10n.Frequency.yearly
+    var displayName: String { displayName(interval: 1) }
+
+    func displayName(interval: Int) -> String {
+        if interval <= 1 {
+            switch self {
+            case .daily: return L10n.Frequency.daily
+            case .weekly: return L10n.Frequency.weekly
+            case .monthly: return L10n.Frequency.monthly
+            case .yearly: return L10n.Frequency.yearly
+            }
+        } else {
+            switch self {
+            case .daily: return L10n.Frequency.everyNDays(interval)
+            case .weekly: return L10n.Frequency.everyNWeeks(interval)
+            case .monthly: return L10n.Frequency.everyNMonths(interval)
+            case .yearly: return L10n.Frequency.everyNYears(interval)
+            }
         }
     }
 }

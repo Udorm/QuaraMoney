@@ -89,7 +89,8 @@ struct RecurringReviewView: View {
 }
 
 /// One due occurrence: summary + inline Post / Skip. Swipe leading → Edit & Post.
-private struct RecurringDueRow: View {
+/// Shared by the review inbox and the rule-detail screen.
+struct RecurringDueRow: View {
     let rule: RecurringRule
     let onPost: () -> Void
     let onSkip: () -> Void

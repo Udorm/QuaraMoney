@@ -21,7 +21,10 @@ final class SupabaseManager: Sendable {
                 supabaseURL: url,
                 supabaseKey: SupabaseConfig.anonKey,
                 options: .init(
-                    auth: .init(redirectToURL: SupabaseConfig.authCallbackURL)
+                    auth: .init(
+                        redirectToURL: SupabaseConfig.authCallbackURL,
+                        emitLocalSessionAsInitialSession: true
+                    )
                 )
             )
         } else {

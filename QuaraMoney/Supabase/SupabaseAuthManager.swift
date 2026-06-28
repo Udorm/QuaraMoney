@@ -58,7 +58,7 @@ final class SupabaseAuthManager: ObservableObject {
                 guard let self else { return }
                 switch change.event {
                 case .signedIn, .initialSession, .tokenRefreshed, .userUpdated:
-                    if let session = change.session {
+                    if let session = change.session, !session.isExpired {
                         self.state = .signedIn(email: session.user.email ?? "")
                     } else {
                         self.state = .signedOut

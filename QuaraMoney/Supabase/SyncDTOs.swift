@@ -132,6 +132,7 @@ nonisolated struct SyncRecurringRuleRow: Codable, Sendable {
     var currency_code: String
     var type: String
     var frequency: String
+    var interval: Int = 1
     var start_date: Date
     var next_due_date: Date
     @NullEncodable var end_date: Date?

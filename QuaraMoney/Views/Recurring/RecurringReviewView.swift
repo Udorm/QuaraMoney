@@ -12,8 +12,7 @@ struct RecurringReviewView: View {
     // Uses the same simple predicate as the list view (a compound `isActive &&
     // deletedAt == nil` #Predicate hangs SwiftData here); `isActive`/`isDue`
     // filtering is done in memory — exactly where `isDue` already lives.
-    @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil },
-           sort: \RecurringRule.nextDueDate) private var allRules: [RecurringRule]
+    let allRules: [RecurringRule]
     private var dueRules: [RecurringRule] { allRules.filter { RecurringRuleService.isDue($0) } }
 
     @State private var editingRule: RecurringRule?

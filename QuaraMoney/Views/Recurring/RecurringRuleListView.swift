@@ -67,7 +67,7 @@ struct RecurringRuleListView: View {
             
             if !dueRules.isEmpty {
                 Section {
-                    NavigationLink(destination: RecurringReviewView()) {
+                    NavigationLink(destination: RecurringReviewView(allRules: rules)) {
                         Label(L10n.Recurring.Review.banner(dueRules.count), systemImage: "tray.full")
                             .font(.app(.headline))
                             .foregroundStyle(Color.accentColor)

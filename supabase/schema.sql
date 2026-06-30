@@ -74,6 +74,7 @@ create table if not exists public.recurring_rules (
   currency_code text not null,
   type text not null default 'expense',
   frequency text not null,
+  interval integer not null default 1,
   start_date timestamptz not null,
   next_due_date timestamptz not null,
   end_date timestamptz,

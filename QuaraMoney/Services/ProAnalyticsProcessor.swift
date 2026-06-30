@@ -391,7 +391,7 @@ struct ProAnalyticsProcessor {
 
     nonisolated private static func computeNetWorth(context: ModelContext, walletIds: Set<UUID>, rates: [String: Double], targetCurrency: String) -> Decimal {
         do {
-            let wallets = try context.fetch(FetchDescriptor<Wallet>())
+            let wallets = try context.fetch(FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil }))
             let relevant = walletIds.isEmpty
                 ? wallets.filter { !$0.isArchived }
                 : wallets.filter { walletIds.contains($0.id) }
@@ -412,7 +412,7 @@ struct ProAnalyticsProcessor {
         rates: [String: Double],
         targetCurrency: String
     ) -> [BudgetStatus] {
-        guard let budgets = try? context.fetch(FetchDescriptor<Budget>()) else { return [] }
+        guard let budgets = try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil })) else { return [] }
         let active = budgets.filter { $0.isActive }
         guard !active.isEmpty else { return [] }
 

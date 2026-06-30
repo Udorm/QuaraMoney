@@ -12,7 +12,7 @@ struct MoreView: View {
             List {
                 // MARK: - Profile Banner
                 Section {
-                    NavigationLink(destination: ProfileView()) {
+                    NavigationLink(destination: LazyView(ProfileView())) {
                         HStack(spacing: 14) {
                             ProfileAvatarView(
                                 image: avatarImage,
@@ -48,7 +48,7 @@ struct MoreView: View {
                 }
 
                 Section(L10n.More.features) {
-                    NavigationLink(destination: BudgetInsightsView()) {
+                    NavigationLink(destination: LazyView(BudgetInsightsView())) {
                         Label {
                             Text(L10n.Budget.insights)
                         } icon: {
@@ -56,7 +56,7 @@ struct MoreView: View {
                         }
                     }
 
-                    NavigationLink(destination: EventListView()) {
+                    NavigationLink(destination: LazyView(EventListView())) {
                         Label {
                             Text(L10n.Event.title)
                         } icon: {
@@ -64,7 +64,7 @@ struct MoreView: View {
                         }
                     }
 
-                    NavigationLink(destination: RecurringRuleListView()) {
+                    NavigationLink(destination: LazyView(RecurringRuleListView())) {
                         Label {
                             Text(L10n.More.recurringRules)
                         } icon: {
@@ -72,7 +72,7 @@ struct MoreView: View {
                         }
                     }
 
-                    NavigationLink(destination: DebtListView()) {
+                    NavigationLink(destination: LazyView(DebtListView())) {
                         Label {
                             Text(L10n.Debt.title)
                         } icon: {
@@ -82,7 +82,7 @@ struct MoreView: View {
                 }
 
                 Section(L10n.More.management) {
-                    NavigationLink(destination: WalletListView()) {
+                    NavigationLink(destination: LazyView(WalletListView())) {
                         Label {
                             Text(L10n.Wallet.title)
                         } icon: {
@@ -90,7 +90,7 @@ struct MoreView: View {
                         }
                     }
 
-                    NavigationLink(destination: CategoryListView()) {
+                    NavigationLink(destination: LazyView(CategoryListView())) {
                         Label {
                             Text(L10n.More.categories)
                         } icon: {
@@ -100,7 +100,7 @@ struct MoreView: View {
                 }
 
                 Section(L10n.More.app) {
-                    NavigationLink(destination: SettingsView()) {
+                    NavigationLink(destination: LazyView(SettingsView())) {
                         Label {
                             Text(L10n.Settings.title)
                         } icon: {

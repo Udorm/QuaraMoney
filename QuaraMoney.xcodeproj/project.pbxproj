@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A6DA99AE2FE7CCA600408D0E /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = A6DA99AD2FE7CCA600408D0E /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A6E7B2CF2F420A1F00B59DFF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A6DA99AE2FE7CCA600408D0E /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,6 +62,7 @@
 			children = (
 				A617A7322F2F13E900B1BE7A /* QuaraMoney */,
 				A6E7B2CC2F420A1F00B59DFF /* QuaraMoneyTests */,
+				A6DA99AC2FE7CC9F00408D0E /* Frameworks */,
 				A617A7312F2F13E900B1BE7A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,6 +74,13 @@
 				A6E7B2CB2F420A1F00B59DFF /* QuaraMoneyTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A6DA99AC2FE7CC9F00408D0E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -90,6 +103,7 @@
 			);
 			name = QuaraMoney;
 			packageProductDependencies = (
+				A6DA99AD2FE7CCA600408D0E /* Supabase */,
 			);
 			productName = QuaraMoney;
 			productReference = A617A7302F2F13E900B1BE7A /* QuaraMoney.app */;
@@ -147,6 +161,9 @@
 			);
 			mainGroup = A617A7272F2F13E900B1BE7A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A6DA99AB2FE7CB7000408D0E /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A617A7312F2F13E900B1BE7A /* Products */;
 			projectDirPath = "";
@@ -501,6 +518,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A6DA99AB2FE7CB7000408D0E /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A6DA99AD2FE7CCA600408D0E /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6DA99AB2FE7CB7000408D0E /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A617A7282F2F13E900B1BE7A /* Project object */;
 }

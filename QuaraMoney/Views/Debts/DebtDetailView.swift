@@ -5,8 +5,6 @@ struct DebtDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var debt: Debt
 
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-
     @State private var paymentContext: DebtPaymentContext?
     @State private var showEditSheet = false
     @State private var transactionToEdit: Transaction?
@@ -22,7 +20,7 @@ struct DebtDetailView: View {
     }
 
     private var debtTransactions: [Transaction] {
-        let list = debt.transactions ?? []
+        let list = (debt.transactions ?? []).filter { $0.deletedAt == nil }
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         let rates = CurrencyManager.shared.rates
 
@@ -244,9 +242,7 @@ struct DebtDetailView: View {
             return
         }
 
-        transaction.sourceWallet?.invalidateBalanceCache()
-        transaction.destinationWallet?.invalidateBalanceCache()
-        modelContext.delete(transaction)
+        SoftDeleteService.deleteTransaction(transaction)
 
         do {
             try modelContext.save()
@@ -292,6 +288,17 @@ struct DebtDetailView: View {
     /// the sheet item so the editor always receives the correct category.
     private func startPayment() {
         let category = try? DebtService(modelContext: modelContext).repaymentCategory(for: debt)
+        // Fetch wallets lazily here (only when a payment is actually started)
+        // rather than via an eager `@Query`. A compound `@Query` predicate
+        // (`!isArchived && deletedAt == nil`) evaluated while this view is being
+        // pushed from a NavigationLink hangs SwiftData and freezes the app, so we
+        // use a single-condition fetch and filter `isArchived` in memory.
+        let wallets = (try? modelContext.fetch(
+            FetchDescriptor<Wallet>(
+                predicate: #Predicate<Wallet> { $0.deletedAt == nil },
+                sortBy: [SortDescriptor(\Wallet.name)]
+            )
+        ))?.filter { !$0.isArchived } ?? []
         let wallet = wallets.first(where: { $0.currencyCode == debt.currencyCode }) ?? wallets.first
         paymentContext = DebtPaymentContext(debt: debt, category: category, wallet: wallet)
     }

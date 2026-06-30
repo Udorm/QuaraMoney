@@ -87,8 +87,8 @@ class AddEventLedgerTransactionViewModel {
     
     var frequentCategories: [Category] {
         let sorted = expenseCategories.sorted { cat1, cat2 in
-            let count1 = cat1.transactions?.count ?? 0
-            let count2 = cat2.transactions?.count ?? 0
+            let count1 = (cat1.transactions ?? []).filter { $0.deletedAt == nil }.count
+            let count2 = (cat2.transactions ?? []).filter { $0.deletedAt == nil }.count
             return count1 > count2
         }
         
@@ -146,7 +146,7 @@ class AddEventLedgerTransactionViewModel {
     
     func fetchCategories() {
         guard let modelContext = modelContext else { return }
-        let descriptor = FetchDescriptor<Category>()
+        let descriptor = FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil })
         let allCategories = (try? modelContext.fetch(descriptor)) ?? []
         self.expenseCategories = allCategories.filter { $0.type == .expense }
     }
@@ -190,8 +190,8 @@ class AddEventLedgerTransactionViewModel {
             transaction.categoryColorHex = selectedCategory?.colorHex
             transaction.isSplitAll = isSplitAll
             
-            // Update participants
-            transaction.participants?.forEach { modelContext.delete($0) }
+            // Update participants — tombstone the old ones so the removal syncs.
+            transaction.participants?.forEach { $0.markSoftDeleted() }
             transaction.participants = resolvedParticipantIds.enumerated().map { index, id in
                 EventLedgerParticipant(memberId: id, orderIndex: index, transaction: transaction, member: event.members?.first(where: { $0.id == id }))
             }

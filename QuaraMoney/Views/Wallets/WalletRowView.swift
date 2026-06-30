@@ -2,12 +2,16 @@ import SwiftUI
 
 struct WalletRowView: View {
     let wallet: Wallet
-    
+    /// Bumped by the parent on `.dataDidUpdate` so the row re-renders and recomputes
+    /// the (`@Transient`-cached) balance after transactions change elsewhere.
+    var refreshToken: Int = 0
+
     // Cache theme color for performance
     private let expenseColor: Color
-    
-    init(wallet: Wallet) {
+
+    init(wallet: Wallet, refreshToken: Int = 0) {
         self.wallet = wallet
+        self.refreshToken = refreshToken
         self.expenseColor = ThemeManager.shared.expenseColor
     }
     

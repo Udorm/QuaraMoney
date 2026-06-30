@@ -56,6 +56,9 @@
 "wallet.deleteRelatedTransactionsWarning" = "ការលុបកាបូបនេះនឹងលុបប្រតិបត្តិការដែលពាក់ព័ន្ធចំនួន %d ផងដែរ។ សកម្មភាពនេះមិនអាចត្រឡប់វិញបានទេ។";
 "wallet.archiveInstead" = "ទុកក្នុងបណ្ណសារជំនួសវិញ";
 "wallet.deleteAnyway" = "លុបចោល";
+"wallet.moveTransactions" = "ផ្លាស់ប្តូរប្រតិបត្តិការ…";
+"wallet.moveTransactionsTitle" = "ផ្លាស់ប្តូរប្រតិបត្តិការ";
+"wallet.moveTransactionsPrompt" = "ជ្រើសរើសកាបូបដើម្បីទទួលប្រតិបត្តិការពី “%@”។ បន្ទាប់មកកាបូបនេះនឹងត្រូវលុប។";
 "wallet.restore" = "ស្តារឡើងវិញ";
 "wallet.archived" = "បានទុកក្នុងបណ្ណសារ";
 "wallet.noArchivedWallets" = "គ្មានកាបូបក្នុងបណ្ណសារ";
@@ -350,12 +353,50 @@
 "recurring.assignments" = "ការចាត់តាំង";
 "recurring.preview" = "មើលជាមុន";
 "recurring.emptyTitle" = "គ្មានច្បាប់វិលជុំ";
+"recurring.generatedNote" = "បង្កើតពី %@";
+"recurring.reminder.title" = "ការទូទាត់វិលជុំដល់កំណត់";
+"recurring.reminder.body" = "%1$@ (%2$@) ដល់កំណត់ថ្ងៃនេះ";
+"recurring.type" = "ប្រភេទ";
+"recurring.setEndDate" = "កំណត់ថ្ងៃបញ្ចប់";
+"recurring.endDate" = "ថ្ងៃបញ្ចប់";
+"recurring.wallet" = "កាបូប";
+"recurring.nextPayment" = "ការទូទាត់បន្ទាប់";
+"recurring.startedOn" = "បានចាប់ផ្តើម";
+"recurring.ends" = "បញ្ចប់";
+"recurring.noEndDate" = "គ្មានថ្ងៃបញ្ចប់";
+"recurring.reminder.toggle" = "ការរំលឹកដល់កំណត់";
+"recurring.edit" = "កែសម្រួលច្បាប់";
+"recurring.editFutureNote" = "ការផ្លាស់ប្តូរអនុវត្តតែលើប្រតិបត្តិការដែលបង្កើតនៅពេលក្រោយ។ ប្រតិបត្តិការចាស់មិនរងផលប៉ះពាល់ទេ។";
+"recurring.pause" = "ផ្អាក";
+"recurring.resume" = "បន្ត";
+"recurring.paused" = "បានផ្អាក";
+"recurring.post" = "បញ្ចូល";
+"recurring.skip" = "រំលង";
+"recurring.editAndPost" = "កែ និងបញ្ចូល";
+"recurring.dueToday" = "ដល់កំណត់ថ្ងៃនេះ";
+"recurring.overdue" = "ហួសកំណត់";
+"recurring.dueCount" = "%d ដល់កំណត់";
+"recurring.proposed" = "ប្រតិបត្តិការស្នើ";
+"recurring.review.title" = "រង់ចាំការត្រួតពិនិត្យ";
+"recurring.review.banner" = "%d រង់ចាំការត្រួតពិនិត្យ";
+"recurring.review.postAll" = "បញ្ចូលទាំងអស់";
+"recurring.review.skipAll" = "រំលងទាំងអស់";
+"recurring.review.empty" = "មិនមានអ្វីដល់កំណត់ទេ។";
 
 // MARK: - Frequencies (ភាពញឹកញាប់)
 "frequency.daily" = "ប្រចាំថ្ងៃ";
 "frequency.weekly" = "ប្រចាំសប្ដាហ៍";
 "frequency.monthly" = "ប្រចាំខែ";
 "frequency.yearly" = "ប្រចាំឆ្នាំ";
+"frequency.everyNDays" = "រៀងរាល់ %lld ថ្ងៃ";
+"frequency.everyNWeeks" = "រៀងរាល់ %lld សប្ដាហ៍";
+"frequency.everyNMonths" = "រៀងរាល់ %lld ខែ";
+"frequency.everyNYears" = "រៀងរាល់ %lld ឆ្នាំ";
+"frequency.interval" = "ធ្វើម្ដងម្កាល";
+"frequency.unit.days" = "ថ្ងៃ";
+"frequency.unit.weeks" = "សប្ដាហ៍";
+"frequency.unit.months" = "ខែ";
+"frequency.unit.years" = "ឆ្នាំ";
 
 // MARK: - Settings (ការកំណត់)
 "settings.title" = "ការកំណត់";
@@ -862,3 +903,14 @@
 "security.lockedTitle" = "QuaraMoney ត្រូវបានចាក់សោ";
 "security.unlock" = "ដោះសោ";
 "security.lockedMessage" = "ផ្ទៀងផ្ទាត់ដើម្បីមើលហិរញ្ញវត្ថុរបស់អ្នក។";
+"recurring.monthlyProgress" = "វឌ្ឍនភាពប្រចាំខែនេះ";
+"recurring.expenses" = "ចំណាយ";
+"recurring.income" = "ចំណូល";
+"recurring.noProgressThisMonth" = "គ្មានវិធានការប្រចាំខែនេះទេ។";
+"recurring.progressDetail" = "បានបង់ %1$@ នៃ %2$@ រំពឹងទុក";
+"recurring.upcomingThisWeek" = "ខាងមុខក្នុងសប្តាហ៍នេះ";
+"recurring.laterThisMonth" = "ពេលក្រោយក្នុងខែនេះ";
+"recurring.later" = "ពេលក្រោយ";
+"recurring.needsReview" = "ត្រូវពិនិត្យឡើងវិញ";
+"recurring.thisMonth" = "ខែនេះ";
+"recurring.nextMonth" = "ខែក្រោយ";

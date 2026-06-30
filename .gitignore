@@ -19,3 +19,8 @@ xcuserdata/
 
 # Scratch files
 test_*.swift
+
+# Supabase secrets — real anon key lives here, never committed
+supabase/secrets.local.xcconfig
+# Generated from the xcconfig above; holds the anon key, so never committed
+QuaraMoney/Supabase/SupabaseSecrets.swift

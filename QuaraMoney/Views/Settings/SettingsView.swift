@@ -138,6 +138,16 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Cloud Sync") {
+                NavigationLink(destination: CloudSyncSettingsView()) {
+                    Label {
+                        Text("Cloud Sync & Account")
+                    } icon: {
+                        ListIconView(systemImage: "icloud.fill", color: .cyan)
+                    }
+                }
+            }
+
             Section("Security") {
                 Toggle(isOn: $securityManager.isAppLockEnabled) {
                     Label {

@@ -56,6 +56,9 @@
 "wallet.deleteRelatedTransactionsWarning" = "Deleting this wallet will also delete all %d related transactions. This action cannot be undone.";
 "wallet.archiveInstead" = "Archive Instead";
 "wallet.deleteAnyway" = "Delete Anyway";
+"wallet.moveTransactions" = "Move Transactions…";
+"wallet.moveTransactionsTitle" = "Move Transactions";
+"wallet.moveTransactionsPrompt" = "Choose a wallet to receive the transactions from “%@”. The wallet will then be deleted.";
 "wallet.restore" = "Restore";
 "wallet.archived" = "Archived";
 "wallet.noArchivedWallets" = "No archived wallets";
@@ -350,12 +353,50 @@
 "recurring.assignments" = "Assignments";
 "recurring.preview" = "Preview";
 "recurring.emptyTitle" = "No Recurring Rules";
+"recurring.generatedNote" = "Generated from %@";
+"recurring.reminder.title" = "Recurring payment due";
+"recurring.reminder.body" = "%1$@ (%2$@) is due today";
+"recurring.type" = "Type";
+"recurring.setEndDate" = "Set end date";
+"recurring.endDate" = "End Date";
+"recurring.wallet" = "Wallet";
+"recurring.nextPayment" = "Next Payment";
+"recurring.startedOn" = "Started";
+"recurring.ends" = "Ends";
+"recurring.noEndDate" = "No end date";
+"recurring.reminder.toggle" = "Due-date reminder";
+"recurring.edit" = "Edit Rule";
+"recurring.editFutureNote" = "Changes apply only to future generated transactions. Past transactions are not affected.";
+"recurring.pause" = "Pause";
+"recurring.resume" = "Resume";
+"recurring.paused" = "Paused";
+"recurring.post" = "Post";
+"recurring.skip" = "Skip";
+"recurring.editAndPost" = "Edit & Post";
+"recurring.dueToday" = "Due today";
+"recurring.overdue" = "Overdue";
+"recurring.dueCount" = "%d due";
+"recurring.proposed" = "Proposed Transaction";
+"recurring.review.title" = "Due for Review";
+"recurring.review.banner" = "%d ready to review";
+"recurring.review.postAll" = "Post All";
+"recurring.review.skipAll" = "Skip All";
+"recurring.review.empty" = "Nothing due right now.";
 
 // MARK: - Frequencies
 "frequency.daily" = "Daily";
 "frequency.weekly" = "Weekly";
 "frequency.monthly" = "Monthly";
 "frequency.yearly" = "Yearly";
+"frequency.everyNDays" = "Every %lld days";
+"frequency.everyNWeeks" = "Every %lld weeks";
+"frequency.everyNMonths" = "Every %lld months";
+"frequency.everyNYears" = "Every %lld years";
+"frequency.interval" = "Repeat every";
+"frequency.unit.days" = "days";
+"frequency.unit.weeks" = "weeks";
+"frequency.unit.months" = "months";
+"frequency.unit.years" = "years";
 
 // MARK: - Settings
 "settings.title" = "Settings";
@@ -862,3 +903,14 @@
 "security.lockedTitle" = "QuaraMoney is Locked";
 "security.lockedMessage" = "Authenticate to view your finances.";
 "security.unlock" = "Unlock";
+"recurring.monthlyProgress" = "This Month's Progress";
+"recurring.expenses" = "Expenses";
+"recurring.income" = "Income";
+"recurring.noProgressThisMonth" = "No recurring rules this month.";
+"recurring.progressDetail" = "%1$@ paid of %2$@ expected";
+"recurring.upcomingThisWeek" = "Upcoming This Week";
+"recurring.laterThisMonth" = "Later This Month";
+"recurring.later" = "Later";
+"recurring.needsReview" = "Needs Review";
+"recurring.thisMonth" = "This Month";
+"recurring.nextMonth" = "Next Month";

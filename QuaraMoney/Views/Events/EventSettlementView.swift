@@ -7,10 +7,16 @@ struct EventSettlementView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Query(sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)]) private var allMembers: [EventMember]
-    @Query(sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
-    @Query(sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query private var allMembers: [EventMember]
+    @Query(filter: #Predicate<EventLedgerTransaction> { $0.deletedAt == nil }, sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
+    @Query(filter: #Predicate<EventLedgerParticipant> { $0.deletedAt == nil }, sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
+
+    init(event: Event) {
+        self.event = event
+        let notDeleted = #Predicate<EventMember> { $0.deletedAt == nil }
+        _allMembers = Query(filter: notDeleted, sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)])
+    }
     
     @State private var exportToWallet = false
     @State private var selectedWallet: Wallet?

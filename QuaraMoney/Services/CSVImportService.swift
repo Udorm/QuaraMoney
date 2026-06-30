@@ -476,13 +476,13 @@ final class CSVImportService {
     
     // MARK: - Fetch Helpers
     func fetchCategories() throws -> [Category] {
-        let descriptor = FetchDescriptor<Category>(sortBy: [SortDescriptor(\.name)])
+        let descriptor = FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil }, sortBy: [SortDescriptor(\.name)])
         return try modelContext.fetch(descriptor)
     }
     
     func fetchWallets() throws -> [Wallet] {
         let descriptor = FetchDescriptor<Wallet>(
-            predicate: #Predicate { !$0.isArchived },
+            predicate: #Predicate { !$0.isArchived && $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.name)]
         )
         return try modelContext.fetch(descriptor)

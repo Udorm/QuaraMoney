@@ -15,7 +15,7 @@ struct ContentView: View {
 @available(iOS 18.0, *)
 struct iOS18ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @State private var showCreateWallet = false
     @State private var selectedTab: Int = 0 
@@ -103,7 +103,7 @@ struct iOS18ContentView: View {
 
 struct LegacyContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateWallet = false

@@ -4,6 +4,12 @@ import Foundation
 @Model
 final class Category {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var name: String
     var icon: String
     var colorHex: String

@@ -106,4 +106,34 @@ final class FilteredTransactionsViewModelTests: XCTestCase {
         let fetched = try context.fetch(FetchDescriptor<Transaction>())
         XCTAssertTrue(fetched.isEmpty)
     }
+
+    func testDeleteTransactionWithSyncTracker() async throws {
+        // Activate mutation tracker
+        SyncMutationTracker.start(mainContext: context)
+        
+        let wallet = Wallet(name: "Test Wallet", currencyCode: "USD", icon: "wallet.pass", colorHex: "#007AFF")
+        context.insert(wallet)
+        
+        let today = Date()
+        let txn = Transaction(amount: Decimal(150), currencyCode: "USD", date: today, type: .expense)
+        txn.sourceWallet = wallet
+        context.insert(txn)
+        
+        try context.save()
+        
+        // Clear deletion queue before test delete
+        SyncDeletionQueue.clear()
+        
+        // Act: Modify transaction (marking it changed) and then delete it
+        txn.amount = Decimal(200)
+        context.delete(txn)
+        
+        // Assert: Save should succeed without crashing
+        XCTAssertNoThrow(try context.save())
+        
+        // Verify deletion is enqueued
+        let queuedDeletions = SyncDeletionQueue.all()
+        XCTAssertTrue(queuedDeletions.contains { $0.table == "transactions" && $0.id == txn.id })
+    }
 }
+

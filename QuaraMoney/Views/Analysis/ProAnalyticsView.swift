@@ -14,8 +14,8 @@ struct ProAnalyticsView: View {
     @State private var showFilterSheet = false
     @State private var showCustomizeSheet = false
 
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
 
     var body: some View {
         NavigationStack {

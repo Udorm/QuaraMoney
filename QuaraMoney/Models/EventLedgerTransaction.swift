@@ -24,6 +24,12 @@ enum EventExpensePaidSource: String, Codable, CaseIterable, Identifiable {
 @Model
 final class EventLedgerTransaction {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var kind: EventLedgerTransactionKind
     var title: String
     var amountMinor: Int64

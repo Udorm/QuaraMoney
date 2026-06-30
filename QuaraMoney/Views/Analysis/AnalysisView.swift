@@ -41,7 +41,7 @@ struct AnalysisContentView: View {
     @Binding var proMode: Bool
 
     // For Wallet Filter - We need to query wallets.
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     var body: some View {
         NavigationStack {

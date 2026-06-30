@@ -9,9 +9,9 @@ struct AddTransactionView: View {
     let startWithScanner: Bool
     
     // Query data
-    @Query(sort: \Category.name) private var categories: [Category]
-    @Query(filter: #Predicate<Wallet> { !$0.isArchived }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
+    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil }, sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
     
     // UI State
     @State private var showAllCategories = false
@@ -191,7 +191,7 @@ struct AddTransactionView: View {
     private func loadTagSourceTransactions() {
         let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date()) ?? .distantPast
         let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= cutoff && $0.note != nil }
+            predicate: #Predicate { $0.date >= cutoff && $0.note != nil && $0.deletedAt == nil }
         )
         tagSourceTransactions = (try? modelContext.fetch(descriptor)) ?? []
     }

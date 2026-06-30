@@ -30,7 +30,7 @@ struct FinancialSummaryCards: View {
     let showChart: Bool
     let previousPeriodCumulative: [Decimal]
     
-    @Query(sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
     @State private var rawSelectedDate: Date? = nil
     @State private var showDetails = false
     

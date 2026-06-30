@@ -4,6 +4,12 @@ import Foundation
 @Model
 final class EventMember {
     var id: UUID
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     var name: String
     @Attribute(.externalStorage) var avatarData: Data?
     var avatarIcon: String?

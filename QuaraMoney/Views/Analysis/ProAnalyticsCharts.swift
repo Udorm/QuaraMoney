@@ -958,7 +958,7 @@ struct ProLargestCard: View {
     /// Resolves the live model object for a highlight and opens the standard
     /// transaction sheet (same view/edit flow used by transaction lists).
     private func openTransaction(_ id: UUID) {
-        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id })
+        var descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == id && $0.deletedAt == nil })
         descriptor.fetchLimit = 1
         viewingTransaction = (try? modelContext.fetch(descriptor))?.first
     }

@@ -14,6 +14,8 @@ struct QuaraMoneyApp: App {
     @StateObject private var languageManager = LanguageManager.shared
     @StateObject private var errorService = ErrorService.shared
     @StateObject private var securityManager = SecurityManager.shared
+    @StateObject private var authManager = SupabaseAuthManager.shared
+    @ObservedObject private var syncEngine = SyncEngine.shared
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
@@ -160,6 +162,51 @@ struct QuaraMoneyApp: App {
             // Force view recreation when language changes
             .id(languageManager.fontRefreshID)
             .environmentObject(languageManager)
+            .environmentObject(authManager)
+            .onOpenURL { url in
+                // Auth callbacks (magic link / email confirmation) for the
+                // quaramoney:// scheme. No-op when sync is off / unconfigured.
+                authManager.handleCallback(url)
+            }
+            .task {
+                // Track local edits so the sync engine can detect changes.
+                // Harmless when sync is off (just stamps local metadata).
+                SyncMutationTracker.start(mainContext: sharedModelContainer.mainContext)
+                // Auto-sync after local edits (debounced); no-op when sync is off.
+                SyncEngine.shared.enableAutoSync(context: sharedModelContainer.mainContext)
+                // Restore an existing session on launch when sync is enabled.
+                if SupabaseFeatureFlags.isSyncEnabled {
+                    authManager.start()
+                }
+            }
+            .onChange(of: authManager.state) { _, _ in
+                if authManager.isSignedIn {
+                    let context = sharedModelContainer.mainContext
+                    // If a different account previously owned this device's local
+                    // data, clear it before adopting the new account (prevents
+                    // cross-account data mixing).
+                    SyncEngine.shared.reconcileAccountIfNeeded(context: context)
+                    Task {
+                        // On first-ever sign-in: check whether both the device and
+                        // cloud have existing data. If so, pause sync and show the
+                        // conflict resolution sheet (Realtime is also deferred to
+                        // prevent a premature sync during the decision window).
+                        let hasConflict = await SyncEngine.shared.checkFirstSignInConflict(context: context)
+                        if !hasConflict {
+                            await SyncEngine.shared.syncIfOperational(context: context)
+                            SyncRealtime.shared.start(context: context)
+                        }
+                    }
+                } else {
+                    SyncRealtime.shared.stop()
+                }
+            }
+            .onChange(of: syncEngine.conflictState) { _, newState in
+                // Conflict resolved — start Realtime now (was deferred above).
+                if newState == .none && authManager.isSignedIn {
+                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
+                }
+            }
             .preferredColorScheme(selectedTheme.colorScheme)
             .task {
                 // Deferred from init() — runs after first frame renders
@@ -177,6 +224,12 @@ struct QuaraMoneyApp: App {
                         errorService.dismiss()
                     }
                 )
+            }
+            .sheet(isPresented: Binding(
+                get: { syncEngine.conflictState != .none },
+                set: { _ in }
+            )) {
+                DataConflictResolutionView()
             }
             .overlay {
                 if showPrivacyOverlay {
@@ -200,11 +253,16 @@ struct QuaraMoneyApp: App {
                     // Lock when leaving the foreground (no-op unless the user
                     // enabled app-lock in Settings).
                     securityManager.lockApp()
+                    // Release the Realtime connection while backgrounded.
+                    SyncRealtime.shared.stop()
                 case .active:
                     // Returning to the foreground: prompt for biometrics if locked.
                     if securityManager.isAppLocked {
                         securityManager.authenticate()
                     }
+                    // Pull any changes from other devices, then resume live updates.
+                    Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
+                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
                 @unknown default:
                     break
                 }
@@ -315,10 +373,13 @@ struct QuaraMoneyApp: App {
         // Perform heavy database operations in background (utility priority to avoid competing with UI)
         Task.detached(priority: .utility) {
             let context = ModelContext(container)
-            
-            // Check recurring transactions
-            await RecurringRuleService.checkAndGenerateTransactions(modelContext: context)
-            
+
+            // Recurring rules are confirm-before-post: they are NOT auto-generated
+            // on launch. Due occurrences surface in the Recurring review inbox.
+            // Refresh due-date reminders to match the current rules (the helper is
+            // @MainActor, so its ModelContext is created and used on the main actor).
+            await Self.rescheduleRecurringReminders(container)
+
             // Check budget rollovers
             BudgetRolloverService.checkAndProcessBudgetRollovers(
                 modelContext: context,
@@ -326,9 +387,16 @@ struct QuaraMoneyApp: App {
                 preferredCurrency: preferredCurrency
             )
             
+            // Seed/ensure default categories ONLY on a device that has never been
+            // claimed by a cloud account. Once the device is account-owned,
+            // categories are authoritative in the cloud and arrive via sync;
+            // auto-seeding here would re-create them with fresh random UUIDs after
+            // any sync wipe (e.g. "Use Cloud Data") and push duplicates back up —
+            // the root cause of recurring category duplication.
+            if !SyncEngine.isLocalStoreAccountOwned {
             // Seed default categories if needed
             DefaultDataService.seedDefaultCategories(modelContext: context, data: defaultCategories)
-            
+
             // Ensure System Categories for Debt & Loan
             // 1. Debt (Lending out money) - Expense
             DefaultDataService.ensureSystemCategoryExists(
@@ -415,7 +483,8 @@ struct QuaraMoneyApp: App {
                     type: type
                 )
             }
-            
+            } // end: seed only when the device is not yet account-owned
+
             do {
                 try context.save()
             } catch {
@@ -441,5 +510,12 @@ struct QuaraMoneyApp: App {
             // from each transaction's stored rate, not these live rates.
             await CurrencyManager.shared.fetchRates()
         }
+    }
+
+    /// Rebuilds recurring due-date reminders on launch. `@MainActor` so the
+    /// `ModelContext` is created and consumed entirely on the main actor.
+    @MainActor
+    private static func rescheduleRecurringReminders(_ container: ModelContainer) async {
+        await RecurringNotificationService.rescheduleAll(in: ModelContext(container))
     }
 }

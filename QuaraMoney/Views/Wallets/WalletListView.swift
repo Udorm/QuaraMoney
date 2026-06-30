@@ -58,14 +58,16 @@ struct WalletListView: View {
 
 private struct WalletListContent: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var wallets: [Wallet]
-    @Query private var allActiveWallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
+    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var allActiveWallets: [Wallet]
     @Binding var walletToEdit: Wallet?
     let showArchived: Bool
     let searchText: String
     
     @State private var walletToDelete: Wallet?
     @State private var showingDeleteAlert = false
+    @State private var walletToReassign: Wallet?
+    @State private var refreshToken = 0
     
     init(showArchived: Bool, walletToEdit: Binding<Wallet?>, searchText: String) {
         self.showArchived = showArchived
@@ -73,12 +75,13 @@ private struct WalletListContent: View {
         self.searchText = searchText
         
         let filter = #Predicate<Wallet> { wallet in
+            wallet.deletedAt == nil &&
             (showArchived ? wallet.isArchived : !wallet.isArchived) &&
             (searchText.isEmpty || wallet.name.localizedStandardContains(searchText))
         }
         _wallets = Query(filter: filter, sort: \Wallet.name)
-        
-        let netWorthFilter = #Predicate<Wallet> { !$0.isArchived }
+
+        let netWorthFilter = #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }
         _allActiveWallets = Query(filter: netWorthFilter, sort: \Wallet.name)
     }
     
@@ -86,14 +89,14 @@ private struct WalletListContent: View {
         List {
             if !showArchived {
                 Section {
-                    NetWorthCard(wallets: allActiveWallets)
+                    NetWorthCard(wallets: allActiveWallets, refreshToken: refreshToken)
                 }
             }
-            
+
             Section(header: Text(showArchived ? L10n.Wallet.Status.archivedWallets : L10n.Wallet.Status.activeWallets)) {
                 ForEach(wallets) { wallet in
                     NavigationLink(destination: WalletDetailView(wallet: wallet, modelContext: modelContext)) {
-                        WalletRowView(wallet: wallet)
+                        WalletRowView(wallet: wallet, refreshToken: refreshToken)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         if !showArchived {
@@ -169,6 +172,14 @@ private struct WalletListContent: View {
                 )
             }
         }
+        .syncPullToRefresh(modelContext)
+        .onReceive(NotificationCenter.default.publisher(for: .dataDidUpdate)) { _ in
+            // Balances are @Transient-cached and not observed by @Query; invalidate
+            // them and bump the token so rows recompute after any data change.
+            for wallet in wallets { wallet.invalidateBalanceCache() }
+            for wallet in allActiveWallets { wallet.invalidateBalanceCache() }
+            refreshToken &+= 1
+        }
         .alert(L10n.Common.delete, isPresented: $showingDeleteAlert, presenting: walletToDelete) { wallet in
             Button(L10n.Common.cancel, role: .cancel) {}
             if !showArchived {
@@ -176,11 +187,28 @@ private struct WalletListContent: View {
                     archiveWallet(wallet)
                 }
             }
+            // Offer to move transactions when the wallet has any and another
+            // active wallet exists to receive them.
+            if (wallet.outgoingTransactions?.contains(where: { $0.deletedAt == nil }) ?? false),
+               allActiveWallets.contains(where: { $0.id != wallet.id }) {
+                Button("wallet.moveTransactions".localized) {
+                    walletToReassign = wallet
+                }
+            }
             Button(L10n.Wallet.deleteAnyway, role: .destructive) {
-                deleteWallet(wallet)
+                deleteWallet(wallet, strategy: .deleteTransactions)
             }
         } message: { wallet in
-            Text(L10n.Wallet.deleteRelatedTransactionsWarning(wallet.outgoingTransactions?.count ?? 0))
+            Text(L10n.Wallet.deleteRelatedTransactionsWarning((wallet.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
+        }
+        .sheet(item: $walletToReassign) { wallet in
+            MoveTransactionsSheet(
+                sourceWallet: wallet,
+                candidates: allActiveWallets.filter { $0.id != wallet.id }
+            ) { target in
+                deleteWallet(wallet, strategy: .move(to: target))
+                walletToReassign = nil
+            }
         }
     }
     
@@ -204,15 +232,9 @@ private struct WalletListContent: View {
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
     
-    private func deleteWallet(_ wallet: Wallet) {
-        // Deleting the wallet cascade-deletes its outgoing transactions, which
-        // includes transfers OUT to other wallets. Invalidate the balance caches
-        // of those destination wallets so their balances don't go stale.
-        for txn in wallet.outgoingTransactions ?? [] {
-            txn.destinationWallet?.invalidateBalanceCache()
-        }
-
-        modelContext.delete(wallet)
+    private func deleteWallet(_ wallet: Wallet, strategy: SoftDeleteService.WalletDeletionStrategy) {
+        // Soft-delete (tombstone) so the deletion replicates to other devices.
+        SoftDeleteService.deleteWallet(wallet, strategy: strategy)
         do {
             try modelContext.save()
         } catch {

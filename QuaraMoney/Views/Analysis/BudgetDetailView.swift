@@ -336,8 +336,10 @@ struct BudgetDetailView: View {
     
     private func deleteTransaction(_ transaction: Transaction) {
         withAnimation {
-            modelContext.delete(transaction)
+            SoftDeleteService.deleteTransaction(transaction)
         }
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
 }
 

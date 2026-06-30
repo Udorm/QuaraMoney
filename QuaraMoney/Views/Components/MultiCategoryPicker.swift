@@ -5,7 +5,7 @@ import SwiftData
 struct MultiCategoryPicker: View {
     @Environment(\.dismiss) private var dismiss
     
-    @Query(sort: \Category.name) private var allCategories: [Category]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var allCategories: [Category]
     @Binding var selectedCategories: Set<UUID>
     
     // Search

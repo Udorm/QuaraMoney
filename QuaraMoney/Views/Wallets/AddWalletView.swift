@@ -172,7 +172,7 @@ struct AddWalletView: View {
                     dismiss()
                 }
             } message: {
-                Text(L10n.Wallet.deleteRelatedTransactionsWarning(viewModel.walletToEdit?.outgoingTransactions?.count ?? 0))
+                Text(L10n.Wallet.deleteRelatedTransactionsWarning((viewModel.walletToEdit?.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
             }
         }
     }

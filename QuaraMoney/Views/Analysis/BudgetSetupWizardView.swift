@@ -6,7 +6,7 @@ struct BudgetSetupWizardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Query(sort: \Category.name) private var categories: [Category]
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     
     // Wizard state
     @State private var currentStep: WizardStep = .welcome

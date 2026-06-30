@@ -34,16 +34,24 @@ enum SchemaV1: VersionedSchema {
 // MARK: - Migration Plan
 
 /// Migration plan that SwiftData uses to migrate between schema versions.
-/// Add new MigrationStages here as the schema evolves.
+///
+/// NOTE on the Supabase sync metadata (`syncUserID`, `updatedAt`, `deletedAt`,
+/// `needsSync`): these were **additive, optional/defaulted** properties, so they
+/// migrate automatically and non-destructively via SwiftData's lightweight
+/// inference under the existing `SchemaV1` version — the same way earlier fields
+/// (e.g. `Transaction.tags`, `storedRate`) were added.
+///
+/// A second `VersionedSchema` was intentionally NOT introduced: because both
+/// versions would reference the same live model types they produce identical
+/// checksums, which SwiftData rejects ("Duplicate version checksums detected").
+/// The next **non-additive** change must add a real `SchemaV2` containing copied
+/// (snapshot) model definitions plus an explicit `MigrationStage`.
 enum QuaraMoneySchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [SchemaV1.self]
     }
 
     static var stages: [MigrationStage] {
-        // No migrations yet — V1 is the baseline.
-        // Future example:
-        // .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
         []
     }
 }

@@ -4,7 +4,12 @@ import Foundation
 @Model
 final class Budget {
     var id: UUID
-    
+
+    // MARK: - Sync metadata (Supabase migration)
+    var syncUserID: UUID?
+    var deletedAt: Date?
+    var needsSync: Bool = true
+
     // MARK: - Core Properties
     
     /// Budget name (optional, auto-generated if nil)

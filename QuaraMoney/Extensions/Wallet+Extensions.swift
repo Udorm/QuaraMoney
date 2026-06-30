@@ -76,6 +76,8 @@ extension Wallet {
         // 1. Process Outgoing Transactions (Income, Expense, Transfer OUT)
         if let outgoing = self.outgoingTransactions {
             for txn in outgoing {
+                // Soft-deleted transactions are tombstones — never count them.
+                if txn.deletedAt != nil { continue }
                 // Legacy event-linked wallet transactions are excluded from personal balance.
                 if txn.event != nil { continue }
 
@@ -102,6 +104,8 @@ extension Wallet {
         // 2. Process Incoming Transactions (Transfer IN)
         if let incoming = self.incomingTransactions {
             for txn in incoming {
+                // Soft-deleted transactions are tombstones — never count them.
+                if txn.deletedAt != nil { continue }
                 // Legacy event-linked wallet transactions are excluded from personal balance.
                 if txn.event != nil { continue }
                 

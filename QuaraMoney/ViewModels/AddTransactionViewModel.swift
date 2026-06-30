@@ -224,7 +224,7 @@ class AddTransactionViewModel: BaseViewModel {
             }
         } else {
             if let existingLocation = transaction.location {
-                dataService.delete(existingLocation)
+                existingLocation.markSoftDeleted()  // tombstone the replaced location
             }
             transaction.location = nil
         }

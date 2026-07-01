@@ -7,6 +7,7 @@
 
 // MARK: - Common (ទូទៅ)
 "common.cancel" = "បោះបង់";
+"common.undo" = "ត្រឡប់វិញ";
 "common.save" = "រក្សាទុក";
 "common.done" = "រួចរាល់";
 "common.add" = "បន្ថែម";
@@ -382,6 +383,14 @@
 "recurring.review.postAll" = "បញ្ចូលទាំងអស់";
 "recurring.review.skipAll" = "រំលងទាំងអស់";
 "recurring.review.empty" = "មិនមានអ្វីដល់កំណត់ទេ។";
+"recurring.review.summary" = "ដល់កំណត់ %lld";
+"recurring.review.postAllMessage" = "នេះនឹងបង្កើតប្រតិបត្តិការ %lld ក្នុងកាបូបរបស់អ្នក។";
+"recurring.review.skipAllMessage" = "នេះនឹងរំលង %lld ដងដោយមិនកត់ត្រាទេ។ វានឹងមិនត្រូវបានបង្កើតឡើយ។";
+"recurring.undo.posted" = "បានបញ្ចូលប្រតិបត្តិការ";
+"recurring.undo.postedCount" = "បានបញ្ចូលប្រតិបត្តិការ %d";
+"recurring.undo.skipped" = "បានរំលងការកំណត់";
+"recurring.undo.skippedCount" = "បានរំលងការកំណត់ %d";
+"recurring.noWallet" = "គ្មានកាបូប";
 
 // MARK: - Frequencies (ភាពញឹកញាប់)
 "frequency.daily" = "ប្រចាំថ្ងៃ";

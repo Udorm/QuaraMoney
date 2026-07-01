@@ -1,11 +1,24 @@
 
 import SwiftUI
+import SwiftData
 
 struct MoreView: View {
     @State private var showBudgetWizard = false
+    @State private var navigateToRecurring = false
     @AppStorage("userDisplayName") private var displayName: String = ""
     @AppStorage("userAvatarPath") private var avatarPath: String = ""
     @State private var avatarImage: UIImage?
+
+    // Simple predicate only (a compound `isActive && deletedAt == nil` #Predicate
+    // can hang SwiftData here); `isActive`/`isDue` filtering happens in memory.
+    @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil })
+    private var recurringRules: [RecurringRule]
+
+    /// Recurring occurrences due today or earlier — surfaced as a badge so the
+    /// review inbox is discoverable without drilling into the Recurring screen.
+    private var dueRecurringCount: Int {
+        recurringRules.filter { RecurringRuleService.isDue($0) }.count
+    }
 
     var body: some View {
         NavigationStack {
@@ -71,6 +84,7 @@ struct MoreView: View {
                             ListIconView(systemImage: "repeat", color: .teal)
                         }
                     }
+                    .badge(dueRecurringCount)
 
                     NavigationLink(destination: LazyView(DebtListView())) {
                         Label {
@@ -110,14 +124,30 @@ struct MoreView: View {
                 }
             }
             .navigationTitle(L10n.More.title)
+            .navigationDestination(isPresented: $navigateToRecurring) {
+                RecurringRuleListView()
+            }
             .sheet(isPresented: $showBudgetWizard) {
                 BudgetSetupWizardView()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
+                navigateToRecurring = true
+            }
             .onAppear {
                 loadAvatar()
+                // Consume a deep-link that arrived before this view existed
+                // (LazyView delays creation until the More tab is selected).
+                if Self.pendingRecurringReview {
+                    Self.pendingRecurringReview = false
+                    navigateToRecurring = true
+                }
             }
         }
     }
+
+    /// Set by ContentView when the recurring deep-link fires, so a freshly
+    /// lazy-created MoreView still routes to the Recurring screen on appear.
+    nonisolated(unsafe) static var pendingRecurringReview = false
 
     private func loadAvatar() {
         guard !avatarPath.isEmpty else {

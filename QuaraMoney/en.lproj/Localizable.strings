@@ -7,6 +7,7 @@
 
 // MARK: - Common
 "common.cancel" = "Cancel";
+"common.undo" = "Undo";
 "common.save" = "Save";
 "common.done" = "Done";
 "common.add" = "Add";
@@ -382,6 +383,14 @@
 "recurring.review.postAll" = "Post All";
 "recurring.review.skipAll" = "Skip All";
 "recurring.review.empty" = "Nothing due right now.";
+"recurring.review.summary" = "%lld due";
+"recurring.review.postAllMessage" = "This creates %lld transactions in your wallets.";
+"recurring.review.skipAllMessage" = "This skips %lld occurrences without recording them. They won't be created.";
+"recurring.undo.posted" = "Transaction posted";
+"recurring.undo.postedCount" = "%d transactions posted";
+"recurring.undo.skipped" = "Occurrence skipped";
+"recurring.undo.skippedCount" = "%d occurrences skipped";
+"recurring.noWallet" = "No wallet";
 
 // MARK: - Frequencies
 "frequency.daily" = "Daily";

@@ -570,6 +570,9 @@ enum L10n {
             static var postAll: String { "recurring.review.postAll".localized }
             static var skipAll: String { "recurring.review.skipAll".localized }
             static var empty: String { "recurring.review.empty".localized }
+            static func summary(_ count: Int) -> String { "recurring.review.summary".localized(with: count) }
+            static func postAllMessage(_ count: Int) -> String { "recurring.review.postAllMessage".localized(with: count) }
+            static func skipAllMessage(_ count: Int) -> String { "recurring.review.skipAllMessage".localized(with: count) }
         }
 
         enum Reminder {

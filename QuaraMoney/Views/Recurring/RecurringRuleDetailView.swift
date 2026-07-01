@@ -9,6 +9,7 @@ struct RecurringRuleDetailView: View {
     @State private var transactionToEdit: Transaction?
     @State private var editingDueRule: RecurringRule?
     @State private var sortOption: TransactionSortOption = .newestFirst
+    @State private var lastMutation: RecurringMutation?
 
     init(rule: RecurringRule) {
         self.rule = rule
@@ -78,16 +79,14 @@ struct RecurringRuleDetailView: View {
                     RecurringDueRow(
                         rule: rule,
                         onPost: {
-                            let posted = RecurringRuleService.post(rule: rule, in: modelContext)
-                            HapticManager.shared.notification(type: posted == nil ? .error : .success)
+                            let mutation = RecurringRuleService.post(rule: rule, in: modelContext)
+                            lastMutation = mutation
+                            HapticManager.shared.notification(type: mutation == nil ? .error : .success)
                         },
-                        onSkip: { RecurringRuleService.skip(rule: rule, in: modelContext) }
+                        onSkip: { lastMutation = RecurringRuleService.skip(rule: rule, in: modelContext) },
+                        onEdit: { editingDueRule = rule }
                     )
                     .swipeActions(edge: .leading) {
-                        Button { editingDueRule = rule } label: {
-                            Label(L10n.Recurring.editAndPost, systemImage: "slider.horizontal.3")
-                        }
-                        .tint(.blue)
                         Button { togglePause(rule) } label: {
                             Label(L10n.Recurring.pause, systemImage: "pause.circle")
                         }
@@ -152,6 +151,9 @@ struct RecurringRuleDetailView: View {
         }
         .sheet(item: $editingDueRule) { rule in
             RecurringPostEditorView(rule: rule)
+        }
+        .undoToast($lastMutation, message: { $0.undoSummary }) { mutation in
+            RecurringRuleService.undo(mutation, in: modelContext)
         }
     }
 

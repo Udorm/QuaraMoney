@@ -22,6 +22,9 @@ final class RecurringProgressViewModel: BaseViewModel {
     // Held in a plain (non-actor-isolated) box so its own deinit can remove the
     // observers — a @MainActor class can't provide a matching nonisolated deinit.
     @ObservationIgnored private let observerBag = ObserverBag()
+    // Coalesces bursts of `.dataDidUpdate` (e.g. Post-All firing many writes)
+    // into a single recompute.
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
     init(dataService: DataService, context: ModelContext) {
         self.modelContext = context
@@ -36,56 +39,87 @@ final class RecurringProgressViewModel: BaseViewModel {
 
         Task { await calculateProgress() }
     }
-    
+
     private func refresh() {
-        Task { await calculateProgress() }
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, let self else { return }
+            await self.calculateProgress()
+        }
     }
-    
+
     private func refreshCurrency() {
         preferredCurrencyCode = CurrencyManager.shared.preferredCurrencyCode
-        Task { await calculateProgress() }
+        refresh()
     }
-    
+
     private func calculateProgress() async {
+        // Snapshot the MainActor inputs, then do the fetch + conversion loop on a
+        // background ModelContext so a large overdue catch-up never hitches the UI.
+        let container = modelContext.container
+        let rates = CurrencyManager.shared.rates
+        let targetCurrency = CurrencyManager.shared.preferredCurrencyCode
+
+        let result = await Task.detached(priority: .utility) {
+            Self.computeProgress(container: container, rates: rates, targetCurrency: targetCurrency)
+        }.value
+
+        guard !Task.isCancelled else { return }
+        self.paidExpenses = result.paidExpenses
+        self.expectedExpenses = result.paidExpenses + result.pendingExpenses
+        self.receivedIncome = result.receivedIncome
+        self.expectedIncome = result.receivedIncome + result.pendingIncome
+    }
+
+    private struct ProgressResult: Sendable {
+        var paidExpenses: Decimal = 0
+        var pendingExpenses: Decimal = 0
+        var receivedIncome: Decimal = 0
+        var pendingIncome: Decimal = 0
+    }
+
+    /// Pure, background-safe computation: fetches this month's recurring
+    /// transactions (paid) and projects each active rule's remaining occurrences
+    /// (pending), all converted to `targetCurrency` at the supplied rates.
+    nonisolated private static func computeProgress(
+        container: ModelContainer,
+        rates: [String: Double],
+        targetCurrency: String
+    ) -> ProgressResult {
+        let context = ModelContext(container)
         let cal = Calendar.current
         let now = Date()
-        
-        // Find boundaries for current month
+
         guard let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: now)),
               let endOfMonth = cal.date(byAdding: DateComponents(month: 1, second: -1), to: startOfMonth) else {
-            return
+            return ProgressResult()
         }
-        
-        var tempPaidExpenses: Decimal = 0
-        var tempReceivedIncome: Decimal = 0
-        var tempPendingExpenses: Decimal = 0
-        var tempPendingIncome: Decimal = 0
-        
-        let currencyManager = CurrencyManager.shared
-        let targetCurrency = currencyManager.preferredCurrencyCode
-        
-        // 1. Fetch Paid/Received Transactions for this month
+
+        var result = ProgressResult()
+
+        // 1. Paid/received recurring transactions this month. (SwiftData can't
+        // predicate the optional `recurringRule` relationship, so the fetch is
+        // date-bounded and the relationship filtered in memory.)
         let txDescriptor = FetchDescriptor<Transaction>(
             predicate: #Predicate { $0.deletedAt == nil && $0.date >= startOfMonth && $0.date <= endOfMonth }
         )
-        
-        if let transactions = try? modelContext.fetch(txDescriptor) {
+        if let transactions = try? context.fetch(txDescriptor) {
             for txn in transactions where txn.recurringRule != nil {
-                let convertedAmount = currencyManager.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency)
+                let converted = CurrencyManager.convert(amount: txn.amount, from: txn.currencyCode, to: targetCurrency, rates: rates)
                 if txn.type == .expense {
-                    tempPaidExpenses += convertedAmount
+                    result.paidExpenses += converted
                 } else if txn.type == .income {
-                    tempReceivedIncome += convertedAmount
+                    result.receivedIncome += converted
                 }
             }
         }
-        
-        // 2. Fetch Pending Rules
+
+        // 2. Pending occurrences from active rules.
         let rulesDescriptor = FetchDescriptor<RecurringRule>(
             predicate: #Predicate { $0.deletedAt == nil && $0.isActive }
         )
-        
-        if let rules = try? modelContext.fetch(rulesDescriptor) {
+        if let rules = try? context.fetch(rulesDescriptor) {
             for rule in rules {
                 var due = rule.nextDueDate
                 var guardN = 0
@@ -97,12 +131,11 @@ final class RecurringProgressViewModel: BaseViewModel {
                     if let end = rule.endDate, due > end { break }
 
                     if due >= startOfMonth {
-                        let convertedAmount = currencyManager.convert(amount: rule.amount, from: rule.currencyCode, to: targetCurrency)
-
+                        let converted = CurrencyManager.convert(amount: rule.amount, from: rule.currencyCode, to: targetCurrency, rates: rates)
                         if rule.type == .expense {
-                            tempPendingExpenses += convertedAmount
+                            result.pendingExpenses += converted
                         } else if rule.type == .income {
-                            tempPendingIncome += convertedAmount
+                            result.pendingIncome += converted
                         }
                     }
 
@@ -112,10 +145,7 @@ final class RecurringProgressViewModel: BaseViewModel {
                 }
             }
         }
-        
-        self.paidExpenses = tempPaidExpenses
-        self.expectedExpenses = tempPaidExpenses + tempPendingExpenses
-        self.receivedIncome = tempReceivedIncome
-        self.expectedIncome = tempReceivedIncome + tempPendingIncome
+
+        return result
     }
 }

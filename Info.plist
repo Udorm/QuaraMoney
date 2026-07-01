@@ -19,5 +19,13 @@
 	<array>
 		<string>MiSansKhmerVF.ttf</string>
 	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>uk.dormmy.QuaraMoney.recurringRefresh</string>
+	</array>
 </dict>
 </plist>

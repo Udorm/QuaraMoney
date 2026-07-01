@@ -33,11 +33,17 @@ struct QuaraMoneyApp: App {
     nonisolated(unsafe) private static var _cachedContainer: ModelContainer?
     
     private var sharedModelContainer: ModelContainer {
-        if let cached = Self._cachedContainer {
+        Self.sharedContainer()
+    }
+
+    /// Static access to the one shared container, for non-SwiftUI entry points
+    /// (the notification delegate, BGTask handlers) that run outside `body`.
+    static func sharedContainer() -> ModelContainer {
+        if let cached = _cachedContainer {
             return cached
         }
-        let container = Self.makeModelContainer()
-        Self._cachedContainer = container
+        let container = makeModelContainer()
+        _cachedContainer = container
         return container
     }
     
@@ -255,6 +261,10 @@ struct QuaraMoneyApp: App {
                     securityManager.lockApp()
                     // Release the Realtime connection while backgrounded.
                     SyncRealtime.shared.stop()
+                    // Queue the next background re-arm of recurring reminders/badge.
+                    if newPhase == .background {
+                        RecurringBackgroundRefresh.schedule()
+                    }
                 case .active:
                     // Returning to the foreground: prompt for biometrics if locked.
                     if securityManager.isAppLocked {
@@ -263,6 +273,9 @@ struct QuaraMoneyApp: App {
                     // Pull any changes from other devices, then resume live updates.
                     Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
                     SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
+                    // Re-arm reminders and refresh the due badge for any rules that
+                    // came due while we were away.
+                    Task { await RecurringNotificationService.rescheduleAll(in: sharedModelContainer.mainContext) }
                 @unknown default:
                     break
                 }

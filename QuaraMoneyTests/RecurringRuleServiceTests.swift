@@ -199,15 +199,16 @@ final class RecurringRuleServiceTests: XCTestCase {
     func testPostUsesRuleTypeForIncome() {
         let wallet = makeWallet()
         let rule = makeRule(type: .income, start: date(2026, 6, 1), nextDue: date(2026, 6, 1), wallet: wallet)
-        let txn = RecurringRuleService.post(rule: rule, in: context)
-        XCTAssertEqual(txn?.type, .income)
+        RecurringRuleService.post(rule: rule, in: context)
+        XCTAssertEqual(allTransactions().first?.type, .income)
     }
 
     func testPostHonorsAmountAndDateOverrides() {
         let wallet = makeWallet()
         let rule = makeRule(amount: 10, start: date(2026, 6, 1), nextDue: date(2026, 6, 1), wallet: wallet)
         let overrideDate = date(2026, 6, 3)
-        let txn = RecurringRuleService.post(rule: rule, amount: 42, date: overrideDate, in: context)
+        RecurringRuleService.post(rule: rule, amount: 42, date: overrideDate, in: context)
+        let txn = allTransactions().first
         XCTAssertEqual(txn?.amount, 42)
         XCTAssertEqual(txn?.date, overrideDate)
         XCTAssertEqual(rule.amount, 10, "Per-occurrence override does not mutate the rule")
@@ -246,10 +247,11 @@ final class RecurringRuleServiceTests: XCTestCase {
         let rule = makeRule(amount: 12, frequency: .monthly, start: due, nextDue: due, wallet: wallet)
 
         RecurringRuleService.skip(rule: rule, in: context)        // June skipped → July
-        let txn = RecurringRuleService.post(rule: rule, in: context) // July posted → August
+        RecurringRuleService.post(rule: rule, in: context)        // July posted → August
 
-        XCTAssertEqual(allTransactions().count, 1, "Only the posted period creates a transaction")
-        XCTAssertEqual(txn?.date, date(2026, 7, 1), "Posted at the surviving (post-skip) due date")
+        let txns = allTransactions()
+        XCTAssertEqual(txns.count, 1, "Only the posted period creates a transaction")
+        XCTAssertEqual(txns.first?.date, date(2026, 7, 1), "Posted at the surviving (post-skip) due date")
         XCTAssertEqual(rule.nextDueDate, date(2026, 8, 1), "Two periods advanced overall")
     }
 
@@ -333,7 +335,7 @@ final class RecurringRuleServiceTests: XCTestCase {
 
         let posted = RecurringRuleService.postAllDue(rule: rule, in: context)
 
-        XCTAssertEqual(posted, 1, "Only occurrences on/before the end date post")
+        XCTAssertEqual(posted?.count, 1, "Only occurrences on/before the end date post")
         XCTAssertEqual(allTransactions().count, 1)
     }
 
@@ -343,9 +345,10 @@ final class RecurringRuleServiceTests: XCTestCase {
         let rule = makeRule(frequency: .monthly, start: start, nextDue: start, wallet: wallet)
 
         let posted = RecurringRuleService.postAllDue(rule: rule, in: context)
+        let count = posted?.count ?? 0
 
-        XCTAssertGreaterThanOrEqual(posted, 2, "Two-plus months overdue should post each missed period")
-        XCTAssertEqual(allTransactions().count, posted)
+        XCTAssertGreaterThanOrEqual(count, 2, "Two-plus months overdue should post each missed period")
+        XCTAssertEqual(allTransactions().count, count)
         XCTAssertFalse(RecurringRuleService.isDue(rule), "Caught up — no longer due")
     }
 
@@ -378,11 +381,87 @@ final class RecurringRuleServiceTests: XCTestCase {
         let rule = makeRule(amount: 5, currency: "USD", start: date(2026, 6, 1),
                             nextDue: date(2026, 6, 1), wallet: khrWallet)
 
-        let txn = RecurringRuleService.post(rule: rule, in: context)
+        RecurringRuleService.post(rule: rule, in: context)
 
+        let txn = allTransactions().first
         XCTAssertEqual(txn?.amount, 5, "Amount stays in the rule's own currency")
         XCTAssertEqual(txn?.currencyCode, "USD")
         XCTAssertEqual(txn?.storedRate, 4000, "storedRate = walletRate / txnRate (4000 / 1)")
         XCTAssertEqual(txn?.exchangeRate, 4000)
+    }
+
+    // MARK: - Undo (post/skip are reversible)
+
+    /// Undoing a post tombstones the created transaction and restores the
+    /// schedule to where it stood before posting.
+    func testUndoPostTombstonesTransactionAndRestoresSchedule() {
+        let wallet = makeWallet()
+        let due = date(2026, 6, 1)
+        let rule = makeRule(amount: 9.99, frequency: .monthly, start: due, nextDue: due, wallet: wallet)
+
+        let mutation = RecurringRuleService.post(rule: rule, in: context)
+        XCTAssertNotNil(mutation)
+        XCTAssertEqual(rule.nextDueDate, date(2026, 7, 1), "Posting advanced one period")
+        XCTAssertEqual(allTransactions().filter { $0.deletedAt == nil }.count, 1)
+
+        RecurringRuleService.undo(mutation!, in: context)
+
+        XCTAssertEqual(rule.nextDueDate, due, "Undo restores the pre-post due date")
+        let live = allTransactions().filter { $0.deletedAt == nil }
+        XCTAssertEqual(live.count, 0, "The posted transaction is soft-deleted on undo")
+        let tombstoned = allTransactions().first { $0.deletedAt != nil }
+        XCTAssertNotNil(tombstoned, "It is tombstoned (not hard-deleted) so the deletion can sync")
+        XCTAssertTrue(tombstoned?.needsSync ?? false)
+        XCTAssertTrue(RecurringRuleService.isDue(rule), "The occurrence is due again after undo")
+    }
+
+    /// Undoing a skip rewinds the schedule by exactly one period and creates no
+    /// ledger side effects.
+    func testUndoSkipRestoresSchedule() {
+        let wallet = makeWallet()
+        let due = date(2026, 6, 1)
+        let rule = makeRule(frequency: .monthly, start: due, nextDue: due, wallet: wallet)
+
+        let mutation = RecurringRuleService.skip(rule: rule, in: context)
+        XCTAssertEqual(rule.nextDueDate, date(2026, 7, 1), "Skip advanced one period")
+
+        RecurringRuleService.undo(mutation!, in: context)
+
+        XCTAssertEqual(rule.nextDueDate, due, "Undo restores the skipped occurrence's due date")
+        XCTAssertEqual(allTransactions().count, 0, "Undoing a skip touches no transactions")
+    }
+
+    /// Undoing a Post-All catch-up tombstones every transaction it created and
+    /// restores the schedule to the start of the caught-up run.
+    func testUndoPostAllDueRestoresAllOccurrences() {
+        let wallet = makeWallet()
+        let start = Calendar.current.date(byAdding: .month, value: -2, to: Date())!
+        let rule = makeRule(frequency: .monthly, start: start, nextDue: start, wallet: wallet)
+
+        let mutation = RecurringRuleService.postAllDue(rule: rule, in: context)
+        let postedCount = mutation?.count ?? 0
+        XCTAssertGreaterThanOrEqual(postedCount, 2)
+        XCTAssertEqual(allTransactions().filter { $0.deletedAt == nil }.count, postedCount)
+
+        RecurringRuleService.undo(mutation!, in: context)
+
+        XCTAssertEqual(rule.nextDueDate, start, "Undo rewinds to the first caught-up occurrence")
+        XCTAssertEqual(allTransactions().filter { $0.deletedAt == nil }.count, 0,
+                       "Every transaction created by Post-All is soft-deleted")
+        XCTAssertTrue(RecurringRuleService.isDue(rule), "The rule is due again after undo")
+    }
+
+    /// The undo token resolves the rule by `PersistentIdentifier`, so it stays
+    /// valid even though it does not hold a direct model reference.
+    func testUndoResolvesRuleByIdentifier() {
+        let wallet = makeWallet()
+        let due = date(2026, 6, 1)
+        let rule = makeRule(frequency: .monthly, start: due, nextDue: due, wallet: wallet)
+        let mutation = RecurringRuleService.skip(rule: rule, in: context)!
+
+        XCTAssertEqual(mutation.ruleID, rule.persistentModelID)
+        XCTAssertEqual(mutation.previousNextDueDate, due)
+        RecurringRuleService.undo(mutation, in: context)
+        XCTAssertEqual(rule.nextDueDate, due)
     }
 }

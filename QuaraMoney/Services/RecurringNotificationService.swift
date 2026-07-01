@@ -13,11 +13,36 @@ import SwiftData
 enum RecurringNotificationService {
 
     private static let identifierPrefix = "recurring_"
-    private static let categoryIdentifier = "RECURRING_DUE"
+    static let categoryIdentifier = "RECURRING_DUE"
     /// Hour of the due day at which the reminder fires (local time).
     private static let reminderHour = 9
 
+    // Action identifiers handled by `AppDelegate` (the notification delegate).
+    // Post/Skip run in the background (no `.foreground`) so the user can act
+    // straight from the banner; Review opens the app on the Recurring screen.
+    static let postActionIdentifier = "RECURRING_POST"
+    static let skipActionIdentifier = "RECURRING_SKIP"
+    static let reviewActionIdentifier = "RECURRING_REVIEW"
+
     static func identifier(for ruleID: UUID) -> String { identifierPrefix + ruleID.uuidString }
+
+    /// The `RECURRING_DUE` category with Post / Skip / Review actions. Registered
+    /// app-wide alongside the budget categories (a single `setNotificationCategories`
+    /// call owns the whole set).
+    static var dueCategory: UNNotificationCategory {
+        let post = UNNotificationAction(identifier: postActionIdentifier, title: L10n.Recurring.post, options: [])
+        let skip = UNNotificationAction(identifier: skipActionIdentifier, title: L10n.Recurring.skip, options: [.destructive])
+        let review = UNNotificationAction(identifier: reviewActionIdentifier, title: L10n.Recurring.Review.title, options: [.foreground])
+        return UNNotificationCategory(identifier: categoryIdentifier, actions: [post, skip, review], intentIdentifiers: [], options: [])
+    }
+
+    /// Mirror the count of currently-due rules onto the app-icon badge. No-ops
+    /// (via `try?`) when badge authorization is missing.
+    @MainActor
+    static func refreshBadgeCount(in context: ModelContext) async {
+        let due = RecurringRuleService.dueRules(in: context).count
+        try? await UNUserNotificationCenter.current().setBadgeCount(due)
+    }
 
     // MARK: - Authorization
 
@@ -80,6 +105,9 @@ enum RecurringNotificationService {
         for rule in rules where rule.remindersEnabled {
             await scheduleRequest(for: rule)
         }
+        // Keep the app-icon badge in step with what's actually due.
+        let dueCount = rules.filter { RecurringRuleService.isDue($0) }.count
+        try? await UNUserNotificationCenter.current().setBadgeCount(dueCount)
     }
 
     // MARK: - Helpers

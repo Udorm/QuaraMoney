@@ -297,7 +297,10 @@ class BudgetNotificationService: ObservableObject {
             options: []
         )
         
-        center.setNotificationCategories([budgetCategory, summaryCategory])
+        // One call owns the entire category set, so the recurring "due" category
+        // (Post / Skip / Review) must be registered here too — registering it
+        // separately would clobber these budget categories.
+        center.setNotificationCategories([budgetCategory, summaryCategory, RecurringNotificationService.dueCategory])
     }
 }
 

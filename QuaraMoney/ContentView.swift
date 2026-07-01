@@ -94,6 +94,10 @@ struct iOS18ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
             selectedTab = 0
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
+            MoreView.pendingRecurringReview = true // consumed by MoreView on appear
+            selectedTab = 3 // More tab — MoreView pushes the Recurring screen
+        }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 .interactiveDismissDisabled()
@@ -177,6 +181,10 @@ struct LegacyContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
             selectedTab = 0
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
+            MoreView.pendingRecurringReview = true // consumed by MoreView on appear
+            selectedTab = 3 // More tab — MoreView pushes the Recurring screen
         }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))

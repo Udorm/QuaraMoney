@@ -1,6 +1,34 @@
 import Foundation
 import SwiftData
 
+/// A reversible record of a single post/skip (or batched post-all/skip-all for
+/// **one** rule). Captured before the schedule advances so the action can be
+/// undone from a transient snackbar: restore `previousNextDueDate` and
+/// soft-delete any transactions the action created. Carries
+/// `PersistentIdentifier`s (not model refs) so it survives `@Query` refreshes.
+struct RecurringMutation: Identifiable {
+    enum Kind { case post, skip }
+    let id = UUID()
+    let ruleID: PersistentIdentifier
+    let previousNextDueDate: Date
+    let createdTransactionIDs: [PersistentIdentifier]
+    let kind: Kind
+    /// Number of occurrences affected (≥ 1; > 1 for the post-all/skip-all batch).
+    let count: Int
+}
+
+extension RecurringMutation {
+    /// Localized snackbar summary, e.g. "Transaction posted" / "3 occurrences skipped".
+    var undoSummary: String {
+        switch (kind, count) {
+        case (.post, 1): return "recurring.undo.posted".localized
+        case (.post, let n): return "recurring.undo.postedCount".localized(with: n)
+        case (.skip, 1): return "recurring.undo.skipped".localized
+        case (.skip, let n): return "recurring.undo.skippedCount".localized(with: n)
+        }
+    }
+}
+
 /// Drives recurring rules in **confirm-before-post** mode.
 ///
 /// A rule no longer auto-creates transactions in the background. Instead it
@@ -22,7 +50,8 @@ enum RecurringRuleService {
     /// `startDate + n·period`) rather than stepped from the previous due date,
     /// so a rule whose start day is the 31st does not permanently drift to the
     /// 28th after passing through February. Daily/weekly step incrementally.
-    static func nextOccurrence(after current: Date, startDate: Date, frequency: Frequency, interval: Int = 1) -> Date? {
+    /// `nonisolated` so the background progress computation can call it off-main.
+    nonisolated static func nextOccurrence(after current: Date, startDate: Date, frequency: Frequency, interval: Int = 1) -> Date? {
         let step = max(1, interval)
         let cal = Calendar.current
         switch frequency {
@@ -106,6 +135,13 @@ enum RecurringRuleService {
         return rules.filter { isDue($0, asOf: now) }
     }
 
+    /// Resolve a rule by its stable `id` (e.g. from a notification payload).
+    @MainActor
+    static func rule(withID id: UUID, in context: ModelContext) -> RecurringRule? {
+        let descriptor = FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.id == id })
+        return (try? context.fetch(descriptor))?.first
+    }
+
     /// How many occurrences are currently due for a rule (≥ 1 when overdue
     /// across several periods). Used to drive "X due" / "Post all" affordances.
     static func pendingOccurrenceCount(for rule: RecurringRule, asOf now: Date = Date()) -> Int {
@@ -129,12 +165,14 @@ enum RecurringRuleService {
 
     /// Post a single due occurrence: create the ledger transaction and advance
     /// the schedule by one period. `amount`/`date` override the rule defaults
-    /// for this one occurrence (the rule itself is unchanged). Returns the
-    /// created transaction, or `nil` if the rule has no wallet or the save fails.
+    /// for this one occurrence (the rule itself is unchanged). Returns a
+    /// `RecurringMutation` describing the (undoable) change, or `nil` if the
+    /// rule has no wallet or the save fails.
     @MainActor
     @discardableResult
-    static func post(rule: RecurringRule, amount: Decimal? = nil, date: Date? = nil, in context: ModelContext) -> Transaction? {
+    static func post(rule: RecurringRule, amount: Decimal? = nil, date: Date? = nil, in context: ModelContext) -> RecurringMutation? {
         guard let wallet = rule.wallet else { return nil }
+        let previousDue = rule.nextDueDate
         let txn = makeTransaction(for: rule, wallet: wallet,
                                   amount: amount ?? rule.amount,
                                   date: date ?? rule.nextDueDate,
@@ -143,44 +181,60 @@ enum RecurringRuleService {
         touchForSync(rule)
         guard commit(context, invalidating: wallet) else { return nil }
         Task { await RecurringNotificationService.reschedule(for: rule) }
-        return txn
+        return RecurringMutation(ruleID: rule.persistentModelID,
+                                 previousNextDueDate: previousDue,
+                                 createdTransactionIDs: [txn.persistentModelID],
+                                 kind: .post, count: 1)
     }
 
     /// Skip the next due occurrence without creating a transaction; advances
-    /// the schedule by one period.
+    /// the schedule by one period. Returns the undoable mutation, or `nil` if
+    /// the save fails.
     @MainActor
-    static func skip(rule: RecurringRule, in context: ModelContext) {
+    @discardableResult
+    static func skip(rule: RecurringRule, in context: ModelContext) -> RecurringMutation? {
+        let previousDue = rule.nextDueDate
         advanceNextDueDate(rule)
         touchForSync(rule)
-        if commit(context, invalidating: nil) {
-            Task { await RecurringNotificationService.reschedule(for: rule) }
-        }
+        guard commit(context, invalidating: nil) else { return nil }
+        Task { await RecurringNotificationService.reschedule(for: rule) }
+        return RecurringMutation(ruleID: rule.persistentModelID,
+                                 previousNextDueDate: previousDue,
+                                 createdTransactionIDs: [],
+                                 kind: .skip, count: 1)
     }
 
     /// Post every occurrence currently due for a rule (using the rule's default
-    /// amount for each), with a single save. Returns the count posted.
+    /// amount for each), with a single save. Returns the undoable mutation
+    /// (`count` = occurrences posted), or `nil` if nothing was posted.
     @MainActor
     @discardableResult
-    static func postAllDue(rule: RecurringRule, asOf now: Date = Date(), in context: ModelContext) -> Int {
-        guard let wallet = rule.wallet else { return 0 }
-        var posted = 0
+    static func postAllDue(rule: RecurringRule, asOf now: Date = Date(), in context: ModelContext) -> RecurringMutation? {
+        guard let wallet = rule.wallet else { return nil }
+        let previousDue = rule.nextDueDate
+        var created: [Transaction] = []
         var guardN = 0
         while isDue(rule, asOf: now), guardN < 1000 {
-            _ = makeTransaction(for: rule, wallet: wallet, amount: rule.amount, date: rule.nextDueDate, in: context)
+            created.append(makeTransaction(for: rule, wallet: wallet, amount: rule.amount, date: rule.nextDueDate, in: context))
             advanceNextDueDate(rule)
-            posted += 1
             guardN += 1
         }
-        guard posted > 0 else { return 0 }
+        guard !created.isEmpty else { return nil }
         touchForSync(rule)
-        guard commit(context, invalidating: wallet) else { return 0 }
+        guard commit(context, invalidating: wallet) else { return nil }
         Task { await RecurringNotificationService.reschedule(for: rule) }
-        return posted
+        return RecurringMutation(ruleID: rule.persistentModelID,
+                                 previousNextDueDate: previousDue,
+                                 createdTransactionIDs: created.map(\.persistentModelID),
+                                 kind: .post, count: created.count)
     }
 
     /// Skip every occurrence currently due for a rule, with a single save.
+    /// Returns the undoable mutation (`count` = occurrences skipped), or `nil`.
     @MainActor
-    static func skipAllDue(rule: RecurringRule, asOf now: Date = Date(), in context: ModelContext) {
+    @discardableResult
+    static func skipAllDue(rule: RecurringRule, asOf now: Date = Date(), in context: ModelContext) -> RecurringMutation? {
+        let previousDue = rule.nextDueDate
         var skipped = 0
         var guardN = 0
         while isDue(rule, asOf: now), guardN < 1000 {
@@ -188,11 +242,32 @@ enum RecurringRuleService {
             skipped += 1
             guardN += 1
         }
-        guard skipped > 0 else { return }
+        guard skipped > 0 else { return nil }
         touchForSync(rule)
-        if commit(context, invalidating: nil) {
-            Task { await RecurringNotificationService.reschedule(for: rule) }
+        guard commit(context, invalidating: nil) else { return nil }
+        Task { await RecurringNotificationService.reschedule(for: rule) }
+        return RecurringMutation(ruleID: rule.persistentModelID,
+                                 previousNextDueDate: previousDue,
+                                 createdTransactionIDs: [],
+                                 kind: .skip, count: skipped)
+    }
+
+    /// Reverse a `RecurringMutation`: restore the rule's previous `nextDueDate`
+    /// and soft-delete any transactions the action created. Safe to call after
+    /// `@Query` refreshes — models are re-resolved by `PersistentIdentifier`.
+    @MainActor
+    static func undo(_ mutation: RecurringMutation, in context: ModelContext) {
+        guard let rule = context.model(for: mutation.ruleID) as? RecurringRule else { return }
+        var wallet: Wallet?
+        for id in mutation.createdTransactionIDs {
+            guard let txn = context.model(for: id) as? Transaction, txn.deletedAt == nil else { continue }
+            wallet = wallet ?? txn.sourceWallet
+            SoftDeleteService.deleteTransaction(txn)
         }
+        rule.nextDueDate = mutation.previousNextDueDate
+        touchForSync(rule)
+        _ = commit(context, invalidating: wallet)
+        Task { await RecurringNotificationService.reschedule(for: rule) }
     }
 
     // MARK: - Private helpers

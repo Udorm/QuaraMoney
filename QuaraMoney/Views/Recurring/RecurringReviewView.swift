@@ -15,9 +15,38 @@ struct RecurringReviewView: View {
     let allRules: [RecurringRule]
     private var dueRules: [RecurringRule] { allRules.filter { RecurringRuleService.isDue($0) } }
 
+    /// Aggregate of everything currently waiting in the inbox — the count of
+    /// pending occurrences (not rules) plus expense/income totals converted to
+    /// the preferred currency. Drives the summary header and confirmation
+    /// dialogs so the user sees the scale of a batch before committing.
+    private struct ReviewTotals {
+        var occurrences: Int
+        var expense: Decimal
+        var income: Decimal
+        var currency: String
+    }
+
+    private var totals: ReviewTotals {
+        let manager = CurrencyManager.shared
+        let target = manager.preferredCurrencyCode
+        var occ = 0
+        var exp: Decimal = 0
+        var inc: Decimal = 0
+        for rule in dueRules {
+            let n = RecurringRuleService.pendingOccurrenceCount(for: rule)
+            occ += n
+            // Post All creates one transaction per pending occurrence, so the
+            // total must scale by `n`, not count the rule once.
+            let converted = manager.convert(amount: rule.amount, from: rule.currencyCode, to: target) * Decimal(n)
+            if rule.type == .expense { exp += converted } else { inc += converted }
+        }
+        return ReviewTotals(occurrences: occ, expense: exp, income: inc, currency: target)
+    }
+
     @State private var editingRule: RecurringRule?
     @State private var confirmPostAll = false
     @State private var confirmSkipAll = false
+    @State private var lastMutation: RecurringMutation?
 
     var body: some View {
         Group {
@@ -28,21 +57,21 @@ struct RecurringReviewView: View {
                 )
             } else {
                 List {
+                    Section {
+                        summaryHeader
+                            .listRowSeparator(.hidden)
+                    }
                     ForEach(dueRules) { rule in
                         RecurringDueRow(
                             rule: rule,
                             onPost: {
-                                let posted = RecurringRuleService.post(rule: rule, in: modelContext)
-                                HapticManager.shared.notification(type: posted == nil ? .error : .success)
+                                let mutation = RecurringRuleService.post(rule: rule, in: modelContext)
+                                lastMutation = mutation
+                                HapticManager.shared.notification(type: mutation == nil ? .error : .success)
                             },
-                            onSkip: { RecurringRuleService.skip(rule: rule, in: modelContext) }
+                            onSkip: { lastMutation = RecurringRuleService.skip(rule: rule, in: modelContext) },
+                            onEdit: { editingRule = rule }
                         )
-                        .swipeActions(edge: .leading) {
-                            Button { editingRule = rule } label: {
-                                Label(L10n.Recurring.editAndPost, systemImage: "slider.horizontal.3")
-                            }
-                            .tint(.blue)
-                        }
                     }
                 }
             }
@@ -68,13 +97,44 @@ struct RecurringReviewView: View {
         .confirmationDialog(L10n.Recurring.Review.postAll, isPresented: $confirmPostAll, titleVisibility: .visible) {
             Button(L10n.Recurring.Review.postAll) { postAll() }
             Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.Recurring.Review.postAllMessage(totals.occurrences))
         }
         .confirmationDialog(L10n.Recurring.Review.skipAll, isPresented: $confirmSkipAll, titleVisibility: .visible) {
             Button(L10n.Recurring.Review.skipAll, role: .destructive) { skipAll() }
             Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text(L10n.Recurring.Review.skipAllMessage(totals.occurrences))
         }
         .sheet(item: $editingRule) { rule in
             RecurringPostEditorView(rule: rule)
+        }
+        .undoToast($lastMutation, message: { $0.undoSummary }) { mutation in
+            RecurringRuleService.undo(mutation, in: modelContext)
+        }
+    }
+
+    /// At-a-glance batch summary: how many occurrences are waiting and what
+    /// posting them all nets, so the scale of "Post All" is visible up front.
+    private var summaryHeader: some View {
+        let t = totals
+        return HStack(alignment: .firstTextBaseline) {
+            Text(L10n.Recurring.Review.summary(t.occurrences))
+                .font(.app(.headline))
+            Spacer()
+            HStack(spacing: 10) {
+                if t.expense > 0 {
+                    Text("-" + t.expense.formattedAmount(for: t.currency))
+                        .foregroundStyle(.primary)
+                }
+                if t.income > 0 {
+                    Text("+" + t.income.formattedAmount(for: t.currency))
+                        .foregroundStyle(.green)
+                }
+            }
+            .font(.app(.subheadline, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
     }
 
@@ -88,12 +148,15 @@ struct RecurringReviewView: View {
     }
 }
 
-/// One due occurrence: summary + inline Post / Skip. Swipe leading → Edit & Post.
-/// Shared by the review inbox and the rule-detail screen.
+/// One due occurrence: summary (with destination wallet/category) + inline
+/// Edit / Skip / Post. Shared by the review inbox and the rule-detail screen.
+/// `onEdit` is optional; when supplied a visible "Edit" button is shown so the
+/// amount/date can be adjusted before posting without hunting for a swipe.
 struct RecurringDueRow: View {
     let rule: RecurringRule
     let onPost: () -> Void
     let onSkip: () -> Void
+    var onEdit: (() -> Void)? = nil
 
     private var pendingCount: Int { RecurringRuleService.pendingOccurrenceCount(for: rule) }
 
@@ -114,24 +177,66 @@ struct RecurringDueRow: View {
                 Image(systemName: rule.category?.icon ?? (rule.type == .income ? "arrow.down.left" : "arrow.up.right"))
                     .foregroundStyle(rule.type == .income ? .green : .red)
                     .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(rule.name).font(.app(.headline))
                     Text(dueLabel).font(.app(.caption)).foregroundStyle(.secondary)
+                    metaChips
                 }
                 Spacer()
                 Text(signedAmount)
                     .font(.app(.body, weight: .semibold))
                     .foregroundStyle(rule.type == .income ? Color.green : Color.primary)
             }
-            HStack {
-                Spacer()
+            HStack(spacing: 8) {
+                if let onEdit {
+                    Button(action: onEdit) {
+                        Label(L10n.Common.edit, systemImage: "slider.horizontal.3")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.secondary)
+                    .font(.app(.subheadline))
+                }
+                Spacer(minLength: 16)
+                // Skip recedes (gray) — it silently drops the occurrence, so it
+                // must not compete visually with Post. Extra spacing keeps it
+                // from sitting flush against the primary action.
                 Button(L10n.Recurring.skip, action: onSkip)
                     .buttonStyle(.bordered)
+                    .tint(.secondary)
                 Button(L10n.Recurring.post, action: onPost)
                     .buttonStyle(.borderedProminent)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Small pills surfacing where this occurrence posts — the destination
+    /// wallet (and category). A missing wallet is flagged so the user
+    /// understands why Post would fail.
+    @ViewBuilder
+    private var metaChips: some View {
+        HStack(spacing: 6) {
+            if let wallet = rule.wallet {
+                chip(icon: "wallet.pass.fill", text: wallet.name, tint: .secondary)
+            } else {
+                chip(icon: "exclamationmark.triangle.fill", text: "recurring.noWallet".localized, tint: .orange)
+            }
+            if let category = rule.category {
+                chip(icon: category.icon, text: category.name, tint: .secondary)
+            }
+        }
+    }
+
+    private func chip(icon: String, text: String, tint: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+            Text(text).lineLimit(1)
+        }
+        .font(.app(.caption2))
+        .foregroundStyle(tint)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(tint.opacity(0.12), in: Capsule())
     }
 }
 

@@ -14,9 +14,15 @@ struct DebtListView: View {
 
     private var preferredCurrency: String { CurrencyManager.shared.preferredCurrencyCode }
 
+    private var overdueDebts: [Debt] { viewModel.overdueDebts(allDebts) }
     private var activeDebts: [Debt] { viewModel.activeDebts(allDebts) }
     private var completedDebts: [Debt] { viewModel.completedDebts(allDebts) }
     private var hasAnyDebts: Bool { !allDebts.isEmpty }
+
+    /// True when a search is active but matches nothing.
+    private var hasNoSearchResults: Bool {
+        viewModel.isSearching && overdueDebts.isEmpty && activeDebts.isEmpty && completedDebts.isEmpty
+    }
 
     var body: some View {
         Group {
@@ -32,13 +38,26 @@ struct DebtListView: View {
                         typeFilter
                     }
 
-                    if activeDebts.isEmpty {
+                    if !overdueDebts.isEmpty {
                         Section {
-                            allSettledRow
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            ForEach(overdueDebts) { debt in
+                                debtLink(debt)
+                            }
+                        } header: {
+                            Label("debt.overdueSection".localized, systemImage: "exclamationmark.circle.fill")
+                                .foregroundStyle(.red)
                         }
-                    } else {
+                    }
+
+                    if overdueDebts.isEmpty && activeDebts.isEmpty {
+                        if !viewModel.isSearching {
+                            Section {
+                                allSettledRow
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                            }
+                        }
+                    } else if !activeDebts.isEmpty {
                         Section {
                             ForEach(activeDebts) { debt in
                                 debtLink(debt)
@@ -60,6 +79,12 @@ struct DebtListView: View {
                 }
                 .listStyle(.insetGrouped)
                 .listSectionSpacing(.compact)
+                .searchable(text: $viewModel.searchText, prompt: "debt.searchPrompt".localized)
+                .overlay {
+                    if hasNoSearchResults {
+                        ContentUnavailableView.search(text: viewModel.searchText)
+                    }
+                }
             }
         }
         .navigationTitle(L10n.Debt.title)
@@ -153,17 +178,38 @@ struct DebtListView: View {
         let owedFraction: Double = total > 0
             ? NSDecimalNumber(decimal: owed / total).doubleValue
             : 0.5
+        // Direction glyphs inside each segment so the split is legible without
+        // relying on color alone (color-blind accessibility). Shown only when a
+        // segment is wide enough to hold the glyph.
         return GeometryReader { geo in
+            let owedWidth = max(0, owedFraction) * (geo.size.width - 2)
+            let oweWidth = (geo.size.width - 2) - owedWidth
             HStack(spacing: 2) {
                 Capsule()
                     .fill(Color.green.gradient)
-                    .frame(width: max(0, owedFraction) * (geo.size.width - 2))
+                    .frame(width: owedWidth)
+                    .overlay {
+                        if owedWidth > 22 {
+                            Image(systemName: "arrow.down.left")
+                                .appFont(size: 8, weight: .bold)
+                                .foregroundStyle(.white)
+                        }
+                    }
                 Capsule()
                     .fill(Color.red.gradient)
+                    .overlay {
+                        if oweWidth > 22 {
+                            Image(systemName: "arrow.up.right")
+                                .appFont(size: 8, weight: .bold)
+                                .foregroundStyle(.white)
+                        }
+                    }
             }
         }
-        .frame(height: 8)
+        .frame(height: 12)
         .opacity(total > 0 ? 1 : 0.25)
+        .accessibilityElement()
+        .accessibilityLabel("\("debt.youAreOwed".localized) \(owed.formattedAmount(for: preferredCurrency)), \("debt.youOwe".localized) \(owe.formattedAmount(for: preferredCurrency))")
     }
 
     private func heroStat(title: String, amount: Decimal, color: Color, icon: String) -> some View {

@@ -10,6 +10,7 @@ struct AddTransactionContainer: View {
     let initialWallet: Wallet?
     let initialDebt: Debt?
     let initialCategory: Category?
+    let initialAmount: Decimal?
 
     init(
         transaction: Transaction? = nil,
@@ -18,7 +19,8 @@ struct AddTransactionContainer: View {
         initialDate: Date? = nil,
         initialWallet: Wallet? = nil,
         initialDebt: Debt? = nil,
-        initialCategory: Category? = nil
+        initialCategory: Category? = nil,
+        initialAmount: Decimal? = nil
     ) {
         self.transaction = transaction
         self.isNewTransaction = isNewTransaction
@@ -27,6 +29,7 @@ struct AddTransactionContainer: View {
         self.initialWallet = initialWallet
         self.initialDebt = initialDebt
         self.initialCategory = initialCategory
+        self.initialAmount = initialAmount
     }
 
     var body: some View {
@@ -37,7 +40,8 @@ struct AddTransactionContainer: View {
                 transaction: transaction,
                 initialDate: initialDate,
                 initialDebt: initialDebt,
-                initialCategory: initialCategory
+                initialCategory: initialCategory,
+                initialAmount: initialAmount
             ),
             isNewTransaction: isNewTransaction,
             startWithScanner: startWithScanner

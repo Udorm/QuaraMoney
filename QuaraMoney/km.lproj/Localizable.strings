@@ -691,6 +691,11 @@
 "debt.paymentNote" = "កំណត់ចំណាំ (ស្រេចចិត្ត)";
 "debt.linkedTransaction" = "ភ្ជាប់ទៅនឹងបំណុល";
 "debt.cannotDeleteAnchor" = "នេះជាធាតុដើមនៃបំណុលរបស់ %@។ ដើម្បីលុបវា សូមលុបបំណុលនៅក្នុង បំណុល និងប្រាក់កម្ចី។";
+"debt.overdueSection" = "ហួសកំណត់";
+"debt.settleInFull" = "សងទាំងអស់";
+"debt.customAmount" = "ចំនួនផ្សេង";
+"debt.searchPrompt" = "ស្វែងរកតាមឈ្មោះ";
+"debt.quickPayHint" = "%@ នៃចំនួនដែលនៅសល់";
 
 // MARK: - Transaction Additions
 "transaction.balanceAdjustment" = "ការកែសម្រួលសមតុល្យ";

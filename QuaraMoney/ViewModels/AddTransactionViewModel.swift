@@ -35,7 +35,7 @@ class AddTransactionViewModel: BaseViewModel {
     private var existingTransaction: Transaction?
     var isEditing: Bool { existingTransaction != nil }
     
-    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil) {
+    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil, initialAmount: Decimal? = nil) {
         self.selectedWallet = initialWallet
         self.selectedEvent = initialEvent
         self.existingTransaction = transaction
@@ -80,10 +80,12 @@ class AddTransactionViewModel: BaseViewModel {
             self.type = debt.type == .owedToMe ? .income : .expense
             self.selectedCurrencyCode = debt.currencyCode
             self.selectedCategory = initialCategory
-            let remaining = debt.remainingAmount
-            if remaining > 0 {
-                self.evaluatedAmount = remaining
-                self.expression = formatDecimalForExpression(remaining)
+            // A caller-supplied amount (quick-pay preset) wins; otherwise default
+            // to the full remaining balance. An explicit 0 means "let me type it".
+            let prefill = initialAmount ?? debt.remainingAmount
+            if prefill > 0 {
+                self.evaluatedAmount = prefill
+                self.expression = formatDecimalForExpression(prefill)
             }
             updateTransactionCurrencyExchangeRate()
         } else if let wallet = initialWallet {

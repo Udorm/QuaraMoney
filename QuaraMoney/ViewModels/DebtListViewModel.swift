@@ -6,19 +6,48 @@ import SwiftData
 final class DebtListViewModel {
     var selectedType: DebtType? = nil
     var showCompleted = false
+    var searchText: String = ""
 
     func filteredDebts(_ allDebts: [Debt]) -> [Debt] {
         var debts = allDebts
         if let type = selectedType {
             debts = debts.filter { $0.type == type }
         }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            debts = debts.filter { $0.personName.localizedCaseInsensitiveContains(query) }
+        }
         return debts
     }
-    
-    func activeDebts(_ allDebts: [Debt]) -> [Debt] {
-        filteredDebts(allDebts).filter { !$0.isCompleted }
+
+    /// True when a name search is currently narrowing the list.
+    var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-    
+
+    /// Outstanding debts past their due date, surfaced above everything else so
+    /// time-sensitive items never get buried. Most-overdue (soonest due) first.
+    func overdueDebts(_ allDebts: [Debt]) -> [Debt] {
+        filteredDebts(allDebts)
+            .filter { !$0.isCompleted && $0.isOverdue }
+            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+    }
+
+    /// Outstanding debts that are not overdue, ordered by soonest due date first
+    /// (undated debts fall to the bottom, newest-created among them first).
+    func activeDebts(_ allDebts: [Debt]) -> [Debt] {
+        filteredDebts(allDebts)
+            .filter { !$0.isCompleted && !$0.isOverdue }
+            .sorted { a, b in
+                switch (a.dueDate, b.dueDate) {
+                case let (x?, y?): return x < y
+                case (_?, nil):    return true
+                case (nil, _?):    return false
+                case (nil, nil):   return a.dateCreated > b.dateCreated
+                }
+            }
+    }
+
     func completedDebts(_ allDebts: [Debt]) -> [Debt] {
         filteredDebts(allDebts).filter { $0.isCompleted }
     }

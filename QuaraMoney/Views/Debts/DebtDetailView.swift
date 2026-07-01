@@ -100,18 +100,7 @@ struct DebtDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             if hasRemainingBalance {
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    startPayment()
-                } label: {
-                    Label(L10n.Debt.recordPayment, systemImage: "plus.circle.fill")
-                        .appFont(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
+                paymentBar
             }
         }
         .toolbar {
@@ -142,7 +131,8 @@ struct DebtDetailView: View {
                 isNewTransaction: true,
                 initialWallet: ctx.wallet,
                 initialDebt: ctx.debt,
-                initialCategory: ctx.category
+                initialCategory: ctx.category,
+                initialAmount: ctx.amount
             )
         }
         .sheet(isPresented: $showEditSheet) {
@@ -210,6 +200,99 @@ struct DebtDetailView: View {
             DebtDueChip(debt: debt)
         }
         .padding(.vertical, 2)
+    }
+
+    // MARK: - Payment bar
+
+    /// Bottom action bar: quick partial-amount presets and a one-tap "settle in
+    /// full" primary, with a path into the full editor for a custom amount. Each
+    /// preset opens the editor pre-filled so recording a repayment is one tap.
+    private var paymentBar: some View {
+        let remaining = debt.displayRemaining
+        let accent = debt.type.accentColor
+        let showPartials = roundedPreset(remaining, fraction: 0.25) > 0
+        return VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                if showPartials {
+                    quickAmountChip(fraction: 0.25, label: "¼", remaining: remaining, accent: accent)
+                    quickAmountChip(fraction: 0.5, label: "½", remaining: remaining, accent: accent)
+                }
+                customAmountChip
+            }
+
+            Button {
+                HapticManager.shared.impact(style: .light)
+                startPayment(amount: remaining)
+            } label: {
+                Label(
+                    "\("debt.settleInFull".localized) · \(remaining.formattedAmount(for: debt.currencyCode))",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .appFont(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .background(.bar)
+    }
+
+    private func quickAmountChip(fraction: Double, label: String, remaining: Decimal, accent: Color) -> some View {
+        let amount = roundedPreset(remaining, fraction: fraction)
+        return Button {
+            HapticManager.shared.selection()
+            startPayment(amount: amount)
+        } label: {
+            VStack(spacing: 1) {
+                Text(label)
+                    .appFont(.subheadline, weight: .semibold)
+                Text(amount.formattedAmount(for: debt.currencyCode))
+                    .appFont(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .opacity(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .foregroundStyle(accent)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("debt.quickPayHint".localized(with: label))
+    }
+
+    private var customAmountChip: some View {
+        Button {
+            HapticManager.shared.impact(style: .light)
+            startPayment(amount: 0)   // 0 → editor opens blank for a typed amount
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: "square.and.pencil")
+                    .appFont(.subheadline, weight: .semibold)
+                Text("debt.customAmount".localized)
+                    .appFont(.caption2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .opacity(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Rounds a fraction of the remaining balance to 2 decimal places so presets
+    /// read as clean amounts (e.g. $25.00, not $24.9975).
+    private func roundedPreset(_ remaining: Decimal, fraction: Double) -> Decimal {
+        var raw = remaining * Decimal(fraction)
+        var result = Decimal()
+        NSDecimalRound(&result, &raw, 2, .plain)
+        return result
     }
 
     private var typeBadge: some View {
@@ -286,7 +369,7 @@ struct DebtDetailView: View {
     /// ensures the managed repayment category exists and picks a default wallet
     /// (preferring one in the debt's currency). Resolved up front and carried in
     /// the sheet item so the editor always receives the correct category.
-    private func startPayment() {
+    private func startPayment(amount: Decimal?) {
         let category = try? DebtService(modelContext: modelContext).repaymentCategory(for: debt)
         // Fetch wallets lazily here (only when a payment is actually started)
         // rather than via an eager `@Query`. A compound `@Query` predicate
@@ -300,7 +383,7 @@ struct DebtDetailView: View {
             )
         ))?.filter { !$0.isArchived } ?? []
         let wallet = wallets.first(where: { $0.currencyCode == debt.currencyCode }) ?? wallets.first
-        paymentContext = DebtPaymentContext(debt: debt, category: category, wallet: wallet)
+        paymentContext = DebtPaymentContext(debt: debt, category: category, wallet: wallet, amount: amount)
     }
 }
 
@@ -310,4 +393,7 @@ private struct DebtPaymentContext: Identifiable {
     let debt: Debt
     let category: Category?
     let wallet: Wallet?
+    /// Pre-fill amount for the editor: a preset amount, or 0 for a blank/custom
+    /// entry. `nil` falls back to the debt's full remaining balance.
+    let amount: Decimal?
 }

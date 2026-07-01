@@ -691,6 +691,11 @@
 "debt.paymentNote" = "Note (optional)";
 "debt.linkedTransaction" = "Linked to a Debt";
 "debt.cannotDeleteAnchor" = "This is the original entry for %@'s debt. To remove it, delete the debt from Debts & Loans.";
+"debt.overdueSection" = "Overdue";
+"debt.settleInFull" = "Settle in Full";
+"debt.customAmount" = "Custom Amount";
+"debt.searchPrompt" = "Search by name";
+"debt.quickPayHint" = "%@ of remaining";
 
 // MARK: - Transaction Additions
 "transaction.balanceAdjustment" = "Balance Adjustment";

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Combine
 import SwiftData
@@ -110,9 +111,51 @@ final class SyncEngine: ObservableObject {
     /// Flushes pending local changes while the current account is still signed in.
     /// Call before sign-out so an account switch (which wipes the local cache)
     /// can't lose un-pushed edits. Uses the context registered by `enableAutoSync`.
+    ///
+    /// Waits for any in-flight sync to finish first: `syncNow` returns
+    /// immediately when a sync is already running, so without the wait the
+    /// "flush" could be a silent no-op while edits newer than the running sync's
+    /// push phase stayed local — and the subsequent wipe would destroy them.
     func flushBeforeSignOut() async {
         guard let context = autoSyncContext else { return }
+        await waitForSyncIdle()
         await syncIfOperational(context: context)
+    }
+
+    /// Suspends until no sync is in flight. Poll-based: syncs are short-lived and
+    /// this only runs on sign-out.
+    func waitForSyncIdle() async {
+        while isSyncing {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+    }
+
+    /// True when the device still holds anything a sync would push (dirty rows or
+    /// queued deletions). Used as the final gate before a sign-out wipe.
+    func hasPendingLocalChanges() -> Bool {
+        guard let context = autoSyncContext else { return false }
+        if !SyncDeletionQueue.all().isEmpty { return true }
+        func has<T>(_ descriptor: FetchDescriptor<T>) -> Bool {
+            var d = descriptor
+            d.fetchLimit = 1
+            return (try? context.fetch(d))?.isEmpty == false
+        }
+        if has(FetchDescriptor<Wallet>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Category>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Transaction>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Event>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventMember>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventLedgerTransaction>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventLedgerParticipant>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventSettlementSnapshot>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventSettlementTransfer>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Debt>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<TransactionLocation>(predicate: #Predicate { $0.needsSync })) { return true }
+        return false
     }
 
     /// Clears the local cache on sign-out (shared-device privacy). Guarded so it
@@ -120,12 +163,21 @@ final class SyncEngine: ObservableObject {
     /// pending changes were flushed first, so nothing un-synced is lost.
     func wipeForSignOut() {
         guard let context = autoSyncContext else { return }
-        SyncMutationTracker.isApplyingSyncChanges = true
-        defer { SyncMutationTracker.isApplyingSyncChanges = false }
-        wipeLocalData(context: context)
-        resetSyncState()
+        do {
+            SyncMutationTracker.isApplyingSyncChanges = true
+            defer { SyncMutationTracker.isApplyingSyncChanges = false }
+            wipeLocalData(context: context)
+            resetSyncState()
+        }
         lastSyncDate = nil
         UserDefaults.standard.removeObject(forKey: Self.localOwnerKey)
+        // Profile identity (name/avatar) belongs to the account, not the device.
+        ProfileSyncService.shared.clearLocal()
+        // Wake view models that cache fetched arrays — @Query views update on
+        // their own, but a VM-driven screen could otherwise keep showing the
+        // signed-out account's numbers. Tagged `object: self` so auto-sync
+        // ignores it (see enableAutoSync).
+        NotificationCenter.default.post(name: .dataDidUpdate, object: self)
     }
 
     // MARK: - First sign-in conflict detection & resolution
@@ -137,11 +189,22 @@ final class SyncEngine: ObservableObject {
     /// Returns `true` and sets `conflictState = .pendingUserDecision` when both
     /// sides have data — the caller must skip sync and wait for the user to decide.
     /// Returns `false` when no conflict exists; normal sync may proceed.
-    func checkFirstSignInConflict(context: ModelContext) async -> Bool {
-        guard UserDefaults.standard.string(forKey: Self.localOwnerKey) == nil else { return false }
+    enum FirstSignInCheckResult {
+        /// Sync may proceed; ownership is stamped (or was already resolved).
+        case noConflict
+        /// Both sides have real data — `conflictState` was raised; sync must wait.
+        case conflict
+        /// The cloud probe failed (network). Sync MUST NOT proceed — an unknown
+        /// cloud state plus a push equals potential duplication. Retried on the
+        /// next sync trigger.
+        case checkFailed
+    }
+
+    func checkFirstSignInConflict(context: ModelContext) async -> FirstSignInCheckResult {
+        guard UserDefaults.standard.string(forKey: Self.localOwnerKey) == nil else { return .noConflict }
         guard SupabaseFeatureFlags.isOperational,
               let client = SupabaseManager.shared.client,
-              let uid = client.auth.currentUser?.id else { return false }
+              let uid = client.auth.currentUser?.id else { return .noConflict }
 
         // Block all auto-sync for the duration of this (network) check, so a local
         // save can't push before we know whether there's a conflict to resolve.
@@ -159,29 +222,77 @@ final class SyncEngine: ObservableObject {
         // and silently pushed those duplicates. Treat categories as local data too.
         guard localHasSyncableData(context) else {
             UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
-            return false
+            return .noConflict
         }
 
         // Cloud data check. Use do/catch so a network failure is never
-        // misidentified as "cloud empty" — we'll retry on the next sign-in.
+        // misidentified as "cloud empty", and never falls through to a sync.
         let cloudHasData: Bool
         do {
             cloudHasData = try await cloudHasSyncableData(client, uid)
         } catch {
             print("[SyncEngine] checkFirstSignInConflict: cloud query failed — will retry: \(error)")
-            return false
+            lastError = "Couldn't verify your account's cloud data. Will retry."
+            return .checkFailed
         }
 
         guard cloudHasData else {
             // Cloud is empty — no conflict. Stamp ownership and allow normal sync.
             UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
-            return false
+            return .noConflict
+        }
+
+        // When everything on this device is an untouched default seed (fresh
+        // install or post-sign-out relaunch), there is nothing worth asking
+        // about: adopt the cloud silently instead of raising a destructive-
+        // sounding modal whose wrong answer ("keep this device") would replace
+        // the user's entire cloud history with 20 empty categories.
+        if isPristineDefaultDataset(context) {
+            print("[SyncEngine] first sign-in: local data is an untouched default seed — adopting cloud")
+            SyncMutationTracker.isApplyingSyncChanges = true
+            wipeLocalData(context: context)
+            resetSyncState()
+            SyncMutationTracker.isApplyingSyncChanges = false
+            UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+            NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+            return .noConflict
         }
 
         // Both device and cloud have data — ask the user.
         // localOwnerKey is intentionally NOT stamped here; resolution functions
         // stamp it once the user decides, so a force-quit retriggers this check.
         conflictState = .pendingUserDecision
+        return .conflict
+    }
+
+    /// True when the device's only syncable data is the auto-seeded default
+    /// category set, untouched: no content in any other entity, and every live
+    /// category still matches its `CategoryCatalog` definition (canonical key
+    /// present, name unchanged in a shipped language). A renamed or user-created
+    /// category makes this false — the conservative answer, which falls back to
+    /// asking the user.
+    private func isPristineDefaultDataset(_ context: ModelContext) -> Bool {
+        func has<T>(_ descriptor: FetchDescriptor<T>) -> Bool {
+            var d = descriptor
+            d.fetchLimit = 1
+            return (try? context.fetch(d))?.isEmpty == false
+        }
+        if has(FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<Transaction>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<Event>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<Debt>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        if has(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.deletedAt == nil })) { return false }
+        let categories = (try? context.fetch(FetchDescriptor<Category>(
+            predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        for category in categories {
+            guard let key = category.canonicalKey,
+                  let def = CategoryCatalog.definition(forKey: key),
+                  def.type == category.type,
+                  CategoryCatalog.matchDefinition(name: category.name, type: category.type)?.key == key
+            else { return false }
+        }
         return true
     }
 
@@ -237,6 +348,7 @@ final class SyncEngine: ObservableObject {
             resetSyncState()
             SyncMutationTracker.isApplyingSyncChanges = false
         }
+        NotificationCenter.default.post(name: .dataDidUpdate, object: self)
         UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
         // Call syncNow directly: syncIfOperational is gated while resolving.
         await syncNow(context: context)
@@ -301,20 +413,20 @@ final class SyncEngine: ObservableObject {
     /// the full dataset. Runs under the sync-write guard so the mutation tracker
     /// doesn't also rewrite `updatedAt` on every record.
     private func forceAllLocalNeedsSync(context: ModelContext) {
-        SyncMutationTracker.isApplyingSyncChanges = true
-        defer { SyncMutationTracker.isApplyingSyncChanges = false }
-        func flag<T: PersistentModel & SyncTrackable>(_ type: T.Type) {
-            if let rows = try? context.fetch(FetchDescriptor<T>()) {
-                for row in rows { row.needsSync = true }
+        withSyncWriteGuard {
+            func flag<T: PersistentModel & SyncTrackable>(_ type: T.Type) {
+                if let rows = try? context.fetch(FetchDescriptor<T>()) {
+                    for row in rows { row.needsSync = true }
+                }
             }
+            flag(Wallet.self); flag(Category.self); flag(Event.self); flag(Debt.self)
+            flag(SavingsGoal.self); flag(RecurringRule.self); flag(EventMember.self)
+            flag(EventLedgerTransaction.self); flag(EventLedgerParticipant.self)
+            flag(EventSettlementSnapshot.self); flag(EventSettlementTransfer.self)
+            flag(EventWalletExportRecord.self); flag(Transaction.self)
+            flag(Budget.self); flag(TransactionLocation.self)
+            try? context.save()
         }
-        flag(Wallet.self); flag(Category.self); flag(Event.self); flag(Debt.self)
-        flag(SavingsGoal.self); flag(RecurringRule.self); flag(EventMember.self)
-        flag(EventLedgerTransaction.self); flag(EventLedgerParticipant.self)
-        flag(EventSettlementSnapshot.self); flag(EventSettlementTransfer.self)
-        flag(EventWalletExportRecord.self); flag(Transaction.self)
-        flag(Budget.self); flag(TransactionLocation.self)
-        try? context.save()
     }
 
     private func handleLocalSave() {
@@ -327,7 +439,7 @@ final class SyncEngine: ObservableObject {
               SupabaseFeatureFlags.isOperational,
               conflictState == .none,
               !isAwaitingInitialConflictCheck,
-              let context = autoSyncContext else { return }
+              autoSyncContext != nil else { return }
         print("[SyncEngine] handleLocalSave called. Debouncing auto-sync.")
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
@@ -374,6 +486,26 @@ final class SyncEngine: ObservableObject {
             return
         }
 
+        // An un-owned store must PASS the first-sign-in check before anything
+        // can push. Previously a failed cloud probe fell through to a full sync,
+        // which could upload freshly seeded default categories into an account
+        // that already has data — the category-duplication bug. `.conflict`
+        // raises the resolution modal; `.checkFailed` surfaces the error and the
+        // next trigger retries. This also closes the foreground-sync path, which
+        // used to bypass the check entirely.
+        if UserDefaults.standard.string(forKey: Self.localOwnerKey) == nil {
+            switch await checkFirstSignInConflict(context: context) {
+            case .noConflict:
+                break
+            case .conflict:
+                print("[SyncEngine] syncNow blocked: first-sign-in conflict raised")
+                return
+            case .checkFailed:
+                print("[SyncEngine] syncNow blocked: first-sign-in cloud check failed")
+                return
+            }
+        }
+
         isSyncing = true
         lastError = nil
         defer {
@@ -381,12 +513,13 @@ final class SyncEngine: ObservableObject {
             print("[SyncEngine] syncNow finished (isSyncing set to false)")
         }
 
-        // Hold the sync-write guard for the whole operation so none of the
-        // engine's own writes (pull-applied rows, post-push needsSync clearing,
-        // remote deletions) get re-flagged as local edits by the mutation tracker.
-        SyncMutationTracker.isApplyingSyncChanges = true
-        defer { SyncMutationTracker.isApplyingSyncChanges = false }
-
+        // NOTE on the sync-write guard: it is NOT held across this whole
+        // operation. syncNow runs on the main actor and suspends at every
+        // network await, where the UI is free to save user edits — a blanket
+        // guard blinded SyncMutationTracker to those saves, so edits (and
+        // deletions) made while a sync was in flight were never flagged and
+        // never synced. Instead, each of the engine's own synchronous
+        // write+save spans is wrapped in `withSyncWriteGuard`.
         didApplyRemoteChanges = false
 
         // Each table step runs in its own do/catch and records a failure instead
@@ -405,6 +538,12 @@ final class SyncEngine: ObservableObject {
             }
         }
 
+        // One-time cleanup of rows a previous account left on this device
+        // (legacy builds didn't wipe on account switch). Must run before any
+        // push: their ids exist in the cloud under the other account, so
+        // upserting them trips RLS and wedges the table's push.
+        await runStep("reconcile foreign rows") { try self.purgeForeignRows(context, uid: uid) }
+
         // Propagate local hard-deletes first (set deleted_at on the server).
         await runStep("push deletions") { try await self.pushDeletions(client) }
 
@@ -415,6 +554,16 @@ final class SyncEngine: ObservableObject {
         // wins on push. New local-only rows aren't touched by pull and still push.
         await runStep("pull wallets") { try await self.pullWallets(context, client, uid) }
         await runStep("pull categories") { try await self.pullCategories(context, client, uid) }
+        // Merge same-canonical-key duplicates the pull may have surfaced (e.g.
+        // two devices minted "Debt" on demand while offline). Winner selection is
+        // deterministic, so every device converges on the same survivor; losers
+        // become tombstones and the re-pointed children push below.
+        await runStep("dedupe categories") {
+            try self.withSyncWriteGuard {
+                try CategoryCatalog.dedupeCanonicalCategories(in: context, owner: uid)
+                try context.save()
+            }
+        }
         await runStep("pull events") { try await self.pullEvents(context, client, uid) }
         await runStep("pull debts") { try await self.pullDebts(context, client, uid) }
         await runStep("pull savings goals") { try await self.pullSavingsGoals(context, client, uid) }
@@ -445,6 +594,9 @@ final class SyncEngine: ObservableObject {
         await runStep("push transactions") { try await self.pushTransactions(context, client, uid) }
         await runStep("push budgets") { try await self.pushBudgets(context, client, uid) }
         await runStep("push transaction locations") { try await self.pushTransactionLocations(context, client, uid) }
+
+        // Account profile (display name + avatar) — single-row pull/push.
+        await runStep("profile") { try await ProfileSyncService.shared.sync(client, uid: uid) }
 
         // Retry any receipt/cover/avatar images that failed to download earlier.
         // Self-healing: successes clear themselves, failures stay queued. Never
@@ -490,6 +642,12 @@ final class SyncEngine: ObservableObject {
         UserDefaults.standard.string(forKey: localOwnerKey) != nil
     }
 
+    /// The account that currently owns this device's local store, if any.
+    /// `nonisolated` for the background launch-maintenance task.
+    nonisolated static var localOwnerUUID: UUID? {
+        UserDefaults.standard.string(forKey: localOwnerKey).flatMap(UUID.init(uuidString:))
+    }
+
     private static let allTableNames = [
         "wallets", "categories", "events", "recurring_rules", "savings_goals", "debts",
         "transactions", "transaction_locations", "budgets", "budget_categories",
@@ -524,12 +682,17 @@ final class SyncEngine: ObservableObject {
         guard let owner else { return }
         guard owner != uid else { return }
         // Different account owned this device — wipe and take ownership now.
-        SyncMutationTracker.isApplyingSyncChanges = true
-        defer { SyncMutationTracker.isApplyingSyncChanges = false }
-        wipeLocalData(context: context)
-        resetSyncState()
+        do {
+            SyncMutationTracker.isApplyingSyncChanges = true
+            defer { SyncMutationTracker.isApplyingSyncChanges = false }
+            wipeLocalData(context: context)
+            resetSyncState()
+        }
         lastSyncDate = nil
         UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
+        // The previous account's profile identity must not leak to this one.
+        ProfileSyncService.shared.clearLocal()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: self)
     }
 
     /// Bulk-deletes all synced models locally (children before parents to respect
@@ -559,44 +722,153 @@ final class SyncEngine: ObservableObject {
         UserDefaults.standard.set(false, forKey: "hasCompletedInitialSync.v1")
     }
 
+    // MARK: - Foreign-row reconciliation (legacy account-switch cleanup)
+
+    private static func foreignPurgeKey(_ uid: UUID) -> String { "foreignRowsPurged.v1.\(uid.uuidString)" }
+
+    /// Removes (or adopts) rows that were synced under a DIFFERENT account and
+    /// left on this device by builds that predate the account-reconcile wipe.
+    ///
+    /// Pushing such rows into the current account trips the cloud's RLS: their
+    /// ids already exist there under the other account, so the upsert's UPDATE
+    /// arm fails its USING check ("new row violates row-level security policy")
+    /// and the whole table's push wedges. Beyond the error, pushing them would
+    /// mix two accounts' financial data.
+    ///
+    /// The other account's cloud copy is intact, so:
+    ///  • foreign *content* rows (transactions, events, debts, …) are dropped
+    ///    locally — no tombstones (the guard suppresses deletion tracking), the
+    ///    other account keeps its data;
+    ///  • foreign wallets/categories still referenced by CURRENT-account rows
+    ///    are adopted instead: fresh id, owner reassigned, flagged to push as
+    ///    this account's own row (a hard delete would orphan the references —
+    ///    and `Category.transactions` is `.deny`, so it would abort the save).
+    ///    Adopted categories keep their canonical key, so the dedupe pass merges
+    ///    them into the account's own copy right after the next pull.
+    ///
+    /// Runs once per (device, account); the reconcile wipe prevents new foreign
+    /// rows from appearing afterwards.
+    private func purgeForeignRows(_ context: ModelContext, uid: UUID) throws {
+        guard !UserDefaults.standard.bool(forKey: Self.foreignPurgeKey(uid)) else { return }
+        try withSyncWriteGuard {
+            func foreignRows<T: PersistentModel & SyncTrackable>(_ type: T.Type) -> [T] {
+                ((try? context.fetch(FetchDescriptor<T>())) ?? []).filter {
+                    guard let owner = ($0 as? any SyncOwned)?.syncOwner else { return false }
+                    return owner != uid
+                }
+            }
+            var dropped = 0
+            func drop<T: PersistentModel & SyncTrackable>(_ type: T.Type) {
+                for row in foreignRows(type) {
+                    context.delete(row)
+                    dropped += 1
+                }
+            }
+            // Content rows, children before parents (mirrors wipeLocalData).
+            drop(TransactionLocation.self)
+            drop(Transaction.self)
+            drop(EventWalletExportRecord.self)
+            drop(EventSettlementTransfer.self)
+            drop(EventSettlementSnapshot.self)
+            drop(EventLedgerParticipant.self)
+            drop(EventLedgerTransaction.self)
+            drop(EventMember.self)
+            drop(Budget.self)
+            drop(RecurringRule.self)
+            drop(SavingsGoal.self)
+            drop(Debt.self)
+            drop(Event.self)
+
+            var adopted = 0
+            func adopt(_ row: some PersistentModel & SyncTrackable) {
+                // Fresh identity: becomes a brand-new LOCAL row (owner cleared,
+                // not assigned) — so if the current account already has its own
+                // copy of this category in the cloud, the dedupe ranking treats
+                // the adopted one as local-only and merges it INTO the real row,
+                // never the other way around.
+                if let c = row as? Category {
+                    c.id = UUID()
+                    c.syncUserID = nil
+                }
+                if let w = row as? Wallet {
+                    w.id = UUID()
+                    w.syncUserID = nil
+                }
+                row.updatedAt = Date()
+                row.needsSync = true
+                adopted += 1
+            }
+
+            // Foreign content is gone; any remaining reference to a foreign
+            // wallet/category comes from the CURRENT account's data.
+            let goals = (try? context.fetch(FetchDescriptor<SavingsGoal>())) ?? []
+            for w in foreignRows(Wallet.self) {
+                let referenced = !(w.outgoingTransactions ?? []).isEmpty
+                    || !(w.incomingTransactions ?? []).isEmpty
+                    || !(w.recurringRules ?? []).isEmpty
+                    || goals.contains { $0.linkedWallet === w }
+                if referenced { adopt(w) } else { context.delete(w); dropped += 1 }
+            }
+            for c in foreignRows(Category.self) {
+                let referenced = !(c.transactions ?? []).isEmpty
+                    || !(c.budgets ?? []).isEmpty
+                    || !(c.recurringRules ?? []).isEmpty
+                if referenced { adopt(c) } else { context.delete(c); dropped += 1 }
+            }
+
+            try context.save()
+            if dropped > 0 || adopted > 0 {
+                print("[SyncEngine] purged \(dropped) foreign rows, adopted \(adopted) (previous-account leftovers)")
+            }
+            UserDefaults.standard.set(true, forKey: Self.foreignPurgeKey(uid))
+        }
+    }
+
     // MARK: - Push
 
     private func pushWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Wallet>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { w in
             SyncWalletRow(id: w.id, user_id: uid, name: w.name, currency_code: w.currencyCode,
                       icon: w.icon, color_hex: w.colorHex, is_archived: w.isArchived,
                       created_at: w.createdAt, updated_at: w.updatedAt, deleted_at: w.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "wallets", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushCategories(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { c in
             SyncCategoryRow(id: c.id, user_id: uid, name: c.name, icon: c.icon, color_hex: c.colorHex,
-                        type: c.type.rawValue, is_system: c.isSystem,
+                        type: c.type.rawValue, is_system: c.isSystem, canonical_key: c.canonicalKey,
                         created_at: c.createdAt, updated_at: c.updatedAt, deleted_at: c.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "categories", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         var rows: [SyncTransactionRow] = []
         rows.reserveCapacity(pending.count)
         for t in pending {
             var photoPath: String?
             if let data = t.photoData {
                 photoPath = imagePath(uid, "transactions", t.id)
-                try await uploadImage(data, to: photoPath!, client) // throws → sync retries (needsSync kept)
+                let hash = Self.sha256(data)
+                if t.photoUploadedHash != hash {
+                    try await uploadImage(data, to: photoPath!, client) // throws → sync retries (needsSync kept)
+                    t.photoUploadedHash = hash
+                }
+            } else {
+                t.photoUploadedHash = nil
             }
             rows.append(SyncTransactionRow(
                 id: t.id, user_id: uid, type: t.type.rawValue, date: t.date, note: t.note,
@@ -613,20 +885,26 @@ final class SyncEngine: ObservableObject {
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "transactions", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Event>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         var rows: [SyncEventRow] = []
         rows.reserveCapacity(pending.count)
         for e in pending {
             var coverPath: String?
             if let data = e.coverImageData {
                 coverPath = imagePath(uid, "events", e.id)
-                try await uploadImage(data, to: coverPath!, client)
+                let hash = Self.sha256(data)
+                if e.coverImageUploadedHash != hash {
+                    try await uploadImage(data, to: coverPath!, client)
+                    e.coverImageUploadedHash = hash
+                }
+            } else {
+                e.coverImageUploadedHash = nil
             }
             rows.append(SyncEventRow(id: e.id, user_id: uid, title: e.title, start_date: e.startDate,
                          end_date: e.endDate, total_budget: e.totalBudget, cover_image_path: coverPath,
@@ -637,13 +915,13 @@ final class SyncEngine: ObservableObject {
                          updated_at: e.updatedAt, deleted_at: e.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "events", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Debt>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { d in
             SyncDebtRow(id: d.id, user_id: uid, person_name: d.personName, total_amount: d.totalAmount,
                         currency_code: d.currencyCode, due_date: d.dueDate, type: d.type.rawValue, note: d.note,
@@ -651,13 +929,13 @@ final class SyncEngine: ObservableObject {
                         updated_at: d.updatedAt, deleted_at: d.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "debts", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { g in
             SyncSavingsGoalRow(id: g.id, user_id: uid, name: g.name, goal_description: g.goalDescription,
                                target_amount: g.targetAmount, current_amount: g.currentAmount,
@@ -670,13 +948,13 @@ final class SyncEngine: ObservableObject {
                                priority: g.priority, linked_wallet_id: g.linkedWallet?.id, deleted_at: g.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "savings_goals", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { r in
             SyncRecurringRuleRow(id: r.id, user_id: uid, name: r.name, amount: r.amount,
                                  currency_code: r.currencyCode, type: r.type.rawValue, frequency: r.frequency.rawValue,
@@ -687,20 +965,26 @@ final class SyncEngine: ObservableObject {
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "recurring_rules", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventMember>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         var rows: [SyncEventMemberRow] = []
         rows.reserveCapacity(pending.count)
         for m in pending {
             var avatarPath: String?
             if let data = m.avatarData {
                 avatarPath = imagePath(uid, "event_members", m.id)
-                try await uploadImage(data, to: avatarPath!, client)
+                let hash = Self.sha256(data)
+                if m.avatarUploadedHash != hash {
+                    try await uploadImage(data, to: avatarPath!, client)
+                    m.avatarUploadedHash = hash
+                }
+            } else {
+                m.avatarUploadedHash = nil
             }
             rows.append(SyncEventMemberRow(id: m.id, user_id: uid, event_id: m.event?.id, name: m.name,
                                            avatar_path: avatarPath, avatar_icon: m.avatarIcon,
@@ -710,13 +994,13 @@ final class SyncEngine: ObservableObject {
                                            updated_at: m.updatedAt, deleted_at: m.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "event_members", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventLedgerTransaction>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { t in
             SyncEventLedgerTransactionRow(id: t.id, user_id: uid, event_id: t.event?.id, kind: t.kind.rawValue,
                                           title: t.title, amount_minor: t.amountMinor, paid_source: t.paidSource.rawValue,
@@ -728,39 +1012,39 @@ final class SyncEngine: ObservableObject {
                                           deleted_at: t.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_ledger_transactions", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventLedgerParticipants(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventLedgerParticipant>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { p in
             SyncEventLedgerParticipantRow(id: p.id, user_id: uid, transaction_id: p.transaction?.id,
                                           member_id: p.memberId, event_member_id: p.member?.id,
                                           order_index: p.orderIndex, updated_at: p.updatedAt, deleted_at: p.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_ledger_participants", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventSettlementSnapshots(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventSettlementSnapshot>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { s in
             SyncEventSettlementSnapshotRow(id: s.id, user_id: uid, event_id: s.event?.id,
                                            ledger_revision: s.ledgerRevision, created_at: s.createdAt,
                                            updated_at: s.updatedAt, deleted_at: s.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_settlement_snapshots", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventSettlementTransfers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventSettlementTransfer>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { t in
             SyncEventSettlementTransferRow(id: t.id, user_id: uid, snapshot_id: t.snapshot?.id,
                                            from_member_id: t.fromMemberId, to_member_id: t.toMemberId,
@@ -768,13 +1052,13 @@ final class SyncEngine: ObservableObject {
                                            updated_at: t.updatedAt, deleted_at: t.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_settlement_transfers", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventWalletExportRecords(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { r in
             SyncEventWalletExportRecordRow(id: r.id, user_id: uid, event_id: r.event?.id, snapshot_id: r.snapshot?.id,
                                            member_id: r.memberId, wallet_transaction_id: r.walletTransactionId,
@@ -783,13 +1067,13 @@ final class SyncEngine: ObservableObject {
                                            updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_wallet_export_records", client)
-        writeBackServerTimestamps(returned, to: pending)
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { b in
             SyncBudgetRow(id: b.id, user_id: uid, name: b.name, amount_limit: b.amountLimit,
                           currency_code: b.currencyCode, period_type_raw: b.periodType.rawValue,
@@ -806,7 +1090,6 @@ final class SyncEngine: ObservableObject {
                           category_id: b.category?.id, deleted_at: b.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "budgets", client)
-        writeBackServerTimestamps(returned, to: pending)
         // Rebuild each budget's category join rows (delete then insert current set).
         for b in pending {
             try await client.from("budget_categories").delete().eq("budget_id", value: b.id.uuidString).execute()
@@ -817,7 +1100,7 @@ final class SyncEngine: ObservableObject {
                 try await client.from("budget_categories").insert(joins).execute()
             }
         }
-        markSynced(pending, uid: uid, context: context)
+        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -828,6 +1111,7 @@ final class SyncEngine: ObservableObject {
             return (t, loc)
         }
         guard !pairs.isEmpty else { return }
+        let snapshot = updatedAtSnapshot(pairs.map { $0.1 })
         let rows = pairs.map { (t, loc) in
             SyncTransactionLocationRow(id: loc.id, user_id: uid, transaction_id: t.id,
                                        display_name: loc.displayName, full_address: loc.fullAddress,
@@ -844,9 +1128,7 @@ final class SyncEngine: ObservableObject {
                                        updated_at: loc.updatedAt, deleted_at: loc.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "transaction_locations", client)
-        let locations = pairs.map { $0.1 }
-        writeBackServerTimestamps(returned, to: locations)
-        markSynced(locations, uid: uid, context: context)
+        finishPush(returned, pending: pairs.map { $0.1 }, snapshot: snapshot, uid: uid, context: context)
     }
 
     /// Sets `deleted_at` on the server for each locally-deleted row, then clears
@@ -871,13 +1153,53 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    private func markSynced(_ models: [any SyncTrackable], uid: UUID, context: ModelContext) {
-        // (sync-write guard is held for the whole syncNow operation)
-        for case let m as (any SyncTrackable) in models {
-            m.needsSync = false
-            (m as? any SyncOwned)?.assignOwner(uid)
+    /// Runs a synchronous span of the engine's own writes under the mutation-
+    /// tracker guard, so the save inside isn't re-flagged as a user edit. Must
+    /// never wrap an `await`: while suspended, the guard would blind the tracker
+    /// to genuine user saves happening on the main actor.
+    func withSyncWriteGuard<T>(_ body: () throws -> T) rethrows -> T {
+        let previous = SyncMutationTracker.isApplyingSyncChanges
+        SyncMutationTracker.isApplyingSyncChanges = true
+        defer { SyncMutationTracker.isApplyingSyncChanges = previous }
+        return try body()
+    }
+
+    /// Captures each model's `updatedAt` before a push's network await, so
+    /// `finishPush` can tell "unchanged since we serialized it" apart from
+    /// "user edited it while the upsert was in flight".
+    private func updatedAtSnapshot(_ models: [any SyncTrackable]) -> [UUID: Date] {
+        Dictionary(models.map { ($0.id, $0.updatedAt) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Completes a push: writes the server-authoritative `updated_at` back and
+    /// clears `needsSync` — but ONLY for models whose `updatedAt` still matches
+    /// the pre-push snapshot. A model edited during the upsert await keeps its
+    /// dirty flag (and its newer local timestamp) so the edit pushes next cycle
+    /// instead of being silently marked synced with stale server state.
+    private func finishPush<R: SyncServerRow>(
+        _ returned: [R],
+        pending: [any SyncTrackable],
+        snapshot: [UUID: Date],
+        uid: UUID,
+        context: ModelContext
+    ) {
+        withSyncWriteGuard {
+            let serverDates = Dictionary(returned.map { ($0.id, $0.updated_at) },
+                                         uniquingKeysWith: { first, _ in first })
+            for m in pending {
+                guard snapshot[m.id] == m.updatedAt else { continue }  // edited mid-push — stays dirty
+                if let d = serverDates[m.id] { m.updatedAt = d }
+                m.needsSync = false
+                (m as? any SyncOwned)?.assignOwner(uid)
+            }
+            try? context.save()
         }
-        try? context.save()
+    }
+
+    /// Hex SHA-256 — identity for uploaded image bytes, so receipts/covers/
+    /// avatars re-upload only when the pixels actually changed.
+    static func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Resolves a pulled row's foreign-key reference, preserving an existing link
@@ -914,452 +1236,482 @@ final class SyncEngine: ObservableObject {
     private func pullWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncWalletRow] = try await fetchChanged("wallets", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "wallets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(Wallet.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "wallets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(Wallet.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                let w = try fetchByID(Wallet.self, id: row.id, in: context) ?? {
+                    let new = Wallet(name: row.name, currencyCode: row.currency_code, icon: row.icon, colorHex: row.color_hex)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                // LWW: keep local if it has a newer un-pushed change.
+                if Self.localChangeWins(localNeedsSync: w.needsSync, localUpdatedAt: w.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                w.name = row.name; w.currencyCode = row.currency_code; w.icon = row.icon
+                w.colorHex = row.color_hex; w.isArchived = row.is_archived
+                w.createdAt = row.created_at; w.updatedAt = row.updated_at
+                w.deletedAt = row.deleted_at; w.syncUserID = row.user_id; w.needsSync = false
             }
-            let w = try fetchByID(Wallet.self, id: row.id, in: context) ?? {
-                let new = Wallet(name: row.name, currencyCode: row.currency_code, icon: row.icon, colorHex: row.color_hex)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            // LWW: keep local if it has a newer un-pushed change.
-            if Self.localChangeWins(localNeedsSync: w.needsSync, localUpdatedAt: w.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            w.name = row.name; w.currencyCode = row.currency_code; w.icon = row.icon
-            w.colorHex = row.color_hex; w.isArchived = row.is_archived
-            w.createdAt = row.created_at; w.updatedAt = row.updated_at
-            w.deletedAt = row.deleted_at; w.syncUserID = row.user_id; w.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullCategories(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncCategoryRow] = try await fetchChanged("categories", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "categories", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(Category.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "categories", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(Category.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                let c = try fetchByID(Category.self, id: row.id, in: context) ?? {
+                    let new = Category(name: row.name, icon: row.icon ?? "", colorHex: row.color_hex ?? "",
+                                       type: TransactionType(rawValue: row.type) ?? .expense, isSystem: row.is_system,
+                                       canonicalKey: row.canonical_key)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: c.needsSync, localUpdatedAt: c.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                c.name = row.name; c.icon = row.icon ?? ""; c.colorHex = row.color_hex ?? ""
+                c.type = TransactionType(rawValue: row.type) ?? c.type; c.isSystem = row.is_system
+                // Never let a pre-key cloud row (canonical_key null) erase a locally
+                // stamped key — the stamp is what makes dedupe converge.
+                if let key = row.canonical_key { c.canonicalKey = key }
+                c.createdAt = row.created_at; c.updatedAt = row.updated_at
+                c.deletedAt = row.deleted_at; c.syncUserID = row.user_id; c.needsSync = false
             }
-            let c = try fetchByID(Category.self, id: row.id, in: context) ?? {
-                let new = Category(name: row.name, icon: row.icon ?? "", colorHex: row.color_hex ?? "",
-                                   type: TransactionType(rawValue: row.type) ?? .expense, isSystem: row.is_system)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: c.needsSync, localUpdatedAt: c.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            c.name = row.name; c.icon = row.icon ?? ""; c.colorHex = row.color_hex ?? ""
-            c.type = TransactionType(rawValue: row.type) ?? c.type; c.isSystem = row.is_system
-            c.createdAt = row.created_at; c.updatedAt = row.updated_at
-            c.deletedAt = row.deleted_at; c.syncUserID = row.user_id; c.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncTransactionRow] = try await fetchChanged("transactions", client, uid)
         guard !rows.isEmpty else { return }
         var pendingPhotoDownloads: [(UUID, String)] = []
-        try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(Transaction.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(Transaction.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
+                let t = try fetchByID(Transaction.self, id: row.id, in: context) ?? {
+                    let new = Transaction(amount: row.amount, currencyCode: row.currency_code,
+                                          date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
+                                          exchangeRate: row.exchange_rate)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                t.type = TransactionType(rawValue: row.type) ?? t.type
+                t.date = row.date; t.note = row.note; t.tags = row.tags
+                t.excludeFromReports = row.exclude_from_reports
+                t.amount = row.amount; t.currencyCode = row.currency_code
+                t.exchangeRate = row.exchange_rate; t.storedRate = row.stored_rate
+                t.category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
+                t.sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
+                t.destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
+                t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+                t.recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
+                t.debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
+                t.savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
+                t.createdAt = row.created_at; t.updatedAt = row.updated_at
+                t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
             }
-            if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
-            let t = try fetchByID(Transaction.self, id: row.id, in: context) ?? {
-                let new = Transaction(amount: row.amount, currencyCode: row.currency_code,
-                                      date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
-                                      exchangeRate: row.exchange_rate)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            t.type = TransactionType(rawValue: row.type) ?? t.type
-            t.date = row.date; t.note = row.note; t.tags = row.tags
-            t.excludeFromReports = row.exclude_from_reports
-            t.amount = row.amount; t.currencyCode = row.currency_code
-            t.exchangeRate = row.exchange_rate; t.storedRate = row.stored_rate
-            t.category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
-            t.sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
-            t.destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
-            t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
-            t.recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
-            t.debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
-            t.savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
-            t.createdAt = row.created_at; t.updatedAt = row.updated_at
-            t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
+            try context.save()
         }
-        try context.save()
         // Download receipt images for rows that have a path but no local data.
         for (id, path) in pendingPhotoDownloads {
             guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
             await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
         }
-        if !pendingPhotoDownloads.isEmpty { try context.save() }
+        if !pendingPhotoDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
 
     private func pullEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventRow] = try await fetchChanged("events", client, uid)
         guard !rows.isEmpty else { return }
         var pendingCoverDownloads: [(UUID, String)] = []
-        try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(Event.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(Event.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                if let path = row.cover_image_path { pendingCoverDownloads.append((row.id, path)) }
+                let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
+                    let new = Event(title: row.title, startDate: row.start_date)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: e.needsSync, localUpdatedAt: e.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                e.title = row.title; e.startDate = row.start_date; e.endDate = row.end_date
+                e.totalBudget = row.total_budget; e.notes = row.notes; e.icon = row.icon
+                e.colorHex = row.color_hex; e.location = row.location; e.status = row.status
+                e.currencyCode = row.currency_code; e.ledgerRevision = row.ledger_revision
+                e.confirmedSettlementRevision = row.confirmed_settlement_revision
+                e.ledgerMode = EventLedgerMode(rawValue: row.ledger_mode) ?? .isolatedV1
+                e.latitude = row.latitude; e.longitude = row.longitude
+                e.updatedAt = row.updated_at; e.deletedAt = row.deleted_at
+                e.syncUserID = row.user_id; e.needsSync = false
             }
-            if let path = row.cover_image_path { pendingCoverDownloads.append((row.id, path)) }
-            let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
-                let new = Event(title: row.title, startDate: row.start_date)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: e.needsSync, localUpdatedAt: e.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            e.title = row.title; e.startDate = row.start_date; e.endDate = row.end_date
-            e.totalBudget = row.total_budget; e.notes = row.notes; e.icon = row.icon
-            e.colorHex = row.color_hex; e.location = row.location; e.status = row.status
-            e.currencyCode = row.currency_code; e.ledgerRevision = row.ledger_revision
-            e.confirmedSettlementRevision = row.confirmed_settlement_revision
-            e.ledgerMode = EventLedgerMode(rawValue: row.ledger_mode) ?? .isolatedV1
-            e.latitude = row.latitude; e.longitude = row.longitude
-            e.updatedAt = row.updated_at; e.deletedAt = row.deleted_at
-            e.syncUserID = row.user_id; e.needsSync = false
+            try context.save()
         }
-        try context.save()
         for (id, path) in pendingCoverDownloads {
             guard let e = try fetchByID(Event.self, id: id, in: context), e.coverImageData == nil else { continue }
             await downloadAndStoreImage(path, kind: .eventCover, id: id, client, context)
         }
-        if !pendingCoverDownloads.isEmpty { try context.save() }
+        if !pendingCoverDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
 
     private func pullDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncDebtRow] = try await fetchChanged("debts", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(Debt.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(Debt.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                let d = try fetchByID(Debt.self, id: row.id, in: context) ?? {
+                    let new = Debt(personName: row.person_name, totalAmount: row.total_amount,
+                                   currencyCode: row.currency_code, type: DebtType(rawValue: row.type) ?? .iOwe,
+                                   dueDate: row.due_date, note: row.note)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: d.needsSync, localUpdatedAt: d.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                d.personName = row.person_name; d.totalAmount = row.total_amount; d.currencyCode = row.currency_code
+                d.dueDate = row.due_date; d.type = DebtType(rawValue: row.type) ?? d.type; d.note = row.note
+                d.dateCreated = row.date_created; d.isCompleted = row.is_completed
+                d.createdAt = row.created_at; d.updatedAt = row.updated_at; d.deletedAt = row.deleted_at
+                d.syncUserID = row.user_id; d.needsSync = false
             }
-            let d = try fetchByID(Debt.self, id: row.id, in: context) ?? {
-                let new = Debt(personName: row.person_name, totalAmount: row.total_amount,
-                               currencyCode: row.currency_code, type: DebtType(rawValue: row.type) ?? .iOwe,
-                               dueDate: row.due_date, note: row.note)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: d.needsSync, localUpdatedAt: d.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            d.personName = row.person_name; d.totalAmount = row.total_amount; d.currencyCode = row.currency_code
-            d.dueDate = row.due_date; d.type = DebtType(rawValue: row.type) ?? d.type; d.note = row.note
-            d.dateCreated = row.date_created; d.isCompleted = row.is_completed
-            d.createdAt = row.created_at; d.updatedAt = row.updated_at; d.deletedAt = row.deleted_at
-            d.syncUserID = row.user_id; d.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncSavingsGoalRow] = try await fetchChanged("savings_goals", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                let g = try fetchByID(SavingsGoal.self, id: row.id, in: context) ?? {
+                    let new = SavingsGoal(name: row.name, targetAmount: row.target_amount,
+                                          currencyCode: row.currency_code, targetDate: row.target_date,
+                                          iconName: row.icon_name, colorHex: row.color_hex)
+                    new.id = row.id
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
+                g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
+                g.createdDate = row.created_date; g.updatedAt = row.updated_at; g.iconName = row.icon_name
+                g.colorHex = row.color_hex; g.isCompleted = row.is_completed; g.completedDate = row.completed_date
+                g.autoContributeEnabled = row.auto_contribute_enabled
+                g.autoContributeAmount = row.auto_contribute_amount
+                g.autoContributePeriod = row.auto_contribute_period_raw.flatMap { BudgetPeriodType(rawValue: $0) }
+                g.priority = row.priority
+                g.linkedWallet = try resolveRef(Wallet.self, id: row.linked_wallet_id, current: g.linkedWallet, in: context)
+                g.deletedAt = row.deleted_at; g.syncUserID = row.user_id; g.needsSync = false
             }
-            let g = try fetchByID(SavingsGoal.self, id: row.id, in: context) ?? {
-                let new = SavingsGoal(name: row.name, targetAmount: row.target_amount,
-                                      currencyCode: row.currency_code, targetDate: row.target_date,
-                                      iconName: row.icon_name, colorHex: row.color_hex)
-                new.id = row.id
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
-            g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
-            g.createdDate = row.created_date; g.updatedAt = row.updated_at; g.iconName = row.icon_name
-            g.colorHex = row.color_hex; g.isCompleted = row.is_completed; g.completedDate = row.completed_date
-            g.autoContributeEnabled = row.auto_contribute_enabled
-            g.autoContributeAmount = row.auto_contribute_amount
-            g.autoContributePeriod = row.auto_contribute_period_raw.flatMap { BudgetPeriodType(rawValue: $0) }
-            g.priority = row.priority
-            g.linkedWallet = try resolveRef(Wallet.self, id: row.linked_wallet_id, current: g.linkedWallet, in: context)
-            g.deletedAt = row.deleted_at; g.syncUserID = row.user_id; g.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncRecurringRuleRow] = try await fetchChanged("recurring_rules", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                    }
+                    return
                 }
-                return
+                let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
+                    let new = RecurringRule(name: row.name, amount: row.amount, currencyCode: row.currency_code,
+                                            frequency: Frequency(rawValue: row.frequency) ?? .monthly,
+                                            startDate: row.start_date,
+                                            type: TransactionType(rawValue: row.type) ?? .expense)
+                    new.id = row.id
+                    new.interval = row.interval
+                    new.needsSync = false
+                    context.insert(new)
+                    return new
+                }()
+                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
+                r.type = TransactionType(rawValue: row.type) ?? r.type
+                r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
+                r.interval = row.interval
+                r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
+                r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
+                r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
+                r.category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
+                r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
+                r.syncUserID = row.user_id; r.needsSync = false
             }
-            let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
-                let new = RecurringRule(name: row.name, amount: row.amount, currencyCode: row.currency_code,
-                                        frequency: Frequency(rawValue: row.frequency) ?? .monthly,
-                                        startDate: row.start_date,
-                                        type: TransactionType(rawValue: row.type) ?? .expense)
-                new.id = row.id
-                new.interval = row.interval
-                new.needsSync = false
-                context.insert(new)
-                return new
-            }()
-            if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
-            r.type = TransactionType(rawValue: row.type) ?? r.type
-            r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
-            r.interval = row.interval
-            r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
-            r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
-            r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
-            r.category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
-            r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
-            r.syncUserID = row.user_id; r.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventMemberRow] = try await fetchChanged("event_members", client, uid)
         guard !rows.isEmpty else { return }
         var pendingAvatarDownloads: [(UUID, String)] = []
-        try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventMember.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventMember.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                if let path = row.avatar_path { pendingAvatarDownloads.append((row.id, path)) }
+                let existing = try fetchByID(EventMember.self, id: row.id, in: context)
+                let m: EventMember
+                if let existing { m = existing } else {
+                    let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                    m = EventMember(name: row.name, event: ev)
+                    m.id = row.id
+                    m.needsSync = false
+                    context.insert(m)
+                }
+                if Self.localChangeWins(localNeedsSync: m.needsSync, localUpdatedAt: m.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
+                m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
+                m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
+                m.event = try resolveRef(Event.self, id: row.event_id, current: m.event, in: context)
+                m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
             }
-            if let path = row.avatar_path { pendingAvatarDownloads.append((row.id, path)) }
-            let existing = try fetchByID(EventMember.self, id: row.id, in: context)
-            let m: EventMember
-            if let existing { m = existing } else {
-                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-                m = EventMember(name: row.name, event: ev)
-                m.id = row.id
-                m.needsSync = false
-                context.insert(m)
-            }
-            if Self.localChangeWins(localNeedsSync: m.needsSync, localUpdatedAt: m.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
-            m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
-            m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
-            m.event = try resolveRef(Event.self, id: row.event_id, current: m.event, in: context)
-            m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
+            try context.save()
         }
-        try context.save()
         for (id, path) in pendingAvatarDownloads {
             guard let m = try fetchByID(EventMember.self, id: id, in: context), m.avatarData == nil else { continue }
             await downloadAndStoreImage(path, kind: .memberAvatar, id: id, client, context)
         }
-        if !pendingAvatarDownloads.isEmpty { try context.save() }
+        if !pendingAvatarDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
 
     private func pullEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventLedgerTransactionRow] = try await fetchChanged("event_ledger_transactions", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context)
+                let t: EventLedgerTransaction
+                if let existing { t = existing } else {
+                    let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                    t = EventLedgerTransaction(
+                        kind: EventLedgerTransactionKind(rawValue: row.kind) ?? .expense, title: row.title,
+                        amountMinor: row.amount_minor, paidSource: EventExpensePaidSource(rawValue: row.paid_source) ?? .member,
+                        paidByMemberId: row.paid_by_member_id, splitType: EventSplitType(rawValue: row.split_type) ?? .equal,
+                        date: row.date, note: row.note, categoryId: row.category_id, categoryName: row.category_name,
+                        categoryIcon: row.category_icon, categoryColorHex: row.category_color_hex, event: ev)
+                    t.id = row.id
+                    t.needsSync = false
+                    context.insert(t)
+                }
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                t.kind = EventLedgerTransactionKind(rawValue: row.kind) ?? t.kind
+                t.title = row.title; t.amountMinor = row.amount_minor
+                t.paidSource = EventExpensePaidSource(rawValue: row.paid_source) ?? t.paidSource
+                t.paidByMemberId = row.paid_by_member_id
+                t.splitType = EventSplitType(rawValue: row.split_type) ?? t.splitType
+                t.date = row.date; t.note = row.note; t.categoryId = row.category_id
+                t.categoryName = row.category_name; t.categoryIcon = row.category_icon
+                t.categoryColorHex = row.category_color_hex; t.isSplitAll = row.is_split_all; t.isDeleted = row.is_deleted
+                t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+                t.createdAt = row.created_at; t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
+                t.syncUserID = row.user_id; t.needsSync = false
             }
-            let existing = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context)
-            let t: EventLedgerTransaction
-            if let existing { t = existing } else {
-                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-                t = EventLedgerTransaction(
-                    kind: EventLedgerTransactionKind(rawValue: row.kind) ?? .expense, title: row.title,
-                    amountMinor: row.amount_minor, paidSource: EventExpensePaidSource(rawValue: row.paid_source) ?? .member,
-                    paidByMemberId: row.paid_by_member_id, splitType: EventSplitType(rawValue: row.split_type) ?? .equal,
-                    date: row.date, note: row.note, categoryId: row.category_id, categoryName: row.category_name,
-                    categoryIcon: row.category_icon, categoryColorHex: row.category_color_hex, event: ev)
-                t.id = row.id
-                t.needsSync = false
-                context.insert(t)
-            }
-            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            t.kind = EventLedgerTransactionKind(rawValue: row.kind) ?? t.kind
-            t.title = row.title; t.amountMinor = row.amount_minor
-            t.paidSource = EventExpensePaidSource(rawValue: row.paid_source) ?? t.paidSource
-            t.paidByMemberId = row.paid_by_member_id
-            t.splitType = EventSplitType(rawValue: row.split_type) ?? t.splitType
-            t.date = row.date; t.note = row.note; t.categoryId = row.category_id
-            t.categoryName = row.category_name; t.categoryIcon = row.category_icon
-            t.categoryColorHex = row.category_color_hex; t.isSplitAll = row.is_split_all; t.isDeleted = row.is_deleted
-            t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
-            t.createdAt = row.created_at; t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
-            t.syncUserID = row.user_id; t.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullEventLedgerParticipants(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventLedgerParticipantRow] = try await fetchChanged("event_ledger_participants", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context)
+                let p: EventLedgerParticipant
+                if let existing { p = existing } else {
+                    let txn = try row.transaction_id.flatMap { try fetchByID(EventLedgerTransaction.self, id: $0, in: context) }
+                    let mem = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
+                    p = EventLedgerParticipant(memberId: row.member_id, orderIndex: row.order_index, transaction: txn, member: mem)
+                    p.id = row.id
+                    p.needsSync = false
+                    context.insert(p)
+                }
+                if Self.localChangeWins(localNeedsSync: p.needsSync, localUpdatedAt: p.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                p.memberId = row.member_id; p.orderIndex = row.order_index
+                p.transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
+                p.member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
+                p.updatedAt = row.updated_at; p.deletedAt = row.deleted_at
+                p.syncUserID = row.user_id; p.needsSync = false
             }
-            let existing = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context)
-            let p: EventLedgerParticipant
-            if let existing { p = existing } else {
-                let txn = try row.transaction_id.flatMap { try fetchByID(EventLedgerTransaction.self, id: $0, in: context) }
-                let mem = try row.event_member_id.flatMap { try fetchByID(EventMember.self, id: $0, in: context) }
-                p = EventLedgerParticipant(memberId: row.member_id, orderIndex: row.order_index, transaction: txn, member: mem)
-                p.id = row.id
-                p.needsSync = false
-                context.insert(p)
-            }
-            if Self.localChangeWins(localNeedsSync: p.needsSync, localUpdatedAt: p.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            p.memberId = row.member_id; p.orderIndex = row.order_index
-            p.transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
-            p.member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
-            p.updatedAt = row.updated_at; p.deletedAt = row.deleted_at
-            p.syncUserID = row.user_id; p.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullEventSettlementSnapshots(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventSettlementSnapshotRow] = try await fetchChanged("event_settlement_snapshots", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context)
+                let s: EventSettlementSnapshot
+                if let existing { s = existing } else {
+                    let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                    s = EventSettlementSnapshot(ledgerRevision: row.ledger_revision, event: ev)
+                    s.id = row.id
+                    s.needsSync = false
+                    context.insert(s)
+                }
+                if Self.localChangeWins(localNeedsSync: s.needsSync, localUpdatedAt: s.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                s.ledgerRevision = row.ledger_revision
+                s.event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
+                s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
+                s.syncUserID = row.user_id; s.needsSync = false
             }
-            let existing = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context)
-            let s: EventSettlementSnapshot
-            if let existing { s = existing } else {
-                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-                s = EventSettlementSnapshot(ledgerRevision: row.ledger_revision, event: ev)
-                s.id = row.id
-                s.needsSync = false
-                context.insert(s)
-            }
-            if Self.localChangeWins(localNeedsSync: s.needsSync, localUpdatedAt: s.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            s.ledgerRevision = row.ledger_revision
-            s.event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
-            s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
-            s.syncUserID = row.user_id; s.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullEventSettlementTransfers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventSettlementTransferRow] = try await fetchChanged("event_settlement_transfers", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context)
+                let t: EventSettlementTransfer
+                if let existing { t = existing } else {
+                    let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+                    t = EventSettlementTransfer(fromMemberId: row.from_member_id, toMemberId: row.to_member_id,
+                                                amountMinor: row.amount_minor, sequence: row.sequence, snapshot: snap)
+                    t.id = row.id
+                    t.needsSync = false
+                    context.insert(t)
+                }
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
+                t.amountMinor = row.amount_minor; t.sequence = row.sequence
+                t.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
+                t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
+                t.syncUserID = row.user_id; t.needsSync = false
             }
-            let existing = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context)
-            let t: EventSettlementTransfer
-            if let existing { t = existing } else {
-                let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
-                t = EventSettlementTransfer(fromMemberId: row.from_member_id, toMemberId: row.to_member_id,
-                                            amountMinor: row.amount_minor, sequence: row.sequence, snapshot: snap)
-                t.id = row.id
-                t.needsSync = false
-                context.insert(t)
-            }
-            if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
-            t.amountMinor = row.amount_minor; t.sequence = row.sequence
-            t.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
-            t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
-            t.syncUserID = row.user_id; t.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullEventWalletExportRecords(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncEventWalletExportRecordRow] = try await fetchChanged("event_wallet_export_records", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context)
+                let r: EventWalletExportRecord
+                if let existing { r = existing } else {
+                    let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
+                    let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
+                    r = EventWalletExportRecord(memberId: row.member_id, walletTransactionId: row.wallet_transaction_id,
+                                                amountMinor: row.amount_minor,
+                                                direction: EventWalletExportDirection(rawValue: row.direction) ?? .expense,
+                                                exportType: EventWalletExportType(rawValue: row.export_type) ?? .settlement,
+                                                event: ev, snapshot: snap)
+                    r.id = row.id
+                    r.needsSync = false
+                    context.insert(r)
+                }
+                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                r.memberId = row.member_id; r.walletTransactionId = row.wallet_transaction_id
+                r.amountMinor = row.amount_minor
+                r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
+                r.exportType = EventWalletExportType(rawValue: row.export_type) ?? r.exportType
+                r.event = try resolveRef(Event.self, id: row.event_id, current: r.event, in: context)
+                r.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: r.snapshot, in: context)
+                r.createdAt = row.created_at; r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
+                r.syncUserID = row.user_id; r.needsSync = false
             }
-            let existing = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context)
-            let r: EventWalletExportRecord
-            if let existing { r = existing } else {
-                let ev = try row.event_id.flatMap { try fetchByID(Event.self, id: $0, in: context) }
-                let snap = try row.snapshot_id.flatMap { try fetchByID(EventSettlementSnapshot.self, id: $0, in: context) }
-                r = EventWalletExportRecord(memberId: row.member_id, walletTransactionId: row.wallet_transaction_id,
-                                            amountMinor: row.amount_minor,
-                                            direction: EventWalletExportDirection(rawValue: row.direction) ?? .expense,
-                                            exportType: EventWalletExportType(rawValue: row.export_type) ?? .settlement,
-                                            event: ev, snapshot: snap)
-                r.id = row.id
-                r.needsSync = false
-                context.insert(r)
-            }
-            if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            r.memberId = row.member_id; r.walletTransactionId = row.wallet_transaction_id
-            r.amountMinor = row.amount_minor
-            r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
-            r.exportType = EventWalletExportType(rawValue: row.export_type) ?? r.exportType
-            r.event = try resolveRef(Event.self, id: row.event_id, current: r.event, in: context)
-            r.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: r.snapshot, in: context)
-            r.createdAt = row.created_at; r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
-            r.syncUserID = row.user_id; r.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1369,82 +1721,86 @@ final class SyncEngine: ObservableObject {
         let joinRows: [SyncBudgetCategoryRow] = try await client.from("budget_categories")
             .select().eq("user_id", value: uid.uuidString).execute().value
         let joinMap = Dictionary(grouping: joinRows, by: { $0.budget_id }).mapValues { $0.map(\.category_id) }
-        try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(Budget.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(Budget.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(Budget.self, id: row.id, in: context)
+                let b: Budget
+                if let existing { b = existing } else {
+                    b = Budget(amountLimit: row.amount_limit)
+                    b.id = row.id
+                    b.needsSync = false
+                    context.insert(b)
+                }
+                if Self.localChangeWins(localNeedsSync: b.needsSync, localUpdatedAt: b.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                b.name = row.name; b.amountLimit = row.amount_limit; b.currencyCode = row.currency_code
+                b.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
+                b.startDate = row.start_date; b.createdAt = row.created_at; b.updatedAt = row.updated_at
+                b.customEndDate = row.custom_end_date; b.month = row.month; b.year = row.year
+                b.isRecurring = row.is_recurring; b.rolloverExcess = row.rollover_excess
+                b.rolloverAmount = row.rollover_amount
+                b.alertAt50 = row.alert_at_50; b.alertAt80 = row.alert_at_80; b.alertAt100 = row.alert_at_100
+                b.alertOnProjectedOverspend = row.alert_on_projected_overspend
+                b.lastAlertTriggeredDate = row.last_alert_triggered_date
+                b.lastAlertThreshold = row.last_alert_threshold
+                b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
+                b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
+                b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
+                if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
+                   let amountType = BudgetAmountType.decode(from: data) {
+                    b.amountType = amountType
+                }
+                b.deletedAt = row.deleted_at; b.syncUserID = row.user_id; b.needsSync = false
             }
-            let existing = try fetchByID(Budget.self, id: row.id, in: context)
-            let b: Budget
-            if let existing { b = existing } else {
-                b = Budget(amountLimit: row.amount_limit)
-                b.id = row.id
-                b.needsSync = false
-                context.insert(b)
-            }
-            if Self.localChangeWins(localNeedsSync: b.needsSync, localUpdatedAt: b.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            b.name = row.name; b.amountLimit = row.amount_limit; b.currencyCode = row.currency_code
-            b.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
-            b.startDate = row.start_date; b.createdAt = row.created_at; b.updatedAt = row.updated_at
-            b.customEndDate = row.custom_end_date; b.month = row.month; b.year = row.year
-            b.isRecurring = row.is_recurring; b.rolloverExcess = row.rollover_excess
-            b.rolloverAmount = row.rollover_amount
-            b.alertAt50 = row.alert_at_50; b.alertAt80 = row.alert_at_80; b.alertAt100 = row.alert_at_100
-            b.alertOnProjectedOverspend = row.alert_on_projected_overspend
-            b.lastAlertTriggeredDate = row.last_alert_triggered_date
-            b.lastAlertThreshold = row.last_alert_threshold
-            b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
-            b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
-            b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
-            if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
-               let amountType = BudgetAmountType.decode(from: data) {
-                b.amountType = amountType
-            }
-            b.deletedAt = row.deleted_at; b.syncUserID = row.user_id; b.needsSync = false
+            try context.save()
         }
-        try context.save()
     }
 
     private func pullTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncTransactionLocationRow] = try await fetchChanged("transaction_locations", client, uid)
         guard !rows.isEmpty else { return }
-        try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
-            if row.deleted_at != nil {
-                if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) {
-                    if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                    dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+        try withSyncWriteGuard {
+            try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
+                if row.deleted_at != nil {
+                    if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) {
+                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                    }
+                    return
                 }
-                return
+                let existing = try fetchByID(TransactionLocation.self, id: row.id, in: context)
+                let loc: TransactionLocation
+                if let existing { loc = existing } else {
+                    loc = TransactionLocation(latitude: row.latitude, longitude: row.longitude,
+                                              source: TransactionLocationSource(rawValue: row.source_raw) ?? .manual)
+                    loc.id = row.id
+                    loc.needsSync = false
+                    context.insert(loc)
+                }
+                if Self.localChangeWins(localNeedsSync: loc.needsSync, localUpdatedAt: loc.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                loc.displayName = row.display_name; loc.fullAddress = row.full_address
+                loc.shortAddress = row.short_address; loc.latitude = row.latitude; loc.longitude = row.longitude
+                loc.horizontalAccuracyMeters = row.horizontal_accuracy_meters; loc.capturedAt = row.captured_at
+                loc.sourceRaw = row.source_raw; loc.applePlaceID = row.apple_place_id
+                loc.alternateApplePlaceIDs = row.alternate_apple_place_ids
+                loc.pointOfInterestCategoryRaw = row.point_of_interest_category_raw
+                loc.locality = row.locality; loc.administrativeArea = row.administrative_area
+                loc.countryCode = row.country_code; loc.normalizedSpatialKey = row.normalized_spatial_key
+                loc.updatedAt = row.updated_at; loc.deletedAt = row.deleted_at
+                loc.syncUserID = row.user_id; loc.needsSync = false
+                // Link to its owning transaction.
+                if let tid = row.transaction_id, let t = try fetchByID(Transaction.self, id: tid, in: context) {
+                    t.location = loc
+                }
             }
-            let existing = try fetchByID(TransactionLocation.self, id: row.id, in: context)
-            let loc: TransactionLocation
-            if let existing { loc = existing } else {
-                loc = TransactionLocation(latitude: row.latitude, longitude: row.longitude,
-                                          source: TransactionLocationSource(rawValue: row.source_raw) ?? .manual)
-                loc.id = row.id
-                loc.needsSync = false
-                context.insert(loc)
-            }
-            if Self.localChangeWins(localNeedsSync: loc.needsSync, localUpdatedAt: loc.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-            loc.displayName = row.display_name; loc.fullAddress = row.full_address
-            loc.shortAddress = row.short_address; loc.latitude = row.latitude; loc.longitude = row.longitude
-            loc.horizontalAccuracyMeters = row.horizontal_accuracy_meters; loc.capturedAt = row.captured_at
-            loc.sourceRaw = row.source_raw; loc.applePlaceID = row.apple_place_id
-            loc.alternateApplePlaceIDs = row.alternate_apple_place_ids
-            loc.pointOfInterestCategoryRaw = row.point_of_interest_category_raw
-            loc.locality = row.locality; loc.administrativeArea = row.administrative_area
-            loc.countryCode = row.country_code; loc.normalizedSpatialKey = row.normalized_spatial_key
-            loc.updatedAt = row.updated_at; loc.deletedAt = row.deleted_at
-            loc.syncUserID = row.user_id; loc.needsSync = false
-            // Link to its owning transaction.
-            if let tid = row.transaction_id, let t = try fetchByID(Transaction.self, id: tid, in: context) {
-                t.location = loc
-            }
+            try context.save()
         }
-        try context.save()
     }
 
     // MARK: - Helpers
@@ -1589,13 +1945,23 @@ final class SyncEngine: ObservableObject {
         let entry = SyncImageDownloadQueue.Entry(kind: kind, id: id, path: path)
         do {
             let data = try await downloadImage(path, client)
+            let hash = Self.sha256(data)
             switch kind {
             case .transactionPhoto:
-                if let t = try fetchByID(Transaction.self, id: id, in: context) { t.photoData = data }
+                if let t = try fetchByID(Transaction.self, id: id, in: context) {
+                    t.photoData = data
+                    t.photoUploadedHash = hash
+                }
             case .eventCover:
-                if let e = try fetchByID(Event.self, id: id, in: context) { e.coverImageData = data }
+                if let e = try fetchByID(Event.self, id: id, in: context) {
+                    e.coverImageData = data
+                    e.coverImageUploadedHash = hash
+                }
             case .memberAvatar:
-                if let m = try fetchByID(EventMember.self, id: id, in: context) { m.avatarData = data }
+                if let m = try fetchByID(EventMember.self, id: id, in: context) {
+                    m.avatarData = data
+                    m.avatarUploadedHash = hash
+                }
             }
             SyncImageDownloadQueue.remove(entry)
         } catch {
@@ -1617,7 +1983,7 @@ final class SyncEngine: ObservableObject {
             }
             await downloadAndStoreImage(entry.path, kind: entry.kind, id: entry.id, client, context)
         }
-        try? context.save()
+        withSyncWriteGuard { try? context.save() }
     }
 
     private func imageAlreadyPresent(_ entry: SyncImageDownloadQueue.Entry, _ context: ModelContext) -> Bool {
@@ -1657,22 +2023,69 @@ final class SyncEngine: ObservableObject {
     }()
 }
 
-/// Lets `markSynced` stamp the owner uniformly across entity types.
+/// Lets `finishPush` stamp — and `purgeForeignRows` inspect — the owning
+/// account uniformly across entity types.
 protocol SyncOwned: AnyObject {
     func assignOwner(_ uid: UUID)
+    var syncOwner: UUID? { get }
 }
-extension Wallet: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension Category: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension Transaction: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension Event: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension Debt: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension SavingsGoal: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension RecurringRule: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventMember: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventLedgerTransaction: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventLedgerParticipant: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventSettlementSnapshot: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventSettlementTransfer: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension EventWalletExportRecord: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension Budget: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
-extension TransactionLocation: SyncOwned { func assignOwner(_ uid: UUID) { syncUserID = uid } }
+extension Wallet: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension Category: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension Transaction: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension Event: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension Debt: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension SavingsGoal: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension RecurringRule: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventMember: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventLedgerTransaction: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventLedgerParticipant: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventSettlementSnapshot: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventSettlementTransfer: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension EventWalletExportRecord: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension Budget: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}
+extension TransactionLocation: SyncOwned {
+    func assignOwner(_ uid: UUID) { syncUserID = uid }
+    var syncOwner: UUID? { syncUserID }
+}

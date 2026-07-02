@@ -53,12 +53,7 @@ final class DebtService {
         let trimmedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
 
         do {
-            let category = try fetchOrCreateSystemCategory(
-                name: "Debt",
-                type: .expense,
-                icon: "arrow.up.right",
-                color: "#FF3B30"
-            )
+            let category = try CategoryCatalog.fetchOrCreate(key: "sys_debt", in: modelContext)
 
             let debt = Debt(
                 personName: trimmedPerson,
@@ -106,12 +101,7 @@ final class DebtService {
         let trimmedPerson = person.trimmingCharacters(in: .whitespacesAndNewlines)
 
         do {
-            let category = try fetchOrCreateSystemCategory(
-                name: "Loan",
-                type: .income,
-                icon: "arrow.down.left",
-                color: "#34C759"
-            )
+            let category = try CategoryCatalog.fetchOrCreate(key: "sys_loan", in: modelContext)
 
             let debt = Debt(
                 personName: trimmedPerson,
@@ -160,29 +150,18 @@ final class DebtService {
 
         do {
             let transactionType: TransactionType
-            let categoryName: String
-            let defaultIcon: String
-            let defaultColor: String
+            let categoryKey: String
 
             switch debt.type {
             case .owedToMe:
                 transactionType = .income
-                categoryName = "Debt Collection"
-                defaultIcon = "tray.and.arrow.down.fill"
-                defaultColor = "#34C759"
+                categoryKey = "sys_debt_collection"
             case .iOwe:
                 transactionType = .expense
-                categoryName = "Loan Repayment"
-                defaultIcon = "tray.and.arrow.up.fill"
-                defaultColor = "#007AFF"
+                categoryKey = "sys_loan_repayment"
             }
 
-            let category = try fetchOrCreateSystemCategory(
-                name: categoryName,
-                type: transactionType,
-                icon: defaultIcon,
-                color: defaultColor
-            )
+            let category = try CategoryCatalog.fetchOrCreate(key: categoryKey, in: modelContext)
 
             let transaction = Transaction(
                 amount: amount,
@@ -246,9 +225,9 @@ final class DebtService {
     func repaymentCategory(for debt: Debt) throws -> Category {
         switch debt.type {
         case .owedToMe:
-            return try fetchOrCreateSystemCategory(name: "Debt Collection", type: .income, icon: "tray.and.arrow.down.fill", color: "#34C759")
+            return try CategoryCatalog.fetchOrCreate(key: "sys_debt_collection", in: modelContext)
         case .iOwe:
-            return try fetchOrCreateSystemCategory(name: "Loan Repayment", type: .expense, icon: "tray.and.arrow.up.fill", color: "#007AFF")
+            return try CategoryCatalog.fetchOrCreate(key: "sys_loan_repayment", in: modelContext)
         }
     }
 
@@ -319,27 +298,5 @@ final class DebtService {
         if amount <= 0 {
             throw DebtServiceError.invalidAmount
         }
-    }
-
-    private func fetchOrCreateSystemCategory(
-        name: String,
-        type: TransactionType,
-        icon: String,
-        color: String
-    ) throws -> Category {
-        let allCategories = try modelContext.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil }))
-
-        if let existing = allCategories.first(where: { $0.name == name && $0.type == type && $0.isSystem }) {
-            return existing
-        }
-
-        if let existingLoose = allCategories.first(where: { $0.name == name && $0.type == type }) {
-            existingLoose.isSystem = true
-            return existingLoose
-        }
-
-        let newCategory = Category(name: name, icon: icon, colorHex: color, type: type, isSystem: true)
-        modelContext.insert(newCategory)
-        return newCategory
     }
 }

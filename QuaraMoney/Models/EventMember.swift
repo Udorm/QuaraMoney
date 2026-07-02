@@ -12,6 +12,10 @@ final class EventMember {
 
     var name: String
     @Attribute(.externalStorage) var avatarData: Data?
+
+    /// SHA-256 of the last avatar bytes uploaded to (or downloaded from) cloud
+    /// storage; sync re-uploads only when the image changed. Local-only metadata.
+    var avatarUploadedHash: String?
     var avatarIcon: String?
     var colorHex: String = "#007AFF" // Default blue
     var isArchived: Bool = false

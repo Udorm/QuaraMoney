@@ -194,13 +194,17 @@ struct QuaraMoneyApp: App {
                     SyncEngine.shared.reconcileAccountIfNeeded(context: context)
                     Task {
                         // On first-ever sign-in: check whether both the device and
-                        // cloud have existing data. If so, pause sync and show the
-                        // conflict resolution sheet (Realtime is also deferred to
-                        // prevent a premature sync during the decision window).
-                        let hasConflict = await SyncEngine.shared.checkFirstSignInConflict(context: context)
-                        if !hasConflict {
+                        // cloud have existing data. `.conflict` pauses sync and
+                        // shows the resolution sheet; `.checkFailed` (network)
+                        // blocks sync entirely — proceeding could push duplicate
+                        // data into an unverified cloud state. Realtime is also
+                        // deferred in both cases.
+                        switch await SyncEngine.shared.checkFirstSignInConflict(context: context) {
+                        case .noConflict:
                             await SyncEngine.shared.syncIfOperational(context: context)
                             SyncRealtime.shared.start(context: context)
+                        case .conflict, .checkFailed:
+                            break
                         }
                     }
                 } else {
@@ -324,65 +328,6 @@ struct QuaraMoneyApp: App {
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         
-        let defaultCategories = [
-            // Income
-            DefaultCategoryData(name: L10n.Category.salary, icon: "dollarsign.circle", colorHex: "#4CAF50", type: .income),
-            DefaultCategoryData(name: L10n.Category.investments, icon: "chart.line.uptrend.xyaxis", colorHex: "#2196F3", type: .income),
-            DefaultCategoryData(name: L10n.Category.others, icon: "gift", colorHex: "#FFC107", type: .income),
-            DefaultCategoryData(name: L10n.Category.debtAndLoans, icon: "banknote", colorHex: "#795548", type: .income),
-            
-            // Expense
-            DefaultCategoryData(name: L10n.Category.foodAndDrink, icon: "fork.knife", colorHex: "#FF5722", type: .expense),
-            DefaultCategoryData(name: L10n.Category.housing, icon: "house", colorHex: "#795548", type: .expense),
-            DefaultCategoryData(name: L10n.Category.transportation, icon: "car", colorHex: "#03A9F4", type: .expense),
-            DefaultCategoryData(name: L10n.Category.personalLifestyle, icon: "tshirt", colorHex: "#E91E63", type: .expense),
-            DefaultCategoryData(name: L10n.Category.health, icon: "heart", colorHex: "#F44336", type: .expense),
-            DefaultCategoryData(name: L10n.Category.education, icon: "book", colorHex: "#9C27B0", type: .expense),
-            DefaultCategoryData(name: L10n.Category.tech, icon: "laptopcomputer", colorHex: "#607D8B", type: .expense),
-            DefaultCategoryData(name: L10n.Category.leisure, icon: "gamecontroller", colorHex: "#673AB7", type: .expense),
-            DefaultCategoryData(name: L10n.Category.subscriptions, icon: "arrow.triangle.2.circlepath", colorHex: "#3F51B5", type: .expense),
-            DefaultCategoryData(name: L10n.Category.financial, icon: "building.columns", colorHex: "#009688", type: .expense),
-            DefaultCategoryData(name: L10n.Category.debtAndLoans, icon: "banknote", colorHex: "#795548", type: .expense),
-            DefaultCategoryData(name: L10n.Category.trip, icon: "airplane", colorHex: "#FF9800", type: .expense),
-            DefaultCategoryData(name: L10n.Category.saving, icon: "banknote.fill", colorHex: "#4CAF50", type: .expense),
-            DefaultCategoryData(name: L10n.Category.giftsAndDonations, icon: "gift.fill", colorHex: "#E91E63", type: .expense),
-            
-            // Bills
-            DefaultCategoryData(name: L10n.Category.electricityBill, icon: "bolt", colorHex: "#FFEB3B", type: .expense),
-            DefaultCategoryData(name: L10n.Category.waterBill, icon: "drop", colorHex: "#2196F3", type: .expense),
-            DefaultCategoryData(name: L10n.Category.internetBill, icon: "wifi", colorHex: "#00BCD4", type: .expense)
-        ]
-        
-        let debtCategoryName = L10n.Category.debtAndLoans
-        
-        let debtSystemCategoryDebt = L10n.Debt.SystemCategory.debt
-        let debtSystemCategoryDebtCollection = L10n.Debt.SystemCategory.debtCollection
-        let debtSystemCategoryLoan = L10n.Debt.SystemCategory.loan
-        let debtSystemCategoryLoanRepayment = L10n.Debt.SystemCategory.loanRepayment
-        let categoryTrip = L10n.Category.trip
-        let categorySaving = L10n.Category.saving
-        let categoryGiftsAndDonations = L10n.Category.giftsAndDonations
-        
-        let mustHaveCategories: [(String, String, String, TransactionType)] = [
-            // Income
-            (L10n.Category.salary, "dollarsign.circle", "#4CAF50", .income),
-            (L10n.Category.investments, "chart.line.uptrend.xyaxis", "#2196F3", .income),
-            (L10n.Category.others, "gift", "#FFC107", .income),
-            // Expense
-            (L10n.Category.foodAndDrink, "fork.knife", "#FF5722", .expense),
-            (L10n.Category.housing, "house", "#795548", .expense),
-            (L10n.Category.transportation, "car", "#03A9F4", .expense),
-            (L10n.Category.health, "heart", "#F44336", .expense),
-            (L10n.Category.financial, "building.columns", "#009688", .expense),
-            (L10n.Category.debtAndLoans, "banknote", "#795548", .expense),
-            (L10n.Category.trip, "airplane", "#FF9800", .expense),
-            (L10n.Category.saving, "banknote.fill", "#4CAF50", .expense),
-            // Bills
-            (L10n.Category.electricityBill, "bolt", "#FFEB3B", .expense),
-            (L10n.Category.waterBill, "drop", "#2196F3", .expense),
-            (L10n.Category.internetBill, "wifi", "#00BCD4", .expense),
-        ]
-        
         // Perform heavy database operations in background (utility priority to avoid competing with UI)
         Task.detached(priority: .utility) {
             let context = ModelContext(container)
@@ -399,107 +344,35 @@ struct QuaraMoneyApp: App {
                 rates: rates,
                 preferredCurrency: preferredCurrency
             )
-            
-            // Seed/ensure default categories ONLY on a device that has never been
-            // claimed by a cloud account. Once the device is account-owned,
-            // categories are authoritative in the cloud and arrive via sync;
-            // auto-seeding here would re-create them with fresh random UUIDs after
-            // any sync wipe (e.g. "Use Cloud Data") and push duplicates back up —
-            // the root cause of recurring category duplication.
-            if !SyncEngine.isLocalStoreAccountOwned {
-            // Seed default categories if needed
-            DefaultDataService.seedDefaultCategories(modelContext: context, data: defaultCategories)
 
-            // Ensure System Categories for Debt & Loan
-            // 1. Debt (Lending out money) - Expense
-            DefaultDataService.ensureSystemCategoryExists(
-                modelContext: context,
-                name: debtSystemCategoryDebt,
-                icon: "arrow.up.right",
-                colorHex: "#FF3B30",
-                type: .expense
-            )
-            
-            // 2. Debt Collection (Receiving money back) - Income
-            DefaultDataService.ensureSystemCategoryExists(
-                modelContext: context,
-                name: debtSystemCategoryDebtCollection,
-                icon: "tray.and.arrow.down.fill",
-                colorHex: "#34C759",
-                type: .income
-            )
-            
-            // 3. Loan (Borrowing money) - Income
-            DefaultDataService.ensureSystemCategoryExists(
-                modelContext: context,
-                name: debtSystemCategoryLoan,
-                icon: "arrow.down.left",
-                colorHex: "#34C759",
-                type: .income
-            )
-            
-            // 4. Loan Repayment (Paying back money) - Expense
-            DefaultDataService.ensureSystemCategoryExists(
-                modelContext: context,
-                name: debtSystemCategoryLoanRepayment,
-                icon: "tray.and.arrow.up.fill",
-                colorHex: "#007AFF",
-                type: .expense
-            )
-            
-            // Maintain compatibility for "Debts & Loans" (Legacy)
-            DefaultDataService.ensureCategoryExists(
-                modelContext: context,
-                name: debtCategoryName,
-                icon: "banknote",
-                colorHex: "#795548",
-                type: .income
-            )
-            
-            DefaultDataService.ensureCategoryExists(
-                modelContext: context,
-                name: debtCategoryName,
-                icon: "banknote",
-                colorHex: "#795548",
-                type: .expense
-            )
-            
-            // Ensure new categories exist for existing users (safe: won't duplicate)
-            DefaultDataService.ensureCategoryExists(
-                modelContext: context,
-                name: categoryTrip,
-                icon: "airplane",
-                colorHex: "#FF9800",
-                type: .expense
-            )
-            DefaultDataService.ensureCategoryExists(
-                modelContext: context,
-                name: categorySaving,
-                icon: "banknote.fill",
-                colorHex: "#4CAF50",
-                type: .expense
-            )
-            DefaultDataService.ensureCategoryExists(
-                modelContext: context,
-                name: categoryGiftsAndDonations,
-                icon: "gift.fill",
-                colorHex: "#E91E63",
-                type: .expense
-            )
-            
-            for (name, icon, colorHex, type) in mustHaveCategories {
-                DefaultDataService.ensureSystemCategoryExists(
-                    modelContext: context,
-                    name: name,
-                    icon: icon,
-                    colorHex: colorHex,
-                    type: type
-                )
-            }
-            } // end: seed only when the device is not yet account-owned
-
+            // Snapshot ownership before touching categories: if a first-sign-in
+            // conflict resolution claims the device while this task is running,
+            // its wipe/pull races our background context — roll back instead of
+            // saving stale inserts on top of the freshly adopted cloud data.
+            let ownedAtStart = SyncEngine.isLocalStoreAccountOwned
             do {
-                try context.save()
+                // Stamp canonical keys onto pre-key categories and merge duplicates
+                // (idempotent; runs for owned devices too so legacy cloud rows gain
+                // keys and cross-language/dual-device duplicates self-heal).
+                try CategoryCatalog.stampAndDedupe(in: context, owner: SyncEngine.localOwnerUUID)
+
+                // Seed/ensure default categories ONLY on a device that has never
+                // been claimed by a cloud account. Once the device is account-owned,
+                // categories are authoritative in the cloud and arrive via sync;
+                // auto-seeding here would re-create them after any sync wipe (e.g.
+                // "Use Cloud Data") and push duplicates back up.
+                if !ownedAtStart {
+                    try CategoryCatalog.seedDefaultsIfEmpty(in: context)
+                    for def in CategoryCatalog.all where def.ensureOnLaunch {
+                        _ = try CategoryCatalog.fetchOrCreate(key: def.key, in: context)
+                    }
+                }
+
+                if SyncEngine.isLocalStoreAccountOwned != ownedAtStart {
+                    context.rollback()
+                } else {
+                    try context.save()
+                }
             } catch {
                 #if DEBUG
                 print("[Setup] Failed to save default data: \(error)")

@@ -52,6 +52,11 @@ final class Transaction {
     // faulting multi-MB receipt images into memory on every list fetch.
     @Attribute(.externalStorage) var photoData: Data?
 
+    /// SHA-256 of the last photo bytes uploaded to (or downloaded from) cloud
+    /// storage, so sync re-uploads the receipt only when the image actually
+    /// changed — not on every edit of the transaction. Local-only metadata.
+    var photoUploadedHash: String?
+
     // Location metadata for future intelligent suggestions
     @Relationship(deleteRule: .cascade) var location: TransactionLocation?
     

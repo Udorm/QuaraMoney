@@ -32,9 +32,21 @@ nonisolated struct SyncCategoryRow: Codable, Sendable {
     @NullEncodable var color_hex: String?
     var type: String
     var is_system: Bool
+    /// Language-independent identity for app-defined categories (see
+    /// CategoryCatalog). Partial unique per (user_id, canonical_key, type).
+    @NullEncodable var canonical_key: String?
     var created_at: Date
     var updated_at: Date
     @NullEncodable var deleted_at: Date?
+}
+
+/// Single-row account profile (display name + avatar), synced by
+/// `ProfileSyncService`. `id` is the auth user id.
+nonisolated struct SyncProfileRow: Codable, Sendable {
+    var id: UUID
+    @NullEncodable var display_name: String?
+    @NullEncodable var avatar_path: String?
+    var updated_at: Date
 }
 
 nonisolated struct SyncTransactionRow: Codable, Sendable {

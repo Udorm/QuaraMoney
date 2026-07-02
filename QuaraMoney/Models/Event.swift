@@ -31,6 +31,10 @@ final class Event {
     var endDate: Date?
     var totalBudget: Decimal?
     @Attribute(.externalStorage) var coverImageData: Data?
+
+    /// SHA-256 of the last cover bytes uploaded to (or downloaded from) cloud
+    /// storage; sync re-uploads only when the image changed. Local-only metadata.
+    var coverImageUploadedHash: String?
     var notes: String?
     
     // New properties for enhanced features

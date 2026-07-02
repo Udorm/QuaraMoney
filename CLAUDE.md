@@ -104,6 +104,19 @@ View (SwiftUI @Query / @State)
 | Private backing stores | `_` prefix | `_cachedBalance` |
 | Localization keys | `dot.namespaced` | `"common.save"` |
 
+### Categories (canonical keys)
+- App-defined categories (defaults + system) are identified by a language-independent `Category.canonicalKey` (e.g. `"salary"`, `"sys_debt"`); user-created categories have `nil`
+- **All definitions live in `Services/CategoryCatalog.swift`** — seeding, launch "ensure" passes, and `DebtService` resolve categories via `CategoryCatalog.fetchOrCreate(key:in:)`, never by localized name
+- The cloud enforces a partial unique index on `(user_id, canonical_key, type)`; the sync engine's dedupe pass merges same-key duplicates deterministically
+- Seeding only runs on devices never claimed by a cloud account (`SyncEngine.isLocalStoreAccountOwned`); once owned, categories come from the cloud
+
+### Cloud Sync & Account
+- Supabase sync lives in `QuaraMoney/Supabase/` (`SyncEngine`, `SyncMutationTracker`, `SyncRealtime`, `ProfileSyncService`)
+- The unified Account screen (`Views/More/AccountView.swift`, reached from the More-tab profile banner) hosts profile identity + auth + sync controls; `AccountViewModel` owns the sync-toggle side effects
+- Profile (display name + avatar) syncs to the `profiles` table and is wiped on sign-out/account switch — never let it leak across accounts
+- `SyncMutationTracker.isApplyingSyncChanges` must only wrap the engine's *synchronous* write+save spans (`SyncEngine.withSyncWriteGuard`), never an `await` — holding it across suspension points hides concurrent user edits from sync
+- Cloud schema changes: update `supabase/migrations/`, mirror into `supabase/schema.sql` + `rls.sql`, and apply to the live project before shipping the client change
+
 ## Complex Modules
 
 ### Event Expense Splitting (most complex feature)

@@ -119,11 +119,16 @@ final class SupabaseAuthManager: ObservableObject {
         guard let client else { return }
         beginWork()
         defer { isWorking = false }
-        // Flush pending changes while still authenticated. Only wipe the local
-        // cache on sign-out if that flush succeeded and the data is in the cloud,
-        // so an offline sign-out can't lose un-synced edits.
+        // Flush pending changes while still authenticated (waits for any
+        // in-flight sync first, so the flush can't silently no-op). Only wipe
+        // the local cache when the flush verifiably left nothing behind — the
+        // sync ran clean, the initial upload has completed, AND no dirty rows or
+        // queued deletions remain — so an offline or racing sign-out can't lose
+        // un-synced edits.
         await SyncEngine.shared.flushBeforeSignOut()
-        let safeToWipe = SyncEngine.shared.lastError == nil && SyncEngine.shared.hasCompletedInitialSync
+        let safeToWipe = SyncEngine.shared.lastError == nil
+            && SyncEngine.shared.hasCompletedInitialSync
+            && !SyncEngine.shared.hasPendingLocalChanges()
         do {
             try await client.auth.signOut()
         } catch {

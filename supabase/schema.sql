@@ -38,10 +38,18 @@ create table if not exists public.categories (
   color_hex text,
   type text not null,
   is_system boolean not null default false,
+  -- Language-independent identity for app-defined categories (CategoryCatalog);
+  -- null for user-created ones. Partial-unique per account so duplicate defaults
+  -- can't exist (migration 2026-07-02_profiles_and_canonical_categories).
+  canonical_key text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
+
+create unique index if not exists categories_user_canonical_key_unique
+  on public.categories (user_id, canonical_key, type)
+  where deleted_at is null and canonical_key is not null;
 
 create table if not exists public.events (
   id uuid primary key,
@@ -338,3 +346,20 @@ create index if not exists idx_evparticipants_user_updated on public.event_ledge
 create index if not exists idx_evsnapshots_user_updated  on public.event_settlement_snapshots(user_id, updated_at);
 create index if not exists idx_evtransfers_user_updated  on public.event_settlement_transfers(user_id, updated_at);
 create index if not exists idx_evexports_user_updated    on public.event_wallet_export_records(user_id, updated_at);
+
+-- ---------------------------------------------------------------------------
+-- profiles — single-row account profile (display name + avatar pointer).
+-- Avatar bytes live in the receipts bucket at {uid}/profile/avatar.jpg.
+-- (migration 2026-07-02_profiles_and_canonical_categories)
+-- ---------------------------------------------------------------------------
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  avatar_path text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists set_updated_at on public.profiles;
+create trigger set_updated_at before insert or update on public.profiles
+  for each row execute function public.set_updated_at();

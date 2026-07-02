@@ -7,6 +7,8 @@ struct MoreView: View {
     @State private var navigateToRecurring = false
     @AppStorage("userDisplayName") private var displayName: String = ""
     @AppStorage("userAvatarPath") private var avatarPath: String = ""
+    @AppStorage("isSupabaseSyncEnabled") private var syncEnabled = false
+    @ObservedObject private var auth = SupabaseAuthManager.shared
     @State private var avatarImage: UIImage?
 
     // Simple predicate only (a compound `isActive && deletedAt == nil` #Predicate
@@ -23,9 +25,9 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
-                // MARK: - Profile Banner
+                // MARK: - Profile / Account Banner
                 Section {
-                    NavigationLink(destination: LazyView(ProfileView())) {
+                    NavigationLink(destination: LazyView(AccountView())) {
                         HStack(spacing: 14) {
                             ProfileAvatarView(
                                 image: avatarImage,
@@ -38,7 +40,7 @@ struct MoreView: View {
                                     .font(.app(.body, weight: .semibold))
                                     .foregroundStyle(displayName.isEmpty ? .secondary : .primary)
 
-                                Text(L10n.Profile.editProfile)
+                                Text(accountSubtitle)
                                     .font(.app(.caption))
                                     .foregroundStyle(.secondary)
                             }
@@ -133,6 +135,10 @@ struct MoreView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
                 navigateToRecurring = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .profileDidChange)) { _ in
+                // A sync replaced/removed the avatar file — reload the banner image.
+                loadAvatar()
+            }
             .onAppear {
                 loadAvatar()
                 // Consume a deep-link that arrived before this view existed
@@ -148,6 +154,15 @@ struct MoreView: View {
     /// Set by ContentView when the recurring deep-link fires, so a freshly
     /// lazy-created MoreView still routes to the Recurring screen on appear.
     nonisolated(unsafe) static var pendingRecurringReview = false
+
+    /// Banner subtitle: signed-in account email when cloud sync is active,
+    /// otherwise the edit-profile hint.
+    private var accountSubtitle: String {
+        if syncEnabled, let email = auth.currentEmail, !email.isEmpty {
+            return email
+        }
+        return L10n.Profile.editProfile
+    }
 
     private func loadAvatar() {
         guard !avatarPath.isEmpty else {

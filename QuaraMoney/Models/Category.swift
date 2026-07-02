@@ -17,21 +17,31 @@ final class Category {
     
     var isSystem: Bool = false
 
+    /// Language-independent identity for app-defined (default/system) categories,
+    /// e.g. `"salary"`, `"sys_debt"`. `nil` for user-created categories. Two
+    /// devices that independently create the same default produce rows with the
+    /// same key, so sync can merge them instead of duplicating (the cloud enforces
+    /// a partial unique index on `(user_id, canonical_key, type)`). Definitions
+    /// live in `CategoryCatalog`. Additive optional property — migrates via
+    /// SwiftData lightweight inference under SchemaV1 (see SchemaVersioning.swift).
+    var canonicalKey: String?
+
     // Timestamps (for future sync readiness)
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
-    
+
     // Relationships
     @Relationship(deleteRule: .deny) var transactions: [Transaction]?
     @Relationship(deleteRule: .cascade) var budgets: [Budget]?
     @Relationship(deleteRule: .nullify) var recurringRules: [RecurringRule]?
-    
-    init(name: String, icon: String, colorHex: String, type: TransactionType, isSystem: Bool = false) {
+
+    init(name: String, icon: String, colorHex: String, type: TransactionType, isSystem: Bool = false, canonicalKey: String? = nil) {
         self.id = UUID()
         self.name = name
         self.icon = icon
         self.colorHex = colorHex
         self.type = type
         self.isSystem = isSystem
+        self.canonicalKey = canonicalKey
     }
 }

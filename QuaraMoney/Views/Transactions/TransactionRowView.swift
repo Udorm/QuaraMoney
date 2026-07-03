@@ -79,14 +79,14 @@ struct TransactionRowView: View {
         switch source {
         case .event(let transaction, _, _, _):
             if transaction.kind == .contribution {
-                return "Contribution"
+                return "event.transaction.tabContribution".localized
             }
-            return transaction.categoryName ?? "Uncategorized"
+            return transaction.categoryName ?? "transaction.uncategorized".localized
         case .wallet(let transaction, _):
             return transaction.category?.name
             ?? (transaction.type == .transfer
-                ? "Transfer"
-                : (transaction.type == .adjustment ? "Balance Adjustment" : (transaction.note ?? "Uncategorized")))
+                ? "transaction.type.transfer".localized
+                : (transaction.type == .adjustment ? "transaction.balanceAdjustment".localized : (transaction.note ?? "transaction.uncategorized".localized)))
         }
     }
     

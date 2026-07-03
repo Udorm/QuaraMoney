@@ -924,7 +924,7 @@ struct AddTransactionView: View {
     private var reportingSection: some View {
         Section {
             // Exclude Toggle
-            Toggle("Exclude from Reports", isOn: $viewModel.excludeFromReports)
+            Toggle("transaction.excludeFromReports".localized, isOn: $viewModel.excludeFromReports)
         }
     }
 }

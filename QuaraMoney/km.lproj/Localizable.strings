@@ -38,6 +38,9 @@
 // MARK: - Home (ទំព័រដើម)
 "home.title" = "ទំព័រដើម";
 "home.noTransactions" = "គ្មានប្រតិបត្តិការក្នុងអំឡុងពេលនេះ";
+"home.empty.title" = "មិនទាន់មានប្រតិបត្តិការនៅឡើយ";
+"home.empty.message" = "បន្ថែមចំណូល ឬចំណាយដំបូងរបស់អ្នក ដើម្បីចាប់ផ្តើមតាមដានលុយរបស់អ្នក";
+"home.emptyPeriod.title" = "គ្មានប្រតិបត្តិការ";
 
 // MARK: - Wallets (កាបូប)
 "wallet.title" = "កាបូបលុយ";
@@ -50,6 +53,13 @@
 "wallet.color" = "ពណ៌";
 "wallet.icon" = "រូបតំណាង";
 "wallet.emptyState" = "ចុច + ដើម្បីបង្កើតកាបូបដំបូង";
+"wallet.adjustBalance" = "កែតម្រូវសមតុល្យ";
+"wallet.currentBalance" = "សមតុល្យបច្ចុប្បន្ន";
+"wallet.newBalance" = "សមតុល្យថ្មី";
+"wallet.difference" = "ភាពខុសគ្នា";
+"wallet.adjustFooter" = "បញ្ចូលចំនួនទឹកប្រាក់ពិតប្រាកដដែលមាននៅក្នុងកាបូបរបស់អ្នក។ កម្មវិធីនឹងបង្កើតប្រតិបត្តិការមួយ ដើម្បីកែតម្រូវភាពខុសគ្នា";
+"common.details" = "ព័ត៌មានលម្អិត";
+"transaction.noteOptional" = "កំណត់ចំណាំ (ជាជម្រើស)";
 "wallet.customRange" = "តាមតម្រូវការ";
 "wallet.archive" = "ទុកក្នុងបណ្ណសារ";
 "wallet.unarchive" = "ឈប់ទុកក្នុងបណ្ណសារ";
@@ -90,6 +100,10 @@
 "transaction.type.expense" = "ចំណាយ";
 "transaction.type.transfer" = "ផ្ទេរ";
 "transaction.type.adjustment" = "ការកែតម្រូវ";
+"transaction.uncategorized" = "គ្មានប្រភេទ";
+"transaction.balanceAdjustment" = "ការកែតម្រូវសមតុល្យ";
+"transaction.excludeFromReports" = "មិនរាប់បញ្ចូលក្នុងរបាយការណ៍";
+"transaction.deletedToast" = "បានលុបប្រតិបត្តិការ";
 "transaction.category" = "ប្រភេទ";
 "transaction.scanReceipt" = "ស្កេនវិក្កយបត្រ";
 "transaction.currency" = "រូបិយប័ណ្ណ";
@@ -485,14 +499,43 @@
 "onboarding.personalizeColors" = "ប្ដូរពណ៌តាមបំណង";
 "onboarding.colorDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូល និងចំណាយរបស់អ្នក";
 "onboarding.allSet" = "អ្នករួចរាល់ហើយ!";
-"onboarding.getStarted" = "តោះបង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្ដើម";
+"onboarding.getStarted" = "ចាប់ផ្តើម";
+"onboarding.wallet.title" = "បង្កើតកាបូបដំបូងរបស់អ្នក";
+"onboarding.wallet.description" = "កាបូបផ្ទុកលុយរបស់អ្នក — ដូចជាសាច់ប្រាក់ គណនីធនាគារ ឬប្រាក់សន្សំ។ អ្នកអាចបន្ថែមទៀតនៅពេលក្រោយ";
+"onboarding.wallet.defaultName" = "សាច់ប្រាក់";
 "onboarding.welcomeTitle" = "សូមស្វាគមន៍មកកាន់ QuaraMoney";
 "onboarding.welcomeDescription" = "គ្រប់គ្រងហិរញ្ញវត្ថុរបស់អ្នក\nតាមដានការចំណាយ និងសន្សំ";
 "onboarding.themeDescription" = "ជ្រើសរើសពណ៌សម្រាប់ចំណូលនិងចំណាយរបស់អ្នក";
 "onboarding.incomeColor" = "ពណ៌ចំណូល";
 "onboarding.expenseColor" = "ពណ៌ចំណាយ";
 "onboarding.finalTitle" = "រួចរាល់ហើយ!";
-"onboarding.finalDescription" = "បង្កើតកាបូបដំបូងរបស់អ្នកដើម្បីចាប់ផ្តើម";
+"onboarding.finalDescription" = "ចាប់ផ្តើមតាមដានចំណូល និងចំណាយរបស់អ្នក";
+"onboarding.skip" = "រំលង";
+"onboarding.continue" = "បន្ត";
+"onboarding.track.title" = "កត់ត្រាចំណាយក្នុងប៉ុន្មានវិនាទី";
+"onboarding.track.description" = "ចុចប៊ូតុង + វាយបញ្ចូលចំនួនទឹកប្រាក់ រួចជ្រើសរើសប្រភេទ។ រួចរាល់ — គ្រប់ដុល្លារ និងរៀលត្រូវបានកត់ត្រា";
+"onboarding.track.step1" = "ចុចប៊ូតុង +";
+"onboarding.track.step2" = "បញ្ចូលចំនួនទឹកប្រាក់";
+"onboarding.track.step3" = "ជ្រើសរើសប្រភេទ";
+"onboarding.wallets.title" = "កាបូបសម្រាប់លុយគ្រប់កន្លែង";
+"onboarding.wallets.description" = "បែងចែកសាច់ប្រាក់ ធនាគារ និងប្រាក់សន្សំដាច់ដោយឡែក។ អូសរវាងកាតកាបូបនៅទំព័រដើម ដើម្បីមើលសមតុល្យនីមួយៗ";
+"onboarding.insights.title" = "ដឹងថាលុយអ្នកទៅណា";
+"onboarding.insights.description" = "ក្រាហ្វ និងថវិកាបង្ហាញការចំណាយតាមប្រភេទ — ដូច្នេះអ្នកដឹងជានិច្ចថានៅសល់ប៉ុន្មាន";
+"onboarding.ready.description" = "ជ្រើសរើសរូបិយប័ណ្ណសំខាន់របស់អ្នក ហើយយើងនឹងបង្កើតកាបូបសាច់ប្រាក់ជូនអ្នក";
+"onboarding.ready.currencyQuestion" = "រូបិយប័ណ្ណសំខាន់";
+"onboarding.ready.usd" = "ដុល្លារអាមេរិក";
+"onboarding.ready.khr" = "រៀលខ្មែរ";
+"onboarding.ready.changeLater" = "អ្នកអាចផ្លាស់ប្តូរអ្វីៗគ្រប់យ៉ាងនៅពេលក្រោយក្នុងការកំណត់";
+"onboarding.demo.totalBalance" = "សមតុល្យសរុប";
+"onboarding.demo.food" = "អាហារ";
+"onboarding.demo.transport" = "ធ្វើដំណើរ";
+"onboarding.demo.coffee" = "កាហ្វេ";
+"onboarding.demo.saved" = "បានរក្សាទុក!";
+"onboarding.demo.bank" = "ធនាគារ";
+"onboarding.demo.swipeHint" = "អូសដើម្បីប្តូរកាបូប";
+"onboarding.demo.thisMonth" = "ខែនេះ";
+"onboarding.demo.foodBudget" = "ថវិកាអាហារ";
+"onboarding.demo.left" = "នៅសល់";
 
 // MARK: - Status Messages (សារស្ថានភាព)
 "status.deleting" = "កំពុងលុប...";

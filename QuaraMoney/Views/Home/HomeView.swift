@@ -28,6 +28,11 @@ struct HomeView: View {
                         await SyncEngine.shared.syncIfOperational(context: modelContext)
                     }
             }
+            .undoToast($viewModel.recentlyDeleted, message: { _ in
+                "transaction.deletedToast".localized
+            }, onUndo: { token in
+                viewModel.undoDelete(token)
+            })
             .safeAreaInset(edge: .bottom, alignment: .trailing) {
                 Button {
                     shouldScan = false
@@ -173,66 +178,115 @@ struct HomeView: View {
         return "analysis.pro.filter.nSelected".localized(with: ids.count)
     }
 
+    /// Brand-new user (or fresh install): nothing recorded at all, ever.
+    private var isFirstRunEmpty: Bool {
+        viewModel.hasLoadedOnce && !viewModel.hasAnyTransactions && viewModel.searchText.isEmpty
+    }
+
+    /// The current period/search yielded no rows (but data exists elsewhere).
+    private var isResultEmpty: Bool {
+        viewModel.hasLoadedOnce && viewModel.dailySections.isEmpty && viewModel.sortedTransactions.isEmpty
+    }
+
     private var transactionList: some View {
         List {
-            Section {
-                MonthSelectionView(
-                    selectedTab: $viewModel.selectedTab,
-                    months: Array(viewModel.availableMonths.suffix(3))
-                )
+            if isFirstRunEmpty {
+                Section {
+                    ContentUnavailableView {
+                        Label("home.empty.title".localized, systemImage: "list.bullet.rectangle.portrait")
+                    } description: {
+                        Text("home.empty.message".localized)
+                    } actions: {
+                        Button {
+                            shouldScan = false
+                            showingAddTransaction = true
+                        } label: {
+                            Text("transaction.add".localized)
+                                .font(.app(.body, weight: .semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.vertical, 32)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    MonthSelectionView(
+                        selectedTab: $viewModel.selectedTab,
+                        months: Array(viewModel.availableMonths.suffix(3))
+                    )
 
-                if case .custom = viewModel.selectedTab {
-                    HStack {
-                        Spacer()
-                        DatePicker("Start", selection: $viewModel.customStartDate, displayedComponents: .date)
-                            .labelsHidden()
-                            .font(.app(.headline))
-                        Text("-")
-                            .foregroundStyle(.secondary)
-                            .font(.app(.headline))
-                        DatePicker("End", selection: $viewModel.customEndDate, displayedComponents: .date)
-                            .labelsHidden()
-                            .font(.app(.headline))
-                        Spacer()
+                    if case .custom = viewModel.selectedTab {
+                        HStack {
+                            Spacer()
+                            DatePicker("filter.startDate".localized, selection: $viewModel.customStartDate, displayedComponents: .date)
+                                .labelsHidden()
+                                .font(.app(.headline))
+                            Text("-")
+                                .foregroundStyle(.secondary)
+                                .font(.app(.headline))
+                            DatePicker("filter.endDate".localized, selection: $viewModel.customEndDate, displayedComponents: .date)
+                                .labelsHidden()
+                                .font(.app(.headline))
+                            Spacer()
+                        }
                     }
                 }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-            .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
 
-            // Summary Section
-            Section(header: summaryHeader) {
-                FinancialSummaryCards(
-                    income: viewModel.incomeTotal,
-                    expense: viewModel.expenseTotal,
-                    dailySections: viewModel.dailySections,
-                    startDate: viewModel.currentStartDate,
-                    endDate: viewModel.currentEndDate,
-                    previousPeriodCumulative: viewModel.previousPeriodCumulative
-                )
-            }
-
-            // Daily Transactions or sorted flat list
-            if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
-                ForEach(viewModel.sortedTransactions) { txn in
-                    HomeTransactionRow(
-                        transaction: txn,
-                        onEdit: { transactionToEdit = txn },
-                        onDelete: { viewModel.deleteTransaction(txn) }
+                // Summary Section
+                Section(header: summaryHeader) {
+                    FinancialSummaryCards(
+                        income: viewModel.incomeTotal,
+                        expense: viewModel.expenseTotal,
+                        dailySections: viewModel.dailySections,
+                        startDate: viewModel.currentStartDate,
+                        endDate: viewModel.currentEndDate,
+                        previousPeriodCumulative: viewModel.previousPeriodCumulative
                     )
                 }
-            } else {
-                ForEach(viewModel.dailySections) { section in
-                    Section(header: DailyHeader(section: section, onAddTapped: {
-                        let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: section.date) ?? section.date
-                        backdateTarget = BackdateTarget(date: noon)
-                    })) {
-                        ForEach(section.transactions) { txn in
-                            HomeTransactionRow(
-                                transaction: txn,
-                                onEdit: { transactionToEdit = txn },
-                                onDelete: { viewModel.deleteTransaction(txn) }
-                            )
+
+                if isResultEmpty {
+                    Section {
+                        if !viewModel.searchText.isEmpty {
+                            ContentUnavailableView.search(text: viewModel.searchText)
+                                .padding(.vertical, 16)
+                        } else {
+                            ContentUnavailableView {
+                                Label("home.emptyPeriod.title".localized, systemImage: "calendar.badge.exclamationmark")
+                            } description: {
+                                Text("home.noTransactions".localized)
+                            }
+                            .padding(.vertical, 16)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
+                    // Sorted flat list
+                    ForEach(viewModel.sortedTransactions) { txn in
+                        HomeTransactionRow(
+                            transaction: txn,
+                            onEdit: { transactionToEdit = txn },
+                            onDelete: { viewModel.deleteTransaction(txn) }
+                        )
+                    }
+                } else {
+                    // Daily Transactions
+                    ForEach(viewModel.dailySections) { section in
+                        Section(header: DailyHeader(section: section, onAddTapped: {
+                            let noon = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: section.date) ?? section.date
+                            backdateTarget = BackdateTarget(date: noon)
+                        })) {
+                            ForEach(section.transactions) { txn in
+                                HomeTransactionRow(
+                                    transaction: txn,
+                                    onEdit: { transactionToEdit = txn },
+                                    onDelete: { viewModel.deleteTransaction(txn) }
+                                )
+                            }
                         }
                     }
                 }
@@ -288,12 +342,18 @@ struct DailyHeader: View {
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
             if let onAddTapped {
+                // 44pt hit target (HIG minimum) without inflating the header:
+                // the frame+contentShape define the tappable area, the negative
+                // padding collapses the layout footprint back to icon size.
                 Button(action: onAddTapped) {
                     Image(systemName: "plus.circle")
                         .font(.subheadline)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
+                .padding(-13)
                 .accessibilityLabel("Add transaction on \(section.date.formatted(date: .long, time: .omitted))")
             }
         }

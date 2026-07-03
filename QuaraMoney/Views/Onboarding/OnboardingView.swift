@@ -1,291 +1,466 @@
 import SwiftUI
+import SwiftData
 
+/// Redesigned onboarding: pick a language, then a short guided tour of the
+/// app's core flows (add a transaction, wallets, insights). Setup is kept to
+/// a single choice — the main currency — everything else uses defaults and a
+/// starter Cash wallet is created automatically.
 struct OnboardingView: View {
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var currencyManager = CurrencyManager.shared
-    @ObservedObject private var themeManager = ThemeManager.shared
-    
-    @State private var currentStep: OnboardingStep = .welcome
-    @State private var searchText: String = ""
-    @Namespace private var animationNamespace
-    
-    enum OnboardingStep: Int, CaseIterable {
-        case welcome = 0
-        case currency = 1
-        case theme = 2
-        case final = 3
+    @ObservedObject private var languageManager = LanguageManager.shared
+
+    private enum Stage {
+        case language
+        case tour
     }
-    
+
+    private enum TourPage: Int, CaseIterable {
+        case welcome = 0
+        case track
+        case wallets
+        case insights
+        case ready
+    }
+
+    // TEMP DEBUG: allow jumping straight to a tour page for screenshots
+    @State private var stage: Stage = ProcessInfo.processInfo.environment["ONB_PAGE"] != nil ? .tour : .language
+    @State private var page: TourPage = TourPage(rawValue: Int(ProcessInfo.processInfo.environment["ONB_PAGE"] ?? "") ?? 0) ?? .welcome
+
     var body: some View {
+        ZStack {
+            background
+
+            switch stage {
+            case .language:
+                languageStage
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+            case .tour:
+                tourStage
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
+            }
+        }
+    }
+
+    private var background: some View {
         ZStack {
             Color(.systemBackground)
                 .ignoresSafeArea()
-            
-            VStack {
-                // Progress Indicator
-                HStack(spacing: 8) {
-                    ForEach(OnboardingStep.allCases, id: \.self) { step in
-                        Capsule()
-                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color(.systemGray4))
-                            .frame(width: step == currentStep ? 24 : 8, height: 8)
-                            .animation(.spring(), value: currentStep)
-                    }
-                }
-                .padding(.top, 20)
-                
-                Spacer()
-                
-                // Content
-                Group {
-                    switch currentStep {
-                    case .welcome:
-                        welcomeView
-                    case .currency:
-                        currencyView
-                    case .theme:
-                        themeView
-                    case .final:
-                        finalView
-                    }
-                }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
-                .id(currentStep)
-                
-                Spacer()
-                
-                // Navigation Buttons
-                HStack {
-                    if currentStep != .welcome {
-                        Button(L10n.Common.back) {
-                            withAnimation {
-                                if let prev = OnboardingStep(rawValue: currentStep.rawValue - 1) {
-                                    currentStep = prev
-                                }
-                            }
-                        }
-                        .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        withAnimation {
-                            if let next = OnboardingStep(rawValue: currentStep.rawValue + 1) {
-                                currentStep = next
-                            } else {
-                                // Complete Onboarding
-                                completeOnboarding()
-                            }
-                        }
-                    }) {
-                        Text(currentStep == .final ? L10n.Onboarding.getStarted : L10n.Common.next)
-                            .font(.app(.body, weight: .bold))
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
-                            .clipShape(Capsule())
-                    }
-                }
-                .padding(.horizontal, 30)
-                .padding(.bottom, 20)
-            }
+            RadialGradient(
+                colors: [Color.accentColor.opacity(0.12), .clear],
+                center: .top,
+                startRadius: 0,
+                endRadius: 440
+            )
+            .ignoresSafeArea()
         }
     }
-    
-    // MARK: - Steps Views
-    
-    private var welcomeView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "wallet.pass.fill") // Placeholder for App Icon
-                .resizable()
-                .scaledToFit()
-                .frame(width: 100, height: 100)
-                .foregroundColor(.accentColor)
-                .padding(.bottom, 20)
-            
-                .padding(.bottom, 20)
-            
-            Text(L10n.Onboarding.welcomeTitle)
-                .font(.app(.largeTitle, weight: .bold))
-                .multilineTextAlignment(.center)
-            
-            Text(L10n.Onboarding.welcomeDescription)
-                .font(.app(.body))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-        .padding()
-    }
-    
-    private var currencyView: some View {
+
+    // MARK: - Language selection
+
+    /// Shown before a language is chosen, so its fixed labels are bilingual.
+    private var languageStage: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Text(L10n.Onboarding.selectCurrency)
-                    .font(.app(.title, weight: .bold))
-                
-                Text(L10n.Onboarding.currencyDescription)
-                    .font(.app(.subheadline))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+            Spacer()
+
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 96, height: 96)
+                .overlay(
+                    Image(systemName: "wallet.pass.fill")
+                        .font(.app(size: 42, weight: .medium))
+                        .foregroundStyle(.white)
+                )
+                .shadow(color: Color.accentColor.opacity(0.35), radius: 18, y: 10)
+
+            Text("QuaraMoney")
+                .font(.app(.largeTitle, weight: .bold))
+                .padding(.top, 20)
+
+            VStack(spacing: 3) {
+                Text("Choose your language")
+                Text("ជ្រើសរើសភាសារបស់អ្នក")
             }
-            .padding(.horizontal)
-            .padding(.bottom, 20)
-            
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField(L10n.Common.search, text: $searchText)
-                    .font(.app(.body))
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+            .font(.app(.subheadline))
+            .foregroundStyle(.secondary)
+            .padding(.top, 24)
+
+            VStack(spacing: 14) {
+                languageCard(
+                    title: "English",
+                    subtitle: "Continue in English",
+                    glyph: "Aa",
+                    language: .english
+                )
+                languageCard(
+                    title: "ភាសាខ្មែរ",
+                    subtitle: "បន្តជាភាសាខ្មែរ",
+                    glyph: "កខ",
+                    language: .khmer
+                )
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 24)
+
+            Spacer()
+            Spacer()
+        }
+    }
+
+    private func languageCard(
+        title: String,
+        subtitle: String,
+        glyph: String,
+        language: LanguageManager.Language
+    ) -> some View {
+        Button {
+            HapticManager.shared.selection()
+            languageManager.selectedLanguage = language
+            withAnimation(.spring(duration: 0.5)) {
+                stage = .tour
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Text(glyph)
+                    .font(.app(.title3, weight: .bold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(Color.accentColor.opacity(0.12)))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.app(.body, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.app(.footnote))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.app(.footnote, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Guided tour
+
+    private var tourStage: some View {
+        VStack(spacing: 0) {
+            tourTopBar
+
+            TabView(selection: $page) {
+                tourPage(
+                    title: "onboarding.welcomeTitle".localized,
+                    description: "onboarding.welcomeDescription".localized
+                ) {
+                    OnboardingWelcomeIllustration()
+                }
+                .tag(TourPage.welcome)
+
+                tourPage(
+                    title: "onboarding.track.title".localized,
+                    description: "onboarding.track.description".localized
+                ) {
+                    OnboardingTrackIllustration()
+                }
+                .tag(TourPage.track)
+
+                tourPage(
+                    title: "onboarding.wallets.title".localized,
+                    description: "onboarding.wallets.description".localized
+                ) {
+                    OnboardingWalletsIllustration()
+                }
+                .tag(TourPage.wallets)
+
+                tourPage(
+                    title: "onboarding.insights.title".localized,
+                    description: "onboarding.insights.description".localized
+                ) {
+                    OnboardingInsightsIllustration()
+                }
+                .tag(TourPage.insights)
+
+                readyPage
+                    .tag(TourPage.ready)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            Button {
+                HapticManager.shared.impact(style: .light)
+                if page == .ready {
+                    completeOnboarding()
+                } else {
+                    withAnimation(.spring(duration: 0.45)) {
+                        page = TourPage(rawValue: page.rawValue + 1) ?? .ready
                     }
                 }
+            } label: {
+                Text(page == .ready ? "onboarding.getStarted".localized : "onboarding.continue".localized)
+                    .font(.app(.body, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
-            .padding(.horizontal)
-            .padding(.bottom, 16)
-            
-            List {
-                if searchText.isEmpty {
-                    Section(header: Text("Common Currencies")) {
-                        ForEach(["USD", "KHR", "EUR", "GBP", "JPY"], id: \.self) { code in
-                            currencyRow(for: code)
+            .buttonStyle(.glassProminent)
+            .tint(.accentColor)
+            .padding(.horizontal, 28)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private var tourTopBar: some View {
+        ZStack {
+            HStack(spacing: 6) {
+                ForEach(TourPage.allCases, id: \.self) { step in
+                    Capsule()
+                        .fill(step == page ? Color.accentColor : Color(.systemGray4))
+                        .frame(width: step == page ? 22 : 7, height: 7)
+                }
+            }
+            .animation(.spring(duration: 0.4), value: page)
+
+            HStack {
+                Button {
+                    HapticManager.shared.selection()
+                    if page == .welcome {
+                        withAnimation(.spring(duration: 0.5)) {
+                            stage = .language
+                        }
+                    } else {
+                        withAnimation(.spring(duration: 0.45)) {
+                            page = TourPage(rawValue: page.rawValue - 1) ?? .welcome
                         }
                     }
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.app(.subheadline, weight: .semibold))
+                        .frame(width: 38, height: 38)
                 }
-                
-                Section(header: Text(searchText.isEmpty ? "All Currencies" : "Search Results")) {
-                    ForEach(filteredCurrencies, id: \.id) { currency in
-                        currencyRow(for: currency.id)
+                .buttonStyle(.glass)
+                .accessibilityLabel(Text(L10n.Common.back))
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(duration: 0.45)) {
+                        page = .ready
                     }
+                } label: {
+                    Text("onboarding.skip".localized)
+                        .font(.app(.subheadline, weight: .semibold))
+                        .padding(.horizontal, 6)
+                        .frame(height: 38)
                 }
-            }
-            .listStyle(.plain)
-        }
-    }
-    
-    private var filteredCurrencies: [CurrencyManager.CurrencyInfo] {
-        if searchText.isEmpty {
-            return currencyManager.availableCurrencyInfos
-        } else {
-            return currencyManager.availableCurrencyInfos.filter { 
-                $0.searchString.contains(searchText.lowercased())
+                .buttonStyle(.glass)
+                .opacity(page == .ready ? 0 : 1)
+                .disabled(page == .ready)
             }
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
-    
-    private func currencyRow(for code: String) -> some View {
+
+    private func tourPage<Illustration: View>(
+        title: String,
+        description: String,
+        @ViewBuilder illustration: () -> Illustration
+    ) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+
+            illustration()
+                .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 24)
+
+            VStack(spacing: 12) {
+                Text(title)
+                    .font(.app(.title, weight: .bold))
+                    .multilineTextAlignment(.center)
+                Text(description)
+                    .font(.app(.body))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 32)
+
+            Spacer(minLength: 28)
+        }
+    }
+
+    // MARK: - Ready page (single setup choice: currency)
+
+    private var readyPage: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+
+            readySeal
+
+            Spacer(minLength: 24)
+
+            VStack(spacing: 12) {
+                Text("onboarding.finalTitle".localized)
+                    .font(.app(.title, weight: .bold))
+                    .multilineTextAlignment(.center)
+                Text("onboarding.ready.description".localized)
+                    .font(.app(.body))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 32)
+
+            HStack(spacing: 12) {
+                currencyCard(code: "USD", symbol: "$", name: "onboarding.ready.usd".localized)
+                currencyCard(code: "KHR", symbol: "៛", name: "onboarding.ready.khr".localized)
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 22)
+
+            Text("onboarding.ready.changeLater".localized)
+                .font(.app(.caption))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 14)
+                .padding(.horizontal, 32)
+
+            Spacer(minLength: 28)
+        }
+        .onAppear {
+            // The tour only offers the two market currencies; anything else
+            // (stale UserDefaults value) falls back to USD.
+            if !["USD", "KHR"].contains(currencyManager.preferredCurrencyCode) {
+                currencyManager.preferredCurrencyCode = "USD"
+            }
+        }
+    }
+
+    private var readySeal: some View {
+        ZStack {
+            Circle()
+                .fill(Color.green.opacity(0.12))
+                .frame(width: 150, height: 150)
+            Circle()
+                .fill(Color.green.opacity(0.18))
+                .frame(width: 112, height: 112)
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [.green, Color.green.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 84, height: 84)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.app(size: 38, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+                .shadow(color: Color.green.opacity(0.35), radius: 16, y: 8)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func currencyCard(code: String, symbol: String, name: String) -> some View {
         let isSelected = currencyManager.preferredCurrencyCode == code
-        let info = currencyManager.availableCurrencyInfos.first { $0.id == code }
-        
-        return Button(action: {
-            withAnimation(.spring()) {
+        return Button {
+            HapticManager.shared.selection()
+            withAnimation(.spring(duration: 0.35)) {
                 currencyManager.preferredCurrencyCode = code
             }
-        }) {
-            HStack(spacing: 16) {
-                // Symbol Icon
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.accentColor : Color(.systemGray6))
-                        .frame(width: 44, height: 44)
-                    
-                    Text(info?.symbol ?? code)
-                        .font(.app(.headline, weight: .bold))
-                        .foregroundColor(isSelected ? .white : .primary)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(info?.name ?? code)
-                        .font(.app(.body, weight: .semibold))
-                        .foregroundColor(.primary)
-                    
-                    Text(code)
-                        .font(.app(.caption))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.title3)
-                }
+        } label: {
+            VStack(spacing: 8) {
+                Text(symbol)
+                    .font(.app(.title2, weight: .bold))
+                    .foregroundStyle(isSelected ? Color.white : Color.accentColor)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(isSelected ? Color.accentColor : Color.accentColor.opacity(0.12)))
+                Text(name)
+                    .font(.app(.subheadline, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(code)
+                    .font(.app(.caption))
+                    .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+            )
+            .contentShape(Rectangle())
         }
-        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-        .listRowSeparator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
-    
-    private var themeView: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                Text(L10n.Onboarding.personalizeColors)
-                    .font(.app(.title, weight: .bold))
-                
-                Text(L10n.Onboarding.themeDescription)
-                    .font(.app(.subheadline))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(L10n.Onboarding.incomeColor)
-                        .font(.app(.headline))
-                    
-                    ColorPickerView(selectedColorHex: $themeManager.incomeColorHex)
-                        .frame(height: 150)
-                }
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(L10n.Onboarding.expenseColor)
-                        .font(.app(.headline))
-                    
-                    ColorPickerView(selectedColorHex: $themeManager.expenseColorHex)
-                        .frame(height: 150)
-                }
-            }
-            .padding()
-        }
-    }
-    
-    private var finalView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 100, height: 100)
-                .foregroundColor(.green)
-                .padding(.bottom, 20)
-            
-                .padding(.bottom, 20)
-            
-            Text(L10n.Onboarding.finalTitle)
-                .font(.app(.largeTitle, weight: .bold))
-            
-            Text(L10n.Onboarding.finalDescription)
-                .font(.app(.body))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-        .padding()
-    }
-    
+
+    // MARK: - Completion
+
     private func completeOnboarding() {
+        createFirstWalletIfNeeded()
+        HapticManager.shared.success()
         withAnimation {
             isOnboardingCompleted = true
+        }
+    }
+
+    /// Creates a starter wallet in the chosen currency, named "Cash" in the
+    /// chosen language. Skipped when wallets already exist (e.g. a reinstall
+    /// whose store was restored or cloud-synced) — ContentView's create-wallet
+    /// sheet remains as the fallback for stores that end up empty some other way.
+    private func createFirstWalletIfNeeded() {
+        let name = "onboarding.wallet.defaultName".localized
+        let descriptor = FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })
+        let existingCount = (try? modelContext.fetchCount(descriptor)) ?? 0
+        guard existingCount == 0 else { return }
+
+        let wallet = Wallet(
+            name: name,
+            currencyCode: currencyManager.preferredCurrencyCode,
+            icon: "wallet.pass",
+            colorHex: "#007AFF"
+        )
+        modelContext.insert(wallet)
+        do {
+            try modelContext.save()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+        } catch {
+            #if DEBUG
+            print("Error creating onboarding wallet: \(error)")
+            #endif
         }
     }
 }

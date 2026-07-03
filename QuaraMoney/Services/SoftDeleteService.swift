@@ -35,6 +35,22 @@ enum SoftDeleteService {
         transaction.markSoftDeleted()
     }
 
+    /// Reverses `deleteTransaction` (Undo): clears the tombstones and re-stamps
+    /// sync metadata so the restore replicates like an ordinary edit.
+    static func restoreTransaction(_ transaction: Transaction) {
+        let now = Date()
+        transaction.deletedAt = nil
+        transaction.updatedAt = now
+        transaction.needsSync = true
+        if let location = transaction.location {
+            location.deletedAt = nil
+            location.updatedAt = now
+            location.needsSync = true
+        }
+        transaction.sourceWallet?.invalidateBalanceCache()
+        transaction.destinationWallet?.invalidateBalanceCache()
+    }
+
     // MARK: - Category
 
     /// Soft-deletes a category. Its transactions are **kept** (history is never

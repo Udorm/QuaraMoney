@@ -70,6 +70,20 @@ class HomeViewModel {
     var dailySections: [DailyTransactionSection] = []
     var previousPeriodCumulative: [Decimal] = []
 
+    /// Whether any (non-deleted) transaction exists at all — drives the
+    /// first-run empty state vs. the empty-period one.
+    var hasAnyTransactions: Bool = true
+    /// False until the first fetch lands, so empty states don't flash on launch.
+    var hasLoadedOnce: Bool = false
+
+    /// Token for the transient Undo toast after a swipe-delete. Holding the
+    /// model is safe: soft-delete keeps the row (tombstone) alive.
+    struct DeletedTransactionToken: Identifiable {
+        let id: UUID
+        let transaction: Transaction
+    }
+    var recentlyDeleted: DeletedTransactionToken?
+
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
 
@@ -149,11 +163,20 @@ class HomeViewModel {
                 calculateReferenceLine: true
             )
 
-            await self.applyData(dataID)
+            // Cheap count query so the view can distinguish "brand new user"
+            // from "nothing in this period / no search matches".
+            let anyDescriptor = FetchDescriptor<Transaction>(
+                predicate: #Predicate { $0.deletedAt == nil }
+            )
+            let anyExist = ((try? context.fetchCount(anyDescriptor)) ?? 0) > 0
+
+            await self.applyData(dataID, hasAnyTransactions: anyExist)
         }
     }
 
-    private func applyData(_ dataID: ProcessedTransactionDataID) {
+    private func applyData(_ dataID: ProcessedTransactionDataID, hasAnyTransactions: Bool) {
+        self.hasAnyTransactions = hasAnyTransactions
+        self.hasLoadedOnce = true
         self.incomeTotal = dataID.incomeTotal
         self.expenseTotal = dataID.expenseTotal
         self.previousPeriodCumulative = dataID.previousPeriodCumulative
@@ -205,12 +228,29 @@ class HomeViewModel {
         SoftDeleteService.deleteTransaction(transaction)
         do {
             try modelContext.save()
+            // Offer a transient Undo — the tombstone makes restore trivial.
+            recentlyDeleted = DeletedTransactionToken(id: transaction.id, transaction: transaction)
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
             // Force refresh immediately to update UI
             refreshData()
         } catch {
             #if DEBUG
             print("Error deleting transaction: \(error)")
+            #endif
+        }
+    }
+
+    /// Undoes a just-performed swipe-delete by clearing the soft-delete tombstone.
+    func undoDelete(_ token: DeletedTransactionToken) {
+        SoftDeleteService.restoreTransaction(token.transaction)
+        do {
+            try modelContext.save()
+            HapticManager.shared.selection()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            refreshData()
+        } catch {
+            #if DEBUG
+            print("Error restoring transaction: \(error)")
             #endif
         }
     }

@@ -155,7 +155,7 @@ struct WalletDetailView: View {
                     Button {
                         showingAdjustBalance = true
                     } label: {
-                        Label("Adjust Balance", systemImage: "dollarsign.circle")
+                        Label("wallet.adjustBalance".localized, systemImage: "dollarsign.circle")
                     }
                     
                     Button {

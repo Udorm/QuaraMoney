@@ -38,6 +38,9 @@
 // MARK: - Home
 "home.title" = "Overview";
 "home.noTransactions" = "No transactions in this period.";
+"home.empty.title" = "No Transactions Yet";
+"home.empty.message" = "Add your first income or expense to start tracking your money.";
+"home.emptyPeriod.title" = "No Transactions";
 
 // MARK: - Wallets
 "wallet.title" = "Wallets";
@@ -50,6 +53,13 @@
 "wallet.color" = "Color";
 "wallet.icon" = "Icon";
 "wallet.emptyState" = "Tap + to create your first wallet.";
+"wallet.adjustBalance" = "Adjust Balance";
+"wallet.currentBalance" = "Current Balance";
+"wallet.newBalance" = "New Balance";
+"wallet.difference" = "Difference";
+"wallet.adjustFooter" = "Enter the actual amount currently in your wallet. The app will create a transaction to adjust the difference.";
+"common.details" = "Details";
+"transaction.noteOptional" = "Note (Optional)";
 "wallet.customRange" = "Custom Range";
 "wallet.archive" = "Archive";
 "wallet.unarchive" = "Unarchive";
@@ -90,6 +100,10 @@
 "transaction.type.expense" = "Expense";
 "transaction.type.transfer" = "Transfer";
 "transaction.type.adjustment" = "Adjustment";
+"transaction.uncategorized" = "Uncategorized";
+"transaction.balanceAdjustment" = "Balance Adjustment";
+"transaction.excludeFromReports" = "Exclude from Reports";
+"transaction.deletedToast" = "Transaction deleted";
 "transaction.category" = "Category";
 "transaction.scanReceipt" = "Scan Receipt";
 "transaction.currency" = "Currency";
@@ -485,14 +499,43 @@
 "onboarding.personalizeColors" = "Personalize Colors";
 "onboarding.colorDescription" = "Choose colors for your income and expenses.";
 "onboarding.allSet" = "You're All Set!";
-"onboarding.getStarted" = "Let's create your first wallet to get started.";
+"onboarding.getStarted" = "Get Started";
+"onboarding.wallet.title" = "Create Your First Wallet";
+"onboarding.wallet.description" = "A wallet holds your money — like cash, a bank account, or savings. You can add more later.";
+"onboarding.wallet.defaultName" = "Cash";
 "onboarding.welcomeTitle" = "Welcome to QuaraMoney";
 "onboarding.welcomeDescription" = "Take control of your finances.\nTrack expenses, budget smarter, and save more.";
 "onboarding.themeDescription" = "Choose colors for your income and expenses.";
 "onboarding.incomeColor" = "Income Color";
 "onboarding.expenseColor" = "Expense Color";
 "onboarding.finalTitle" = "You're All Set!";
-"onboarding.finalDescription" = "Let's create your first wallet to get started.";
+"onboarding.finalDescription" = "Start tracking your income and expenses.";
+"onboarding.skip" = "Skip";
+"onboarding.continue" = "Continue";
+"onboarding.track.title" = "Track spending in seconds";
+"onboarding.track.description" = "Tap the + button, type the amount, and pick a category. Done — every dollar and riel is recorded.";
+"onboarding.track.step1" = "Tap the + button";
+"onboarding.track.step2" = "Enter the amount";
+"onboarding.track.step3" = "Pick a category";
+"onboarding.wallets.title" = "A wallet for every pocket";
+"onboarding.wallets.description" = "Keep cash, bank, and savings separate. Swipe between wallet cards on Home to see each balance.";
+"onboarding.insights.title" = "Know where your money goes";
+"onboarding.insights.description" = "Charts and budgets show your spending by category — so you always know how much is left.";
+"onboarding.ready.description" = "Choose your main currency and we'll set up a Cash wallet for you.";
+"onboarding.ready.currencyQuestion" = "Main Currency";
+"onboarding.ready.usd" = "US Dollar";
+"onboarding.ready.khr" = "Khmer Riel";
+"onboarding.ready.changeLater" = "You can change everything later in Settings.";
+"onboarding.demo.totalBalance" = "Total Balance";
+"onboarding.demo.food" = "Food";
+"onboarding.demo.transport" = "Transport";
+"onboarding.demo.coffee" = "Coffee";
+"onboarding.demo.saved" = "Saved!";
+"onboarding.demo.bank" = "Bank";
+"onboarding.demo.swipeHint" = "Swipe to switch wallets";
+"onboarding.demo.thisMonth" = "This Month";
+"onboarding.demo.foodBudget" = "Food budget";
+"onboarding.demo.left" = "left";
 
 // MARK: - Status Messages
 "status.deleting" = "Deleting...";

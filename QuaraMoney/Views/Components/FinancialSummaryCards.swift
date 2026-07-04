@@ -29,11 +29,13 @@ struct FinancialSummaryCards: View {
     let endDate: Date
     let showChart: Bool
     let previousPeriodCumulative: [Decimal]
-    
+    /// Tighter spacing + smaller chart/figures, for hero-card contexts (Home).
+    let compact: Bool
+
     @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
     @State private var rawSelectedDate: Date? = nil
     @State private var showDetails = false
-    
+
     init(
         income: Decimal,
         expense: Decimal,
@@ -41,7 +43,8 @@ struct FinancialSummaryCards: View {
         startDate: Date = Date(),
         endDate: Date = Date(),
         showChart: Bool = true,
-        previousPeriodCumulative: [Decimal] = []
+        previousPeriodCumulative: [Decimal] = [],
+        compact: Bool = false
     ) {
         self.income = income
         self.expense = expense
@@ -50,6 +53,7 @@ struct FinancialSummaryCards: View {
         self.endDate = endDate
         self.showChart = showChart
         self.previousPeriodCumulative = previousPeriodCumulative
+        self.compact = compact
     }
     
     // Dynamic properties
@@ -212,14 +216,14 @@ struct FinancialSummaryCards: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: compact ? 12 : 16) {
             if showChart {
                 // ── Header: Two-column legend like Apple Health ──
                 chartHeader
 
                 // ── Chart: Two smooth lines ──
                 chartView
-                    .frame(height: 120)
+                    .frame(height: compact ? 96 : 120)
             } else {
                 // Standard Net Total Header for non-chart summary (like Analysis View)
                 HStack(alignment: .top) {
@@ -258,7 +262,7 @@ struct FinancialSummaryCards: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, compact ? 0 : 8)
     }
     
     // MARK: - Chart Header (Apple Health Style)
@@ -272,13 +276,13 @@ struct FinancialSummaryCards: View {
                     Circle()
                         .fill(ThemeManager.shared.expenseColor)
                         .frame(width: 8, height: 8)
-                    Text(isFullMonthSelected ? currentMonthName : L10n.Filter.thisMonth)
+                    Text("analysis.expenseInPeriod".localized(with: isFullMonthSelected ? currentMonthName : L10n.Filter.thisMonth))
                         .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.secondary)
                 }
                 
                 Text(currentMonthTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                    .appFont(.title2, weight: .bold)
+                    .appFont(compact ? .title3 : .title2, weight: .bold)
                     .foregroundStyle(ThemeManager.shared.expenseColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,13 +293,13 @@ struct FinancialSummaryCards: View {
                     Circle()
                         .fill(Color.gray.opacity(0.6))
                         .frame(width: 8, height: 8)
-                    Text(isFullMonthSelected ? previousMonthName : L10n.Analysis.previousPeriod)
+                    Text("analysis.expenseInPeriod".localized(with: isFullMonthSelected ? previousMonthName : L10n.Analysis.previousPeriod))
                         .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.secondary)
                 }
                 
                 Text(previousMonthTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                    .appFont(.title2, weight: .bold)
+                    .appFont(compact ? .title3 : .title2, weight: .bold)
                     .foregroundStyle(Color(.secondaryLabel))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -342,7 +346,18 @@ struct FinancialSummaryCards: View {
                 )
                 .foregroundStyle(Color(.separator).opacity(0.4))
                 .lineStyle(StrokeStyle(lineWidth: 1))
-                
+                .annotation(
+                    position: .top,
+                    spacing: 4,
+                    overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
+                ) {
+                    ProCallout {
+                        Text(selectedItem.date, format: .dateTime.month(.abbreviated).day())
+                            .appFont(.caption2, weight: .semibold)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 // Point on current line
                 if selectedItem.date <= maxSpendingDate {
                     PointMark(
@@ -407,6 +422,12 @@ struct FinancialSummaryCards: View {
             }
         }
         .chartLegend(.hidden)
+        // Each period's data spans a different date range, so morphing marks between
+        // them (Swift Charts' default) reads as a jittery wobble. Give the chart a
+        // fresh identity per period instead and simply cross-fade.
+        .id(startDate)
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: startDate)
     }
     
     @ViewBuilder

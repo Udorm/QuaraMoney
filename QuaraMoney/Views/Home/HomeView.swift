@@ -12,7 +12,6 @@ struct HomeView: View {
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
-    @State private var shouldScan = false
     @State private var backdateTarget: BackdateTarget?
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
     
@@ -35,17 +34,17 @@ struct HomeView: View {
             })
             .safeAreaInset(edge: .bottom, alignment: .trailing) {
                 Button {
-                    shouldScan = false
                     showingAddTransaction = true
                 } label: {
                     Image(systemName: "plus")
                 }
-                .modifier(AddTransactionFABStyle())
+                .modifier(CircularFABStyle())
                 .controlSize(.large)
                 .padding(.trailing)
                 .padding(.bottom, 8)
             }
-            .navigationTitle(L10n.Home.title)
+            .navigationTitle("QuaraMoney")
+            .navigationBarTitleDisplayMode(.large)
             .searchable(text: $viewModel.searchText)
             .searchToolbarBehavior(.minimize)
             .task {
@@ -53,8 +52,8 @@ struct HomeView: View {
                 try? await Task.sleep(for: .milliseconds(100))
                 viewModel.refreshData()
             }
-            .sheet(isPresented: $showingAddTransaction, onDismiss: { shouldScan = false }) {
-                AddTransactionContainer(transaction: nil, isNewTransaction: true, startWithScanner: shouldScan)
+            .sheet(isPresented: $showingAddTransaction) {
+                AddTransactionContainer(transaction: nil, isNewTransaction: true)
             }
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
@@ -83,7 +82,6 @@ struct HomeView: View {
             // to settle before presenting the sheet (presenting from a non-visible tab is
             // silently ignored by UIKit).
             .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
-                shouldScan = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     showingAddTransaction = true
                 }
@@ -94,20 +92,9 @@ struct HomeView: View {
                 guard AppDelegate.pendingShortcutType == AppDelegate.ShortcutType.addTransaction else { return }
                 AppDelegate.pendingShortcutType = nil
                 try? await Task.sleep(for: .milliseconds(1500))
-                shouldScan = false
                 showingAddTransaction = true
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        shouldScan = true
-                        showingAddTransaction = true
-                    } label: {
-                        Image(systemName: "doc.text.viewfinder")
-                    }
-                    .accessibilityLabel("Scan receipt")
-                }
-
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
                         Picker(selection: $viewModel.sortOption, label: Text(L10n.Sort.title)) {
@@ -134,40 +121,13 @@ struct HomeView: View {
         }
     }
 
-    private var currentPeriodText: String {
-        switch viewModel.selectedTab {
-        case .month(let date):
-            let calendar = Calendar.current
-            if calendar.isDate(date, equalTo: Date(), toGranularity: .month) {
-                return L10n.Filter.thisMonth
-            } else if let lastMonth = calendar.date(byAdding: .month, value: -1, to: Date()),
-                      calendar.isDate(date, equalTo: lastMonth, toGranularity: .month) {
-                return L10n.Filter.lastMonth
-            } else {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMMM yyyy"
-                return formatter.string(from: date)
-            }
-        case .custom:
-            let start = viewModel.customStartDate.formatted(.dateTime.month(.abbreviated).day())
-            let end = viewModel.customEndDate.formatted(.dateTime.month(.abbreviated).day().year())
-            return "\(start) – \(end)"
-        }
-    }
-
     private var summaryHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            if !viewModel.selectedWalletIds.isEmpty {
-                Text(walletFilterDescription)
-                    .font(.app(.subheadline))
-            }
-            Spacer()
-            Text(currentPeriodText)
+        HStack {
+            Text(walletFilterDescription)
                 .font(.app(.subheadline))
-                .foregroundStyle(!viewModel.selectedWalletIds.isEmpty ? .secondary : .primary)
+            Spacer()
         }
         .textCase(nil)
-        .padding(.top, -8)  // Tighten the gap between the picker section and the summary card
     }
 
     private var walletFilterDescription: String {
@@ -198,7 +158,6 @@ struct HomeView: View {
                         Text("home.empty.message".localized)
                     } actions: {
                         Button {
-                            shouldScan = false
                             showingAddTransaction = true
                         } label: {
                             Text("transaction.add".localized)
@@ -212,41 +171,59 @@ struct HomeView: View {
                 .listRowSeparator(.hidden)
             } else {
                 Section {
-                    MonthSelectionView(
-                        selectedTab: $viewModel.selectedTab,
-                        months: Array(viewModel.availableMonths.suffix(3))
-                    )
+                    VStack(spacing: 12) {
+                        FinancialSummaryCards(
+                            income: viewModel.incomeTotal,
+                            expense: viewModel.expenseTotal,
+                            dailySections: viewModel.dailySections,
+                            startDate: viewModel.currentStartDate,
+                            endDate: viewModel.currentEndDate,
+                            previousPeriodCumulative: viewModel.previousPeriodCumulative,
+                            compact: true
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 20)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    Color.accentColor.opacity(0.12),
+                                    Color(uiColor: .secondarySystemGroupedBackground)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                    if case .custom = viewModel.selectedTab {
-                        HStack {
-                            Spacer()
-                            DatePicker("filter.startDate".localized, selection: $viewModel.customStartDate, displayedComponents: .date)
-                                .labelsHidden()
-                                .font(.app(.headline))
-                            Text("-")
-                                .foregroundStyle(.secondary)
-                                .font(.app(.headline))
-                            DatePicker("filter.endDate".localized, selection: $viewModel.customEndDate, displayedComponents: .date)
-                                .labelsHidden()
-                                .font(.app(.headline))
-                            Spacer()
+                        GlassPeriodSelector(
+                            selectedTab: $viewModel.selectedTab,
+                            months: Array(viewModel.availableMonths.suffix(3))
+                        )
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(Capsule())
+
+                        if case .custom = viewModel.selectedTab {
+                            HStack {
+                                Spacer()
+                                DatePicker("filter.startDate".localized, selection: $viewModel.customStartDate, displayedComponents: .date)
+                                    .labelsHidden()
+                                    .font(.app(.headline))
+                                Text("-")
+                                    .foregroundStyle(.secondary)
+                                    .font(.app(.headline))
+                                DatePicker("filter.endDate".localized, selection: $viewModel.customEndDate, displayedComponents: .date)
+                                    .labelsHidden()
+                                    .font(.app(.headline))
+                                Spacer()
+                            }
+                            .padding(.top, 4)
                         }
                     }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
+                    .listRowBackground(Color.clear)
                 }
-                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 .listRowBackground(Color.clear)
-
-                // Summary Section
-                Section(header: summaryHeader) {
-                    FinancialSummaryCards(
-                        income: viewModel.incomeTotal,
-                        expense: viewModel.expenseTotal,
-                        dailySections: viewModel.dailySections,
-                        startDate: viewModel.currentStartDate,
-                        endDate: viewModel.currentEndDate,
-                        previousPeriodCumulative: viewModel.previousPeriodCumulative
-                    )
-                }
+                .listRowSeparator(.hidden)
 
                 if isResultEmpty {
                     Section {
@@ -293,6 +270,8 @@ struct HomeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(4) // Reduce section spacing and top padding
+        .environment(\.defaultMinListHeaderHeight, 0)
     }
 }
 
@@ -369,7 +348,9 @@ struct DailyHeader: View {
 // Let's use a simple one here for now.
 
 
-private struct AddTransactionFABStyle: ViewModifier {
+/// Circular glass FAB used for floating primary actions (Home's add button, the
+/// Add Transaction sheet's scan button).
+struct CircularFABStyle: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
             content

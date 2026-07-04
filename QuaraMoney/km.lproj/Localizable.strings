@@ -19,6 +19,9 @@
 "common.hide" = "លាក់";
 "common.create" = "បង្កើត";
 "common.preview" = "មើលជាមុន";
+"common.noResults" = "គ្មានលទ្ធផល";
+"common.expanded" = "បានពង្រីក";
+"common.collapsed" = "បានបង្រួម";
 "common.seeAll" = "មើលទាំងអស់";
 "common.error" = "បញ្ហា";
 "common.advancedOptions" = "ជម្រើសកម្រិតខ្ពស់";
@@ -77,6 +80,11 @@
 "wallet.edit" = "កែសម្រួលកាបូប";
 "wallet.details" = "ព័ត៌មានលម្អិតកាបូប";
 "wallet.appearance" = "រូបរាង";
+"wallet.noWallets" = "គ្មានកាបូប";
+"wallet.last30Days" = "៣០ថ្ងៃចុងក្រោយ";
+"wallet.adjust" = "កែតម្រូវ";
+"wallet.action.addExpense" = "បន្ថែមចំណាយ";
+"wallet.action.addIncome" = "បន្ថែមចំណូល";
 "filter.status" = "ស្ថានភាព";
 "status.active" = "សកម្ម";
 "status.archived" = "បានទុកក្នុងបណ្ណសារ";
@@ -317,6 +325,7 @@
 "analysis.net" = "លុយលស់";
 "analysis.previousMonth" = "ខែមុន";
 "analysis.previousPeriod" = "រយៈពេលមុន";
+"analysis.expenseInPeriod" = "ចំណាយក្នុង %@";
 
 
 // MARK: - Events (ព្រឹត្តិការណ៍)

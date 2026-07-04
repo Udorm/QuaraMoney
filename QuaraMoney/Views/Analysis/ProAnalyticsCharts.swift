@@ -46,7 +46,7 @@ struct ProMetricHeader: View {
 // MARK: - Scrub Callout
 
 /// The floating "lollipop" card shown above the selection rule while scrubbing a chart.
-private struct ProCallout<Content: View>: View {
+struct ProCallout<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {

@@ -3,42 +3,85 @@ import SwiftUI
 struct AdjustBalanceView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AdjustBalanceViewModel
+    @FocusState private var isAmountFocused: Bool
 
     init(wallet: Wallet, dataService: DataService) {
         _viewModel = State(wrappedValue: AdjustBalanceViewModel(wallet: wallet, dataService: dataService))
     }
 
+    private var walletColor: Color {
+        Color(hex: viewModel.wallet.colorHex) ?? .blue
+    }
+
+    private var differenceColor: Color {
+        viewModel.difference >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                // Current Balance Section (Read-only)
+                // Current balance header
                 Section {
-                    HStack {
-                        Text("wallet.currentBalance".localized)
-                        Spacer()
-                        Text(viewModel.currentBalance.formattedAmount(for: viewModel.wallet.currencyCode))
-                            .foregroundStyle(.secondary)
+                    VStack(spacing: 10) {
+                        Image(systemName: viewModel.wallet.icon)
+                            .font(.app(.title3))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                LinearGradient(
+                                    colors: [walletColor, walletColor.opacity(0.72)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
+
+                        VStack(spacing: 2) {
+                            Text("wallet.currentBalance".localized)
+                                .font(.app(.caption, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text(viewModel.currentBalance.formattedAmount(for: viewModel.wallet.currencyCode))
+                                .font(.app(.title, weight: .bold))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
 
                 // Target Balance Input
                 Section {
                     HStack {
                         Text(viewModel.wallet.currencyCode)
-                            .fontWeight(.semibold)
+                            .font(.app(.subheadline, weight: .semibold))
                             .foregroundStyle(.secondary)
                         TextField("wallet.newBalance".localized, text: $viewModel.targetBalanceString)
                             .keyboardType(.decimalPad)
-                            .font(.app(.title3))
+                            .font(.app(.title3, weight: .semibold))
+                            .monospacedDigit()
+                            .focused($isAmountFocused)
                     }
 
                     if viewModel.targetBalance != nil {
                         HStack {
                             Text("wallet.difference".localized)
                             Spacer()
-                            let sign = viewModel.difference >= 0 ? "+" : ""
-                            Text("\(sign)\(viewModel.difference.formattedAmount(for: viewModel.wallet.currencyCode))")
-                                .foregroundStyle(viewModel.difference >= 0 ? .green : .red)
+                            HStack(spacing: 3) {
+                                Image(systemName: viewModel.difference >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.app(.caption2, weight: .bold))
+                                let sign = viewModel.difference >= 0 ? "+" : ""
+                                Text("\(sign)\(viewModel.difference.formattedAmount(for: viewModel.wallet.currencyCode))")
+                                    .font(.app(.subheadline, weight: .semibold))
+                                    .monospacedDigit()
+                            }
+                            .foregroundStyle(differenceColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(differenceColor.opacity(0.12), in: Capsule())
                         }
                     }
                 } header: {
@@ -72,6 +115,9 @@ struct AdjustBalanceView: View {
                     }
                     .disabled(!viewModel.isValid)
                 }
+            }
+            .onAppear {
+                isAmountFocused = true
             }
         }
     }

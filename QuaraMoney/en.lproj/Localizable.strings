@@ -19,6 +19,9 @@
 "common.hide" = "Hide";
 "common.create" = "Create";
 "common.preview" = "Preview";
+"common.noResults" = "No Results";
+"common.expanded" = "Expanded";
+"common.collapsed" = "Collapsed";
 "common.seeAll" = "See All";
 "common.error" = "Error";
 "common.advancedOptions" = "Advanced Options";
@@ -77,6 +80,11 @@
 "wallet.edit" = "Edit Wallet";
 "wallet.details" = "Wallet Details";
 "wallet.appearance" = "Appearance";
+"wallet.noWallets" = "No Wallets";
+"wallet.last30Days" = "Last 30 days";
+"wallet.adjust" = "Adjust";
+"wallet.action.addExpense" = "Add Expense";
+"wallet.action.addIncome" = "Add Income";
 "filter.status" = "Status";
 "status.active" = "Active";
 "status.archived" = "Archived";
@@ -317,6 +325,7 @@
 "analysis.net" = "Net";
 "analysis.previousMonth" = "Prev Month";
 "analysis.previousPeriod" = "Prev Period";
+"analysis.expenseInPeriod" = "Expense in %@";
 
 
 // MARK: - Events

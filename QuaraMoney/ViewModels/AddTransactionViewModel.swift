@@ -35,7 +35,7 @@ class AddTransactionViewModel: BaseViewModel {
     private var existingTransaction: Transaction?
     var isEditing: Bool { existingTransaction != nil }
     
-    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil, initialAmount: Decimal? = nil) {
+    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil, initialAmount: Decimal? = nil, initialType: TransactionType? = nil) {
         self.selectedWallet = initialWallet
         self.selectedEvent = initialEvent
         self.existingTransaction = transaction
@@ -90,6 +90,12 @@ class AddTransactionViewModel: BaseViewModel {
             updateTransactionCurrencyExchangeRate()
         } else if let wallet = initialWallet {
             self.selectedCurrencyCode = wallet.currencyCode
+        }
+
+        // Caller-requested starting type (wallet quick actions) — only for new
+        // entries; never override an existing transaction or a debt repayment.
+        if transaction == nil, initialDebt == nil, let initialType {
+            self.type = initialType
         }
     }
     

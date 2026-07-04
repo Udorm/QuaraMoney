@@ -6,8 +6,7 @@ struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
-    let startWithScanner: Bool
-    
+
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -42,10 +41,9 @@ struct AddTransactionView: View {
     private let maxQuickCategories = 3 // Show 3 categories + "More" to keep strictly to one row (4 items)
     private let maxQuickWallets = 4
     
-    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true, startWithScanner: Bool = false) {
+    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
         self._viewModel = State(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
-        self.startWithScanner = startWithScanner
     }
     
     /// True when editing a transaction that belongs to a debt/loan. Such entries
@@ -391,6 +389,26 @@ struct AddTransactionView: View {
                     .contentMargins(.top, 16, for: .scrollContent)
                 }
             }
+            .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                // Scanning overwrites the form from a receipt, so it's only offered
+                // for a fresh, non-debt-linked entry, and tucked away while the
+                // calculator keyboard is occupying the same corner of the screen.
+                // A safe-area inset (not a ZStack overlay) so the list reserves
+                // space for it instead of scrolling content underneath.
+                if isNewTransaction && !isDebtLinked && !showKeyboard {
+                    Button {
+                        showScanner = true
+                    } label: {
+                        Image(systemName: "doc.text.viewfinder")
+                    }
+                    .modifier(CircularFABStyle())
+                    .controlSize(.large)
+                    .padding(.trailing)
+                    .padding(.bottom, 8)
+                    .accessibilityLabel("Scan receipt")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 // MARK: - Calculator Keyboard (Dismissible)
                 if showKeyboard && !isNoteFieldFocused {
@@ -439,8 +457,6 @@ struct AddTransactionView: View {
                     .disabled(!viewModel.isValid)
                     .accessibilityLabel("Save transaction")
                 }
-                
-                // Moved scan button to FAB
             }
             .sheet(isPresented: $showScanner) {
                 ScannerView(isPresented: $showScanner) { result in
@@ -481,11 +497,7 @@ struct AddTransactionView: View {
                     recomputeSuggestions()
                 }
                 // Only show keyboard for new transactions
-                showKeyboard = isNewTransaction && !startWithScanner
-
-                if startWithScanner {
-                    showScanner = true
-                }
+                showKeyboard = isNewTransaction
 
                 // Fetch current location in the background to refine suggestions (new entries only)
                 if isNewTransaction {

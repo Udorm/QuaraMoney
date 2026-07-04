@@ -143,59 +143,81 @@ struct TransactionRowView: View {
         return paidByName
     }
     
+    private var hasMetaLine: Bool {
+        debt != nil || subtitleText != nil
+    }
+
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill((Color(hex: iconColorHex) ?? .gray).opacity(0.1))
-                    .frame(width: 40, height: 40)
-                
+                    .frame(width: 34, height: 34)
+
                 Image(systemName: iconName)
-                    .font(.app(.body))
+                    .font(.app(.subheadline))
                     .foregroundStyle(Color(hex: iconColorHex) ?? .gray)
             }
-            
-            VStack(alignment: .leading) {
-                Text(titleText)
-                    .font(.app(.body, weight: .medium))
-                
-                if let subtitleText {
-                    Text(subtitleText)
-                        .font(.app(.caption))
-                        .foregroundStyle(.secondary)
-                }
-                
 
-                
-                if let debt {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titleText)
+                    .font(.app(.subheadline, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if hasMetaLine {
                     HStack(spacing: 4) {
-                        Image(systemName: debt.type == .owedToMe ? "arrow.up.right" : "arrow.down.left")
-                        Text(debt.personName)
+                        if let debt {
+                            debtBadge(debt)
+                        }
+
+                        if let subtitleText {
+                            Text(subtitleText)
+                                .font(.app(.caption))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(4)
-                    .foregroundStyle(.secondary)
                 }
             }
-            
-            Spacer()
-            
-            VStack(alignment: .trailing) {
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(amountText)
-                    .font(.app(.body, weight: .semibold))
+                    .font(.app(.subheadline, weight: .semibold))
                     .foregroundStyle(isPositive ? incomeColor : expenseColor)
-                
+                    .lineLimit(1)
+
                 Text(timeText)
                     .font(.app(.caption2))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+            .layoutPriority(1)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(titleText), \(amountText), \(timeText)\(subtitleText.map { ", \($0)" } ?? "")")
+    }
+
+    @ViewBuilder
+    private func debtBadge(_ debt: Debt) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: debt.type.directionIcon)
+                .font(.system(size: 9, weight: .bold))
+            Text(debt.personName)
+                .font(.app(.caption2, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .foregroundStyle(debt.type.accentColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(debt.type.accentColor.opacity(0.12), in: Capsule())
+        .layoutPriority(1)
     }
 }

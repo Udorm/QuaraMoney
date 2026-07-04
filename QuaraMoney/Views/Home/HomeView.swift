@@ -171,7 +171,7 @@ struct HomeView: View {
                 .listRowSeparator(.hidden)
             } else {
                 Section {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
                         FinancialSummaryCards(
                             income: viewModel.incomeTotal,
                             expense: viewModel.expenseTotal,
@@ -179,20 +179,11 @@ struct HomeView: View {
                             startDate: viewModel.currentStartDate,
                             endDate: viewModel.currentEndDate,
                             previousPeriodCumulative: viewModel.previousPeriodCumulative,
-                            compact: true
+                            compact: true,
+                            tintedBackground: true
                         )
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 20)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color.accentColor.opacity(0.12),
-                                    Color(uiColor: .secondarySystemGroupedBackground)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .padding(18)
+                        .background(Color.accentColor)
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
 
                         GlassPeriodSelector(
@@ -219,7 +210,7 @@ struct HomeView: View {
                             .padding(.top, 4)
                         }
                     }
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 12, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
                 .listRowBackground(Color.clear)

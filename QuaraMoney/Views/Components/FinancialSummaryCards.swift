@@ -31,6 +31,10 @@ struct FinancialSummaryCards: View {
     let previousPeriodCumulative: [Decimal]
     /// Tighter spacing + smaller chart/figures, for hero-card contexts (Home).
     let compact: Bool
+    /// True when the card sits on a solid accent-colored background (Home's hero
+    /// card) rather than the default page background — chart chrome and secondary
+    /// labels switch to translucent white so they stay legible against the fill.
+    let tintedBackground: Bool
 
     @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
     @State private var rawSelectedDate: Date? = nil
@@ -44,7 +48,8 @@ struct FinancialSummaryCards: View {
         endDate: Date = Date(),
         showChart: Bool = true,
         previousPeriodCumulative: [Decimal] = [],
-        compact: Bool = false
+        compact: Bool = false,
+        tintedBackground: Bool = false
     ) {
         self.income = income
         self.expense = expense
@@ -54,11 +59,42 @@ struct FinancialSummaryCards: View {
         self.showChart = showChart
         self.previousPeriodCumulative = previousPeriodCumulative
         self.compact = compact
+        self.tintedBackground = tintedBackground
     }
-    
+
     // Dynamic properties
     var net: Decimal {
         income - expense
+    }
+
+    // MARK: - Tinted-background-aware colors
+
+    private var mutedTextColor: Color {
+        tintedBackground ? Color.white.opacity(0.75) : .secondary
+    }
+
+    private var previousValueColor: Color {
+        tintedBackground ? Color.white.opacity(0.9) : Color(.secondaryLabel)
+    }
+
+    private var referenceLineColor: Color {
+        tintedBackground ? Color.white.opacity(0.55) : Color.gray.opacity(0.45)
+    }
+
+    private var referenceDotColor: Color {
+        tintedBackground ? Color.white.opacity(0.7) : Color.gray
+    }
+
+    private var separatorColor: Color {
+        tintedBackground ? Color.white.opacity(0.35) : Color(.separator).opacity(0.4)
+    }
+
+    private var gridlineColor: Color {
+        tintedBackground ? Color.white.opacity(0.15) : Color.secondary.opacity(0.08)
+    }
+
+    private var primaryValueColor: Color {
+        tintedBackground ? .white : .primary
     }
     
     private var isFullMonthSelected: Bool {
@@ -230,7 +266,7 @@ struct FinancialSummaryCards: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.Analysis.net.uppercased())
                             .appFont(.caption2, weight: .bold)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(mutedTextColor)
 
                         Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                             .appFont(.title, weight: .bold)
@@ -252,7 +288,7 @@ struct FinancialSummaryCards: View {
                     Image(systemName: showDetails ? "chevron.up" : "chevron.down")
                         .appFont(.caption2, weight: .semibold)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(mutedTextColor)
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
@@ -278,29 +314,29 @@ struct FinancialSummaryCards: View {
                         .frame(width: 8, height: 8)
                     Text("analysis.expenseInPeriod".localized(with: isFullMonthSelected ? currentMonthName : L10n.Filter.thisMonth))
                         .appFont(.caption, weight: .semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mutedTextColor)
                 }
-                
+
                 Text(currentMonthTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(compact ? .title3 : .title2, weight: .bold)
                     .foregroundStyle(ThemeManager.shared.expenseColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             // Previous Month Column
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.gray.opacity(0.6))
+                        .fill(referenceDotColor)
                         .frame(width: 8, height: 8)
                     Text("analysis.expenseInPeriod".localized(with: isFullMonthSelected ? previousMonthName : L10n.Analysis.previousPeriod))
                         .appFont(.caption, weight: .semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mutedTextColor)
                 }
-                
+
                 Text(previousMonthTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(compact ? .title3 : .title2, weight: .bold)
-                    .foregroundStyle(Color(.secondaryLabel))
+                    .foregroundStyle(previousValueColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -321,7 +357,7 @@ struct FinancialSummaryCards: View {
                         series: .value("Series", "Previous")
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(Color.gray.opacity(0.45))
+                    .foregroundStyle(referenceLineColor)
                     .lineStyle(StrokeStyle(lineWidth: 2.5))
                 }
             }
@@ -344,7 +380,7 @@ struct FinancialSummaryCards: View {
                 RuleMark(
                     x: .value("Selected", selectedItem.date, unit: .day)
                 )
-                .foregroundStyle(Color(.separator).opacity(0.4))
+                .foregroundStyle(separatorColor)
                 .lineStyle(StrokeStyle(lineWidth: 1))
                 .annotation(
                     position: .top,
@@ -374,7 +410,7 @@ struct FinancialSummaryCards: View {
                         x: .value("Selected", selectedAvg.date, unit: .day),
                         y: .value("Previous", Double(truncating: selectedAvg.cumulativeAmount as NSDecimalNumber))
                     )
-                    .foregroundStyle(Color.gray)
+                    .foregroundStyle(referenceDotColor)
                     .symbolSize(60)
                 }
             } else {
@@ -394,7 +430,7 @@ struct FinancialSummaryCards: View {
                         x: .value("Date", lastAvg.date, unit: .day),
                         y: .value("Previous", Double(truncating: lastAvg.cumulativeAmount as NSDecimalNumber))
                     )
-                    .foregroundStyle(Color.gray.opacity(0.5))
+                    .foregroundStyle(referenceDotColor)
                     .symbolSize(36)
                 }
             }
@@ -404,19 +440,19 @@ struct FinancialSummaryCards: View {
             AxisMarks(values: .automatic(desiredCount: 5)) { value in
                 AxisValueLabel(format: .dateTime.day())
                     .font(.app(.caption2))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(mutedTextColor)
             }
         }
         .chartYScale(domain: 0...maxYValue)
         .chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(Color.secondary.opacity(0.08))
+                    .foregroundStyle(gridlineColor)
                 AxisValueLabel {
                     if let doubleValue = value.as(Double.self) {
                         Text(doubleValue.formattedAmountShort(for: CurrencyManager.shared.preferredCurrencyCode))
                             .font(.app(.caption2))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(mutedTextColor)
                     }
                 }
             }
@@ -440,18 +476,24 @@ struct FinancialSummaryCards: View {
                         .frame(width: 6, height: 6)
                     Text(L10n.Transaction.TransactionType.income.uppercased())
                         .appFont(.caption2, weight: .semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mutedTextColor)
                 }
                 Text(income.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(.subheadline, weight: .bold)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(primaryValueColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            
-            Divider()
-                .frame(height: 24)
-                .padding(.horizontal, 8)
-            
+
+            Group {
+                if tintedBackground {
+                    Rectangle().fill(separatorColor)
+                } else {
+                    Divider()
+                }
+            }
+            .frame(width: 1, height: 24)
+            .padding(.horizontal, 8)
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     Circle()
@@ -459,7 +501,7 @@ struct FinancialSummaryCards: View {
                         .frame(width: 6, height: 6)
                     Text(L10n.Analysis.net.uppercased())
                         .appFont(.caption2, weight: .semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(mutedTextColor)
                 }
                 Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(.subheadline, weight: .bold)

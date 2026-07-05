@@ -163,7 +163,7 @@ struct HomeView: View {
                             Text("transaction.add".localized)
                                 .font(.app(.body, weight: .semibold))
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.glassProminent)
                     }
                     .padding(.vertical, 32)
                 }
@@ -180,7 +180,10 @@ struct HomeView: View {
                             endDate: viewModel.currentEndDate,
                             previousPeriodCumulative: viewModel.previousPeriodCumulative,
                             compact: true,
-                            tintedBackground: true
+                            tintedBackground: true,
+                            onNavigateToPro: {
+                                NotificationCenter.default.post(name: .openProAnalytics, object: nil)
+                            }
                         )
                         .padding(18)
                         .background(Color.accentColor)
@@ -222,15 +225,13 @@ struct HomeView: View {
                             ContentUnavailableView.search(text: viewModel.searchText)
                                 .padding(.vertical, 16)
                         } else {
-                            ContentUnavailableView {
-                                Label("home.emptyPeriod.title".localized, systemImage: "calendar.badge.exclamationmark")
-                            } description: {
-                                Text("home.noTransactions".localized)
-                            }
-                            .padding(.vertical, 16)
+                            AppEmptyStateView(
+                                "home.emptyPeriod.title".localized,
+                                systemImage: "calendar.badge.exclamationmark",
+                                description: "home.noTransactions".localized
+                            )
                         }
                     }
-                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 } else if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
                     // Sorted flat list

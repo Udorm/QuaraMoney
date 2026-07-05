@@ -15,6 +15,7 @@ struct ProDashboardFilterSheet: View {
     // Staged (pending) state
     @State private var pendingFilter: DashboardFilter
     @State private var pendingPeriod: AnalysisPeriod
+    @State private var pendingReferenceDate: Date
     @State private var pendingStart: Date
     @State private var pendingEnd: Date
     @State private var minAmountText: String
@@ -26,6 +27,7 @@ struct ProDashboardFilterSheet: View {
         self.categories = categories
         _pendingFilter = State(initialValue: vm.filter)
         _pendingPeriod = State(initialValue: vm.selectedPeriod)
+        _pendingReferenceDate = State(initialValue: vm.currentReferenceDate)
         _pendingStart = State(initialValue: vm.customStartDate)
         _pendingEnd = State(initialValue: vm.customEndDate)
         _minAmountText = State(initialValue: vm.filter.minAmount.map { NSDecimalNumber(decimal: $0).stringValue } ?? "")
@@ -89,6 +91,17 @@ struct ProDashboardFilterSheet: View {
         }
     }
 
+    /// End of the range implied by the staged period + reference date — drives the
+    /// "can't go past today" guard on the forward chevron.
+    private var pendingRangeEnd: Date {
+        pendingPeriod.dateRange(referenceDate: pendingReferenceDate, customStart: pendingStart, customEnd: pendingEnd).end
+    }
+
+    private var canNavigatePendingForward: Bool {
+        guard pendingPeriod != .custom else { return false }
+        return pendingRangeEnd < Date()
+    }
+
     private var periodSection: some View {
         Section {
             Picker("filter.period".localized, selection: $pendingPeriod) {
@@ -100,12 +113,52 @@ struct ProDashboardFilterSheet: View {
             }
             .pickerStyle(.menu)
             .font(.app(.body))
+            .onChange(of: pendingPeriod) { _, _ in
+                // Matches the header's old behavior: switching the period type snaps back
+                // to the current instance (this week / this month / etc.).
+                pendingReferenceDate = Date()
+            }
 
             if pendingPeriod == .custom {
                 DatePicker("filter.startDate".localized, selection: $pendingStart, displayedComponents: .date)
                     .font(.app(.body))
                 DatePicker("filter.endDate".localized, selection: $pendingEnd, in: pendingStart..., displayedComponents: .date)
                     .font(.app(.body))
+            } else {
+                // Which instance of the period — "which week", "which month", etc.
+                HStack {
+                    Button {
+                        pendingReferenceDate = pendingPeriod.navigateBack(from: pendingReferenceDate)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .appFont(.subheadline, weight: .semibold)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Text(pendingPeriod.description(referenceDate: pendingReferenceDate, customStart: pendingStart, customEnd: pendingEnd))
+                        .appFont(.subheadline, weight: .semibold)
+                        .multilineTextAlignment(.center)
+                        .contentTransition(.numericText())
+
+                    Spacer()
+
+                    Button {
+                        guard canNavigatePendingForward else { return }
+                        pendingReferenceDate = pendingPeriod.navigateForward(from: pendingReferenceDate)
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .appFont(.subheadline, weight: .semibold)
+                            .foregroundStyle(canNavigatePendingForward ? .primary : Color(.tertiaryLabel))
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canNavigatePendingForward)
+                }
             }
         } header: {
             Text("filter.period".localized).font(.app(.caption))
@@ -258,10 +311,9 @@ struct ProDashboardFilterSheet: View {
             newFilter.maxAmount = parsedMax
         }
 
-        // Apply period first (its setter resets the reference date), then the filter.
-        if vm.selectedPeriod != pendingPeriod { vm.selectedPeriod = pendingPeriod }
-        if vm.customStartDate != pendingStart { vm.customStartDate = pendingStart }
-        if vm.customEndDate != pendingEnd { vm.customEndDate = pendingEnd }
+        // Batched so the period type, its specific instance, and custom bounds land in one
+        // refresh instead of three.
+        vm.applyPeriodSelection(period: pendingPeriod, referenceDate: pendingReferenceDate, customStart: pendingStart, customEnd: pendingEnd)
         vm.filter = newFilter
 
         dismiss()

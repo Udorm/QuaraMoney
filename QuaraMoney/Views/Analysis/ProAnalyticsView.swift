@@ -21,7 +21,7 @@ struct ProAnalyticsView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 16) {
-                    ProActiveFiltersBar(vm: vm, wallets: wallets, categories: categories) {
+                    ProScopeBar(vm: vm, wallets: wallets, categories: categories) {
                         showFilterSheet = true
                     }
 
@@ -51,14 +51,28 @@ struct ProAnalyticsView: View {
                 .padding(.vertical)
                 .animation(.easeInOut(duration: 0.25), value: vm.currentReferenceDate)
                 .animation(.easeInOut(duration: 0.2), value: vm.layout)
+                .animation(.easeInOut(duration: 0.2), value: vm.filter)
             }
-            // Floating Liquid Glass period controls — the navigation layer stays above the
-            // content layer, which scrolls underneath.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                ProPeriodHeader(vm: vm)
-            }
+            // Paging: a decisive horizontal swipe anywhere on the dashboard moves one period
+            // back/forward. It's the quick complement to picking a specific period in the
+            // filter sheet; vertical scrolling is left untouched.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onEnded { value in
+                        let dx = value.translation.width
+                        guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                        if dx < 0 {
+                            guard vm.canNavigateForward else { return }
+                            HapticManager.shared.selection()
+                            vm.navigateForward()
+                        } else {
+                            HapticManager.shared.selection()
+                            vm.navigateBack()
+                        }
+                    }
+            )
             .navigationDestination(for: ProDashboardDetail.self) { detail in
-                ProSectionDetailPage(detail: detail, vm: vm, wallets: wallets)
+                ProSectionDetailPage(detail: detail, vm: vm, wallets: wallets, categories: categories)
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
@@ -66,15 +80,22 @@ struct ProAnalyticsView: View {
                 ToolbarItem(placement: .principal) {
                     AnalyticsModePicker(proMode: $proMode)
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        showCustomizeSheet = true
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            showFilterSheet = true
+                        } label: {
+                            Label("analysis.pro.filter.title".localized, systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        Button {
+                            showCustomizeSheet = true
+                        } label: {
+                            Label("analysis.pro.customize".localized, systemImage: "slider.horizontal.3")
+                        }
                     } label: {
-                        Image(systemName: "slider.horizontal.3")
+                        Image(systemName: vm.filter.hasActiveConstraints ? "ellipsis.circle.fill" : "ellipsis.circle")
                             .font(.app(.title3))
-                    }
-                    ProDashboardFilterButton(filter: vm.filter) {
-                        showFilterSheet = true
+                            .foregroundStyle(vm.filter.hasActiveConstraints ? Color.accentColor : .primary)
                     }
                 }
             }
@@ -169,37 +190,49 @@ enum ProDashboardDetail: Hashable {
     }
 }
 
-/// Full-chart page pushed from a summary card. Shares the dashboard view model,
-/// so period, filters, and interactivity all carry over.
+/// Full-chart page pushed from a summary card. Shares the dashboard view model, so period,
+/// filters, and interactivity all carry over — the scope bar here mutates the same `vm`
+/// instance the dashboard uses, so any change made while viewing a chart's detail is already
+/// in effect (and reflected in the chip rail) when the user navigates back.
 struct ProSectionDetailPage: View {
     let detail: ProDashboardDetail
     var vm: ProAnalyticsViewModel
     var wallets: [Wallet] = []
+    var categories: [Category] = []
+
+    @State private var showFilterSheet = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 12) {
-                Text(vm.filterDescription)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                switch detail {
-                case .budgets:    ProBudgetsCard(vm: vm)
-                case .flow:       ProFlowCard(vm: vm)
-                case .categories: ProCategoriesCard(vm: vm, wallets: wallets)
-                case .patterns:   ProPatternsCard(vm: vm)
-                case .heatmap:    ProHeatmapCard(vm: vm)
-                case .merchants:  ProMerchantsCard(vm: vm)
-                case .largest:    ProLargestCard(vm: vm)
-                case .insights:   ProInsightsCard(vm: vm)
+                // Edge-to-edge, matching the dashboard — the bar manages its own horizontal
+                // padding and scrolls under the safe area rather than being inset twice.
+                ProScopeBar(vm: vm, wallets: wallets, categories: categories) {
+                    showFilterSheet = true
                 }
+
+                VStack(spacing: 12) {
+                    switch detail {
+                    case .budgets:    ProBudgetsCard(vm: vm)
+                    case .flow:       ProFlowCard(vm: vm)
+                    case .categories: ProCategoriesCard(vm: vm, wallets: wallets)
+                    case .patterns:   ProPatternsCard(vm: vm)
+                    case .heatmap:    ProHeatmapCard(vm: vm)
+                    case .merchants:  ProMerchantsCard(vm: vm)
+                    case .largest:    ProLargestCard(vm: vm)
+                    case .insights:   ProInsightsCard(vm: vm)
+                    }
+                }
+                .padding(.horizontal)
             }
-            .padding()
+            .padding(.vertical)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(detail.title)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showFilterSheet) {
+            ProDashboardFilterSheet(vm: vm, wallets: wallets, categories: categories)
+        }
     }
 }
 
@@ -247,65 +280,6 @@ struct ProSectionHeader: View {
             }
             Spacer(minLength: 0)
         }
-    }
-}
-
-// MARK: - Period Header (floating Liquid Glass navigation layer)
-
-struct ProPeriodHeader: View {
-    @Bindable var vm: ProAnalyticsViewModel
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Picker("analysis.timePeriod".localized, selection: $vm.selectedPeriod) {
-                Text("analysis.period.w".localized).tag(AnalysisPeriod.week)
-                Text("analysis.period.m".localized).tag(AnalysisPeriod.month)
-                Text("analysis.period.6m".localized).tag(AnalysisPeriod.sixMonths)
-                Text("analysis.period.y".localized).tag(AnalysisPeriod.year)
-            }
-            .pickerStyle(.segmented)
-
-            HStack {
-                Button {
-                    vm.navigateBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .appFont(.subheadline, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Text(vm.selectedPeriod.description(
-                    referenceDate: vm.currentReferenceDate,
-                    customStart: vm.customStartDate,
-                    customEnd: vm.customEndDate
-                ))
-                .appFont(.subheadline, weight: .semibold)
-                .multilineTextAlignment(.center)
-                .contentTransition(.numericText())
-
-                Spacer()
-
-                Button {
-                    vm.navigateForward()
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .appFont(.subheadline, weight: .semibold)
-                        .foregroundStyle(vm.canNavigateForward ? .secondary : Color(.tertiaryLabel))
-                        .frame(width: 44, height: 36)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!vm.canNavigateForward)
-            }
-            .glassEffect(.regular, in: Capsule())
-        }
-        .padding(.horizontal)
-        .padding(.bottom, 8)
     }
 }
 
@@ -571,39 +545,14 @@ struct ProInsightsCard: View {
     }
 }
 
-// MARK: - Filter Button (toolbar)
+// MARK: - Scope Bar (content-layer period + filter chips)
 
-/// Toolbar filter button with a count badge reflecting how many constraints are active.
-struct ProDashboardFilterButton: View {
-    let filter: DashboardFilter
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .symbolVariant(filter.hasActiveConstraints ? .fill : .none)
-                    .font(.app(.title3))
-                    .foregroundStyle(filter.hasActiveConstraints ? Color.accentColor : .primary)
-
-                if filter.activeConstraintCount > 0 {
-                    Text("\(filter.activeConstraintCount)")
-                        .appFont(.caption2, weight: .bold)
-                        .foregroundStyle(.white)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .background(Circle().fill(Color.red))
-                        .offset(x: 7, y: -7)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Active Filters Chip Bar
-
-/// Horizontally scrollable, tappable summary of every active filter. Tapping a chip removes
-/// that constraint; the leading "Filters" chip opens the full sheet.
-struct ProActiveFiltersBar: View {
+/// First row of the scroll content: an inline chip rail, all scrolling together. The leading
+/// chip is the date — its own `‹ ›` glyphs step the period back/forward in place, while tapping
+/// the label/calendar icon opens the filter sheet (period type, specific instance, and every
+/// other constraint). The remainder is the expense ⇄ income scope chip plus one removable chip
+/// per active constraint.
+struct ProScopeBar: View {
     @Bindable var vm: ProAnalyticsViewModel
     var wallets: [Wallet]
     var categories: [Category]
@@ -615,12 +564,34 @@ struct ProActiveFiltersBar: View {
             : L10n.Transaction.TransactionType.expense
     }
 
+    private var periodLabel: String {
+        vm.selectedPeriod.description(
+            referenceDate: vm.currentReferenceDate,
+            customStart: vm.customStartDate,
+            customEnd: vm.customEndDate
+        )
+    }
+
+    private var canNavigateBack: Bool { vm.selectedPeriod != .custom }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                // Type toggle chip — always present, taps cycle expense ⇄ income.
+                // Date chip — inline ‹ › step the period in place; tapping the label opens the sheet.
+                DateChip(
+                    text: periodLabel,
+                    canGoBack: canNavigateBack,
+                    canGoForward: vm.canNavigateForward,
+                    onBack: vm.navigateBack,
+                    onForward: vm.navigateForward,
+                    onTap: openFilters
+                )
+
+                // Type scope chip — always present, taps cycle expense ⇄ income. The double
+                // chevron (not a directional arrow) signals "tap to switch", matching the
+                // convention pickers and menus use elsewhere in iOS.
                 Chip(
-                    systemImage: vm.filter.transactionType == .income ? "arrow.down.left" : "arrow.up.right",
+                    systemImage: "chevron.up.chevron.down",
                     text: typeLabel,
                     tint: vm.filter.transactionType == .income ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor,
                     style: .solid
@@ -663,9 +634,6 @@ struct ProActiveFiltersBar: View {
                         vm.filter.clearConstraints()
                     }
                 }
-
-                // Add-filter chip
-                Chip(systemImage: "plus", text: "analysis.pro.filter.add".localized, tint: .accentColor, style: .tinted, action: openFilters)
             }
             .padding(.horizontal)
         }
@@ -735,6 +703,55 @@ struct ProActiveFiltersBar: View {
             case .tinted:  return tint
             case .outline: return .primary
             }
+        }
+    }
+
+    /// Date chip with its navigation folded in: `‹`/`›` step the period back/forward without
+    /// leaving the chip, styled the same as the trailing chevron so all three glyphs read as
+    /// one control; tapping the calendar/label segment opens the filter sheet.
+    private struct DateChip: View {
+        let text: String
+        let canGoBack: Bool
+        let canGoForward: Bool
+        let onBack: () -> Void
+        let onForward: () -> Void
+        let onTap: () -> Void
+
+        var body: some View {
+            HStack(spacing: 6) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .appFont(.caption2, weight: .bold)
+                        .foregroundStyle(canGoBack ? Color.accentColor : Color.accentColor.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canGoBack)
+
+                Button(action: onTap) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "calendar")
+                            .appFont(.caption2, weight: .semibold)
+                        Text(text)
+                            .appFont(.caption, weight: .medium)
+                            .lineLimit(1)
+                            .contentTransition(.numericText())
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onForward) {
+                    Image(systemName: "chevron.right")
+                        .appFont(.caption2, weight: .bold)
+                        .foregroundStyle(canGoForward ? Color.accentColor : Color.accentColor.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canGoForward)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.accentColor.opacity(0.15))
+            .foregroundStyle(Color.accentColor)
+            .clipShape(Capsule())
         }
     }
 }

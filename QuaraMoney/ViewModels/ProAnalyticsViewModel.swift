@@ -16,6 +16,7 @@ final class ProAnalyticsViewModel {
 
     var selectedPeriod: AnalysisPeriod = .month {
         didSet {
+            guard !isBatchingPeriodUpdate else { return }
             currentReferenceDate = Date()
             updateDateRange()
             refreshData()
@@ -23,11 +24,15 @@ final class ProAnalyticsViewModel {
     }
 
     var customStartDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
+        didSet { if !isBatchingPeriodUpdate, selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
     var customEndDate: Date = Date() {
-        didSet { if selectedPeriod == .custom { updateDateRange(); refreshData() } }
+        didSet { if !isBatchingPeriodUpdate, selectedPeriod == .custom { updateDateRange(); refreshData() } }
     }
+
+    /// Suppresses the per-property `didSet` refreshes while `applyPeriodSelection` stages a
+    /// whole period change (type + reference instance + custom bounds) in one shot.
+    private var isBatchingPeriodUpdate = false
 
     /// Every non-period filter dimension (type, wallets, categories, amount range, exclusions).
     /// Single source of truth — the filter sheet and chip bar both mutate this.
@@ -153,6 +158,20 @@ final class ProAnalyticsViewModel {
     }
 
     // MARK: - Navigation
+
+    /// Applies a complete period configuration from the filter sheet at once: the period type,
+    /// the specific instance (via `referenceDate`), and custom bounds. Batched so the view only
+    /// recomputes and refreshes a single time.
+    func applyPeriodSelection(period: AnalysisPeriod, referenceDate: Date, customStart: Date, customEnd: Date) {
+        isBatchingPeriodUpdate = true
+        selectedPeriod = period
+        customStartDate = customStart
+        customEndDate = customEnd
+        currentReferenceDate = referenceDate
+        isBatchingPeriodUpdate = false
+        updateDateRange()
+        refreshData()
+    }
 
     func navigateBack() {
         guard selectedPeriod != .custom else { return }

@@ -35,10 +35,12 @@ struct FinancialSummaryCards: View {
     /// card) rather than the default page background — chart chrome and secondary
     /// labels switch to translucent white so they stay legible against the fill.
     let tintedBackground: Bool
+    /// When set, a drill-in chevron is shown at the top-right of the header that
+    /// invokes this closure (Home → Pro analytics). Nil hides the chevron.
+    let onNavigateToPro: (() -> Void)?
 
     @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.startDate, order: .reverse) private var budgets: [Budget]
     @State private var rawSelectedDate: Date? = nil
-    @State private var showDetails = false
 
     init(
         income: Decimal,
@@ -49,7 +51,8 @@ struct FinancialSummaryCards: View {
         showChart: Bool = true,
         previousPeriodCumulative: [Decimal] = [],
         compact: Bool = false,
-        tintedBackground: Bool = false
+        tintedBackground: Bool = false,
+        onNavigateToPro: (() -> Void)? = nil
     ) {
         self.income = income
         self.expense = expense
@@ -60,6 +63,7 @@ struct FinancialSummaryCards: View {
         self.previousPeriodCumulative = previousPeriodCumulative
         self.compact = compact
         self.tintedBackground = tintedBackground
+        self.onNavigateToPro = onNavigateToPro
     }
 
     // Dynamic properties
@@ -273,12 +277,14 @@ struct FinancialSummaryCards: View {
     var body: some View {
         VStack(spacing: compact ? 12 : 16) {
             if showChart {
-                // ── Header: Two-column legend like Apple Health ──
+                // ── Header: Two-column legend like Apple Health, with an optional
+                // drill-in chevron on the trailing edge ──
                 chartHeader
 
-                // ── Chart: Two smooth lines ──
+                // ── Chart: Two smooth lines. The chart now claims the space that the
+                // former income/net toggle occupied, keeping the card the same height. ──
                 chartView
-                    .frame(height: compact ? 96 : 120)
+                    .frame(height: compact ? 130 : 150)
             } else {
                 // Standard Net Total Header for non-chart summary (like Analysis View)
                 HStack(alignment: .top) {
@@ -292,39 +298,42 @@ struct FinancialSummaryCards: View {
                             .foregroundStyle(netValueColor(isPositive: net >= 0))
                     }
                     Spacer()
+                    if let onNavigateToPro {
+                        proChevronButton(action: onNavigateToPro)
+                    }
                 }
-            }
-
-            // Show/hide toggle for income & net details
-            Button {
-                withAnimation(.easeInOut(duration: 0.22)) { showDetails.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(showDetails
-                         ? L10n.Common.hide
-                         : "\(L10n.Transaction.TransactionType.income) & \(L10n.Analysis.net)")
-                        .appFont(.caption, weight: .semibold)
-                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
-                        .appFont(.caption2, weight: .semibold)
-                }
-                .foregroundStyle(mutedTextColor)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity)
-
-            if showDetails {
-                metricsGridView
-                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.vertical, compact ? 0 : 8)
+    }
+
+    // MARK: - Pro Drill-in Chevron
+
+    @ViewBuilder
+    private func proChevronButton(action: @escaping () -> Void) -> some View {
+        Button {
+            HapticManager.shared.impact(style: .light)
+            action()
+        } label: {
+            Image(systemName: "chevron.right")
+                .appFont(.footnote, weight: .semibold)
+                .foregroundStyle(tintedBackground ? .white : Color.accentColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle().fill(tintedBackground
+                                  ? Color.white.opacity(0.18)
+                                  : Color(.secondarySystemGroupedBackground))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("analysis.pro.mode.pro".localized)
     }
     
     // MARK: - Chart Header (Apple Health Style)
     
     @ViewBuilder
     private var chartHeader: some View {
-        HStack(alignment: .top, spacing: 0) {
+        HStack(alignment: .center, spacing: 12) {
             // Current Month Column
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -359,6 +368,11 @@ struct FinancialSummaryCards: View {
                     .foregroundStyle(previousValueColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Drill-in to the full Pro analytics dashboard (Home only).
+            if let onNavigateToPro {
+                proChevronButton(action: onNavigateToPro)
+            }
         }
         .animation(.easeInOut(duration: 0.15), value: rawSelectedDate == nil)
     }
@@ -486,52 +500,6 @@ struct FinancialSummaryCards: View {
         .animation(.easeInOut(duration: 0.25), value: startDate)
     }
     
-    @ViewBuilder
-    private var metricsGridView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(ThemeManager.shared.incomeColor)
-                        .frame(width: 6, height: 6)
-                        .overlay(Circle().stroke(haloColor, lineWidth: tintedBackground ? 1 : 0))
-                    Text(L10n.Transaction.TransactionType.income.uppercased())
-                        .appFont(.caption2, weight: .semibold)
-                        .foregroundStyle(mutedTextColor)
-                }
-                Text(income.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                    .appFont(.subheadline, weight: .bold)
-                    .foregroundStyle(primaryValueColor)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Group {
-                if tintedBackground {
-                    Rectangle().fill(separatorColor)
-                } else {
-                    Divider()
-                }
-            }
-            .frame(width: 1, height: 24)
-            .padding(.horizontal, 8)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
-                        .frame(width: 6, height: 6)
-                        .overlay(Circle().stroke(haloColor, lineWidth: tintedBackground ? 1 : 0))
-                    Text(L10n.Analysis.net.uppercased())
-                        .appFont(.caption2, weight: .semibold)
-                        .foregroundStyle(mutedTextColor)
-                }
-                Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                    .appFont(.subheadline, weight: .bold)
-                    .foregroundStyle(netValueColor(isPositive: net >= 0))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
 }
 
 #Preview {

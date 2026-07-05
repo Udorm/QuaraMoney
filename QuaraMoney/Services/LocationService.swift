@@ -37,7 +37,11 @@ final class CurrentLocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func requestCurrentLocation() async throws -> CLLocation {
-        guard CLLocationManager.locationServicesEnabled() else {
+        // `locationServicesEnabled()` can block, so CoreLocation warns against
+        // calling it on the main thread. This class is `@MainActor`, so hop off
+        // to a background thread for the check (the call is thread-safe).
+        let servicesEnabled = await Task.detached { CLLocationManager.locationServicesEnabled() }.value
+        guard servicesEnabled else {
             throw LocationServiceError.unavailable
         }
 

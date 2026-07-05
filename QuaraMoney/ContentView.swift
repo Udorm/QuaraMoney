@@ -17,9 +17,10 @@ struct iOS18ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
+    @AppStorage("analyticsProMode") private var analyticsProMode: Bool = false
     @State private var showCreateWallet = false
-    @State private var selectedTab: Int = 0 
-    
+    @State private var selectedTab: Int = 0
+
     var body: some View {
         Group {
             if useSidebarOniPad {
@@ -98,6 +99,10 @@ struct iOS18ContentView: View {
             MoreView.pendingRecurringReview = true // consumed by MoreView on appear
             selectedTab = 3 // More tab — MoreView pushes the Recurring screen
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openProAnalytics)) { _ in
+            analyticsProMode = true
+            selectedTab = 1 // Analysis tab — routes to the Pro dashboard
+        }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 .interactiveDismissDisabled()
@@ -109,6 +114,7 @@ struct LegacyContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
+    @AppStorage("analyticsProMode") private var analyticsProMode: Bool = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showCreateWallet = false
     @State private var selectedTab: Int? = 0
@@ -185,6 +191,10 @@ struct LegacyContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
             MoreView.pendingRecurringReview = true // consumed by MoreView on appear
             selectedTab = 3 // More tab — MoreView pushes the Recurring screen
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openProAnalytics)) { _ in
+            analyticsProMode = true
+            selectedTab = 1 // Analysis tab — routes to the Pro dashboard
         }
         .sheet(isPresented: $showCreateWallet) {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))

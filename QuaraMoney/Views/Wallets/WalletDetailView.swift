@@ -128,13 +128,6 @@ struct WalletDetailView: View {
                 }
                 .accessibilityLabel("Sort transactions")
 
-                Button {
-                    showingAddTransaction = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel(L10n.Transaction.add)
-
                 Menu {
                     Button {
                         showingAdjustBalance = true
@@ -288,10 +281,8 @@ struct WalletDetailView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         )
-        .glassEffect(
-            .regular.tint(walletColor.opacity(0.85)),
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-        )
+        .background(walletColor)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(viewModel.wallet.name), balance \(viewModel.wallet.balance.formattedAmount(for: viewModel.wallet.currencyCode))")
     }
@@ -354,7 +345,7 @@ struct WalletDetailView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 40)
             .contentShape(Capsule())
-            .glassEffect(.regular.tint(walletColor.opacity(0.8)).interactive(), in: Capsule())
+            .background(walletColor, in: Capsule())
         }
         .buttonStyle(QuickActionPressStyle())
     }

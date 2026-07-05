@@ -96,7 +96,26 @@ struct FinancialSummaryCards: View {
     private var primaryValueColor: Color {
         tintedBackground ? .white : .primary
     }
-    
+
+    /// Fixed ring drawn around/behind expense-or-income-colored swatches, lines,
+    /// and points on the tinted hero card, so they stay legible no matter how
+    /// close the user's chosen expense/income hue sits to the accent fill.
+    private var haloColor: Color {
+        Color.white.opacity(0.9)
+    }
+
+    /// The big "expense in period" figure can't rely on the raw expense hue for
+    /// contrast against an arbitrary accent-colored background, so it falls back
+    /// to the same neutral value color used for everything else on that card.
+    private var expenseValueColor: Color {
+        tintedBackground ? primaryValueColor : ThemeManager.shared.expenseColor
+    }
+
+    private func netValueColor(isPositive: Bool) -> Color {
+        guard !tintedBackground else { return primaryValueColor }
+        return isPositive ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+    }
+
     private var isFullMonthSelected: Bool {
         let calendar = Calendar.current
         guard calendar.component(.day, from: startDate) == 1 else { return false }
@@ -270,7 +289,7 @@ struct FinancialSummaryCards: View {
 
                         Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                             .appFont(.title, weight: .bold)
-                            .foregroundStyle(net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                            .foregroundStyle(netValueColor(isPositive: net >= 0))
                     }
                     Spacer()
                 }
@@ -312,6 +331,7 @@ struct FinancialSummaryCards: View {
                     Circle()
                         .fill(ThemeManager.shared.expenseColor)
                         .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(haloColor, lineWidth: tintedBackground ? 1 : 0))
                     Text("analysis.expenseInPeriod".localized(with: isFullMonthSelected ? currentMonthName : L10n.Filter.thisMonth))
                         .appFont(.caption, weight: .semibold)
                         .foregroundStyle(mutedTextColor)
@@ -319,7 +339,7 @@ struct FinancialSummaryCards: View {
 
                 Text(currentMonthTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(compact ? .title3 : .title2, weight: .bold)
-                    .foregroundStyle(ThemeManager.shared.expenseColor)
+                    .foregroundStyle(expenseValueColor)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -474,6 +494,7 @@ struct FinancialSummaryCards: View {
                     Circle()
                         .fill(ThemeManager.shared.incomeColor)
                         .frame(width: 6, height: 6)
+                        .overlay(Circle().stroke(haloColor, lineWidth: tintedBackground ? 1 : 0))
                     Text(L10n.Transaction.TransactionType.income.uppercased())
                         .appFont(.caption2, weight: .semibold)
                         .foregroundStyle(mutedTextColor)
@@ -499,13 +520,14 @@ struct FinancialSummaryCards: View {
                     Circle()
                         .fill(net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                         .frame(width: 6, height: 6)
+                        .overlay(Circle().stroke(haloColor, lineWidth: tintedBackground ? 1 : 0))
                     Text(L10n.Analysis.net.uppercased())
                         .appFont(.caption2, weight: .semibold)
                         .foregroundStyle(mutedTextColor)
                 }
                 Text(net.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(.subheadline, weight: .bold)
-                    .foregroundStyle(net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                    .foregroundStyle(netValueColor(isPositive: net >= 0))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -37,7 +37,7 @@ enum TransactionPlaceLookup {
 
         let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let sorted = response.mapItems.sorted { lhs, rhs in
-            origin.distance(to: lhs.placemark.coordinate) < origin.distance(to: rhs.placemark.coordinate)
+            origin.distance(to: lhs.location.coordinate) < origin.distance(to: rhs.location.coordinate)
         }
 
         return Array(sorted.prefix(limit)).map {
@@ -46,20 +46,22 @@ enum TransactionPlaceLookup {
     }
 
     /// Maps an `MKMapItem` into a `TransactionLocationSelection`, including iOS 18 place identifiers.
+    ///
+    /// Sources address fields from the iOS 26 `location`/`address`/`addressRepresentations`
+    /// APIs (the old `placemark` is deprecated). Note MapKit no longer exposes a country code
+    /// here — `regionCode` is a state/region code, not a country code — so `countryCode` is left
+    /// `nil` on new captures. The field is retained on the model purely for cloud-sync
+    /// compatibility (existing rows and other devices still round-trip it); nothing in the app
+    /// reads it, so dropping the source is behavior-neutral.
     static func selection(
         from mapItem: MKMapItem,
         source: TransactionLocationSource,
         accuracy: CLLocationAccuracy?
     ) -> TransactionLocationSelection {
-        let placemark = mapItem.placemark
-        let coordinate = placemark.coordinate
-        let fullAddress = placemark.title
-        let shortAddress = [placemark.thoroughfare, placemark.locality]
-            .compactMap { value in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
-            .joined(separator: ", ")
+        let coordinate = mapItem.location.coordinate
+        let fullAddress = mapItem.address?.fullAddress
+        let shortAddress = mapItem.address?.shortAddress
+        let representations = mapItem.addressRepresentations
 
         var applePlaceID: String?
         var alternatePlaceIDs: [String] = []
@@ -71,7 +73,7 @@ enum TransactionPlaceLookup {
         return TransactionLocationSelection(
             displayName: mapItem.name ?? fullAddress,
             fullAddress: fullAddress,
-            shortAddress: shortAddress.isEmpty ? nil : shortAddress,
+            shortAddress: (shortAddress?.isEmpty ?? true) ? nil : shortAddress,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             horizontalAccuracyMeters: accuracy,
@@ -79,9 +81,9 @@ enum TransactionPlaceLookup {
             applePlaceID: applePlaceID,
             alternateApplePlaceIDs: alternatePlaceIDs,
             pointOfInterestCategoryRaw: mapItem.pointOfInterestCategory?.rawValue,
-            locality: placemark.locality,
-            administrativeArea: placemark.administrativeArea,
-            countryCode: placemark.countryCode
+            locality: representations?.cityName,
+            administrativeArea: representations?.regionName,
+            countryCode: nil
         )
     }
 

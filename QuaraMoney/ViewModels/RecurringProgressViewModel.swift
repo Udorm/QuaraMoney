@@ -31,10 +31,12 @@ final class RecurringProgressViewModel: BaseViewModel {
         super.init(dataService: dataService)
 
         observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .dataDidUpdate, object: nil, queue: .main) { [weak self] _ in
-            self?.refresh()
+            guard let self else { return }
+            Task { @MainActor in self.refresh() }
         })
         observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .languageDidChange, object: nil, queue: .main) { [weak self] _ in
-            self?.refreshCurrency()
+            guard let self else { return }
+            Task { @MainActor in self.refreshCurrency() }
         })
 
         Task { await calculateProgress() }
@@ -77,6 +79,7 @@ final class RecurringProgressViewModel: BaseViewModel {
         var pendingExpenses: Decimal = 0
         var receivedIncome: Decimal = 0
         var pendingIncome: Decimal = 0
+        nonisolated init() {}
     }
 
     /// Pure, background-safe computation: fetches this month's recurring

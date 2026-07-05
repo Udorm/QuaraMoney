@@ -19,7 +19,7 @@ import SwiftData
 /// IMPORTANT: mutations made here happen off the main context, where
 /// `SyncMutationTracker` does not observe saves — so every mutation stamps
 /// `needsSync`/`updatedAt` explicitly.
-enum CategoryCatalog {
+nonisolated enum CategoryCatalog {
 
     // MARK: - Definitions
 
@@ -42,9 +42,27 @@ enum CategoryCatalog {
         /// (the legacy "must-have"/ensure set). Once a device is account-owned,
         /// categories are cloud-authoritative and nothing is auto-created.
         let ensureOnLaunch: Bool
+    }
 
-        /// Display name in the user's current language.
-        var localizedName: String { l10nKey.localized }
+    /// The store's current UI language code, resolved WITHOUT touching the
+    /// `@MainActor` `LanguageManager` so seeding/maintenance can run on their
+    /// background context. Mirrors `LanguageManager.updateBundle()`'s selection.
+    private static var currentLanguageCode: String {
+        switch UserDefaults.standard.string(forKey: "selectedLanguage") {
+        case "en": return "en"
+        case "km": return "km"
+        default: // "system" or unset
+            return Locale.preferredLanguages.first?.starts(with: "km") == true ? "km" : "en"
+        }
+    }
+
+    /// A definition's display name in the store's current language. Equivalent to
+    /// the old `Definition.localizedName` (`l10nKey.localized`) but resolved
+    /// nonisolated via the shipped `.lproj` bundles (see `name(of:in:)`).
+    private static func currentLocalizedName(for def: Definition) -> String {
+        name(of: def.l10nKey, in: currentLanguageCode)
+            ?? name(of: def.l10nKey, in: "en")
+            ?? def.l10nKey
     }
 
     static let all: [Definition] = [
@@ -108,7 +126,7 @@ enum CategoryCatalog {
     /// fallback that legacy code paths hardcoded.
     private static func knownNames(for def: Definition) -> Set<String> {
         var names = Set(shippedLanguages.compactMap { name(of: def.l10nKey, in: $0) })
-        names.insert(def.localizedName)
+        names.insert(currentLocalizedName(for: def))
         // Legacy: DebtService hardcoded the English system-category names.
         switch def.key {
         case "sys_debt": names.insert("Debt")
@@ -147,7 +165,7 @@ enum CategoryCatalog {
         if let adopted = try adoptByName(def, in: context) {
             return adopted
         }
-        let category = Category(name: def.localizedName, icon: def.icon,
+        let category = Category(name: currentLocalizedName(for: def), icon: def.icon,
                                 colorHex: def.colorHex, type: def.type,
                                 isSystem: def.isSystem, canonicalKey: def.key)
         context.insert(category)
@@ -189,7 +207,7 @@ enum CategoryCatalog {
         ))
         guard existing == 0 else { return }
         for def in all where def.seedOnFreshInstall {
-            let category = Category(name: def.localizedName, icon: def.icon,
+            let category = Category(name: currentLocalizedName(for: def), icon: def.icon,
                                     colorHex: def.colorHex, type: def.type,
                                     isSystem: def.isSystem, canonicalKey: def.key)
             context.insert(category)

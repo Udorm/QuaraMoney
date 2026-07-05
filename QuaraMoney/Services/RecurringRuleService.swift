@@ -70,7 +70,7 @@ enum RecurringRuleService {
     /// strictly greater than `current`. The trailing `while` walks past any
     /// month-end clamping edge cases that could otherwise repeat a date and
     /// stall the schedule.
-    private static func anchoredNext(current: Date, startDate: Date, component: Calendar.Component, step: Int = 1) -> Date? {
+    nonisolated private static func anchoredNext(current: Date, startDate: Date, component: Calendar.Component, step: Int = 1) -> Date? {
         let cal = Calendar.current
         let rawN = max(0, cal.dateComponents([component], from: startDate, to: current).value(for: component) ?? 0)
         // Round up to the next multiple of `step` that lands strictly after `current`.

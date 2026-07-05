@@ -70,7 +70,8 @@ final class SyncRealtime {
                             case .delete: kind = "DELETE"
                             }
                             print("[SyncRealtime] remote \(kind) received; scheduling resync")
-                            await MainActor.run { self?.scheduleSync() }
+                            guard let self else { return }
+                            await self.scheduleSync()
                         }
                     }
                 }

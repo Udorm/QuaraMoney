@@ -18,11 +18,11 @@ import SwiftData
 /// - `UIBackgroundModes` → `fetch`
 enum RecurringBackgroundRefresh {
 
-    static let taskIdentifier = "uk.dormmy.QuaraMoney.recurringRefresh"
+    nonisolated static let taskIdentifier = "uk.dormmy.QuaraMoney.recurringRefresh"
 
     /// Earliest the system should consider running the task again. The OS
     /// ultimately decides actual timing based on usage/battery/network.
-    private static let refreshInterval: TimeInterval = 6 * 3600 // ~4×/day ceiling
+    nonisolated private static let refreshInterval: TimeInterval = 6 * 3600 // ~4×/day ceiling
 
     /// Register the task handler. MUST be called before the app finishes
     /// launching (from `application(_:didFinishLaunchingWithOptions:)`).

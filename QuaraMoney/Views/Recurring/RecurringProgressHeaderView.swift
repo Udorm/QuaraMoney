@@ -100,14 +100,7 @@ struct RecurringProgressHeaderView: View {
                 Spacer(minLength: 8)
 
                 // Paid amount in tint, expected as a muted denominator.
-                (
-                    Text(paid.formattedAmount(for: currencyCode))
-                        .font(.app(.callout, weight: .bold))
-                        .foregroundColor(color)
-                    + Text(" / \(expected.formattedAmount(for: currencyCode))")
-                        .font(.app(.caption, weight: .medium))
-                        .foregroundColor(.secondary)
-                )
+                Text("\(Text(paid.formattedAmount(for: currencyCode)).font(.app(.callout, weight: .bold)).foregroundColor(color))\(Text(" / \(expected.formattedAmount(for: currencyCode))").font(.app(.caption, weight: .medium)).foregroundColor(.secondary))")
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             }

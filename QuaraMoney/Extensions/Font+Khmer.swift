@@ -3,10 +3,12 @@ import UIKit
 import CoreText
 
 // Internal use only
-private let khmerFontName = "MiSans Khmer VF"
+nonisolated private let khmerFontName = "MiSans Khmer VF"
 
-// Cache for font descriptors to avoid repeated CoreText lookups
-private let fontCache = NSCache<NSString, UIFont>()
+// Cache for font descriptors to avoid repeated CoreText lookups.
+// NSCache is thread-safe, so font construction can run off the main actor;
+// `nonisolated(unsafe)` because NSCache isn't inferred Sendable (UIFont value type).
+nonisolated(unsafe) private let fontCache = NSCache<NSString, UIFont>()
 
 // MARK: - Font Weight Mapping
 
@@ -30,7 +32,7 @@ extension Font.Weight {
 
 extension UIFont.Weight {
     /// Maps UIFont.Weight to variable font weight axis value (100-900)
-    var variableFontValue: CGFloat {
+    nonisolated var variableFontValue: CGFloat {
         switch self {
         case .ultraLight: return 100
         case .thin: return 200
@@ -187,7 +189,7 @@ extension Font.Weight {
 extension UIFont {
     
     /// Creates a Khmer font with proper variable font weight support
-    static func khmerFont(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+    nonisolated static func khmerFont(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
         let cacheKey = "khmer-\(size)-\(weight.rawValue)" as NSString
         if let cached = fontCache.object(forKey: cacheKey) {
             return cached
@@ -230,7 +232,7 @@ extension UIFont {
     /// Works like CSS font-family: renders each character with the appropriate font.
     /// - Latin/symbols/numbers: System font (SF Pro) - PRIMARY
     /// - Khmer characters (U+1780–U+17FF): MiSans Khmer VF - FALLBACK
-    static func appWithCascade(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+    nonisolated static func appWithCascade(ofSize size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
         let cacheKey = "cascade-\(size)-\(weight.rawValue)" as NSString
         if let cached = fontCache.object(forKey: cacheKey) {
             return cached

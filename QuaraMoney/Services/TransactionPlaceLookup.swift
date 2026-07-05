@@ -37,7 +37,7 @@ enum TransactionPlaceLookup {
 
         let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let sorted = response.mapItems.sorted { lhs, rhs in
-            origin.distance(to: lhs.placemark.coordinate) < origin.distance(to: rhs.placemark.coordinate)
+            origin.distance(to: lhs.location.coordinate) < origin.distance(to: rhs.location.coordinate)
         }
 
         return Array(sorted.prefix(limit)).map {

@@ -6,7 +6,7 @@ import SwiftData
 extension Decimal {
     /// Lossy conversion to `Double` for plotting. Charts requires `Double`/`Plottable`;
     /// money math stays in `Decimal` everywhere else per project convention.
-    var doubleValue: Double { Double(truncating: self as NSDecimalNumber) }
+    nonisolated var doubleValue: Double { Double(truncating: self as NSDecimalNumber) }
 }
 
 /// Background aggregator for the **Pro analytics dashboard**.
@@ -113,7 +113,7 @@ struct ProAnalyticsProcessor {
         let colorHex: String
         let current: Decimal
         let previous: Decimal
-        var change: Decimal { current - previous }
+        nonisolated var change: Decimal { current - previous }
     }
 
     /// One of the biggest single transactions in the period (already converted).
@@ -136,7 +136,7 @@ struct ProAnalyticsProcessor {
         let periodStart: Date
         let periodEnd: Date
         let categoryInfos: [FilterCategoryInfo]
-        var fraction: Double { limit > 0 ? (spent / limit).doubleValue : 0 }
+        nonisolated var fraction: Double { limit > 0 ? (spent / limit).doubleValue : 0 }
         var remaining: Decimal { limit - spent }
     }
 

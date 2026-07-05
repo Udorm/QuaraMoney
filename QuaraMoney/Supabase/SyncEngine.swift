@@ -629,7 +629,7 @@ final class SyncEngine: ObservableObject {
 
     // MARK: - Account scoping
 
-    private static let localOwnerKey = "localStoreOwnerID.v1"
+    nonisolated private static let localOwnerKey = "localStoreOwnerID.v1"
 
     /// True once this device's local store has been claimed by a cloud account
     /// (first sign-in / conflict resolution completed). `nonisolated` so the
@@ -2026,8 +2026,8 @@ final class SyncEngine: ObservableObject {
 /// Lets `finishPush` stamp — and `purgeForeignRows` inspect — the owning
 /// account uniformly across entity types.
 protocol SyncOwned: AnyObject {
-    func assignOwner(_ uid: UUID)
-    var syncOwner: UUID? { get }
+    nonisolated func assignOwner(_ uid: UUID)
+    nonisolated var syncOwner: UUID? { get }
 }
 extension Wallet: SyncOwned {
     func assignOwner(_ uid: UUID) { syncUserID = uid }

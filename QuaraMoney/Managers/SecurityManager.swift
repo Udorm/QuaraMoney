@@ -23,11 +23,12 @@ class SecurityManager: ObservableObject {
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             isAuthenticating = true
             
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock QuaraMoney") { [weak self] success, authenticationError in
-                Task { @MainActor in
-                    self?.isAuthenticating = false
+            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock QuaraMoney") { success, authenticationError in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.isAuthenticating = false
                     if success {
-                        self?.isAppLocked = false
+                        self.isAppLocked = false
                     }
                 }
             }

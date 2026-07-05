@@ -5,10 +5,10 @@ import CoreData
 /// Models that carry Supabase sync metadata. All conformers already declare
 /// `updatedAt` and `needsSync` (added in Phase 2), so the conformances are empty.
 protocol SyncTrackable: AnyObject {
-    var id: UUID { get }
-    var updatedAt: Date { get set }
-    var needsSync: Bool { get set }
-    var deletedAt: Date? { get set }
+    nonisolated var id: UUID { get }
+    nonisolated var updatedAt: Date { get set }
+    nonisolated var needsSync: Bool { get set }
+    nonisolated var deletedAt: Date? { get set }
 }
 
 extension SyncTrackable {

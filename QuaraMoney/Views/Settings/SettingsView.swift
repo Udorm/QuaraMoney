@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject private var languageManager = LanguageManager.shared
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @AppStorage("appTheme") private var selectedTheme: QuaraMoneyApp.AppTheme = .system
+    @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
     @StateObject private var notificationManager = NotificationManager.shared
     @StateObject private var securityManager = SecurityManager.shared
     @State private var showPopulateConfirmation = false
@@ -63,6 +64,18 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+
+            Section {
+                Toggle(isOn: $useCompactTransactionEntry) {
+                    Label {
+                        Text("settings.compactEntry".localized)
+                    } icon: {
+                        ListIconView(systemImage: "rectangle.compress.vertical", color: .mint)
+                    }
+                }
+            } footer: {
+                Text("settings.compactEntry.footer".localized)
             }
 
             Section("Appearance") {

@@ -57,10 +57,12 @@ struct WalletDetailView: View {
 
             // Period selector
             Section {
-                MonthSelectionView(
+                GlassPeriodSelector(
                     selectedTab: $viewModel.selectedTab,
                     months: Array(viewModel.availableMonths.suffix(3))
                 )
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(Capsule())
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
 
@@ -128,21 +130,12 @@ struct WalletDetailView: View {
                 }
                 .accessibilityLabel("Sort transactions")
 
-                Menu {
-                    Button {
-                        showingAdjustBalance = true
-                    } label: {
-                        Label("wallet.adjustBalance".localized, systemImage: "slider.horizontal.3")
-                    }
-
-                    Button {
-                        showingEditWallet = true
-                    } label: {
-                        Label(L10n.Common.edit, systemImage: "pencil")
-                    }
+                Button {
+                    showingEditWallet = true
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "pencil")
                 }
+                .accessibilityLabel(L10n.Common.edit)
             }
         }
         .sheet(isPresented: $showingEditWallet) {

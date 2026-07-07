@@ -696,12 +696,10 @@ enum L10n {
     // MARK: - More
     enum More {
         static var title: String { "more.title".localized }
-        static var planningTools: String { "more.planningTools".localized }
-        static var features: String { "more.features".localized }
+        static var insights: String { "more.insights".localized }
         static var management: String { "more.management".localized }
         static var app: String { "more.app".localized }
-        static var budgetWizard: String { "more.budgetWizard".localized }
-        
+
         static var categories: String { "category.title".localized }
         static var recurringRules: String { "recurring.title".localized }
     }
@@ -773,87 +771,6 @@ enum L10n {
         static var daily: String { "notificationType.daily".localized }
     }
 
-    // MARK: - Wizard
-    enum Wizard {
-        static func step(_ current: Int, _ total: Int) -> String { "wizard.step".localized(with: current, total) }
-        static var back: String { "wizard.back".localized }
-        static var continueAction: String { "wizard.continue".localized }
-        static var createBudgets: String { "wizard.createBudgets".localized }
-        
-        static var incomePrompt: String { "wizard.income.prompt".localized }
-        static func basedOn(_ template: String) -> String { "wizard.basedOn".localized(with: template) }
-        static var assignPrompt: String { "wizard.assign.prompt".localized }
-        static func selectedCount(_ count: Int) -> String { "wizard.selected".localized(with: count) }
-        static var totalAllocation: String { "wizard.totalAllocation".localized }
-        static var budgetsToCreate: String { "wizard.budgetsToCreate".localized }
-        
-        enum Start {
-            static var title: String { "wizard.welcome.title".localized }
-            static var subtitle: String { "wizard.welcome.subtitle".localized }
-            static var limitsTitle: String { "wizard.feature.limits.title".localized }
-            static var limitsDesc: String { "wizard.feature.limits.desc".localized }
-            static var alertsTitle: String { "wizard.feature.alerts.title".localized }
-            static var alertsDesc: String { "wizard.feature.alerts.desc".localized }
-            static var trackTitle: String { "wizard.feature.track.title".localized }
-            static var trackDesc: String { "wizard.feature.track.desc".localized }
-            static var autoRenewTitle: String { "wizard.feature.autoRenew.title".localized }
-            static var autoRenewDesc: String { "wizard.feature.autoRenew.desc".localized }
-        }
-        
-        enum SelectTemplate {
-            static var title: String { "wizard.selectTemplate.title".localized }
-            static var subtitle: String { "wizard.selectTemplate.subtitle".localized }
-        }
-        enum EnterIncome {
-            static var title: String { "wizard.enterIncome.title".localized }
-            static var subtitle: String { "wizard.enterIncome.subtitle".localized }
-        }
-        enum AssignCategories {
-            static var title: String { "wizard.assignCategories.title".localized }
-            static var subtitle: String { "wizard.assignCategories.subtitle".localized }
-        }
-        enum Customize {
-            static var title: String { "wizard.customize.title".localized }
-            static var subtitle: String { "wizard.customize.subtitle".localized }
-        }
-        enum Review {
-            static var title: String { "wizard.review.title".localized }
-            static var subtitle: String { "wizard.review.subtitle".localized }
-            static var point1: String { "wizard.review.point1".localized }
-            static var point2: String { "wizard.review.point2".localized }
-            static var point3: String { "wizard.review.point3".localized }
-        }
-        enum Complete {
-            static var title: String { "wizard.done.title".localized }
-            static var subtitle: String { "wizard.done.subtitle".localized }
-            static var allSetTitle: String { "wizard.allSet.title".localized }
-            static var allSetMessage: String { "wizard.allSet.message".localized }
-            static var point1: String { "wizard.allSet.point1".localized }
-            static var point2: String { "wizard.allSet.point2".localized }
-            static var point3: String { "wizard.allSet.point3".localized }
-        }
-    }
-    
-    // MARK: - Budget Template
-    enum BudgetTemplate {
-        enum Conservative {
-            static var title: String { "template.conservative.title".localized }
-            static var desc: String { "template.conservative.desc".localized }
-        }
-        enum Balanced {
-            static var title: String { "template.balanced.title".localized }
-            static var desc: String { "template.balanced.desc".localized }
-        }
-        enum FiftyThirtyTwenty {
-            static var title: String { "template.503020.title".localized }
-            static var desc: String { "template.503020.desc".localized }
-        }
-        enum ZeroBased {
-            static var title: String { "template.zeroBased.title".localized }
-            static var desc: String { "template.zeroBased.desc".localized }
-        }
-    }
-    
     // MARK: - Budget Category Type
     enum BudgetCategoryType {
         enum Needs {

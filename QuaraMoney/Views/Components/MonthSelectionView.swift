@@ -1,48 +1,9 @@
 import SwiftUI
-import UIKit
-
-// MARK: - MonthSelectionView
-
-struct MonthSelectionView: View {
-    @Binding var selectedTab: TabPeriodSelection
-    let months: [Date] // Expected to be precisely 3 months
-    
-    var body: some View {
-        Picker("Month", selection: $selectedTab) {
-            Text(L10n.Period.custom).tag(TabPeriodSelection.custom)
-            ForEach(months, id: \.self) { date in
-                Text(monthLabel(for: date)).tag(TabPeriodSelection.month(date))
-            }
-        }
-        .pickerStyle(.segmented)
-        // Set the default if it somehow isn't valid
-        .onAppear {
-            // Reset appearance to system defaults
-            UISegmentedControl.appearance().backgroundColor = nil
-            UISegmentedControl.appearance().selectedSegmentTintColor = nil
-            
-//            // Set consistent font size to match DatePicker
-//            let font = UIFont.app(ofSize: 15, weight: .regular)
-//            let selectedFont = UIFont.app(ofSize: 15, weight: .semibold)
-//            
-//            UISegmentedControl.appearance().setTitleTextAttributes([.font: font], for: .normal)
-//            UISegmentedControl.appearance().setTitleTextAttributes([.font: selectedFont], for: .selected)
-
-            if case .custom = selectedTab { return }
-            if case .month(let date) = selectedTab, !months.contains(where: { Calendar.current.isDate($0, equalTo: date, toGranularity: .month) }) {
-                if let first = months.last {
-                    selectedTab = .month(first)
-                }
-            }
-        }
-    }
-}
 
 // MARK: - GlassPeriodSelector
 
-/// Liquid Glass replacement for the segmented period picker: a glass capsule
-/// with a sliding tinted pill for the selected period. Same API as
-/// `MonthSelectionView` so the two are interchangeable.
+/// Glass-capsule period picker: a translucent capsule track with a sliding
+/// tinted pill for the selected period.
 struct GlassPeriodSelector: View {
     @Binding var selectedTab: TabPeriodSelection
     let months: [Date] // Expected to be precisely 3 months
@@ -70,7 +31,7 @@ struct GlassPeriodSelector: View {
     private func segment(label: String, tag: TabPeriodSelection) -> some View {
         let isSelected = selectedTab == tag
         return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            withAnimation(.smooth(duration: 0.3)) {
                 selectedTab = tag
             }
         } label: {

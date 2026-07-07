@@ -3,7 +3,6 @@ import SwiftUI
 import SwiftData
 
 struct MoreView: View {
-    @State private var showBudgetWizard = false
     @State private var navigateToRecurring = false
     @AppStorage("userDisplayName") private var displayName: String = ""
     @AppStorage("userAvatarPath") private var avatarPath: String = ""
@@ -49,54 +48,6 @@ struct MoreView: View {
                     }
                 }
 
-                Section(L10n.More.planningTools) {
-                    Button {
-                        showBudgetWizard = true
-                    } label: {
-                        Label {
-                            Text(L10n.More.budgetWizard)
-                                .foregroundStyle(.primary)
-                        } icon: {
-                            ListIconView(systemImage: "wand.and.stars", color: .purple)
-                        }
-                    }
-                }
-
-                Section(L10n.More.features) {
-                    NavigationLink(destination: LazyView(BudgetInsightsView())) {
-                        Label {
-                            Text(L10n.Budget.insights)
-                        } icon: {
-                            ListIconView(systemImage: "chart.line.uptrend.xyaxis", color: .blue)
-                        }
-                    }
-
-                    NavigationLink(destination: LazyView(EventListView())) {
-                        Label {
-                            Text(L10n.Event.title)
-                        } icon: {
-                            ListIconView(systemImage: "party.popper", color: .orange)
-                        }
-                    }
-
-                    NavigationLink(destination: LazyView(RecurringRuleListView())) {
-                        Label {
-                            Text(L10n.More.recurringRules)
-                        } icon: {
-                            ListIconView(systemImage: "repeat", color: .teal)
-                        }
-                    }
-                    .badge(dueRecurringCount)
-
-                    NavigationLink(destination: LazyView(DebtListView())) {
-                        Label {
-                            Text(L10n.Debt.title)
-                        } icon: {
-                            ListIconView(systemImage: "person.2.crop.square.stack", color: .red)
-                        }
-                    }
-                }
-
                 Section(L10n.More.management) {
                     NavigationLink(destination: LazyView(WalletListView())) {
                         Label {
@@ -111,6 +62,41 @@ struct MoreView: View {
                             Text(L10n.More.categories)
                         } icon: {
                             ListIconView(systemImage: "tag.fill", color: .green)
+                        }
+                    }
+
+                    NavigationLink(destination: LazyView(DebtListView())) {
+                        Label {
+                            Text(L10n.Debt.title)
+                        } icon: {
+                            ListIconView(systemImage: "person.2.crop.square.stack", color: .red)
+                        }
+                    }
+
+                    NavigationLink(destination: LazyView(RecurringRuleListView())) {
+                        Label {
+                            Text(L10n.More.recurringRules)
+                        } icon: {
+                            ListIconView(systemImage: "repeat", color: .teal)
+                        }
+                    }
+                    .badge(dueRecurringCount)
+                }
+
+                Section(L10n.More.insights) {
+                    NavigationLink(destination: LazyView(BudgetInsightsView())) {
+                        Label {
+                            Text(L10n.Budget.insights)
+                        } icon: {
+                            ListIconView(systemImage: "chart.line.uptrend.xyaxis", color: .blue)
+                        }
+                    }
+
+                    NavigationLink(destination: LazyView(EventListView())) {
+                        Label {
+                            Text(L10n.Event.title)
+                        } icon: {
+                            ListIconView(systemImage: "party.popper", color: .orange)
                         }
                     }
                 }
@@ -128,9 +114,6 @@ struct MoreView: View {
             .navigationTitle(L10n.More.title)
             .navigationDestination(isPresented: $navigateToRecurring) {
                 RecurringRuleListView()
-            }
-            .sheet(isPresented: $showBudgetWizard) {
-                BudgetSetupWizardView()
             }
             .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
                 navigateToRecurring = true

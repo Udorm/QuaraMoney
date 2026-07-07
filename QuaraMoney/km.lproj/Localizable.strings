@@ -228,61 +228,6 @@
 "budget.type.savings.title" = "ការសន្សំ និងបំណុល";
 "budget.type.savings.desc" = "កសាងទ្រព្យសម្បត្តិ និងសងបំណុល";
 
-// MARK: - Budget Templates
-"template.conservative.title" = "អភិរក្ស";
-"template.conservative.desc" = "ដែនកំណត់ចំណាយតឹងរឹងដោយផ្តោតលើការសន្សំ";
-"template.balanced.title" = "តុល្យភាព";
-"template.balanced.desc" = "វិធីសាស្រ្តមធ្យម ថ្លឹងថ្លែងតម្រូវការចាំបាច់ តម្រូវការបន្ថែម និងការសន្សំស្មើគ្នា";
-"template.503020.title" = "ច្បាប់ ៥០/៣០/២០";
-"template.503020.desc" = "៥០% តម្រូវការចាំបាច់, ៣០% តម្រូវការបន្ថែម, ២០% ការសន្សំ";
-"template.zeroBased.title" = "ផ្អែកលើសូន្យ";
-"template.zeroBased.desc" = "គ្រប់ដុល្លារមានគោលដៅ";
-
-// MARK: - Budget Setup Wizard
-"wizard.step" = "ជំហាន %d នៃ %d";
-"wizard.welcome.title" = "សូមស្វាគមន៍";
-"wizard.welcome.subtitle" = "តោះរៀបចំថវិការបស់អ្នក";
-"wizard.selectTemplate.title" = "ជ្រើសរើសវិធីសាស្រ្ត";
-"wizard.selectTemplate.subtitle" = "ជ្រើសរើសវិធីសាស្រ្តថវិកាដែលសមនឹងអ្នក";
-"wizard.enterIncome.title" = "ចំណូលរបស់អ្នក";
-"wizard.enterIncome.subtitle" = "តើអ្នករកចំណូលបានប៉ុន្មានក្នុងមួយខែ?";
-"wizard.assignCategories.title" = "កំណត់ប្រភេទ";
-"wizard.assignCategories.subtitle" = "រៀបចំប្រភេទចំណាយរបស់អ្នក";
-"wizard.customize.title" = "កែសម្រួល";
-"wizard.customize.subtitle" = "កែសម្រួលភាគរយប្រសិនបើត្រូវការ";
-"wizard.review.title" = "ត្រួតពិនិត្យ";
-"wizard.review.subtitle" = "ត្រួតពិនិត្យផែនការថវិការបស់អ្នក";
-"wizard.done.title" = "រួចរាល់";
-"wizard.done.subtitle" = "ថវិការបស់អ្នករួចរាល់ហើយ!";
-
-"wizard.feature.limits.title" = "កំណត់ដែនកំណត់ចំណាយ";
-"wizard.feature.limits.desc" = "បង្កើតថវិកាសម្រាប់ប្រភេទផ្សេងៗ";
-"wizard.feature.alerts.title" = "ទទួលបានការជូនដំណឹង";
-"wizard.feature.alerts.desc" = "ដឹងនៅពេលអ្នកជិតដល់ដែនកំណត់";
-"wizard.feature.track.title" = "តាមដានវឌ្ឍនភាព";
-"wizard.feature.track.desc" = "មើលថាអ្នកធ្វើបានល្អកម្រិតណា";
-"wizard.feature.autoRenew.title" = "បន្តដោយស្វ័យប្រវត្តិ";
-"wizard.feature.autoRenew.desc" = "ថវិកាកំណត់ឡើងវិញដោយស្វ័យប្រវត្តិរៀងរាល់វគ្គ";
-
-"wizard.income.prompt" = "បញ្ចូលចំណូលប្រចាំខែរបស់អ្នក (ក្រោយបង់ពន្ធ)";
-"wizard.basedOn" = "ផ្អែកលើ %@៖";
-"wizard.assign.prompt" = "កំណត់ប្រភេទចំណាយរបស់អ្នកទៅប្រភេទថវិកានីមួយៗ";
-"wizard.selected" = "បានជ្រើសរើស %d";
-"wizard.totalAllocation" = "ការបែងចែកសរុប";
-"wizard.budgetsToCreate" = "ថវិកាដែលត្រូវបង្កើត";
-"wizard.review.point1" = "• ថវិកាប្រភេទចំណាយ ៣ (តម្រូវការចាំបាច់, តម្រូវការបន្ថែម, ការសន្សំ)";
-"wizard.review.point2" = "• ប្រចាំខែដដែលៗជាមួយនឹងការបន្តដោយស្វ័យប្រវត្តិ";
-"wizard.review.point3" = "• ការជូនដំណឹងនៅចំណាយ ៨០% និង ១០០%";
-"wizard.allSet.title" = "អ្នករួចរាល់ហើយ!";
-"wizard.allSet.message" = "ថវិការបស់អ្នកត្រូវបានបង្កើត អ្នកអាចកែតម្រូវវានៅពេលក្រោយពីអេក្រង់ថវិកា";
-"wizard.allSet.point1" = "មើលថវិការបស់អ្នកនៅក្នុងផ្ទាំងវិភាគ";
-"wizard.allSet.point2" = "ទទួលបានការជូនដំណឹងនៅពេលជិតដល់ដែនកំណត់";
-"wizard.allSet.point3" = "តាមដានវឌ្ឍនភាពរបស់អ្នកជារៀងរាល់ថ្ងៃ";
-
-"wizard.back" = "ថយក្រោយ";
-"wizard.continue" = "បន្ត";
-"wizard.createBudgets" = "បង្កើតថវិកា";
-
 // MARK: - Budget Periods (រយៈពេលថវិកា)
 "period.daily" = "ប្រចាំថ្ងៃ";
 "period.weekly" = "ប្រចាំសប្ដាហ៍";
@@ -433,6 +378,8 @@
 // MARK: - Settings (ការកំណត់)
 "settings.title" = "ការកំណត់";
 "settings.general" = "ទូទៅ";
+"settings.compactEntry" = "ការបញ្ចូលប្រតិបត្តិការសង្ខេប";
+"settings.compactEntry.footer" = "ទម្រង់បញ្ចូលក្នុងអេក្រង់តែមួយ ដោយក្ដារចុចបង្ហាញជានិច្ច — គ្រប់ការបញ្ចូលទាំងអស់ត្រូវការចុចតែម្ដង មិនចាំបាច់រំកិលអេក្រង់ឡើយ។";
 "settings.defaultCurrency" = "រូបិយប័ណ្ណលំនាំដើម";
 "settings.themeColors" = "រចនាប័ទ្ម និងពណ៌";
 "settings.importCSV" = "នាំចូលពី CSV";
@@ -467,9 +414,7 @@
 
 // MARK: - More (បន្ថែមទៀត)
 "more.title" = "បន្ថែមទៀត";
-"more.planningTools" = "ឧបករណ៍រៀបចំ";
-"more.budgetWizard" = "អ្នកជំនួយរៀបចំថវិកា";
-"more.features" = "មុខងារ";
+"more.insights" = "ការយល់ដឹង";
 "more.management" = "ការគ្រប់គ្រង";
 "more.app" = "កម្មវិធី";
 

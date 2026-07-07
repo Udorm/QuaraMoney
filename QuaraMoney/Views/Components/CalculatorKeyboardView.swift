@@ -105,30 +105,47 @@ struct CalculatorKeyboardView: View {
     @Binding var expression: String
     @Binding var evaluatedAmount: Decimal
     let onDismiss: (() -> Void)?
-    
-    init(expression: Binding<String>, evaluatedAmount: Binding<Decimal>, onDismiss: (() -> Void)? = nil) {
+    /// When set, the keypad runs in persistent mode: "Done" is replaced by "="
+    /// in the function row and the bottom-right key becomes a prominent Save
+    /// key (the keypad never dismisses, so save lives in the thumb zone).
+    let onSave: (() -> Void)?
+    let isSaveDisabled: Bool
+
+    init(
+        expression: Binding<String>,
+        evaluatedAmount: Binding<Decimal>,
+        onDismiss: (() -> Void)? = nil,
+        onSave: (() -> Void)? = nil,
+        isSaveDisabled: Bool = false
+    ) {
         self._expression = expression
         self._evaluatedAmount = evaluatedAmount
         self.onDismiss = onDismiss
+        self.onSave = onSave
+        self.isSaveDisabled = isSaveDisabled
     }
-    
+
     // Layout:
-    // Row 1: ⌫, C, Done, ÷
+    // Row 1: ⌫, C, Done, ÷        (persistent mode: ⌫, C, =, ÷)
     // Row 2: 7, 8, 9, ×
     // Row 3: 4, 5, 6, −
     // Row 4: 1, 2, 3, +
-    // Row 5: 00, 0, ., =
+    // Row 5: 00, 0, ., =          (persistent mode: 00, 0, ., ✓ Save)
     
     private let buttonSpacing: CGFloat = 4 // Compact spacing
     private let buttonHeight: CGFloat = 34 // More compact height
     
     var body: some View {
         VStack(spacing: buttonSpacing) {
-            // Row 1: ⌫, C, Done, ÷
+            // Row 1: ⌫, C, Done/=, ÷
             HStack(spacing: buttonSpacing) {
                 CalcButton(systemImage: "delete.backward", color: CalcColors.functionButton) { handleBackspace() }
                 CalcButton(text: "C", color: CalcColors.functionButton) { handleClear() }
-                CalcButton(text: "common.done".localized, color: CalcColors.functionButton) { finalizeAndDismiss() }
+                if onSave == nil {
+                    CalcButton(text: "common.done".localized, color: CalcColors.functionButton) { finalizeAndDismiss() }
+                } else {
+                    CalcButton(text: "=", color: CalcColors.functionButton) { handleEquals() }
+                }
                 CalcButton(text: "÷", color: CalcColors.operatorButton) { handleOperator("÷") }
             }
             
@@ -156,12 +173,29 @@ struct CalculatorKeyboardView: View {
                 CalcButton(text: "+", color: CalcColors.operatorButton) { handleOperator("+") }
             }
             
-            // Row 5: 00, 0, ., =
+            // Row 5: 00, 0, ., = (or ✓ Save in persistent mode)
             HStack(spacing: buttonSpacing) {
                 CalcButton(text: "00", color: CalcColors.numberButton) { handleNumber("00") }
                 CalcButton(text: "0", color: CalcColors.numberButton) { handleNumber("0") }
                 CalcButton(text: ".", color: CalcColors.numberButton) { handleDecimal() }
-                CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
+                if let onSave {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        onSave()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.app(.headline, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.accentColor)
+                    .foregroundColor(.white)
+                    .disabled(isSaveDisabled)
+                    .accessibilityLabel("common.save".localized)
+                } else {
+                    CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
+                }
             }
         }
         .padding(.horizontal, 8)

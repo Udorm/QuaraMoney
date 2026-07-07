@@ -228,61 +228,6 @@
 "budget.type.savings.title" = "Savings & Debt";
 "budget.type.savings.desc" = "Building wealth and paying off debt";
 
-// MARK: - Budget Templates
-"template.conservative.title" = "Conservative";
-"template.conservative.desc" = "Tight spending limits with focus on savings. Best for aggressive debt payoff or savings goals.";
-"template.balanced.title" = "Balanced";
-"template.balanced.desc" = "Moderate approach balancing needs, wants, and savings equally.";
-"template.503020.title" = "50/30/20 Rule";
-"template.503020.desc" = "50% needs, 30% wants, 20% savings. Popular and sustainable approach.";
-"template.zeroBased.title" = "Zero-Based";
-"template.zeroBased.desc" = "Every dollar has a purpose. Assign all income to specific categories.";
-
-// MARK: - Budget Setup Wizard
-"wizard.step" = "Step %d of %d";
-"wizard.welcome.title" = "Welcome";
-"wizard.welcome.subtitle" = "Let's set up your budgets";
-"wizard.selectTemplate.title" = "Choose a Method";
-"wizard.selectTemplate.subtitle" = "Pick a budgeting method that works for you";
-"wizard.enterIncome.title" = "Your Income";
-"wizard.enterIncome.subtitle" = "How much do you earn monthly?";
-"wizard.assignCategories.title" = "Assign Categories";
-"wizard.assignCategories.subtitle" = "Organize your spending categories";
-"wizard.customize.title" = "Customize";
-"wizard.customize.subtitle" = "Adjust the percentages if needed";
-"wizard.review.title" = "Review";
-"wizard.review.subtitle" = "Review your budget plan";
-"wizard.done.title" = "Done";
-"wizard.done.subtitle" = "Your budgets are ready!";
-
-"wizard.feature.limits.title" = "Set Spending Limits";
-"wizard.feature.limits.desc" = "Create budgets for different categories";
-"wizard.feature.alerts.title" = "Get Alerts";
-"wizard.feature.alerts.desc" = "Know when you're approaching your limits";
-"wizard.feature.track.title" = "Track Progress";
-"wizard.feature.track.desc" = "See how you're doing at a glance";
-"wizard.feature.autoRenew.title" = "Auto-Renew";
-"wizard.feature.autoRenew.desc" = "Budgets reset automatically each period";
-
-"wizard.income.prompt" = "Enter your monthly take-home pay (after taxes)";
-"wizard.basedOn" = "Based on %@:";
-"wizard.assign.prompt" = "Assign your expense categories to each budget type";
-"wizard.selected" = "%d selected";
-"wizard.totalAllocation" = "Total Allocation";
-"wizard.budgetsToCreate" = "Budgets to Create";
-"wizard.review.point1" = "• 3 category-type budgets (Needs, Wants, Savings)";
-"wizard.review.point2" = "• Monthly recurring with auto-renewal";
-"wizard.review.point3" = "• Alerts at 80% and 100% spending";
-"wizard.allSet.title" = "You're All Set!";
-"wizard.allSet.message" = "Your budgets have been created. You can always adjust them later from the Budgets screen.";
-"wizard.allSet.point1" = "View your budgets in the Analysis tab";
-"wizard.allSet.point2" = "Get alerts when approaching limits";
-"wizard.allSet.point3" = "Track your progress daily";
-
-"wizard.back" = "Back";
-"wizard.continue" = "Continue";
-"wizard.createBudgets" = "Create Budgets";
-
 // MARK: - Budget Periods
 "period.daily" = "Daily";
 "period.weekly" = "Weekly";
@@ -433,6 +378,8 @@
 // MARK: - Settings
 "settings.title" = "Settings";
 "settings.general" = "General";
+"settings.compactEntry" = "Compact Transaction Entry";
+"settings.compactEntry.footer" = "One-screen entry form with the keypad always visible — every input is one tap away, no scrolling needed.";
 "settings.defaultCurrency" = "Default Currency";
 "settings.themeColors" = "Theme & Colors";
 "settings.importCSV" = "Import from CSV";
@@ -467,9 +414,7 @@
 
 // MARK: - More
 "more.title" = "More";
-"more.planningTools" = "Planning Tools";
-"more.budgetWizard" = "Budget Setup Wizard";
-"more.features" = "Features";
+"more.insights" = "Insights";
 "more.management" = "Management";
 "more.app" = "App";
 

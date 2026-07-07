@@ -112,7 +112,9 @@ struct EventLocationPickerView: View {
                     }
                 }
             } catch {
+                #if DEBUG
                 print("Geocoding failed: \(error)")
+                #endif
             }
         }
     }

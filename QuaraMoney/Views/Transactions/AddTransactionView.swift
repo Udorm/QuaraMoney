@@ -20,6 +20,9 @@ struct AddTransactionView: View {
     @State private var showLocationPicker = false
     @State private var isFetchingCurrentLocation = false
     @State private var showDebtSheet = false
+    // Inline creation of a first wallet/category when the user has none.
+    @State private var showAddWallet = false
+    @State private var showAddCategory = false
 
     @Environment(\.modelContext) private var modelContext
 
@@ -595,57 +598,90 @@ struct AddTransactionView: View {
     }
 
     // MARK: - Wallet Selector
+    @ViewBuilder
     private var walletSelector: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(frequentWallets) { wallet in
-                        WalletChip(
-                            wallet: wallet,
-                            isSelected: viewModel.selectedWallet?.id == wallet.id
-                        ) {
-                            selectWallet(wallet)
-                        }
-                    }
-
-                    if wallets.count > maxQuickWallets {
-                        Button {
-                            showAllWallets = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "ellipsis")
-                                    .font(.app(.caption2))
-                                Text("common.more".localized)
-                                    .font(.app(.subheadline, weight: .medium))
+        if wallets.isEmpty {
+            TransactionSetupPrompt(
+                icon: "wallet.pass",
+                tint: .accentColor,
+                title: "transaction.setup.wallet.title".localized,
+                message: "transaction.setup.wallet.message".localized,
+                actionTitle: "wallet.add".localized
+            ) {
+                showAddWallet = true
+            }
+            .padding(.vertical, 4)
+            .sheet(isPresented: $showAddWallet, onDismiss: autoSelectNewWalletIfNeeded) {
+                AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(frequentWallets) { wallet in
+                            WalletChip(
+                                wallet: wallet,
+                                isSelected: viewModel.selectedWallet?.id == wallet.id
+                            ) {
+                                selectWallet(wallet)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color(.tertiarySystemGroupedBackground))
-                            .foregroundColor(.secondary)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                            )
                         }
-                        .buttonStyle(.plain)
+
+                        if wallets.count > maxQuickWallets {
+                            Button {
+                                showAllWallets = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "ellipsis")
+                                        .font(.app(.caption2))
+                                    Text("common.more".localized)
+                                        .font(.app(.subheadline, weight: .medium))
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(.tertiarySystemGroupedBackground))
+                                .foregroundColor(.secondary)
+                                .cornerRadius(16)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        }
-        .padding(.vertical, 4)
-        .overlay(
-            Group {
-                if viewModel.type == .adjustment {
-                    Color(.secondarySystemFill)
-                        .allowsHitTesting(true)
+            .padding(.vertical, 4)
+            .overlay(
+                Group {
+                    if viewModel.type == .adjustment {
+                        Color(.secondarySystemFill)
+                            .allowsHitTesting(true)
+                    }
                 }
+            )
+            .sheet(isPresented: $showAllWallets) {
+                walletPickerSheet
             }
-        )
-        .sheet(isPresented: $showAllWallets) {
-            walletPickerSheet
         }
+    }
+
+    /// Auto-selects the wallet the user just created so a first-time entry can be
+    /// saved immediately. Only acts when nothing is selected yet (i.e. the
+    /// empty-state prompt drove the creation).
+    private func autoSelectNewWalletIfNeeded() {
+        guard viewModel.selectedWallet == nil, let wallet = wallets.first else { return }
+        selectWallet(wallet)
+        recomputeSuggestions()
+    }
+
+    /// Auto-selects a freshly created category (for the current type) after the
+    /// inline "Add Category" prompt.
+    private func autoSelectNewCategoryIfNeeded() {
+        guard viewModel.selectedCategory == nil, let category = filteredCategories.first else { return }
+        viewModel.selectedCategory = category
     }
     
     // MARK: - Wallet Picker Sheet
@@ -720,9 +756,16 @@ struct AddTransactionView: View {
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if filteredCategories.isEmpty {
-                Text("transaction.noCategoriesForType".localized(with: viewModel.type.title))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
+                TransactionSetupPrompt(
+                    icon: "square.grid.2x2",
+                    tint: .accentColor,
+                    title: "transaction.setup.category.title".localized,
+                    message: "transaction.setup.category.message".localized,
+                    actionTitle: "category.add".localized
+                ) {
+                    showAddCategory = true
+                }
+                .padding(.vertical, 4)
             } else {
                 // Show frequent categories in grid
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
@@ -769,6 +812,9 @@ struct AddTransactionView: View {
         }
         .sheet(isPresented: $showAllCategories) {
             categoryPickerSheet
+        }
+        .sheet(isPresented: $showAddCategory, onDismiss: autoSelectNewCategoryIfNeeded) {
+            AddCategoryView(initialType: viewModel.type)
         }
     }
     

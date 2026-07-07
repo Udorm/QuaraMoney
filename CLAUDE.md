@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **QuaraMoney** is a personal finance iOS app for the Cambodian market. English + Khmer bilingual, multi-currency (USD/KHR primary). Features: income/expense tracking, wallets, group event expense splitting, debts, budgets, savings goals, receipt scanning.
 
-- **Platform:** iOS 17+ (iOS 18 features behind `#available` checks)
+- **Platform:** iOS 26 deployment target (`IPHONEOS_DEPLOYMENT_TARGET = 26.0`; tests 26.2). Vestigial `#available(iOS 18/26, *)` checks remain in places but are no longer load-bearing.
 - **UI:** 100% SwiftUI — no UIKit
-- **Persistence:** SwiftData
+- **Persistence:** SwiftData (local) + Supabase cloud sync
 - **Architecture:** MVVM
-- **No third-party dependencies** — Apple frameworks only (SwiftUI, SwiftData, Combine, Vision, CoreLocation, UserNotifications, CoreText)
+- **Dependencies:** supabase-swift (SPM) for auth/sync/storage; otherwise Apple frameworks only (SwiftUI, SwiftData, Combine, Vision, CoreLocation, UserNotifications, CoreText)
 
 ## Build & Test Commands
 
@@ -30,7 +30,7 @@ xcodebuild test -scheme QuaraMoney -destination 'platform=iOS Simulator,name=iPh
   -only-testing:QuaraMoneyTests/EventSettlementEngineTests
 ```
 
-Requirements: Xcode 16+, iOS 17+ simulator. No CocoaPods/SPM — pure Xcode project.
+Requirements: Xcode 26+, iOS 26 simulator. Dependencies via SPM (supabase-swift); no CocoaPods.
 
 ## Architecture
 
@@ -64,9 +64,9 @@ View (SwiftUI @Query / @State)
 - `ModelContext` is always on `@MainActor`; pass `PersistentIdentifier` across actor boundaries
 - `ModelContainer` created once in `QuaraMoneyApp` and injected via `.modelContainer(_:)`
 
-### iOS 17 vs iOS 18
+### Legacy availability checks
 
-`ContentView.swift` uses `#available(iOS 18, *)`: iOS 18 uses native `Tab` API, iOS 17 falls back to `NavigationSplitView` + `TabView`. Preserve both code paths when modifying navigation.
+The deployment target is iOS 26, so iOS 26 Liquid Glass APIs (`.glassEffect`, `.buttonStyle(.glass/.glassProminent)`) need no availability guards. `ContentView.swift` still carries a vestigial `#available(iOS 18, *)` split (native `Tab` API vs `NavigationSplitView` + `TabView` fallback) — the iOS-18 branch is the one that runs; the fallback is dead code kept from the iOS 17 era.
 
 ## Key Conventions
 

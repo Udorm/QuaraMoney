@@ -78,7 +78,9 @@ class AdjustBalanceViewModel {
             try dataService.save()
             wallet.invalidateBalanceCache()
         } catch {
+            #if DEBUG
             print("Error saving adjustment: \(error)")
+            #endif
         }
     }
 }

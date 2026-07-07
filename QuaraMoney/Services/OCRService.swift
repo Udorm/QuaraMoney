@@ -196,15 +196,17 @@ class OCRService {
         }
         let base64Image = jpegData.base64EncodedString()
         
-        // Gemini API Endpoint for 1.5 Flash
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\(apiKey)"
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
         guard let url = URL(string: urlString) else {
             throw OCRServiceError.imageProcessingFailed
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Key travels in a header, not the URL: query strings end up in proxy and
+        // server logs, headers don't.
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         
         var walletContext = ""
         if let wallets = availableWallets, !wallets.isEmpty {

@@ -347,6 +347,32 @@ create index if not exists idx_evsnapshots_user_updated  on public.event_settlem
 create index if not exists idx_evtransfers_user_updated  on public.event_settlement_transfers(user_id, updated_at);
 create index if not exists idx_evexports_user_updated    on public.event_wallet_export_records(user_id, updated_at);
 
+-- FK covering indexes (advisor: unindexed_foreign_keys — cascade deletes and
+-- FK checks scan the child table without these).
+-- (migration 2026-07-07_rls_initplan_and_fk_indexes)
+create index if not exists idx_budget_categories_category   on public.budget_categories(category_id);
+create index if not exists idx_budget_categories_user       on public.budget_categories(user_id);
+create index if not exists idx_budgets_category             on public.budgets(category_id);
+create index if not exists idx_evparticipants_event_member  on public.event_ledger_participants(event_member_id);
+create index if not exists idx_evparticipants_transaction   on public.event_ledger_participants(transaction_id);
+create index if not exists idx_evledgertx_event             on public.event_ledger_transactions(event_id);
+create index if not exists idx_evmembers_event              on public.event_members(event_id);
+create index if not exists idx_evsnapshots_event            on public.event_settlement_snapshots(event_id);
+create index if not exists idx_evtransfers_snapshot         on public.event_settlement_transfers(snapshot_id);
+create index if not exists idx_evexports_event              on public.event_wallet_export_records(event_id);
+create index if not exists idx_evexports_snapshot           on public.event_wallet_export_records(snapshot_id);
+create index if not exists idx_recurring_category           on public.recurring_rules(category_id);
+create index if not exists idx_recurring_wallet             on public.recurring_rules(wallet_id);
+create index if not exists idx_savings_linked_wallet        on public.savings_goals(linked_wallet_id);
+create index if not exists idx_txlocations_transaction      on public.transaction_locations(transaction_id);
+create index if not exists idx_transactions_category        on public.transactions(category_id);
+create index if not exists idx_transactions_debt            on public.transactions(debt_id);
+create index if not exists idx_transactions_dest_wallet     on public.transactions(destination_wallet_id);
+create index if not exists idx_transactions_event           on public.transactions(event_id);
+create index if not exists idx_transactions_recurring_rule  on public.transactions(recurring_rule_id);
+create index if not exists idx_transactions_savings_goal    on public.transactions(savings_goal_id);
+create index if not exists idx_transactions_source_wallet   on public.transactions(source_wallet_id);
+
 -- ---------------------------------------------------------------------------
 -- profiles — single-row account profile (display name + avatar pointer).
 -- Avatar bytes live in the receipts bucket at {uid}/profile/avatar.jpg.

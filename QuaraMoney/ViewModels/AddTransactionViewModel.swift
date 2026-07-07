@@ -316,7 +316,9 @@ class AddTransactionViewModel: BaseViewModel {
             
             HapticManager.shared.notification(type: .success)
         } catch {
+            #if DEBUG
             print("OCR Error: \(error)")
+            #endif
             HapticManager.shared.notification(type: .error)
         }
     }

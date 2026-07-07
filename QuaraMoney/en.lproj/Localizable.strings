@@ -104,6 +104,10 @@
 "transaction.searchWallets" = "Search wallets";
 "transaction.noOtherWallets" = "No other wallets available";
 "transaction.noCategoriesForType" = "No categories for %@";
+"transaction.setup.wallet.title" = "Add your first wallet";
+"transaction.setup.wallet.message" = "You need a wallet before you can save this transaction.";
+"transaction.setup.category.title" = "No categories yet";
+"transaction.setup.category.message" = "Create a category to organize this transaction.";
 "transaction.type.income" = "Income";
 "transaction.type.expense" = "Expense";
 "transaction.type.transfer" = "Transfer";
@@ -426,6 +430,9 @@
 "profile.removePhoto" = "Remove Photo";
 "profile.takePhoto" = "Take Photo";
 "profile.chooseFromLibrary" = "Choose from Library";
+"profile.reframePhoto" = "Reframe Photo";
+"profile.moveAndScale" = "Move and Scale";
+"profile.usePhoto" = "Use Photo";
 "profile.memberSince" = "Member Since";
 "profile.totalWallets" = "Wallets";
 "profile.totalTransactions" = "Transactions";
@@ -914,6 +921,7 @@
 "security.lockedTitle" = "QuaraMoney is Locked";
 "security.lockedMessage" = "Authenticate to view your finances.";
 "security.unlock" = "Unlock";
+"security.lockUnavailable" = "App Lock needs a device passcode. Set a passcode in iOS Settings, or turn off App Lock.";
 "recurring.monthlyProgress" = "This Month's Progress";
 "recurring.expenses" = "Expenses";
 "recurring.income" = "Income";

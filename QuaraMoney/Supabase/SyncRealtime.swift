@@ -53,10 +53,14 @@ final class SyncRealtime {
             do {
                 try await channel.subscribeWithError()
             } catch {
+                #if DEBUG
                 print("[SyncRealtime] subscribe failed: \(error)")
+                #endif
                 return
             }
+            #if DEBUG
             print("[SyncRealtime] subscribed; watching \(streams.count) tables")
+            #endif
 
             // Fan the per-table change streams into one resync trigger.
             await withTaskGroup(of: Void.self) { group in
@@ -69,7 +73,9 @@ final class SyncRealtime {
                             case .update: kind = "UPDATE"
                             case .delete: kind = "DELETE"
                             }
+                            #if DEBUG
                             print("[SyncRealtime] remote \(kind) received; scheduling resync")
+                            #endif
                             guard let self else { return }
                             await self.scheduleSync()
                         }

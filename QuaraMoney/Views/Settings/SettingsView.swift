@@ -180,7 +180,7 @@ struct SettingsView: View {
                     ListIconView(systemImage: "sparkles", color: .purple)
                 }
 
-                Text("Enter your Gemini API Key to enable smart receipt scanning. If left empty, the app will use standard on-device OCR.")
+                Text("Enter your Gemini API Key to enable smart receipt scanning. When enabled, receipt photos and your wallet names are sent to Google for processing. If left empty, the app uses standard on-device OCR and nothing leaves your device.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

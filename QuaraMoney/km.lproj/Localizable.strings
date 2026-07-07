@@ -104,6 +104,10 @@
 "transaction.searchWallets" = "ស្វែងរកកាបូប";
 "transaction.noOtherWallets" = "គ្មានកាបូបផ្សេងទៀតទេ";
 "transaction.noCategoriesForType" = "គ្មានប្រភេទសម្រាប់ %@";
+"transaction.setup.wallet.title" = "បន្ថែមកាបូបដំបូងរបស់អ្នក";
+"transaction.setup.wallet.message" = "អ្នកត្រូវការកាបូបមុននឹងអាចរក្សាទុកប្រតិបត្តិការនេះ។";
+"transaction.setup.category.title" = "មិនទាន់មានប្រភេទ";
+"transaction.setup.category.message" = "បង្កើតប្រភេទដើម្បីរៀបចំប្រតិបត្តិការនេះ។";
 "transaction.type.income" = "ចំណូល";
 "transaction.type.expense" = "ចំណាយ";
 "transaction.type.transfer" = "ផ្ទេរ";
@@ -426,6 +430,9 @@
 "profile.removePhoto" = "លុបរូបថត";
 "profile.takePhoto" = "ថតរូប";
 "profile.chooseFromLibrary" = "ជ្រើសរើសពីបណ្ណាល័យ";
+"profile.reframePhoto" = "តម្រឹមរូបថតឡើងវិញ";
+"profile.moveAndScale" = "ផ្លាស់ទី និងពង្រីក";
+"profile.usePhoto" = "ប្រើរូបថតនេះ";
 "profile.memberSince" = "សមាជិកតាំងពី";
 "profile.totalWallets" = "កាបូប";
 "profile.totalTransactions" = "ប្រតិបត្តិការ";
@@ -913,6 +920,7 @@
 
 "security.lockedTitle" = "QuaraMoney ត្រូវបានចាក់សោ";
 "security.unlock" = "ដោះសោ";
+"security.lockUnavailable" = "ការចាក់សោកម្មវិធីត្រូវការលេខសម្ងាត់ឧបករណ៍។ សូមកំណត់លេខសម្ងាត់នៅក្នុងការកំណត់ iOS ឬបិទការចាក់សោកម្មវិធី។";
 "security.lockedMessage" = "ផ្ទៀងផ្ទាត់ដើម្បីមើលហិរញ្ញវត្ថុរបស់អ្នក។";
 "recurring.monthlyProgress" = "វឌ្ឍនភាពប្រចាំខែនេះ";
 "recurring.expenses" = "ចំណាយ";

@@ -140,6 +140,28 @@ final class SupabaseAuthManager: ObservableObject {
         }
     }
 
+    /// Permanently deletes the signed-in account: cloud rows (FK cascade),
+    /// storage objects, and the auth user itself via the `delete-account` Edge
+    /// Function (the client cannot delete its own auth user). Local data is
+    /// wiped afterwards. Required by App Store Guideline 5.1.1(v).
+    func deleteAccount() async {
+        guard let client else { return }
+        beginWork()
+        defer { isWorking = false }
+        do {
+            try await client.functions.invoke("delete-account")
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        // The server-side user no longer exists; drop the local session (the
+        // global sign-out endpoint would 403) and clear the device copy.
+        try? await client.auth.signOut(scope: .local)
+        SyncEngine.shared.wipeForSignOut()
+        state = .signedOut
+        infoMessage = "Your account and all cloud data have been deleted."
+    }
+
     /// Completes an auth flow opened via the `quaramoney://auth-callback` deep link
     /// (magic link / email confirmation). Wired from the app's `.onOpenURL`.
     func handleCallback(_ url: URL) {

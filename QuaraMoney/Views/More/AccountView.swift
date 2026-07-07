@@ -25,10 +25,22 @@ struct AccountView: View {
     @State private var avatarImage: UIImage?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showPhotoOptions = false
+    @State private var showLibraryPicker = false
     @State private var showCamera = false
+    @State private var cameraCapture: UIImage?
+    @State private var pendingCrop: CropCandidate?
     @State private var editingName = false
     @State private var tempName: String = ""
+    @State private var authSheetMode: AuthSheetView.Mode?
+    @State private var showDeleteAccountConfirm = false
     @FocusState private var isNameFocused: Bool
+
+    /// Identifiable wrapper so a freshly captured/picked photo can drive
+    /// `fullScreenCover(item:)` into the crop step.
+    private struct CropCandidate: Identifiable {
+        let id = UUID()
+        let image: UIImage
+    }
 
     private var memberSinceFormatted: String {
         let date = installDateTimestamp > 0
@@ -47,6 +59,10 @@ struct AccountView: View {
                 accountSyncCard
                 quickStatsCard
                 memberSinceCard
+
+                if viewModel.isConfigured && syncEnabled && auth.isSignedIn {
+                    accountManagementSection
+                }
             }
             .padding(.horizontal)
             .padding(.top, 8)
@@ -81,13 +97,38 @@ struct AccountView: View {
                 await loadPhoto(from: newItem)
             }
         }
-        .sheet(isPresented: $showCamera) {
+        .photosPicker(
+            isPresented: $showLibraryPicker,
+            selection: $selectedPhotoItem,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .fullScreenCover(isPresented: $showCamera, onDismiss: {
+            // Enter the crop step only after the camera has fully dismissed —
+            // presenting a second cover while the first is still up gets dropped.
+            if let capture = cameraCapture {
+                cameraCapture = nil
+                pendingCrop = CropCandidate(image: capture)
+            }
+        }) {
             CameraPickerView { image in
-                if let image {
-                    self.avatarImage = image
-                    saveAvatar(image)
+                cameraCapture = image
+            }
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(item: $pendingCrop) { candidate in
+            AvatarCropView(image: candidate.image) { cropped in
+                if let cropped {
+                    avatarImage = cropped
+                    saveAvatar(cropped)
                 }
             }
+        }
+        .sheet(item: $authSheetMode) { mode in
+            AuthSheetView(
+                showsForeignDataWarning: viewModel.hasUnsyncedDataFromPreviousAccount,
+                mode: mode
+            )
         }
         .confirmationDialog(
             L10n.Profile.photoOptions,
@@ -98,9 +139,15 @@ struct AccountView: View {
                 showCamera = true
             }
 
-            // Library selection is handled by the PhotosPicker overlay on the avatar.
+            Button(L10n.Profile.chooseFromLibrary) {
+                showLibraryPicker = true
+            }
 
-            if avatarImage != nil {
+            if let avatarImage {
+                Button("profile.reframePhoto".localized) {
+                    pendingCrop = CropCandidate(image: avatarImage)
+                }
+
                 Button(L10n.Profile.removePhoto, role: .destructive) {
                     removeAvatar()
                 }
@@ -114,30 +161,18 @@ struct AccountView: View {
 
     private var profileHeaderCard: some View {
         VStack(spacing: 20) {
-            // Avatar
-            ZStack {
+            Button {
+                showPhotoOptions = true
+            } label: {
                 ProfileAvatarView(
                     image: avatarImage,
                     displayName: displayName.isEmpty ? L10n.Profile.namePlaceholder : displayName,
                     size: 110,
                     showEditBadge: true
                 )
-
-                // PhotosPicker overlay for library selection
-                PhotosPicker(
-                    selection: $selectedPhotoItem,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
-                    Color.clear
-                        .frame(width: 110, height: 110)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
             }
-            .onTapGesture {
-                showPhotoOptions = true
-            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.Profile.changePhoto)
 
             // Display Name
             VStack(spacing: 8) {
@@ -196,12 +231,22 @@ struct AccountView: View {
     @ViewBuilder
     private var accountSyncCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Image(systemName: "icloud.fill")
-                    .foregroundStyle(.cyan)
-                Text("Account & Cloud Sync")
+                    .font(.app(.subheadline, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+                Text("Cloud Sync")
                     .font(.app(.headline, weight: .semibold))
+
                 Spacer()
+
+                if viewModel.isConfigured {
+                    Toggle("Cloud Sync", isOn: $syncEnabled)
+                        .labelsHidden()
+                }
             }
 
             if !viewModel.isConfigured {
@@ -209,22 +254,17 @@ struct AccountView: View {
                       systemImage: "exclamationmark.triangle")
                     .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
-            } else {
-                Toggle("Enable Cloud Sync (Beta)", isOn: $syncEnabled)
-                    .font(.app(.body))
-
-                if syncEnabled {
-                    Divider()
-                    if auth.isSignedIn {
-                        signedInSection
-                    } else {
-                        AccountAuthForm(showsForeignDataWarning: viewModel.hasUnsyncedDataFromPreviousAccount)
-                    }
+            } else if syncEnabled {
+                Divider()
+                if auth.isSignedIn {
+                    signedInSection
                 } else {
-                    Text("When off, QuaraMoney runs fully offline on this device.")
-                        .font(.app(.caption))
-                        .foregroundStyle(.secondary)
+                    signedOutSection
                 }
+            } else {
+                Text("When off, QuaraMoney runs fully offline on this device.")
+                    .font(.app(.caption))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(16)
@@ -236,61 +276,233 @@ struct AccountView: View {
         }
     }
 
+    // MARK: - Signed-out state (sign in / create account CTA)
+
+    @ViewBuilder
+    private var signedOutSection: some View {
+        VStack(spacing: 16) {
+            if viewModel.hasUnsyncedDataFromPreviousAccount {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device.")
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            VStack(spacing: 4) {
+                Text("Back Up Your Data")
+                    .font(.app(.subheadline, weight: .semibold))
+
+                Text("Sign in so your wallets, transactions, and budgets are safely backed up and follow you to any device.")
+                    .font(.app(.caption))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: 10) {
+                Button {
+                    authSheetMode = .signIn
+                } label: {
+                    Text("Sign In")
+                        .font(.app(.body, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+                Button {
+                    authSheetMode = .signUp
+                } label: {
+                    Text("Create Account")
+                        .font(.app(.body, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+        }
+    }
+
+    // MARK: - Signed-in state (account + sync status)
+
     @ViewBuilder
     private var signedInSection: some View {
-        LabeledContent {
-            Text(auth.currentEmail ?? "")
-                .font(.app(.subheadline))
+        // Who's signed in
+        HStack(spacing: 12) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 34))
                 .foregroundStyle(.secondary)
-        } label: {
-            Text("Signed in")
-                .font(.app(.body))
-        }
 
-        Button {
-            Task { await sync.syncNow(context: modelContext) }
-        } label: {
-            HStack {
-                Label(sync.isInitialSyncInProgress ? "Setting up cloud sync…" : "Sync Now",
-                      systemImage: "arrow.triangle.2.circlepath")
-                if sync.isSyncing {
-                    Spacer()
-                    ProgressView()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(auth.currentEmail ?? "")
+                    .font(.app(.subheadline, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
+                    Text("Signed in")
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .contentShape(Rectangle())
+
+            Spacer()
         }
-        .disabled(sync.isSyncing)
+
+        Divider()
+
+        // Sync status + manual sync
+        HStack(spacing: 12) {
+            syncStatusIcon
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(syncStatusTitle)
+                    .font(.app(.subheadline, weight: .medium))
+
+                Text(syncStatusDetail)
+                    .font(.app(.caption))
+                    .foregroundStyle(sync.lastError == nil ? Color.secondary : Color.red)
+                    .lineLimit(3)
+            }
+
+            Spacer()
+
+            Button {
+                Task { await sync.syncNow(context: modelContext) }
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.app(.subheadline, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .disabled(sync.isSyncing)
+            .accessibilityLabel("Sync Now")
+        }
 
         if sync.isInitialSyncInProgress {
             Text("Uploading your existing data for the first time. Keep the app open.")
                 .font(.app(.caption))
                 .foregroundStyle(.secondary)
         }
+    }
 
+    @ViewBuilder
+    private var syncStatusIcon: some View {
+        if sync.isSyncing {
+            ProgressView()
+        } else if sync.lastError != nil {
+            Image(systemName: "exclamationmark.icloud.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+        } else if sync.lastSyncDate != nil {
+            Image(systemName: "checkmark.icloud.fill")
+                .font(.title3)
+                .foregroundStyle(.green)
+        } else {
+            Image(systemName: "icloud")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var syncStatusTitle: String {
+        if sync.isInitialSyncInProgress { return "Setting up cloud sync…" }
+        if sync.isSyncing { return "Syncing…" }
+        if sync.lastError != nil { return "Sync issue" }
+        if sync.lastSyncDate != nil { return "Up to date" }
+        return "Waiting for first sync"
+    }
+
+    private var syncStatusDetail: String {
+        if let error = sync.lastError { return error }
+        if sync.isSyncing { return "Updating your data" }
         if let last = sync.lastSyncDate {
-            LabeledContent {
-                Text(last.formatted(date: .abbreviated, time: .shortened))
-                    .font(.app(.subheadline))
-                    .foregroundStyle(.secondary)
+            return "Last synced \(last.formatted(.relative(presentation: .named)))"
+        }
+        return "Tap sync to upload your data"
+    }
+
+    // MARK: - Sign out / Delete account
+
+    private var accountManagementSection: some View {
+        VStack(spacing: 12) {
+            Button {
+                Task { await auth.signOut() }
             } label: {
-                Text("Last synced")
-                    .font(.app(.body))
+                HStack(spacing: 8) {
+                    if auth.isWorking {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.app(.subheadline, weight: .semibold))
+                    }
+                    Text("Sign Out")
+                        .font(.app(.body, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
             }
-        }
+            .buttonStyle(.plain)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
+            }
+            .disabled(auth.isWorking || sync.isSyncing)
 
-        if let error = sync.lastError {
-            Text(error)
-                .font(.app(.caption))
+            // App Store Guideline 5.1.1(v): account deletion must be available in-app.
+            Button {
+                showDeleteAccountConfirm = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                        .font(.app(.subheadline, weight: .semibold))
+                    Text("Delete Account…")
+                        .font(.app(.body, weight: .semibold))
+                }
                 .foregroundStyle(.red)
-        }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.red.opacity(0.1))
+                    .strokeBorder(Color.red.opacity(0.25), lineWidth: 1)
+            }
+            .disabled(auth.isWorking || sync.isSyncing)
 
-        Divider()
-
-        Button("Sign Out", role: .destructive) {
-            Task { await auth.signOut() }
+            Text("Permanently deletes your account and all synced data from the cloud and this device.")
+                .font(.app(.caption))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
         }
-        .disabled(auth.isWorking || sync.isSyncing)
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $showDeleteAccountConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Account & All Data", role: .destructive) {
+                Task { await auth.deleteAccount() }
+            }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your account, all synced data, and receipt images from the cloud, and removes the data from this device. This cannot be undone.")
+        }
     }
 
     private func refreshTransactionCount() {
@@ -412,8 +624,9 @@ struct AccountView: View {
         if let data = try? await item.loadTransferable(type: Data.self),
            let image = UIImage(data: data) {
             await MainActor.run {
-                self.avatarImage = image
-                saveAvatar(image)
+                pendingCrop = CropCandidate(image: image)
+                // Reset so picking the same photo again re-triggers onChange.
+                selectedPhotoItem = nil
             }
         }
     }
@@ -423,109 +636,6 @@ struct AccountView: View {
         editingName = false
         isNameFocused = false
         viewModel.pushProfileEdit(context: modelContext)
-    }
-}
-
-// MARK: - Auth form (email/password + magic link)
-
-private struct AccountAuthForm: View {
-    let showsForeignDataWarning: Bool
-
-    @EnvironmentObject private var auth: SupabaseAuthManager
-    @State private var email = ""
-    @State private var password = ""
-    @State private var mode: Mode = .signIn
-
-    private enum Mode { case signIn, signUp }
-
-    private var canSubmit: Bool {
-        !auth.isWorking && !email.isEmpty && !password.isEmpty
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(mode == .signIn ? "Sign In" : "Create Account")
-                .font(.app(.subheadline, weight: .semibold))
-                .foregroundStyle(.secondary)
-
-            if showsForeignDataWarning {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device.")
-                        .font(.app(.caption))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(10)
-                .background(Color.orange.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-
-            TextField("Email", text: $email)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(10)
-                .background(Color(.tertiarySystemFill))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            SecureField("Password", text: $password)
-                .textContentType(mode == .signIn ? .password : .newPassword)
-                .padding(10)
-                .background(Color(.tertiarySystemFill))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            Button {
-                Task {
-                    switch mode {
-                    case .signIn: await auth.signIn(email: email, password: password)
-                    case .signUp: await auth.signUp(email: email, password: password)
-                    }
-                }
-            } label: {
-                HStack {
-                    Spacer()
-                    if auth.isWorking {
-                        ProgressView()
-                    } else {
-                        Text(mode == .signIn ? "Sign In" : "Create Account")
-                            .font(.app(.body, weight: .semibold))
-                    }
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canSubmit)
-
-            HStack {
-                Button(mode == .signIn ? "Need an account? Sign up"
-                                       : "Have an account? Sign in") {
-                    mode = (mode == .signIn) ? .signUp : .signIn
-                }
-                .font(.app(.footnote))
-
-                Spacer()
-
-                Button("Email me a magic link") {
-                    Task { await auth.sendMagicLink(email: email) }
-                }
-                .font(.app(.footnote))
-                .disabled(auth.isWorking || email.isEmpty)
-            }
-
-            if let error = auth.errorMessage {
-                Text(error)
-                    .font(.app(.caption))
-                    .foregroundStyle(.red)
-            }
-            if let info = auth.infoMessage {
-                Text(info)
-                    .font(.app(.caption))
-                    .foregroundStyle(.secondary)
-            }
-        }
     }
 }
 
@@ -540,7 +650,9 @@ struct CameraPickerView: UIViewControllerRepresentable {
         picker.sourceType = .camera
         picker.cameraDevice = .front
         picker.delegate = context.coordinator
-        picker.allowsEditing = true
+        // Cropping happens in AvatarCropView (UIImagePickerController's
+        // built-in edit step is unreliable about the chosen frame).
+        picker.allowsEditing = false
         return picker
     }
 

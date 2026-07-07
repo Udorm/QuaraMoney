@@ -5,6 +5,11 @@
 -- NOTE: soft-deleted rows (deleted_at IS NOT NULL) are still selectable on
 -- purpose — the sync pull needs tombstones. Filtering of deleted rows happens
 -- client-side in SwiftData queries.
+--
+-- Policy conventions (migration 2026-07-07_rls_initplan_and_fk_indexes):
+--   * `(select auth.uid())` not bare `auth.uid()` — evaluated once per query
+--     (InitPlan) instead of per row.
+--   * `to authenticated` — anon-key requests skip policy evaluation entirely.
 
 do $$
 declare t text;
@@ -23,28 +28,30 @@ begin
     execute format($f$
       drop policy if exists "%1$s_select_own" on public.%1$s;
       create policy "%1$s_select_own" on public.%1$s
-        for select using (user_id = auth.uid());
+        for select to authenticated using (user_id = (select auth.uid()));
     $f$, t);
 
     -- INSERT
     execute format($f$
       drop policy if exists "%1$s_insert_own" on public.%1$s;
       create policy "%1$s_insert_own" on public.%1$s
-        for insert with check (user_id = auth.uid());
+        for insert to authenticated with check (user_id = (select auth.uid()));
     $f$, t);
 
     -- UPDATE
     execute format($f$
       drop policy if exists "%1$s_update_own" on public.%1$s;
       create policy "%1$s_update_own" on public.%1$s
-        for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+        for update to authenticated
+        using (user_id = (select auth.uid()))
+        with check (user_id = (select auth.uid()));
     $f$, t);
 
     -- DELETE (rarely used — we soft-delete — but locked down anyway)
     execute format($f$
       drop policy if exists "%1$s_delete_own" on public.%1$s;
       create policy "%1$s_delete_own" on public.%1$s
-        for delete using (user_id = auth.uid());
+        for delete to authenticated using (user_id = (select auth.uid()));
     $f$, t);
   end loop;
 end$$;
@@ -59,30 +66,30 @@ on conflict (id) do nothing;
 
 drop policy if exists "receipts_select_own" on storage.objects;
 create policy "receipts_select_own" on storage.objects
-  for select using (
+  for select to authenticated using (
     bucket_id = 'receipts'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 drop policy if exists "receipts_insert_own" on storage.objects;
 create policy "receipts_insert_own" on storage.objects
-  for insert with check (
+  for insert to authenticated with check (
     bucket_id = 'receipts'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 drop policy if exists "receipts_update_own" on storage.objects;
 create policy "receipts_update_own" on storage.objects
-  for update using (
+  for update to authenticated using (
     bucket_id = 'receipts'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 drop policy if exists "receipts_delete_own" on storage.objects;
 create policy "receipts_delete_own" on storage.objects
-  for delete using (
+  for delete to authenticated using (
     bucket_id = 'receipts'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 -- Enable Realtime for all synced tables
@@ -112,16 +119,18 @@ alter table public.profiles enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
-  for select using (id = auth.uid());
+  for select to authenticated using (id = (select auth.uid()));
 
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles
-  for insert with check (id = auth.uid());
+  for insert to authenticated with check (id = (select auth.uid()));
 
 drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles
-  for update using (id = auth.uid()) with check (id = auth.uid());
+  for update to authenticated
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
 
 drop policy if exists "profiles_delete_own" on public.profiles;
 create policy "profiles_delete_own" on public.profiles
-  for delete using (id = auth.uid());
+  for delete to authenticated using (id = (select auth.uid()));

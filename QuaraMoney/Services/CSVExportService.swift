@@ -10,8 +10,27 @@ class CSVExportService {
     
     /// Generates a CSV file from the provided transactions
     /// - Returns: URL to the temporary CSV file
+    /// Neutralizes spreadsheet formula injection: a cell starting with =, +, -, @
+    /// (or a tab/CR) is executed as a formula by Excel/Numbers when the export is
+    /// opened. Prefix with a single quote so it renders as text.
+    private func sanitizedCell(_ value: String) -> String {
+        guard let first = value.first, "=+-@\t\r".contains(first) else { return value }
+        return "'" + value
+    }
+
+    /// Removes exports from previous runs so financial data doesn't accumulate
+    /// in tmp after the share sheet is done with the file.
+    private func cleanupStaleExports() {
+        let tmp = FileManager.default.temporaryDirectory
+        let contents = (try? FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)) ?? []
+        for url in contents where url.lastPathComponent.hasPrefix("QuaraMoney_Export_") {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     @MainActor
     func generateCSV(transactions: [Transaction]) -> URL? {
+        cleanupStaleExports()
         let fileName = "QuaraMoney_Export_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).csv"
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         
@@ -26,10 +45,10 @@ class CSVExportService {
             let date = dateFormatter.string(from: transaction.date)
             let amount = transaction.amount.formatted(.number.grouping(.never))
             let currency = transaction.currencyCode
-            let category = transaction.category?.name ?? "Uncategorized"
+            let category = sanitizedCell(transaction.category?.name ?? "Uncategorized")
             let type = transaction.type.title
-            let note = (transaction.note ?? "").replacingOccurrences(of: "\"", with: "\"\"") // Escape quotes
-            let wallet = transaction.sourceWallet?.name ?? "Unknown"
+            let note = sanitizedCell((transaction.note ?? "").replacingOccurrences(of: "\"", with: "\"\"")) // Escape quotes
+            let wallet = sanitizedCell(transaction.sourceWallet?.name ?? "Unknown")
             
             // Wrap in quotes
             let row = "\"\(date)\",\"\(amount)\",\"\(currency)\",\"\(category)\",\"\(type)\",\"\(note)\",\"\(wallet)\"\n"
@@ -38,6 +57,11 @@ class CSVExportService {
         
         do {
             try csvText.write(to: path, atomically: true, encoding: .utf8)
+            // Encrypt at rest while it sits in tmp awaiting the share sheet.
+            try? FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUnlessOpen],
+                ofItemAtPath: path.path
+            )
             return path
         } catch {
             #if DEBUG

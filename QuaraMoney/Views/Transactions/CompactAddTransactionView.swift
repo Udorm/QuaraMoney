@@ -29,6 +29,9 @@ struct CompactAddTransactionView: View {
     @State private var showDatePopover = false
     @State private var showTimePopover = false
     @State private var isFetchingCurrentLocation = false
+    // Inline creation of a first wallet/category when the user has none.
+    @State private var showAddWallet = false
+    @State private var showAddCategory = false
     /// Note editing swaps the calculator keypad for the system keyboard in
     /// place; the form above never moves.
     @State private var isNoteBarVisible = false
@@ -314,6 +317,12 @@ struct CompactAddTransactionView: View {
                     onDismiss: { showAllCategories = false }
                 )
             }
+            .sheet(isPresented: $showAddWallet, onDismiss: autoSelectNewWalletIfNeeded) {
+                AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
+            }
+            .sheet(isPresented: $showAddCategory, onDismiss: autoSelectNewCategoryIfNeeded) {
+                AddCategoryView(initialType: viewModel.type)
+            }
             .onAppear {
                 loadTagSourceTransactions()
                 recomputeSuggestions()
@@ -455,27 +464,58 @@ struct CompactAddTransactionView: View {
         }
     }
 
+    @ViewBuilder
     private var walletSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("transaction.fromWallet".localized)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(frequentWallets) { wallet in
-                        WalletChip(
-                            wallet: wallet,
-                            isSelected: viewModel.selectedWallet?.id == wallet.id
-                        ) {
-                            selectWallet(wallet)
+            if wallets.isEmpty {
+                TransactionSetupPrompt(
+                    icon: "wallet.pass",
+                    tint: .accentColor,
+                    title: "transaction.setup.wallet.title".localized,
+                    message: "transaction.setup.wallet.message".localized,
+                    actionTitle: "wallet.add".localized
+                ) {
+                    endNoteEditing()
+                    showAddWallet = true
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(frequentWallets) { wallet in
+                            WalletChip(
+                                wallet: wallet,
+                                isSelected: viewModel.selectedWallet?.id == wallet.id
+                            ) {
+                                selectWallet(wallet)
+                            }
+                        }
+
+                        if wallets.count > maxQuickWallets {
+                            moreChip { showAllWallets = true }
                         }
                     }
-
-                    if wallets.count > maxQuickWallets {
-                        moreChip { showAllWallets = true }
-                    }
+                    .padding(.horizontal, 2)
                 }
-                .padding(.horizontal, 2)
             }
         }
+    }
+
+    /// Auto-selects the wallet the user just created so a first-time entry can be
+    /// saved immediately. Only acts when nothing is selected yet.
+    private func autoSelectNewWalletIfNeeded() {
+        guard viewModel.selectedWallet == nil, let wallet = wallets.first else { return }
+        selectWallet(wallet)
+        recomputeSuggestions()
+    }
+
+    /// Auto-selects a freshly created category (for the current type) after the
+    /// inline "Add Category" prompt.
+    private func autoSelectNewCategoryIfNeeded() {
+        guard viewModel.selectedCategory == nil, let category = filteredCategories.first else { return }
+        viewModel.selectedCategory = category
     }
 
     private var destinationSection: some View {
@@ -562,10 +602,18 @@ struct CompactAddTransactionView: View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel(L10n.Category.title)
             if filteredCategories.isEmpty {
-                Text("transaction.noCategoriesForType".localized(with: viewModel.type.title))
-                    .font(.app(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
+                TransactionSetupPrompt(
+                    icon: "square.grid.2x2",
+                    tint: .accentColor,
+                    title: "transaction.setup.category.title".localized,
+                    message: "transaction.setup.category.message".localized,
+                    actionTitle: "category.add".localized
+                ) {
+                    endNoteEditing()
+                    showAddCategory = true
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                     ForEach(frequentCategories) { scored in

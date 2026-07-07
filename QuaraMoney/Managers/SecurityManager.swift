@@ -8,6 +8,9 @@ class SecurityManager: ObservableObject {
     
     @Published var isAppLocked = false
     @Published var isAuthenticating = false
+    /// Set when authentication cannot run at all (e.g. the device passcode was
+    /// removed). Shown on the lock screen; the app stays locked (fail closed).
+    @Published var lockErrorMessage: String?
     @AppStorage("isAppLockEnabled") var isAppLockEnabled = false
     
     private init() {}
@@ -22,7 +25,8 @@ class SecurityManager: ObservableObject {
 
         if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
             isAuthenticating = true
-            
+            lockErrorMessage = nil
+
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock QuaraMoney") { success, authenticationError in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -33,8 +37,10 @@ class SecurityManager: ObservableObject {
                 }
             }
         } else {
-            // No biometrics/passcode available
-            isAppLocked = false 
+            // No passcode/biometrics available. Fail closed: this is a finance
+            // app, so the lock must not silently open. The user can regain
+            // access by setting a device passcode (App Lock stays enforced).
+            lockErrorMessage = "security.lockUnavailable".localized
         }
     }
     
@@ -51,17 +57,22 @@ class SecurityManager: ObservableObject {
     
     func saveAPIKey(_ key: String) -> Bool {
         let data = Data(key.utf8)
-        let query = [
+        let baseQuery = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: apiKeyService,
-            kSecAttrAccount: apiKeyAccount,
-            kSecValueData: data
+            kSecAttrAccount: apiKeyAccount
         ] as [String: Any]
-        
-        // Delete existing item first
-        SecItemDelete(query as CFDictionary)
-        
-        let status = SecItemAdd(query as CFDictionary, nil)
+
+        // Delete existing item first (also clears any item saved under the old
+        // default accessibility class).
+        SecItemDelete(baseQuery as CFDictionary)
+
+        var addQuery = baseQuery
+        addQuery[kSecValueData as String] = data
+        // Readable only while unlocked; never migrates via backup to another device.
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
         return status == errSecSuccess
     }
     

@@ -17,14 +17,19 @@ struct AddCategoryView: View {
         categoryToEdit?.isSystem == true
     }
     
-    init(categoryToEdit: Category? = nil) {
+    /// When creating a new category, seeds the type picker so the category
+    /// matches the transaction being entered (e.g. an Expense entry pre-selects
+    /// the Expense type). Ignored for `.transfer`, which has no categories.
+    init(categoryToEdit: Category? = nil, initialType: TransactionType? = nil) {
         self.categoryToEdit = categoryToEdit
-        
+
         if let category = categoryToEdit {
             _name = State(initialValue: category.name)
             _selectedType = State(initialValue: category.type)
             _selectedIcon = State(initialValue: category.icon)
             _selectedColorHex = State(initialValue: category.colorHex)
+        } else if let initialType, initialType == .income || initialType == .expense {
+            _selectedType = State(initialValue: initialType)
         }
     }
     

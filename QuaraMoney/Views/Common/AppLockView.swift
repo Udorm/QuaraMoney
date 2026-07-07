@@ -4,6 +4,7 @@ import SwiftUI
 /// locked. Blocks all content until the user authenticates.
 struct AppLockView: View {
     let onUnlock: () -> Void
+    @ObservedObject private var securityManager = SecurityManager.shared
 
     var body: some View {
         ZStack {
@@ -33,6 +34,14 @@ struct AppLockView: View {
                 .controlSize(.large)
                 .padding(.horizontal, 40)
                 .padding(.top, 8)
+
+                if let lockError = securityManager.lockErrorMessage {
+                    Text(lockError)
+                        .appFont(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
             }
         }
         .onAppear(perform: onUnlock)

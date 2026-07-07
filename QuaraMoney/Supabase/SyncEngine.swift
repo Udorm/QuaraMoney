@@ -96,13 +96,19 @@ final class SyncEngine: ObservableObject {
     /// Use for foreground / post-sign-in triggers.
     /// No-ops while a first-sign-in conflict awaits user resolution.
     func syncIfOperational(context: ModelContext) async {
+        #if DEBUG
         print("[SyncEngine] syncIfOperational called. isOperational: \(SupabaseFeatureFlags.isOperational)")
+        #endif
         guard SupabaseFeatureFlags.isOperational else {
+            #if DEBUG
             print("[SyncEngine] syncIfOperational skipped: not operational")
+            #endif
             return
         }
         guard conflictState == .none else {
+            #if DEBUG
             print("[SyncEngine] syncIfOperational skipped: conflict resolution pending")
+            #endif
             return
         }
         await syncNow(context: context)
@@ -161,6 +167,14 @@ final class SyncEngine: ObservableObject {
     /// Clears the local cache on sign-out (shared-device privacy). Guarded so it
     /// creates no tombstones (the cloud copy is untouched). Caller must ensure
     /// pending changes were flushed first, so nothing un-synced is lost.
+    ///
+    /// After the wipe the device is unowned again (owner key removed), so we
+    /// re-seed the preset categories immediately — otherwise a signed-out
+    /// local-only user is left with an empty category picker until the next app
+    /// launch re-seeds. Safe against the old duplicate-sync bug: the device is
+    /// unowned (matches a fresh install), and canonical keys + the cloud's
+    /// unique index + `stampAndDedupe` collapse these into the cloud's rows on
+    /// the next sign-in.
     func wipeForSignOut() {
         guard let context = autoSyncContext else { return }
         do {
@@ -171,6 +185,20 @@ final class SyncEngine: ObservableObject {
         }
         lastSyncDate = nil
         UserDefaults.standard.removeObject(forKey: Self.localOwnerKey)
+        // Device is now unowned — restore the preset set (mirrors the fresh-install
+        // seeding in QuaraMoneyApp.setup()) so the local-only user immediately has
+        // categories again instead of waiting for the next launch.
+        do {
+            try CategoryCatalog.seedDefaultsIfEmpty(in: context)
+            for def in CategoryCatalog.all where def.ensureOnLaunch {
+                _ = try CategoryCatalog.fetchOrCreate(key: def.key, in: context)
+            }
+            try context.save()
+        } catch {
+            #if DEBUG
+            print("[SignOut] Failed to re-seed default categories: \(error)")
+            #endif
+        }
         // Profile identity (name/avatar) belongs to the account, not the device.
         ProfileSyncService.shared.clearLocal()
         // Wake view models that cache fetched arrays — @Query views update on
@@ -231,7 +259,9 @@ final class SyncEngine: ObservableObject {
         do {
             cloudHasData = try await cloudHasSyncableData(client, uid)
         } catch {
+            #if DEBUG
             print("[SyncEngine] checkFirstSignInConflict: cloud query failed — will retry: \(error)")
+            #endif
             lastError = "Couldn't verify your account's cloud data. Will retry."
             return .checkFailed
         }
@@ -248,7 +278,9 @@ final class SyncEngine: ObservableObject {
         // sounding modal whose wrong answer ("keep this device") would replace
         // the user's entire cloud history with 20 empty categories.
         if isPristineDefaultDataset(context) {
+            #if DEBUG
             print("[SyncEngine] first sign-in: local data is an untouched default seed — adopting cloud")
+            #endif
             SyncMutationTracker.isApplyingSyncChanges = true
             wipeLocalData(context: context)
             resetSyncState()
@@ -369,7 +401,9 @@ final class SyncEngine: ObservableObject {
             do {
                 try await client.from(table).delete().eq("user_id", value: uid.uuidString).execute()
             } catch {
+                #if DEBUG
                 print("[SyncEngine] resolveKeepLocal: failed to clear cloud table \(table): \(error)")
+                #endif
             }
         }
         SyncDeletionQueue.clear()
@@ -440,12 +474,16 @@ final class SyncEngine: ObservableObject {
               conflictState == .none,
               !isAwaitingInitialConflictCheck,
               autoSyncContext != nil else { return }
+        #if DEBUG
         print("[SyncEngine] handleLocalSave called. Debouncing auto-sync.")
+        #endif
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled, let self, let ctx = self.autoSyncContext else { return }
+            #if DEBUG
             print("[SyncEngine] Debounced auto-sync trigger firing.")
+            #endif
             await self.syncNow(context: ctx)
         }
     }
@@ -462,9 +500,13 @@ final class SyncEngine: ObservableObject {
     }
 
     func syncNow(context: ModelContext) async {
+        #if DEBUG
         print("[SyncEngine] syncNow called. isSyncing: \(isSyncing)")
+        #endif
         guard !isSyncing else {
+            #if DEBUG
             print("[SyncEngine] syncNow ignored: already syncing")
+            #endif
             return
         }
         // Hard stop while the first-sign-in conflict modal is up: nothing may push
@@ -472,16 +514,22 @@ final class SyncEngine: ObservableObject {
         // `.resolving` (not `.pendingUserDecision`) before calling this, so their
         // own sync still runs.
         guard conflictState != .pendingUserDecision, !isAwaitingInitialConflictCheck else {
+            #if DEBUG
             print("[SyncEngine] syncNow blocked: first-sign-in conflict pending/checking")
+            #endif
             return
         }
         guard SupabaseFeatureFlags.isOperational, let client = SupabaseManager.shared.client else {
+            #if DEBUG
             print("[SyncEngine] syncNow failed: not operational")
+            #endif
             lastError = SyncError.notOperational.errorDescription
             return
         }
         guard let uid = client.auth.currentUser?.id else {
+            #if DEBUG
             print("[SyncEngine] syncNow failed: no user")
+            #endif
             lastError = SyncError.noUser.errorDescription
             return
         }
@@ -498,10 +546,14 @@ final class SyncEngine: ObservableObject {
             case .noConflict:
                 break
             case .conflict:
+                #if DEBUG
                 print("[SyncEngine] syncNow blocked: first-sign-in conflict raised")
+                #endif
                 return
             case .checkFailed:
+                #if DEBUG
                 print("[SyncEngine] syncNow blocked: first-sign-in cloud check failed")
+                #endif
                 return
             }
         }
@@ -510,7 +562,9 @@ final class SyncEngine: ObservableObject {
         lastError = nil
         defer {
             isSyncing = false
+            #if DEBUG
             print("[SyncEngine] syncNow finished (isSyncing set to false)")
+            #endif
         }
 
         // NOTE on the sync-write guard: it is NOT held across this whole
@@ -534,7 +588,9 @@ final class SyncEngine: ObservableObject {
             do { try await work() }
             catch {
                 failures.append("\(label): \(error.localizedDescription)")
+                #if DEBUG
                 print("[SyncEngine] step failed — \(label): \(error)")
+                #endif
             }
         }
 
@@ -561,6 +617,20 @@ final class SyncEngine: ObservableObject {
         await runStep("dedupe categories") {
             try self.withSyncWriteGuard {
                 try CategoryCatalog.dedupeCanonicalCategories(in: context, owner: uid)
+                try context.save()
+            }
+        }
+        // A freshly-adopted account whose cloud has no categories (brand-new
+        // sign-up, or an account-switch wipe via reconcileAccountIfNeeded) would
+        // otherwise be left with an empty category picker. Seed the presets once —
+        // after the pull, so an account that DID have cloud categories already has
+        // them and `seedDefaultsIfEmpty`'s count==0 guard makes this a no-op.
+        // Gated to the initial sync so an established store (where the user may
+        // have intentionally deleted categories) is never re-seeded. Not under the
+        // sync-write guard: these are this device's new rows and must push up.
+        if !hasCompletedInitialSync {
+            await runStep("seed default categories") {
+                try CategoryCatalog.seedDefaultsIfEmpty(in: context)
                 try context.save()
             }
         }
@@ -818,7 +888,9 @@ final class SyncEngine: ObservableObject {
 
             try context.save()
             if dropped > 0 || adopted > 0 {
+                #if DEBUG
                 print("[SyncEngine] purged \(dropped) foreign rows, adopted \(adopted) (previous-account leftovers)")
+                #endif
             }
             UserDefaults.standard.set(true, forKey: Self.foreignPurgeKey(uid))
         }
@@ -1965,7 +2037,9 @@ final class SyncEngine: ObservableObject {
             }
             SyncImageDownloadQueue.remove(entry)
         } catch {
+            #if DEBUG
             print("[SyncEngine] image download failed (\(kind.rawValue) \(id)) — queued for retry: \(error)")
+            #endif
             SyncImageDownloadQueue.enqueue(entry)
         }
     }

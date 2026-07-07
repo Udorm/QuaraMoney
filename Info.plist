@@ -13,6 +13,8 @@
 			</array>
 		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>QuaraMoney uses Face ID to unlock the app and protect your financial data.</string>
 	<key>UIAppFonts</key>

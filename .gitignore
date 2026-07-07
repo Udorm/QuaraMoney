@@ -24,3 +24,6 @@ test_*.swift
 supabase/secrets.local.xcconfig
 # Generated from the xcconfig above; holds the anon key, so never committed
 QuaraMoney/Supabase/SupabaseSecrets.swift
+
+# Scratch/sample data — never commit financial data, even samples
+transactions.csv

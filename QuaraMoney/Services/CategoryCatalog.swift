@@ -105,6 +105,20 @@ nonisolated enum CategoryCatalog {
         all.first { $0.key == key }
     }
 
+    /// The category's display name in the store's current UI language. App-defined
+    /// categories (those carrying a `canonicalKey`) re-localize live, so a device
+    /// switching language immediately sees built-in category names update;
+    /// user-created categories fall back to their stored `name`. The stored `name`
+    /// stays the raw seed/user string (used for search, export and sync); this is
+    /// the presentation value — read it via `Category.displayName` everywhere UI
+    /// shows a category name.
+    static func localizedName(for category: Category) -> String {
+        guard let key = category.canonicalKey, let def = definition(forKey: key) else {
+            return category.name
+        }
+        return currentLocalizedName(for: def)
+    }
+
     // MARK: - Localized-name matching (for pre-key rows)
 
     /// Languages the app ships. Matching consults every one of them so a category

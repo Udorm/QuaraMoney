@@ -203,7 +203,7 @@ struct ProAnalyticsProcessor {
 
             if let cat = txn.category {
                 let prev = categoryAgg[cat.id]?.amount ?? 0
-                categoryAgg[cat.id] = (prev + amount, cat.name, cat.icon, cat.colorHex)
+                categoryAgg[cat.id] = (prev + amount, cat.displayName, cat.icon, cat.colorHex)
             }
 
             if let loc = txn.location {
@@ -231,7 +231,7 @@ struct ProAnalyticsProcessor {
                 date: txn.date,
                 amount: amount,
                 note: txn.note,
-                categoryName: txn.category?.name,
+                categoryName: txn.category?.displayName,
                 categoryIcon: txn.category?.icon,
                 categoryColorHex: txn.category?.colorHex
             ))
@@ -255,7 +255,7 @@ struct ProAnalyticsProcessor {
 
             if txn.type == selectedType, let cat = txn.category {
                 let prev = prevCategoryAgg[cat.id]?.amount ?? 0
-                prevCategoryAgg[cat.id] = (prev + amount, cat.name, cat.icon, cat.colorHex)
+                prevCategoryAgg[cat.id] = (prev + amount, cat.displayName, cat.icon, cat.colorHex)
             }
         }
 

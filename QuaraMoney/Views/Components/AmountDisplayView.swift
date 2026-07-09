@@ -162,7 +162,7 @@ struct AmountDisplayView: View {
 /// Compact, chip-sized currency toggle. USD / KHR are quick-select segments;
 /// the trailing segment opens the full picker and shows the active exotic
 /// currency code when one is selected.
-private struct CurrencySegmentedPicker: View {
+struct CurrencySegmentedPicker: View {
     @Binding var currencyCode: String
     @State private var showCurrencyPicker = false
 

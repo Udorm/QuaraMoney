@@ -41,6 +41,8 @@ struct TransactionFilterConfig: Sendable, Equatable {
 
         let startFormatter = DateFormatter()
         let endFormatter = DateFormatter()
+        startFormatter.locale = LanguageManager.shared.selectedLanguage.locale
+        endFormatter.locale = LanguageManager.shared.selectedLanguage.locale
 
         if sameMonth {
             startFormatter.dateFormat = "MMM d"

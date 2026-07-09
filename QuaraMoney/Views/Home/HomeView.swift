@@ -306,7 +306,7 @@ struct DailyHeader: View {
 
     var body: some View {
         HStack {
-            Text(section.date.formatted(date: .long, time: .omitted))
+            Text(section.date.appFormatted(date: .long, time: .omitted))
                 .font(.app(.headline))
             Spacer()
             Text(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
@@ -325,7 +325,7 @@ struct DailyHeader: View {
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
                 .padding(-13)
-                .accessibilityLabel("Add transaction on \(section.date.formatted(date: .long, time: .omitted))")
+                .accessibilityLabel("Add transaction on \(section.date.appFormatted(date: .long, time: .omitted))")
             }
         }
         .padding(.vertical, 4)

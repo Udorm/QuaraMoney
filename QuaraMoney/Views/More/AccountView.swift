@@ -47,6 +47,7 @@ struct AccountView: View {
             ? Date(timeIntervalSince1970: installDateTimestamp)
             : Date()
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter.string(from: date)
@@ -428,7 +429,7 @@ struct AccountView: View {
         if let error = sync.lastError { return error }
         if sync.isSyncing { return "Updating your data" }
         if let last = sync.lastSyncDate {
-            return "Last synced \(last.formatted(.relative(presentation: .named)))"
+            return "Last synced \(last.formatted(.relative(presentation: .named).locale(.app)))"
         }
         return "Tap sync to upload your data"
     }

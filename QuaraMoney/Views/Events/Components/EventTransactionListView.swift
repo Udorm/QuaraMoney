@@ -101,7 +101,7 @@ private struct EventDailySectionHeader: View {
     
     var body: some View {
         HStack {
-            Text(date, style: .date)
+            Text(date.appFormatted(date: .abbreviated))
                 .font(.app(.headline))
                 .textCase(nil) // Ensure natural casing
             Spacer()

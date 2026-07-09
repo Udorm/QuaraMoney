@@ -186,7 +186,7 @@ struct DailySectionHeader: View {
     
     var body: some View {
         HStack {
-            Text(section.date, style: .date)
+            Text(section.date.appFormatted(date: .abbreviated))
                 .font(.app(.headline))
             Spacer()
             Text(section.dailyTotal.formattedAmount(for: currencyCode))

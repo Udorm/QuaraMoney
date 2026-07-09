@@ -19,7 +19,8 @@ struct MultiCategoryPicker: View {
         }
         
         return expenseCategories.filter { category in
-            category.name.localizedCaseInsensitiveContains(searchText)
+            category.displayName.localizedCaseInsensitiveContains(searchText)
+                || category.name.localizedCaseInsensitiveContains(searchText)
         }
     }
     
@@ -31,7 +32,7 @@ struct MultiCategoryPicker: View {
                 } else {
                     ForEach(filteredCategories) { category in
                         SelectableRow(
-                            title: category.name,
+                            title: category.displayName,
                             icon: category.icon,
                             iconColor: Color(hex: category.colorHex) ?? .gray,
                             isSelected: selectedCategories.contains(category.id),

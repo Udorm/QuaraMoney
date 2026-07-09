@@ -497,7 +497,7 @@ struct OverspendingCategoriesCard: View {
                         .frame(width: 30)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.category.name)
+                        Text(item.category.displayName)
                             .font(.app(.subheadline))
                         Text("Over budget \(item.percentage) of the time")
                             .font(.app(.caption))
@@ -594,7 +594,7 @@ struct BudgetTipsCard: View {
             let topCategory = overspendingCategories[0]
             tips.append(BudgetTip(
                 icon: "exclamationmark.circle.fill",
-                title: String(format: "budget.tip.review".localized, topCategory.category.name),
+                title: String(format: "budget.tip.review".localized, topCategory.category.displayName),
                 description: String(format: "budget.tip.reviewDesc".localized, topCategory.percentage)
             ))
         }

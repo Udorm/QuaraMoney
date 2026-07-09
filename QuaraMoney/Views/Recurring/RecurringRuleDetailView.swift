@@ -203,7 +203,7 @@ private struct RecurringHeroCard: View {
         } else if cal.isDateInToday(rule.nextDueDate) {
             return (L10n.Recurring.dueToday, .white)
         }
-        return (rule.nextDueDate.formatted(date: .abbreviated, time: .omitted), .white.opacity(0.9))
+        return (rule.nextDueDate.appFormatted(date: .abbreviated, time: .omitted), .white.opacity(0.9))
     }
 
     var body: some View {
@@ -314,7 +314,7 @@ private struct RecurringHeroCard: View {
                 icon: "calendar",
                 iconTint: .orange,
                 label: "recurring.startedOn".localized,
-                value: rule.startDate.formatted(date: .abbreviated, time: .omitted)
+                value: rule.startDate.appFormatted(date: .abbreviated, time: .omitted)
             )
             if let end = rule.endDate {
                 separator
@@ -322,7 +322,7 @@ private struct RecurringHeroCard: View {
                     icon: "calendar.badge.exclamationmark",
                     iconTint: .pink,
                     label: "recurring.ends".localized,
-                    value: end.formatted(date: .abbreviated, time: .omitted)
+                    value: end.appFormatted(date: .abbreviated, time: .omitted)
                 )
             }
         }

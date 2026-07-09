@@ -49,6 +49,7 @@ class WalletDetailViewModel {
     var filterDescription: String {
         let calendar = Calendar.current
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
 
         switch selectedTab {
         case .month(let date):

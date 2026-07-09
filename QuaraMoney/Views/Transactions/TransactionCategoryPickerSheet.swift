@@ -32,7 +32,10 @@ struct TransactionCategoryPickerSheet: View {
 
     private var displayCategories: [Category] {
         guard !searchText.isEmpty else { return allCategories }
-        return allCategories.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        return allCategories.filter {
+            $0.displayName.localizedCaseInsensitiveContains(searchText)
+                || $0.name.localizedCaseInsensitiveContains(searchText)
+        }
     }
 
     private var showSuggestions: Bool {
@@ -196,7 +199,7 @@ private struct CategoryColorRow: View {
                     .background(color)
                     .clipShape(Circle())
 
-                Text(category.name)
+                Text(category.displayName)
                     .font(.app(.body))
                     .foregroundStyle(.primary)
 

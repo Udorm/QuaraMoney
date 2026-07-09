@@ -25,7 +25,7 @@ struct SavingsGoalDetailView: View {
                                 .font(.app(.title2, weight: .bold))
 
                             if let targetDate = goal.targetDate {
-                                Text(targetDate.formatted(date: .abbreviated, time: .omitted))
+                                Text(targetDate.appFormatted(date: .abbreviated, time: .omitted))
                                     .font(.app(.subheadline))
                                     .foregroundStyle(.secondary)
                             }

@@ -74,6 +74,7 @@ enum FilterPeriod: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .custom:
             let formatter = DateFormatter()
+            formatter.locale = LanguageManager.shared.selectedLanguage.locale
             formatter.dateStyle = .medium
             let start = customStart ?? Date()
             let end = customEnd ?? Date()
@@ -225,21 +226,21 @@ enum AnalysisPeriod: String, CaseIterable, Identifiable, Sendable {
         
         switch self {
         case .day:
-            return range.start.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+            return range.start.formatted(.dateTime.weekday(.wide).day().month(.wide).year().locale(.app))
         case .week:
             let weekEnd = calendar.date(byAdding: .day, value: -1, to: range.end) ?? range.end
-            return "\(range.start.formatted(.dateTime.month(.abbreviated).day())) - \(weekEnd.formatted(.dateTime.month(.abbreviated).day().year()))"
+            return "\(range.start.formatted(.dateTime.month(.abbreviated).day().locale(.app))) - \(weekEnd.formatted(.dateTime.month(.abbreviated).day().year().locale(.app)))"
         case .month:
-            return range.start.formatted(.dateTime.month(.wide).year())
+            return range.start.formatted(.dateTime.month(.wide).year().locale(.app))
         case .sixMonths:
             let rangeEnd = calendar.date(byAdding: .day, value: -1, to: range.end) ?? range.end
-            return "\(range.start.formatted(.dateTime.month(.abbreviated).year())) - \(rangeEnd.formatted(.dateTime.month(.abbreviated).year()))"
+            return "\(range.start.formatted(.dateTime.month(.abbreviated).year().locale(.app))) - \(rangeEnd.formatted(.dateTime.month(.abbreviated).year().locale(.app)))"
         case .year:
-            return range.start.formatted(.dateTime.year())
+            return range.start.formatted(.dateTime.year().locale(.app))
         case .lastYear:
-             return range.start.formatted(.dateTime.year())
+             return range.start.formatted(.dateTime.year().locale(.app))
         case .custom:
-            return "\((customStart ?? Date()).formatted(date: .abbreviated, time: .omitted)) - \((customEnd ?? Date()).formatted(date: .abbreviated, time: .omitted))"
+            return "\((customStart ?? Date()).appFormatted(date: .abbreviated, time: .omitted)) - \((customEnd ?? Date()).appFormatted(date: .abbreviated, time: .omitted))"
         }
     }
     

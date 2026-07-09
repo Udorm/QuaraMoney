@@ -122,7 +122,8 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
     /// Format the period for display
     func formatPeriod(startDate: Date, endDate: Date? = nil) -> String {
         let formatter = DateFormatter()
-        
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
+
         switch self {
         case .weekly:
             formatter.dateFormat = "MMM d"

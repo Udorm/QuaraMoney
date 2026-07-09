@@ -83,7 +83,7 @@ struct TransactionRowView: View {
             }
             return transaction.categoryName ?? "transaction.uncategorized".localized
         case .wallet(let transaction, _):
-            return transaction.category?.name
+            return transaction.category?.displayName
             ?? (transaction.type == .transfer
                 ? "transaction.type.transfer".localized
                 : (transaction.type == .adjustment ? "transaction.balanceAdjustment".localized : (transaction.note ?? "transaction.uncategorized".localized)))
@@ -126,9 +126,9 @@ struct TransactionRowView: View {
     private var timeText: String {
         switch source {
         case .event(let transaction, _, _, _):
-            return transaction.date.formatted(date: .omitted, time: .shortened)
+            return transaction.date.appFormatted(date: .omitted, time: .shortened)
         case .wallet(let transaction, _):
-            return transaction.date.formatted(date: .omitted, time: .shortened)
+            return transaction.date.appFormatted(date: .omitted, time: .shortened)
         }
     }
     

@@ -48,13 +48,13 @@ struct CategoryGridItem: View {
                 }
                 .frame(width: 46, height: 46)
 
-                Text(category.name)
+                Text(category.displayName)
                     .font(.app(.caption2, weight: isSelected ? .bold : .regular))
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? categoryColor : .secondary)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isHighlighted ? "\(category.name), suggested" : category.name)
+        .accessibilityLabel(isHighlighted ? "\(category.displayName), suggested" : category.displayName)
     }
 }

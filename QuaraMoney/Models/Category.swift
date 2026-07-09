@@ -45,3 +45,14 @@ final class Category {
         self.canonicalKey = canonicalKey
     }
 }
+
+extension Category {
+    /// Live, current-language display name for a category (see
+    /// `CategoryCatalog.localizedName(for:)`). App-defined categories re-localize
+    /// on language switch via their `canonicalKey`; user-created ones fall back to
+    /// the stored `name`. Use this for ALL UI; the stored `name` remains the raw
+    /// seed/user string used for search, export and sync.
+    var displayName: String {
+        CategoryCatalog.localizedName(for: self)
+    }
+}

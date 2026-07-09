@@ -131,7 +131,7 @@ struct RecurringRuleEditorView: View {
                     Picker(L10n.Category.select, selection: $selectedCategory) {
                         Text(L10n.Category.select).tag(nil as Category?)
                         ForEach(typedCategories) { category in
-                            Label(category.name, systemImage: category.icon)
+                            Label(category.displayName, systemImage: category.icon)
                                 .tag(category as Category?)
                         }
                     }

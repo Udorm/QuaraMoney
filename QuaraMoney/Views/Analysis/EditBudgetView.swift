@@ -143,7 +143,7 @@ struct EditBudgetView: View {
                                     Image(systemName: category.icon)
                                         .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
                                         .frame(width: 24)
-                                    Text(category.name)
+                                    Text(category.displayName)
                                     Spacer()
                                 }
                             }
@@ -235,7 +235,7 @@ struct EditBudgetView: View {
                         HStack {
                             Text(L10n.Budget.endDate)
                             Spacer()
-                            Text(periodType.dateRange(from: startDate).end.formatted(date: .abbreviated, time: .omitted))
+                            Text(periodType.dateRange(from: startDate).end.appFormatted(date: .abbreviated, time: .omitted))
                                 .foregroundStyle(.secondary)
                         }
                     }

@@ -215,7 +215,7 @@ struct ProDashboardFilterSheet: View {
                 }
                 ForEach(typedCategories) { category in
                     MultiSelectRow(
-                        title: category.name,
+                        title: category.displayName,
                         icon: category.icon.isEmpty ? "tag" : category.icon,
                         iconColor: Color(hex: category.colorHex) ?? .blue,
                         isSelected: pendingFilter.categoryIds.contains(category.id)

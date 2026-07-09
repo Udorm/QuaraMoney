@@ -866,8 +866,8 @@ struct ProBudgetsCard: View {
 
     private func periodDescription(_ status: ProAnalyticsProcessor.BudgetStatus) -> String {
         let displayEnd = Calendar.current.date(byAdding: .day, value: -1, to: status.periodEnd) ?? status.periodEnd
-        let start = status.periodStart.formatted(date: .abbreviated, time: .omitted)
-        let end = displayEnd.formatted(date: .abbreviated, time: .omitted)
+        let start = status.periodStart.appFormatted(date: .abbreviated, time: .omitted)
+        let end = displayEnd.appFormatted(date: .abbreviated, time: .omitted)
         return "\(start) – \(end)"
     }
 }
@@ -930,7 +930,7 @@ struct ProLargestCard: View {
                     Text(displayName(txn))
                         .appFont(.subheadline, weight: .medium)
                         .lineLimit(1)
-                    Text(txn.date, format: .dateTime.month(.abbreviated).day())
+                    Text(txn.date.formatted(.dateTime.month(.abbreviated).day().locale(.app)))
                         .appFont(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -1179,7 +1179,7 @@ struct ProLargestSummaryCard: View {
             if let note = top.note, !note.trimmingCharacters(in: .whitespaces).isEmpty { return note }
             return top.categoryName ?? "analysis.pro.uncategorized".localized
         }()
-        return "\(name) · \(top.date.formatted(.dateTime.month(.abbreviated).day()))"
+        return "\(name) · \(top.date.formatted(.dateTime.month(.abbreviated).day().locale(.app)))"
     }
 
     var body: some View {
@@ -1281,7 +1281,7 @@ struct ProHeatmapSummaryCard: View {
 
     private var headline: String {
         guard let busiest else { return "—" }
-        let day = busiest.date.formatted(.dateTime.month(.abbreviated).day())
+        let day = busiest.date.formatted(.dateTime.month(.abbreviated).day().locale(.app))
         return "\(day) · \(busiest.amount.formattedAmountShort(for: vm.preferredCurrency))"
     }
 
@@ -1616,12 +1616,12 @@ struct ProHeatmapCard: View {
             NavigationStack {
                 FilteredTransactionsDetailView(
                     config: TransactionFilterConfig(
-                        title: day.date.formatted(date: .abbreviated, time: .omitted),
+                        title: day.date.appFormatted(date: .abbreviated, time: .omitted),
                         startDate: day.date,
                         endDate: Calendar.current.date(byAdding: .day, value: 1, to: day.date) ?? day.date,
                         walletId: vm.singleSelectedWalletId,
                         transactionType: vm.selectedTransactionType,
-                        dateRangeDescription: day.date.formatted(date: .complete, time: .omitted),
+                        dateRangeDescription: day.date.appFormatted(date: .complete, time: .omitted),
                         defaultSortOption: .highestAmount
                     )
                 )

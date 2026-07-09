@@ -39,11 +39,11 @@ struct BudgetListView: View {
                 if let name = budget.name, name.localizedCaseInsensitiveContains(searchText) {
                     return true
                 }
-                if let category = budget.category, category.name.localizedCaseInsensitiveContains(searchText) {
+                if let category = budget.category, category.displayName.localizedCaseInsensitiveContains(searchText) {
                     return true
                 }
                 if let categories = budget.categories {
-                    if categories.contains(where: { $0.name.localizedCaseInsensitiveContains(searchText) }) {
+                    if categories.contains(where: { $0.displayName.localizedCaseInsensitiveContains(searchText) }) {
                         return true
                     }
                 }

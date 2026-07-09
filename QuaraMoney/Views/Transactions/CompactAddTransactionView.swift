@@ -29,6 +29,8 @@ struct CompactAddTransactionView: View {
     @State private var showDatePopover = false
     @State private var showTimePopover = false
     @State private var isFetchingCurrentLocation = false
+    @State private var relativeDayOffset: Int = 0
+    private let referenceDate = Calendar.current.startOfDay(for: Date())
     // Inline creation of a first wallet/category when the user has none.
     @State private var showAddWallet = false
     @State private var showAddCategory = false
@@ -73,7 +75,7 @@ struct CompactAddTransactionView: View {
     private var frequentCategories: [ScoredCategory] {
         let sorted = orderedCategories
         let count = filteredCategories.count
-        let limit = count > 4 ? 3 : 4 // 3 + More on one strict row
+        let limit = count > 4 ? 3 : 4
 
         var items = Array(sorted.prefix(limit))
         if let selected = viewModel.selectedCategory, !items.contains(where: { $0.category.id == selected.id }) {
@@ -231,20 +233,18 @@ struct CompactAddTransactionView: View {
 
     var body: some View {
         NavigationStack {
-            // Bounces only when it doesn't fit (e.g. accessibility text sizes);
-            // at standard sizes the whole form sits above the keypad statically.
-            ScrollView {
+            VStack(spacing: 0) {
                 formContent
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 12)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.never)
-            .background(Color(.systemGroupedBackground))
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+                
+                Spacer()
+                
                 bottomBar
             }
+            .background(Color(.systemGroupedBackground))
+            .ignoresSafeArea(.container, edges: .bottom)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -259,7 +259,6 @@ struct CompactAddTransactionView: View {
                     .accessibilityLabel(L10n.Common.cancel)
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
-                    overflowMenu
                     Button {
                         if viewModel.saveTransaction() {
                             dismiss()
@@ -333,15 +332,46 @@ struct CompactAddTransactionView: View {
                 }
                 if isNewTransaction {
                     startBackgroundLocationFetch()
+                    if let topCategory = orderedCategories.first?.category {
+                        viewModel.selectedCategory = topCategory
+                    }
+                }
+                relativeDayOffset = daysBetween(referenceDate, viewModel.date)
+            }
+            .onChange(of: viewModel.type) { _, _ in
+                recomputeSuggestions()
+                if isNewTransaction {
+                    if let topCategory = orderedCategories.first?.category {
+                        viewModel.selectedCategory = topCategory
+                    } else {
+                        viewModel.selectedCategory = nil
+                    }
                 }
             }
-            .onChange(of: viewModel.type) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedWallet) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedCategory) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedLocation) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedCurrencyCode) { _, _ in
                 if viewModel.type != .transfer {
                     viewModel.updateTransactionCurrencyExchangeRate()
+                }
+            }
+            .onChange(of: relativeDayOffset) { _, newOffset in
+                if let newDate = Calendar.current.date(byAdding: .day, value: newOffset, to: referenceDate) {
+                    let calendar = Calendar.current
+                    let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: viewModel.date)
+                    if let combinedDate = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: timeComponents.second ?? 0, of: newDate) {
+                        if calendar.startOfDay(for: viewModel.date) != calendar.startOfDay(for: combinedDate) {
+                            viewModel.date = combinedDate
+                            HapticManager.shared.selection()
+                        }
+                    }
+                }
+            }
+            .onChange(of: viewModel.date) { _, newDate in
+                let offset = daysBetween(referenceDate, newDate)
+                if relativeDayOffset != offset {
+                    relativeDayOffset = offset
                 }
             }
             .onChange(of: viewModel.destinationWallet) { _, newDest in
@@ -380,7 +410,9 @@ struct CompactAddTransactionView: View {
                 categorySection
             }
 
-            detailChipRow
+            detailChipRows
+
+
         }
     }
 
@@ -404,27 +436,126 @@ struct CompactAddTransactionView: View {
         return "1 \(viewModel.selectedCurrencyCode) ≈ \(rateString) \(wallet.currencyCode)"
     }
 
+    private var amountDisplayText: String {
+        if !isNoteBarVisible && !viewModel.expression.isEmpty {
+            return formatExpressionForDisplay(viewModel.expression)
+        } else if viewModel.evaluatedAmount > 0 {
+            return formatAmount(viewModel.evaluatedAmount)
+        } else {
+            return "0"
+        }
+    }
+    
+    private var amountHasOperators: Bool {
+        let operators = CharacterSet(charactersIn: "+-×÷")
+        return viewModel.expression.rangeOfCharacter(from: operators) != nil
+    }
+    
+    private func formatExpressionForDisplay(_ expr: String) -> String {
+        var result = ""
+        var currentNumber = ""
+        for char in expr {
+            if char.isNumber || char == "." {
+                currentNumber.append(char)
+            } else if "+-×÷".contains(char) {
+                if !currentNumber.isEmpty {
+                    result += formatNumberString(currentNumber)
+                    currentNumber = ""
+                }
+                result.append(char)
+            }
+        }
+        if !currentNumber.isEmpty {
+            result += formatNumberString(currentNumber)
+        }
+        return result
+    }
+    
+    private func formatNumberString(_ numStr: String) -> String {
+        let parts = numStr.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let intPart = parts.first else { return numStr }
+        let reversed = String(intPart.reversed())
+        var formatted = ""
+        for (index, char) in reversed.enumerated() {
+            if index > 0 && index % 3 == 0 {
+                formatted.append(",")
+            }
+            formatted.append(char)
+        }
+        let intFormatted = String(formatted.reversed())
+        if parts.count > 1 {
+            return "\(intFormatted).\(parts[1])"
+        } else if numStr.hasSuffix(".") {
+            return "\(intFormatted)."
+        }
+        return intFormatted
+    }
+    
+    private func formatAmount(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.usesGroupingSeparator = true
+        formatter.groupingSeparator = ","
+        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
+        return formatter.string(from: NSNumber(value: doubleValue)) ?? "0"
+    }
+
     private var amountCard: some View {
         VStack(spacing: 0) {
-            AmountDisplayView(
-                amount: viewModel.evaluatedAmount,
-                currencyCode: $viewModel.selectedCurrencyCode,
-                expression: viewModel.expression,
-                isEditing: !isNoteBarVisible,
-                onTap: {
-                    // Tapping the amount hands input back to the keypad.
+            HStack(alignment: .center, spacing: 12) {
+                // Currency selector inline on the left
+                CurrencySegmentedPicker(currencyCode: $viewModel.selectedCurrencyCode)
+                    .padding(.leading, 8)
+                
+                Spacer()
+                
+                // Amount input in the middle at the right
+                HStack(alignment: .center, spacing: 4) {
+                    Text(amountDisplayText)
+                        .font(.app(size: 44, weight: .bold))
+                        .minimumScaleFactor(0.4)
+                        .lineLimit(1)
+                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.1), value: amountDisplayText)
+                    
+                    if !isNoteBarVisible {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(width: 2, height: 34)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
                     endNoteEditing()
                 }
-            )
+                .padding(.trailing, 8)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            
             if let exchangeRateStr = exchangeRateString {
                 Label(exchangeRateStr, systemImage: "lock.fill")
                     .font(.app(.footnote))
                     .foregroundStyle(.secondary)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 6)
+            }
+            
+            if amountHasOperators && viewModel.evaluatedAmount > 0 {
+                HStack {
+                    Spacer()
+                    Text("= \(formatAmount(viewModel.evaluatedAmount))")
+                        .font(.app(.callout))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
             }
         }
         .frame(maxWidth: .infinity)
-        .background(amountBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(amountBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Type selector
@@ -615,41 +746,23 @@ struct CompactAddTransactionView: View {
                 .padding(12)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                    ForEach(frequentCategories) { scored in
-                        CategoryGridItem(
-                            category: scored.category,
-                            isSelected: viewModel.selectedCategory?.id == scored.category.id,
-                            isHighlighted: scored.isHighlighted
-                        ) {
-                            viewModel.selectedCategory = scored.category
-                        }
-                    }
-
-                    if filteredCategories.count > 4 {
-                        Button {
-                            showAllCategories = true
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "ellipsis")
-                                    .font(.app(.title3))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(.tertiarySystemGroupedBackground))
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                                    )
-                                    .frame(width: 46, height: 46)
-
-                                Text("common.more".localized)
-                                    .font(.app(.caption2))
-                                    .foregroundStyle(.secondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(frequentCategories) { scored in
+                            CategoryChip(
+                                category: scored.category,
+                                isSelected: viewModel.selectedCategory?.id == scored.category.id,
+                                isHighlighted: scored.isHighlighted
+                            ) {
+                                viewModel.selectedCategory = scored.category
                             }
                         }
-                        .buttonStyle(.plain)
+                        
+                        if filteredCategories.count > 4 {
+                            moreChip { showAllCategories = true }
+                        }
                     }
+                    .padding(.horizontal, 2)
                 }
             }
         }
@@ -657,22 +770,15 @@ struct CompactAddTransactionView: View {
 
     // MARK: - Detail chips (date · time · note · location · goal)
 
-    private var detailChipRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                dateChip
-                timeChip
-                noteChip
-                locationChip
-                if viewModel.type == .transfer {
-                    savingsGoalChip
-                }
-                if viewModel.excludeFromReports {
-                    excludedChip
-                }
+    private var detailChipRows: some View {
+        FlowLayout(spacing: 8) {
+            dateChip
+            timeChip
+            noteChip
+            locationChip
+            if viewModel.type == .transfer {
+                savingsGoalChip
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 2)
         }
     }
 
@@ -704,34 +810,109 @@ struct CompactAddTransactionView: View {
         .contentShape(Capsule())
     }
 
-    private var dateLabel: String {
+    private func daysBetween(_ start: Date, _ end: Date) -> Int {
+        let calendar = Calendar.current
+        let startOfStart = calendar.startOfDay(for: start)
+        let startOfEnd = calendar.startOfDay(for: end)
+        let components = calendar.dateComponents([.day], from: startOfStart, to: startOfEnd)
+        return components.day ?? 0
+    }
+
+    private func dateLabel(forOffset offset: Int) -> String {
+        guard let targetDate = Calendar.current.date(byAdding: .day, value: offset, to: referenceDate) else { return "" }
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        formatter.doesRelativeDateFormatting = true // "Today" / "Yesterday", localized
-        return formatter.string(from: viewModel.date)
+        formatter.doesRelativeDateFormatting = true
+        return formatter.string(from: targetDate)
+    }
+
+    private var dateTextWidth: CGFloat {
+        let label = dateLabel(forOffset: relativeDayOffset)
+        return max(70, CGFloat(label.count) * 8.5 + 10)
+    }
+
+    private func adjustDate(by days: Int) {
+        let newOffset = relativeDayOffset + days
+        if (-365...365).contains(newOffset) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                relativeDayOffset = newOffset
+            }
+        }
     }
 
     private var dateChip: some View {
-        Button {
-            endNoteEditing()
-            showDatePopover = true
-        } label: {
-            detailChip(icon: "calendar", iconColor: .red, text: dateLabel, isSet: true)
+        HStack(spacing: 0) {
+            Button {
+                adjustDate(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.app(.footnote, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 8)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                    .font(.app(.footnote, weight: .semibold))
+                    .foregroundStyle(.red)
+                
+                TabView(selection: $relativeDayOffset) {
+                    ForEach(-365...365, id: \.self) { offset in
+                        Text(dateLabel(forOffset: offset))
+                            .font(.app(.subheadline, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .tag(offset)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(width: dateTextWidth, height: 24)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: dateTextWidth)
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                endNoteEditing()
+                showDatePopover = true
+            }
+            .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
+                DatePicker(
+                    "transaction.date".localized,
+                    selection: $viewModel.date,
+                    displayedComponents: [.date]
+                )
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .frame(width: 320, height: 340)
+                .padding(8)
+                .presentationCompactAdaptation(.popover)
+            }
+            
+            Button {
+                adjustDate(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.app(.footnote, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 12)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
-            DatePicker(
-                "transaction.date".localized,
-                selection: $viewModel.date,
-                displayedComponents: [.date]
-            )
-            .datePickerStyle(.graphical)
-            .labelsHidden()
-            .frame(width: 320, height: 340)
-            .padding(8)
-            .presentationCompactAdaptation(.popover)
-        }
+        .frame(minHeight: 36)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        )
         .accessibilityLabel("transaction.date".localized)
     }
 
@@ -743,7 +924,7 @@ struct CompactAddTransactionView: View {
             detailChip(
                 icon: "clock",
                 iconColor: .orange,
-                text: viewModel.date.formatted(date: .omitted, time: .shortened),
+                text: viewModel.date.appFormatted(date: .omitted, time: .shortened),
                 isSet: true
             )
         }
@@ -773,60 +954,66 @@ struct CompactAddTransactionView: View {
                 text: viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note,
                 isSet: !viewModel.note.isEmpty
             )
-            .frame(maxWidth: 180, alignment: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.Transaction.note)
     }
 
     private var locationChip: some View {
-        Menu {
-            Button {
-                useCurrentLocationDirectly()
-            } label: {
-                Label("transaction.location.useCurrent".localized, systemImage: "location.fill")
-            }
-            Button {
-                endNoteEditing()
-                showLocationPicker = true
-            } label: {
-                Label("transaction.location.pick".localized, systemImage: "map")
-            }
-            if viewModel.selectedLocation != nil {
-                Button(role: .destructive) {
-                    viewModel.selectedLocation = nil
-                } label: {
-                    Label("transaction.location.clear".localized, systemImage: "xmark.circle")
+        Group {
+            if isFetchingCurrentLocation {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("transaction.location".localized)
+                        .font(.app(.subheadline, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
-            }
-        } label: {
-            Group {
-                if isFetchingCurrentLocation {
-                    HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("transaction.location".localized)
-                            .font(.app(.subheadline, weight: .medium))
-                            .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(minHeight: 36)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+            } else {
+                HStack(spacing: 6) {
+                    Button {
+                        endNoteEditing()
+                        showLocationPicker = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: viewModel.selectedLocation == nil ? "mappin.and.ellipse" : "mappin.circle.fill")
+                                .font(.app(.footnote, weight: .semibold))
+                                .foregroundStyle(.blue)
+                            Text(viewModel.selectedLocation?.title ?? "transaction.location".localized)
+                                .font(.app(.subheadline, weight: .medium))
+                                .foregroundStyle(viewModel.selectedLocation != nil ? .primary : .secondary)
+                                .lineLimit(1)
+                        }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(minHeight: 36)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                } else {
-                    detailChip(
-                        icon: viewModel.selectedLocation == nil ? "mappin.and.ellipse" : "mappin.circle.fill",
-                        iconColor: .blue,
-                        text: viewModel.selectedLocation?.title ?? "transaction.location".localized,
-                        isSet: viewModel.selectedLocation != nil
-                    )
-                    .frame(maxWidth: 180, alignment: .leading)
+                    .buttonStyle(.plain)
+
+                    if viewModel.selectedLocation != nil {
+                        Button {
+                            viewModel.selectedLocation = nil
+                            HapticManager.shared.selection()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                                .font(.app(.footnote))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 2)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(minHeight: 36)
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
             }
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("transaction.location".localized)
     }
 
@@ -861,48 +1048,64 @@ struct CompactAddTransactionView: View {
                 text: viewModel.selectedSavingsGoal?.name ?? L10n.Savings.selectGoal,
                 isSet: viewModel.selectedSavingsGoal != nil
             )
-            .frame(maxWidth: 160, alignment: .leading)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.Savings.selectGoal)
     }
 
-    /// Visible only while "Exclude from Reports" is on (toggled in the ⋯ menu);
-    /// tapping it switches the exclusion back off.
-    private var excludedChip: some View {
-        Button {
-            viewModel.excludeFromReports = false
-            HapticManager.shared.selection()
-        } label: {
-            detailChip(
-                icon: "eye.slash.fill",
-                iconColor: .orange,
-                text: "transaction.excludeFromReports".localized,
-                isSet: true
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("transaction.excludeFromReports".localized)
-    }
 
-    // MARK: - Overflow menu
 
-    private var overflowMenu: some View {
-        Menu {
-            if isNewTransaction {
-                Button {
-                    endNoteEditing()
-                    showScanner = true
-                } label: {
-                    Label("transaction.scanReceipt".localized, systemImage: "doc.text.viewfinder")
+    private var calculatorSuggestionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Location suggestion chip (if location is not set)
+                if viewModel.selectedLocation == nil {
+                    Button {
+                        useCurrentLocationDirectly()
+                    } label: {
+                        HStack(spacing: 4) {
+                            if isFetchingCurrentLocation {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "location.fill")
+                                    .font(.app(.caption2))
+                            }
+                            Text("transaction.location.useCurrent".localized)
+                                .font(.app(.footnote, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.12), in: Capsule())
+                        .foregroundColor(.blue)
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFetchingCurrentLocation)
+                }
+
+                // Tag suggestion chips
+                ForEach(suggestedTagChips) { scored in
+                    Button {
+                        insertTag(scored.tag)
+                    } label: {
+                        Text("#\(scored.tag)")
+                            .font(.app(.footnote, weight: .medium))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("transaction.tag.add".localized(with: scored.tag))
                 }
             }
-            Toggle(isOn: $viewModel.excludeFromReports) {
-                Label("transaction.excludeFromReports".localized, systemImage: "eye.slash")
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
+        .background(Color(.systemGroupedBackground))
+        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: - Bottom bar (keypad ⇄ note bar)
@@ -916,16 +1119,22 @@ struct CompactAddTransactionView: View {
             // The system decimal pad owns the bottom while the rate is edited.
             EmptyView()
         } else {
-            CalculatorKeyboardView(
-                expression: $viewModel.expression,
-                evaluatedAmount: $viewModel.evaluatedAmount,
-                onSave: {
-                    if viewModel.saveTransaction() {
-                        dismiss()
-                    }
-                },
-                isSaveDisabled: !viewModel.isValid
-            )
+            VStack(spacing: 0) {
+                if viewModel.selectedLocation == nil || !suggestedTagChips.isEmpty {
+                    calculatorSuggestionBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                CalculatorKeyboardView(
+                    expression: $viewModel.expression,
+                    evaluatedAmount: $viewModel.evaluatedAmount,
+                    onSave: {
+                        if viewModel.saveTransaction() {
+                            dismiss()
+                        }
+                    },
+                    isSaveDisabled: !viewModel.isValid
+                )
+            }
             .transition(.move(edge: .bottom))
         }
     }
@@ -976,5 +1185,50 @@ struct CompactAddTransactionView: View {
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
         .onAppear { noteFieldFocused = true }
+    }
+}
+
+// MARK: - Category Chip Component
+struct CategoryChip: View {
+    let category: Category
+    let isSelected: Bool
+    let isHighlighted: Bool
+    let action: () -> Void
+    
+    private var categoryColor: Color {
+        Color(hex: category.colorHex) ?? .gray
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: category.icon)
+                    .font(.app(.caption2))
+                    .foregroundStyle(isSelected ? .white : categoryColor)
+                Text(category.displayName)
+                    .font(.app(.subheadline, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(16)
+            .overlay(
+                Group {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.clear, lineWidth: 0)
+                    } else if isHighlighted {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(categoryColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    } else {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    }
+                }
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(category.displayName) category\(isSelected ? ", selected" : "")")
     }
 }

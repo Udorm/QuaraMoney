@@ -23,7 +23,7 @@ struct RecurringProgressHeaderView: View {
                     .font(.app(.headline))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text(Date().formatted(.dateTime.month(.wide)))
+                Text(Date().formatted(.dateTime.month(.wide).locale(.app)))
                     .font(.app(.subheadline, weight: .medium))
                     .foregroundStyle(.secondary)
             }

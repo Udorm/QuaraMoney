@@ -155,17 +155,20 @@ struct EventRowView: View {
         }
     }
     
-    private static let shortDateFormatter: DateFormatter = {
+    // Computed (not cached) so they follow a runtime language switch.
+    private static var shortDateFormatter: DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateFormat = "d MMM"
         return formatter
-    }()
-    
-    private static let yearDateFormatter: DateFormatter = {
+    }
+
+    private static var yearDateFormatter: DateFormatter {
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateFormat = "d MMM yyyy"
         return formatter
-    }()
+    }
     
     private func formatDateRange(start: Date, end: Date?) -> String {
         let currentYear = Calendar.current.component(.year, from: Date())

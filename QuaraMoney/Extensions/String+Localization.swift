@@ -26,7 +26,9 @@ class LanguageManager: ObservableObject {
             switch self {
             case .system: return Locale.current
             case .english: return Locale(identifier: "en")
-            case .khmer: return Locale(identifier: "km")
+            // Khmer's CLDR default numbering system is Latin ("latn"); force
+            // "khmr" so dates/times render with Khmer digits (e.g. ២០២៦).
+            case .khmer: return Locale(identifier: "km_KH@numbers=khmr")
             }
         }
     }
@@ -119,6 +121,26 @@ extension String {
     func localized(comment: String) -> String {
         let bundle = LanguageManager.shared.bundle
         return NSLocalizedString(self, tableName: nil, bundle: bundle, value: self, comment: comment)
+    }
+}
+
+// MARK: - Locale & Date formatting for the selected language
+
+extension Locale {
+    /// The locale for the in-app selected language (Khmer uses Khmer digits).
+    ///
+    /// `Date.formatted(...)` and `NumberFormatter`/`DateFormatter` default to the
+    /// *device* locale (`Locale.autoupdatingCurrent`) and ignore SwiftUI's
+    /// `\.locale` environment, so user-facing date strings must pass this explicitly.
+    static var app: Locale { LanguageManager.shared.selectedLanguage.locale }
+}
+
+extension Date {
+    /// Localized date/time string honoring the in-app selected language (incl.
+    /// Khmer digits) — use instead of `.formatted(date:time:)` for user-facing text.
+    func appFormatted(date dateStyle: Date.FormatStyle.DateStyle = .abbreviated,
+                      time timeStyle: Date.FormatStyle.TimeStyle = .omitted) -> String {
+        formatted(Date.FormatStyle(date: dateStyle, time: timeStyle).locale(.app))
     }
 }
 

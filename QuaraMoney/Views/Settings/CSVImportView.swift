@@ -404,7 +404,7 @@ struct PreviewRowView: View {
             // Date and Amount
             HStack {
                 if let date = row.date {
-                    Text(date, style: .date)
+                    Text(date.appFormatted(date: .abbreviated))
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -436,7 +436,7 @@ struct PreviewRowView: View {
                         if let cat = row.matchedCategory {
                             Image(systemName: cat.icon)
                                 .font(.app(.caption2))
-                            Text(cat.name)
+                            Text(cat.displayName)
                                 .font(.app(.caption))
                         } else {
                             Image(systemName: "questionmark.circle")
@@ -513,7 +513,7 @@ struct CategoryPickerSheet: View {
                         HStack {
                             Image(systemName: category.icon)
                                 .foregroundStyle(Color(hex: category.colorHex) ?? .primary)
-                            Text(category.name)
+                            Text(category.displayName)
                             Spacer()
                             if category.id == selected?.id {
                                 Image(systemName: "checkmark")

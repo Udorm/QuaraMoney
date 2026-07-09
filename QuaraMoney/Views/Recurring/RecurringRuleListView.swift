@@ -261,7 +261,7 @@ private struct RecurringRuleRow: View {
         } else if cal.isDateInToday(rule.nextDueDate) {
             return (L10n.Recurring.dueToday, .orange)
         }
-        return (rule.nextDueDate.formatted(date: .abbreviated, time: .omitted), .secondary)
+        return (rule.nextDueDate.appFormatted(date: .abbreviated, time: .omitted), .secondary)
     }
 
     var body: some View {

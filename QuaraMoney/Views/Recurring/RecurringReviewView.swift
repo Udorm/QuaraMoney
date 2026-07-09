@@ -222,7 +222,7 @@ struct RecurringDueRow: View {
                 chip(icon: "exclamationmark.triangle.fill", text: "recurring.noWallet".localized, tint: .orange)
             }
             if let category = rule.category {
-                chip(icon: category.icon, text: category.name, tint: .secondary)
+                chip(icon: category.icon, text: category.displayName, tint: .secondary)
             }
         }
     }

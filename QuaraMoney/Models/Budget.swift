@@ -203,15 +203,15 @@ final class Budget {
         }
         if let categories = categories, !categories.isEmpty {
             if categories.count == 1 {
-                return categories.first?.name ?? "Budget"
+                return categories.first?.displayName ?? "Budget"
             } else if categories.count == 2 {
-                return "\(categories[0].name) & \(categories[1].name)"
+                return "\(categories[0].displayName) & \(categories[1].displayName)"
             } else {
-                return "\(categories[0].name) & \(categories.count - 1) others"
+                return "\(categories[0].displayName) & \(categories.count - 1) others"
             }
         }
         if let category = category {
-            return category.name
+            return category.displayName
         }
         return "Total Budget"
     }
@@ -284,10 +284,10 @@ final class Budget {
     /// Category display info for filter chips
     var trackedCategoryInfos: [FilterCategoryInfo] {
         if let categories = categories, !categories.isEmpty {
-            return categories.map { FilterCategoryInfo(id: $0.id, name: $0.name, icon: $0.icon, colorHex: $0.colorHex) }
+            return categories.map { FilterCategoryInfo(id: $0.id, name: $0.displayName, icon: $0.icon, colorHex: $0.colorHex) }
         }
         if let category = category {
-            return [FilterCategoryInfo(id: category.id, name: category.name, icon: category.icon, colorHex: category.colorHex)]
+            return [FilterCategoryInfo(id: category.id, name: category.displayName, icon: category.icon, colorHex: category.colorHex)]
         }
         return []
     }

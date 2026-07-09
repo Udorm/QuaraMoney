@@ -257,7 +257,7 @@ struct FinancialSummaryCards: View {
     // Short month name for current period
     private var currentMonthName: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateFormat = "MMMM"
         return formatter.string(from: startDate)
     }
@@ -269,7 +269,7 @@ struct FinancialSummaryCards: View {
             return L10n.Analysis.previousMonth
         }
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         formatter.dateFormat = "MMMM"
         return formatter.string(from: prevDate)
     }
@@ -422,7 +422,7 @@ struct FinancialSummaryCards: View {
                     overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))
                 ) {
                     ProCallout {
-                        Text(selectedItem.date, format: .dateTime.month(.abbreviated).day())
+                        Text(selectedItem.date.formatted(.dateTime.month(.abbreviated).day().locale(.app)))
                             .appFont(.caption2, weight: .semibold)
                             .foregroundStyle(.secondary)
                     }

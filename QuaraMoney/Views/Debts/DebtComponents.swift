@@ -131,10 +131,10 @@ struct DebtDueChip: View {
         if debt.isCompleted {
             label(text: "debt.settled".localized, systemImage: "checkmark.circle.fill", color: .green)
         } else if debt.isOverdue, let due = debt.dueDate {
-            label(text: "\("debt.overdue".localized) · \(due.formatted(date: .abbreviated, time: .omitted))",
+            label(text: "\("debt.overdue".localized) · \(due.appFormatted(date: .abbreviated, time: .omitted))",
                   systemImage: "exclamationmark.circle.fill", color: .red)
         } else if let due = debt.dueDate {
-            label(text: "\("debt.due".localized) \(due.formatted(date: .abbreviated, time: .omitted))",
+            label(text: "\("debt.due".localized) \(due.appFormatted(date: .abbreviated, time: .omitted))",
                   systemImage: "calendar", color: .secondary)
         } else {
             label(text: "debt.noDueDate".localized, systemImage: "calendar", color: .secondary)

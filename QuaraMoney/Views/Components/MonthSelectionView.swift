@@ -70,6 +70,7 @@ private func monthLabel(for date: Date) -> String {
         return L10n.Filter.lastMonth
     } else {
         let formatter = DateFormatter()
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         // Shorter format to save space in the segmented control (e.g., Jan 2026)
         formatter.dateFormat = "MMM yyyy"
         return formatter.string(from: date)

@@ -110,7 +110,7 @@ struct AnalysisDataProcessor {
                     
                     if let cat = txn.category {
                         let existing = rawIncomeCategoryData[cat.id]?.amount ?? 0
-                        rawIncomeCategoryData[cat.id] = (existing + amount, cat.name, cat.icon, cat.colorHex)
+                        rawIncomeCategoryData[cat.id] = (existing + amount, cat.displayName, cat.icon, cat.colorHex)
                     }
                     
                 } else if txn.type == .expense {
@@ -122,7 +122,7 @@ struct AnalysisDataProcessor {
                     
                     if let cat = txn.category {
                         let existing = rawExpenseCategoryData[cat.id]?.amount ?? 0
-                        rawExpenseCategoryData[cat.id] = (existing + amount, cat.name, cat.icon, cat.colorHex)
+                        rawExpenseCategoryData[cat.id] = (existing + amount, cat.displayName, cat.icon, cat.colorHex)
                     }
                 }
             }

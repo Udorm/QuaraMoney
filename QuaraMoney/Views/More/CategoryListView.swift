@@ -95,8 +95,8 @@ struct CategoryRow: View {
                 .foregroundColor(.white)
                 .clipShape(Circle())
             
-            Text(category.name)
-            
+            Text(category.displayName)
+
             Spacer()
             
             if category.isSystem {

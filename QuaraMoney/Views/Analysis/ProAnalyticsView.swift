@@ -608,7 +608,7 @@ struct ProScopeBar: View {
 
                 // Category chips
                 ForEach(categories.filter { vm.filter.categoryIds.contains($0.id) }) { category in
-                    Chip(systemImage: category.icon.isEmpty ? "tag" : category.icon, text: category.name, removable: true) {
+                    Chip(systemImage: category.icon.isEmpty ? "tag" : category.icon, text: category.displayName, removable: true) {
                         vm.filter.categoryIds.remove(category.id)
                     }
                 }
@@ -824,7 +824,7 @@ enum ProDateFormatters {
     /// Localized standalone weekday symbol (1 = Sunday … 7 = Saturday).
     static func weekdaySymbol(_ weekday: Int) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale.current
+        formatter.locale = LanguageManager.shared.selectedLanguage.locale
         let symbols = formatter.shortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols ?? []
         let index = weekday - 1
         guard symbols.indices.contains(index) else { return "" }

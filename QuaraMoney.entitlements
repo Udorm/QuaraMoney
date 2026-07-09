@@ -2,11 +2,5 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Finance app: upgrade the container's default file-protection class so the
-	     SwiftData store, receipt photos and avatar are encrypted at rest.
-	     CompleteUnlessOpen (not Complete) because BGAppRefreshTask and sync may
-	     write while the device is locked. -->
-	<key>com.apple.developer.default-data-protection</key>
-	<string>NSFileProtectionCompleteUnlessOpen</string>
 </dict>
 </plist>

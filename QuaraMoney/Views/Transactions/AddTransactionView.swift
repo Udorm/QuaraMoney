@@ -7,6 +7,10 @@ struct AddTransactionView: View {
     @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
 
+    /// Shared with `AddTransactionContainer`; flipping it swaps this screen for
+    /// the compact layout live (the container keeps the same view model).
+    @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
+
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -59,6 +63,29 @@ struct AddTransactionView: View {
     /// so the debt's derived ledger (totals, repayments) can't be silently
     /// corrupted by changing the amount, type, or currency.
     private var isDebtLinked: Bool { viewModel.debt != nil }
+
+    /// Debt-linked and balance-adjustment entries only exist on the classic
+    /// screen, so the layout switch is offered only when the compact layout is
+    /// actually reachable (mirrors `AddTransactionContainer.usesCompactEntry`).
+    private var canSwitchLayout: Bool {
+        !isDebtLinked && viewModel.type != .adjustment
+    }
+
+    /// Nav-bar overflow menu: pick the classic or compact entry layout.
+    @ViewBuilder
+    private var layoutMenu: some View {
+        Menu {
+            Picker("transaction.layout.menu".localized, selection: $useCompactTransactionEntry) {
+                Label("transaction.layout.classic".localized, systemImage: "list.bullet.rectangle")
+                    .tag(false)
+                Label("transaction.layout.compact".localized, systemImage: "rectangle.compress.vertical")
+                    .tag(true)
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("transaction.layout.menu".localized)
+    }
 
     private var filteredCategories: [Category] {
         categories.filter { $0.type == viewModel.type }
@@ -271,20 +298,14 @@ struct AddTransactionView: View {
                 VStack(spacing: 16) {
                     List {
                         // MARK: - Amount & Type (Fluid row)
-                        Section(footer:
-                            Group {
-                                if let exchangeRateStr = exchangeRateString {
-                                    Label(exchangeRateStr, systemImage: "lock.fill")
-                                        .font(.app(.footnote))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        ) {
+                        Section {
                             AmountDisplayView(
                                 amount: viewModel.evaluatedAmount,
                                 currencyCode: $viewModel.selectedCurrencyCode,
                                 expression: viewModel.expression,
                                 isEditing: showKeyboard,
+                                showsCalculationPreview: false,
+                                convertedAmountText: exchangeRateString,
                                 onTap: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         showKeyboard = true
@@ -466,6 +487,11 @@ struct AddTransactionView: View {
                     }
                     .accessibilityLabel("Cancel")
                 }
+                if canSwitchLayout {
+                    ToolbarItem(placement: .topBarLeading) {
+                        layoutMenu
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if viewModel.saveTransaction() {
@@ -582,7 +608,6 @@ struct AddTransactionView: View {
                     Text(L10n.Transaction.TransactionType.transfer).tag(TransactionType.transfer)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 250)
                 .onChange(of: viewModel.type) { _, newType in
                     if newType != .transfer {
                         viewModel.selectedCategory = nil
@@ -597,11 +622,10 @@ struct AddTransactionView: View {
         guard let wallet = viewModel.selectedWallet,
               viewModel.selectedCurrencyCode != wallet.currencyCode else { return nil }
         
-        let rate = viewModel.exchangeRate
-        let rateString = rate.formatted(.number.precision(.significantDigits(2...6)))
-        return "1 \(viewModel.selectedCurrencyCode) ≈ \(rateString) \(wallet.currencyCode)"
+        let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
+        return "≈ \(convertedAmount.formattedAmount(for: wallet.currencyCode))"
     }
-    
+
     /// Selects a source wallet and refreshes the appropriate exchange rate:
     /// transfers use the source→destination rate, while income/expense use the
     /// transaction-currency→wallet-currency rate so a wallet in a different

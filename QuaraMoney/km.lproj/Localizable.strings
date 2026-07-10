@@ -384,6 +384,9 @@
 "settings.general" = "ទូទៅ";
 "settings.compactEntry" = "ការបញ្ចូលប្រតិបត្តិការសង្ខេប";
 "settings.compactEntry.footer" = "ទម្រង់បញ្ចូលក្នុងអេក្រង់តែមួយ ដោយក្ដារចុចបង្ហាញជានិច្ច — គ្រប់ការបញ្ចូលទាំងអស់ត្រូវការចុចតែម្ដង មិនចាំបាច់រំកិលអេក្រង់ឡើយ។";
+"transaction.layout.menu" = "ប្លង់";
+"transaction.layout.classic" = "បែបប្រពៃណី";
+"transaction.layout.compact" = "សង្ខេប";
 "settings.defaultCurrency" = "រូបិយប័ណ្ណលំនាំដើម";
 "settings.themeColors" = "រចនាប័ទ្ម និងពណ៌";
 "settings.importCSV" = "នាំចូលពី CSV";

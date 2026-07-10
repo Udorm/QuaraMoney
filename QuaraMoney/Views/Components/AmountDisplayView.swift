@@ -9,14 +9,22 @@ struct AmountDisplayView: View {
     /// non-interactive currency label (used where the currency is fixed, e.g.
     /// recording a repayment against an existing debt).
     let showsCurrencyPicker: Bool
+    /// When false, the "= result" calculation preview under the amount is hidden
+    /// (the transaction entry screens show a converted amount there instead).
+    let showsCalculationPreview: Bool
+    /// Optional secondary line shown under the amount (e.g. the amount converted
+    /// into the wallet's currency). Takes the slot the calc preview would use.
+    let convertedAmountText: String?
     var onTap: (() -> Void)? = nil
 
-    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, showsCurrencyPicker: Bool = true, onTap: (() -> Void)? = nil) {
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, showsCurrencyPicker: Bool = true, showsCalculationPreview: Bool = true, convertedAmountText: String? = nil, onTap: (() -> Void)? = nil) {
         self.amount = amount
         self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
         self.showsCurrencyPicker = showsCurrencyPicker
+        self.showsCalculationPreview = showsCalculationPreview
+        self.convertedAmountText = convertedAmountText
         self.onTap = onTap
     }
     
@@ -111,9 +119,13 @@ struct AmountDisplayView: View {
                     .background(Color(.tertiarySystemFill), in: Capsule())
             }
 
-            // Main amount/expression display & calculation preview
+            // Main amount/expression display & converted-amount preview
             VStack(spacing: 4) {
                 HStack(alignment: .center, spacing: 4) {
+                    Text(String.currencySymbol(for: currencyCode))
+                        .font(.app(size: 30, weight: .semibold))
+                        .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
+
                     Text(displayText)
                         .font(.app(size: 48, weight: .bold))
                         .minimumScaleFactor(0.4)
@@ -122,7 +134,7 @@ struct AmountDisplayView: View {
                         .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
                         .contentTransition(.numericText())
                         .animation(.easeInOut(duration: 0.1), value: displayText)
-                    
+
                     // Blinking cursor when editing
                     if isEditing {
                         Rectangle()
@@ -131,9 +143,15 @@ struct AmountDisplayView: View {
                             .opacity(1)
                     }
                 }
-                
-                // Calculation preview when operators present
-                if hasOperators && amount > 0 {
+
+                // Converted amount (wallet currency) takes priority; otherwise
+                // the calculation preview when operators are present.
+                if let convertedAmountText {
+                    Text(convertedAmountText)
+                        .font(.app(.callout))
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                } else if showsCalculationPreview && hasOperators && amount > 0 {
                     Text("= \(formatAmount(amount))")
                         .font(.app(.callout))
                         .foregroundStyle(.secondary)

@@ -336,14 +336,15 @@ struct DailyHeader: View {
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
             if let onAddTapped {
-                // 44pt hit target (HIG minimum). Honest layout: the previous
-                // `.padding(-13)` collapsed the footprint but left the 44pt hit
-                // area overlapping the daily-total text next to it — taps near
-                // the total could trigger "add on this day" unexpectedly.
+                // Icon-sized tap target, flush with the row's trailing edge
+                // (matches the amount alignment below) with a little leading
+                // padding for a comfortable target. A wide invisible frame
+                // here previously centered the icon away from the edge —
+                // inconsistent alignment and a too-large gap from the total.
                 Button(action: onAddTapped) {
                     Image(systemName: "plus.circle")
                         .font(.subheadline)
-                        .frame(width: 44, height: 44)
+                        .padding(.leading, 10)
                         .contentShape(Rectangle())
                 }
                 .foregroundStyle(.secondary)

@@ -2,24 +2,24 @@ import SwiftUI
 
 /// Stocks-style wallet row: identity on the left, 30-day trend in the middle,
 /// balance on the right.
+///
+/// Pure display: the balance and series are computed off-main by
+/// `WalletBalanceStore` and passed in — the row never walks the wallet's
+/// transaction relationships itself. `figures == nil` means the store hasn't
+/// published yet (first load); the row shows a quiet placeholder instead of
+/// flashing $0.
 struct WalletRowView: View {
     let wallet: Wallet
-    /// Bumped by the parent on `.dataDidUpdate` so the row re-renders and recomputes
-    /// the (`@Transient`-cached) balance after transactions change elsewhere.
-    var refreshToken: Int = 0
+    let figures: WalletFigures?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private static let historyDays = 30
-
-    @State private var series: [Wallet.BalancePoint] = []
 
     // Cache theme color for performance
     private let expenseColor: Color
 
-    init(wallet: Wallet, refreshToken: Int = 0) {
+    init(wallet: Wallet, figures: WalletFigures?) {
         self.wallet = wallet
-        self.refreshToken = refreshToken
+        self.figures = figures
         self.expenseColor = ThemeManager.shared.expenseColor
     }
 
@@ -28,7 +28,8 @@ struct WalletRowView: View {
     }
 
     private var showsSparkline: Bool {
-        !dynamicTypeSize.isAccessibilitySize && series.count > 1
+        guard let figures else { return false }
+        return !dynamicTypeSize.isAccessibilitySize && figures.series.count > 1
     }
 
     var body: some View {
@@ -57,26 +58,30 @@ struct WalletRowView: View {
 
             Spacer(minLength: 8)
 
-            if showsSparkline {
-                WalletSparkline(points: series, tint: walletColor, showsArea: false)
+            if showsSparkline, let figures {
+                WalletSparkline(points: figures.series, tint: walletColor, showsArea: false)
                     .frame(width: 52, height: 22)
             }
 
-            Text(wallet.balance.formattedAmount(for: wallet.currencyCode))
-                .font(.app(.body, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(wallet.balance >= 0 ? Color.primary : expenseColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            if let figures {
+                Text(figures.balance.formattedAmount(for: wallet.currencyCode))
+                    .font(.app(.body, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(figures.balance >= 0 ? Color.primary : expenseColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                // First load: figures land a beat later (computed off-main).
+                Text(verbatim: "–")
+                    .font(.app(.body, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(wallet.name) wallet, balance \(wallet.balance.formattedAmount(for: wallet.currencyCode))")
-        .onAppear(perform: recomputeSeries)
-        .onChange(of: refreshToken) { recomputeSeries() }
-    }
-
-    private func recomputeSeries() {
-        series = wallet.dailyBalanceSeries(days: Self.historyDays)
+        .accessibilityLabel(
+            "\(wallet.name) wallet" +
+            (figures.map { ", balance \($0.balance.formattedAmount(for: wallet.currencyCode))" } ?? "")
+        )
     }
 }

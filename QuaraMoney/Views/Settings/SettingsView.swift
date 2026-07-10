@@ -4,7 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
-    @ObservedObject private var currencyManager = CurrencyManager.shared
+    private var currencyManager = CurrencyManager.shared
     @ObservedObject private var languageManager = LanguageManager.shared
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @AppStorage("appTheme") private var selectedTheme: QuaraMoneyApp.AppTheme = .system
@@ -290,7 +290,6 @@ struct SettingsView: View {
                     let service = SampleDataService(modelContext: modelContext)
                     do {
                         try await service.populate()
-                        try? await Task.sleep(nanoseconds: 500_000_000)
                     } catch {
                         errorMessage = "Error populating data: \(error.localizedDescription)"
                         showError = true
@@ -309,7 +308,6 @@ struct SettingsView: View {
                     let service = SampleDataService(modelContext: modelContext)
                     do {
                         try await service.deleteAllTransactions()
-                        try? await Task.sleep(nanoseconds: 500_000_000)
                     } catch {
                         errorMessage = "Error deleting transactions: \(error.localizedDescription)"
                         showError = true

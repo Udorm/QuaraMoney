@@ -107,8 +107,11 @@ struct ProAnalyticsView: View {
             }
             .onAppear {
                 vm.configure(modelContext: modelContext)
-                vm.refreshData()
+                // Visibility gating: refreshes on appear only when data changed
+                // while hidden (or on first load) — not unconditionally.
+                vm.setVisible(true)
             }
+            .onDisappear { vm.setVisible(false) }
         }
     }
 
@@ -822,9 +825,9 @@ extension TimeGrouping {
 
 enum ProDateFormatters {
     /// Localized standalone weekday symbol (1 = Sunday … 7 = Saturday).
+    /// Reads a cached formatter — this runs per chart axis tick per render.
     static func weekdaySymbol(_ weekday: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
+        let formatter = AppDateFormatterCache.formatter(dateFormat: "EEE", locale: .app)
         let symbols = formatter.shortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols ?? []
         let index = weekday - 1
         guard symbols.indices.contains(index) else { return "" }

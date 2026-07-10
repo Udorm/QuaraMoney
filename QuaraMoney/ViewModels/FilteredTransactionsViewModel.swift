@@ -25,6 +25,11 @@ class FilteredTransactionsViewModel {
     private var cancellables = Set<AnyCancellable>()
     private let searchSubject = PassthroughSubject<String, Never>()
 
+    /// In-flight fetch; cancelled + generation-checked so rapid search/sort
+    /// changes can't apply stale results out of order.
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
+
     init(config: TransactionFilterConfig) {
         self.config = config
         self.sortOption = config.defaultSortOption
@@ -66,7 +71,10 @@ class FilteredTransactionsViewModel {
 
         isLoading = true
 
-        Task.detached(priority: .userInitiated) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
             let descriptor = TransactionProcessor.makeDescriptor(
                 startDate: start,
@@ -145,7 +153,10 @@ class FilteredTransactionsViewModel {
 
                 let ids = fetched.map { $0.persistentModelID }
 
+                guard !Task.isCancelled else { return }
                 await MainActor.run { [ids, total] in
+                    // A newer fetch superseded this one while it was in flight.
+                    guard generation == self.refreshGeneration else { return }
                     if let context = self.modelContext {
                         self.transactions = ids.compactMap { context.model(for: $0) as? Transaction }
                     } else {

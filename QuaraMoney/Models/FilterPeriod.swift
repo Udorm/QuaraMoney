@@ -73,12 +73,9 @@ enum FilterPeriod: String, CaseIterable, Identifiable, Sendable {
     func description(customStart: Date? = nil, customEnd: Date? = nil) -> String {
         switch self {
         case .custom:
-            let formatter = DateFormatter()
-            formatter.locale = LanguageManager.shared.selectedLanguage.locale
-            formatter.dateStyle = .medium
-            let start = customStart ?? Date()
-            let end = customEnd ?? Date()
-            return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+            let start = (customStart ?? Date()).appFormatted(date: .abbreviated, time: .omitted)
+            let end = (customEnd ?? Date()).appFormatted(date: .abbreviated, time: .omitted)
+            return "\(start) - \(end)"
         default:
             return self.displayName
         }

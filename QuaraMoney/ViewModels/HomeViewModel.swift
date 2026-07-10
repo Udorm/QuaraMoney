@@ -56,6 +56,38 @@ class HomeViewModel {
     @ObservationIgnored private var startDate: Date = Date()
     @ObservationIgnored private var endDate: Date = Date()
 
+    /// In-flight refresh. Each refresh cancels its predecessor and the apply is
+    /// generation-checked, so rapid filter changes can never land stale results
+    /// out of order (two detached fetches finish in nondeterministic order).
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
+
+    /// Visibility gating: the tab views stay alive in the TabView, so without
+    /// this every `.dataDidUpdate` (i.e. every save anywhere in the app) would
+    /// re-run this screen's full fetch pipeline even while it's off-screen.
+    /// Starts `needsRefresh` so the first appearance performs the initial load.
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
+
+    /// Called from the view's `onAppear`/`onDisappear`. Refreshes on appear
+    /// only when a data change arrived while hidden (or on first load).
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            refreshData()
+        }
+    }
+
+    /// Route for `.dataDidUpdate`: refresh now if on screen, defer otherwise.
+    private func handleDataDidUpdate() {
+        if isVisible {
+            refreshData()
+        } else {
+            needsRefresh = true
+        }
+    }
+
     var currentStartDate: Date { startDate }
     var currentEndDate: Date { endDate }
 
@@ -107,7 +139,7 @@ class HomeViewModel {
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshData()
+                self?.handleDataDidUpdate()
             }
             .store(in: &cancellables)
 
@@ -148,7 +180,10 @@ class HomeViewModel {
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
 
-        Task.detached(priority: .userInitiated) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
 
             let dataID = TransactionProcessor.fetchAndProcess(
@@ -170,11 +205,14 @@ class HomeViewModel {
             )
             let anyExist = ((try? context.fetchCount(anyDescriptor)) ?? 0) > 0
 
-            await self.applyData(dataID, hasAnyTransactions: anyExist)
+            guard !Task.isCancelled else { return }
+            await self.applyData(dataID, hasAnyTransactions: anyExist, generation: generation)
         }
     }
 
-    private func applyData(_ dataID: ProcessedTransactionDataID, hasAnyTransactions: Bool) {
+    private func applyData(_ dataID: ProcessedTransactionDataID, hasAnyTransactions: Bool, generation: Int) {
+        // A newer refresh superseded this one while it was in flight.
+        guard generation == refreshGeneration else { return }
         self.hasAnyTransactions = hasAnyTransactions
         self.hasLoadedOnce = true
         self.incomeTotal = dataID.incomeTotal
@@ -230,9 +268,9 @@ class HomeViewModel {
             try modelContext.save()
             // Offer a transient Undo — the tombstone makes restore trivial.
             recentlyDeleted = DeletedTransactionToken(id: transaction.id, transaction: transaction)
+            // The .dataDidUpdate handler performs the refresh (single channel —
+            // no direct refreshData() call, which used to double-fetch).
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-            // Force refresh immediately to update UI
-            refreshData()
         } catch {
             #if DEBUG
             print("Error deleting transaction: \(error)")
@@ -247,7 +285,6 @@ class HomeViewModel {
             try modelContext.save()
             HapticManager.shared.selection()
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-            refreshData()
         } catch {
             #if DEBUG
             print("Error restoring transaction: \(error)")

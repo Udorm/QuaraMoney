@@ -9,7 +9,7 @@ struct OnboardingView: View {
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var currencyManager = CurrencyManager.shared
+    private var currencyManager = CurrencyManager.shared
     @ObservedObject private var languageManager = LanguageManager.shared
 
     private enum Stage {

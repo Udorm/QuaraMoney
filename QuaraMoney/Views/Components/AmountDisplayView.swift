@@ -88,15 +88,8 @@ struct AmountDisplayView: View {
     
     /// Format final amount with 2 decimal places
     private func formatAmount(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = ","
-        
         let doubleValue = NSDecimalNumber(decimal: value).doubleValue
-        return formatter.string(from: NSNumber(value: doubleValue)) ?? "0"
+        return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
     
     /// Check if expression has operators (showing pending calculation)

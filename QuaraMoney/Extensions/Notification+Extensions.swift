@@ -11,4 +11,7 @@ extension Notification.Name {
     /// ContentView switches to the Analysis tab and enables Pro mode so the full
     /// analytics dashboard opens.
     static let openProAnalytics = Notification.Name("openProAnalytics")
+    /// Posted by CurrencyManager when the preferred display currency changes,
+    /// so derived caches (e.g. WalletBalanceStore's net-worth series) recompute.
+    static let preferredCurrencyDidChange = Notification.Name("preferredCurrencyDidChange")
 }

@@ -1,9 +1,13 @@
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 
+/// `@Observable` (not ObservableObject): rate-table merges (~160 keys after a
+/// fetch) and recent-currency edits no longer invalidate every observer — views
+/// re-render only when a property they actually read changes.
 @MainActor
-class CurrencyManager: ObservableObject {
+@Observable
+final class CurrencyManager {
     static let shared = CurrencyManager()
 
     /// Fallback exchange rates relative to USD — safe to access from any isolation context.
@@ -17,9 +21,10 @@ class CurrencyManager: ObservableObject {
         "JPY": 150.0
     ]
     
-    @Published var preferredCurrencyCode: String {
+    var preferredCurrencyCode: String {
         didSet {
             UserDefaults.standard.set(preferredCurrencyCode, forKey: "preferredCurrencyCode")
+            NotificationCenter.default.post(name: .preferredCurrencyDidChange, object: nil)
             // Fetch rates if we switched to a non-USD currency and don't have recent data
              if preferredCurrencyCode != "USD" {
                  Task {
@@ -31,7 +36,7 @@ class CurrencyManager: ObservableObject {
     
     // Rates relative to USD (Base)
     // Key: Currency Code, Value: Rate (e.g. "KHR": 4000.0)
-    @Published var rates: [String: Double] = ["USD": 1.0]
+    var rates: [String: Double] = ["USD": 1.0]
     
     // Last fetch timestamp
     private var lastRatesFetchDate: Double {
@@ -64,7 +69,7 @@ class CurrencyManager: ObservableObject {
         // Removed auto-fetch on launch to save resources as requested
     }
     
-    @Published var recentCurrencies: [String] = [] {
+    var recentCurrencies: [String] = [] {
         didSet {
             UserDefaults.standard.set(recentCurrencies, forKey: recentCurrenciesKey)
         }
@@ -100,7 +105,9 @@ class CurrencyManager: ObservableObject {
         }
     }
     
-    private(set) lazy var availableCurrencyInfos: [CurrencyInfo] = {
+    // @ObservationIgnored: @Observable can't track lazy storage, and this list
+    // is immutable after first computation anyway.
+    @ObservationIgnored private(set) lazy var availableCurrencyInfos: [CurrencyInfo] = {
         availableCurrencies.map { code in
             let name = Locale.current.localizedString(forCurrencyCode: code) ?? code
             let symbol = String.currencySymbol(for: code)
@@ -108,23 +115,14 @@ class CurrencyManager: ObservableObject {
         }
     }()
     
+    /// Instance conversion using the live rate table. Delegates to the single
+    /// static implementation so every call site (net worth, reports, budgets)
+    /// resolves missing rates through the same fallback table — previously this
+    /// method skipped `fallbackRates` and silently returned the amount
+    /// unchanged for unknown pairs, so screens could disagree about the same
+    /// data depending on which convert they happened to call.
     func convert(amount: Decimal, from sourceCurrency: String, to targetCurrency: String) -> Decimal {
-        guard let sourceRate = rates[sourceCurrency], let targetRate = rates[targetCurrency] else {
-            // Fallback logic if rates are missing
-             if sourceCurrency == "USD" && targetCurrency == "KHR" { return amount * 4000 }
-             if sourceCurrency == "KHR" && targetCurrency == "USD" { return amount / 4000 }
-             if sourceCurrency == targetCurrency { return amount }
-            return amount // Return original if unknown (better than 0?)
-        }
-        
-        // Convert to USD first (Base), then to Target
-        // Amount (Source) / SourceRate = Amount (USD)
-        // Amount (USD) * TargetRate = Amount (Target)
-        
-        let amountUSD = amount / Decimal(sourceRate)
-        let amountTarget = amountUSD * Decimal(targetRate)
-        
-        return amountTarget
+        Self.convert(amount: amount, from: sourceCurrency, to: targetCurrency, rates: rates)
     }
     
     func fetchRates() async {

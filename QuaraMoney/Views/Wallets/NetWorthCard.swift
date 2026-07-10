@@ -2,31 +2,20 @@ import SwiftUI
 
 /// Net-worth hero for the wallet list: headline total, 30-day change badge,
 /// and a trend sparkline. Content-layer only — no glass.
+///
+/// Pure display: the total and series arrive precomputed (off-main) from
+/// `WalletBalanceStore`. `hasLoaded == false` renders a redacted placeholder
+/// instead of flashing $0 on first open.
 struct NetWorthCard: View {
-    let wallets: [Wallet]
-    /// Bumped by the parent on `.dataDidUpdate` so the total recomputes after
-    /// balances change (the `@Transient` balance cache isn't observed by SwiftUI).
-    var refreshToken: Int = 0
-    @ObservedObject private var currencyManager = CurrencyManager.shared
-
-    private static let historyDays = 30
-
-    @State private var series: [Wallet.BalancePoint] = []
-
-    private var totalNetWorth: Decimal {
-        wallets.reduce(0) { total, wallet in
-            total + currencyManager.convert(
-                amount: wallet.balance,
-                from: wallet.currencyCode,
-                to: currencyManager.preferredCurrencyCode
-            )
-        }
-    }
+    let total: Decimal
+    let series: [Wallet.BalancePoint]
+    let currencyCode: String
+    let hasLoaded: Bool
 
     /// Change over the sparkline window (today vs the first point).
     private var change: Decimal? {
         guard let first = series.first, series.count > 1 else { return nil }
-        return totalNetWorth - first.balance
+        return total - first.balance
     }
 
     private var changeColor: Color {
@@ -48,13 +37,14 @@ struct NetWorthCard: View {
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
 
-                Text(totalNetWorth.formattedAmount(for: currencyManager.preferredCurrencyCode))
+                Text(total.formattedAmount(for: currencyCode))
                     .font(.app(.largeTitle, weight: .bold))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(totalNetWorth >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
+                    .foregroundStyle(total >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
+                    .redacted(reason: hasLoaded ? [] : .placeholder)
             }
 
             if !series.isEmpty {
@@ -67,7 +57,7 @@ struct NetWorthCard: View {
                     HStack(spacing: 3) {
                         Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
                             .font(.app(.caption2, weight: .bold))
-                        Text(change.magnitude.formattedAmountShort(for: currencyManager.preferredCurrencyCode))
+                        Text(change.magnitude.formattedAmountShort(for: currencyCode))
                             .font(.app(.caption, weight: .semibold))
                             .monospacedDigit()
                     }
@@ -85,21 +75,10 @@ struct NetWorthCard: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Net worth, \(totalNetWorth.formattedAmount(for: currencyManager.preferredCurrencyCode))")
-        .onAppear(perform: recomputeSeries)
-        .onChange(of: refreshToken) { recomputeSeries() }
-        .onChange(of: currencyManager.preferredCurrencyCode) { recomputeSeries() }
-    }
-
-    private func recomputeSeries() {
-        series = WalletBalanceHistory.netWorthSeries(
-            wallets: wallets,
-            days: Self.historyDays,
-            currencyCode: currencyManager.preferredCurrencyCode
-        )
+        .accessibilityLabel("Net worth, \(total.formattedAmount(for: currencyCode))")
     }
 }
 
 #Preview {
-    NetWorthCard(wallets: [])
+    NetWorthCard(total: 1234.56, series: [], currencyCode: "USD", hasLoaded: true)
 }

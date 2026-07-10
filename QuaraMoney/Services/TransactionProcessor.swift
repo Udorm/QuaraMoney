@@ -253,7 +253,11 @@ struct TransactionProcessor {
                 }
             }
 
-            // Apply search filter in-memory
+            // Apply search filter in-memory. Deliberate: search must OR across
+            // the note AND the category relationship's name, and this repo has
+            // documented SwiftData hangs with compound relationship #Predicates
+            // (see MoreView's RecurringRule query comment) — keep it in memory
+            // until SwiftData's predicate translation is trustworthy here.
             if let searchText = searchText?.trimmingCharacters(in: .whitespacesAndNewlines), !searchText.isEmpty {
                 transactions = transactions.filter { txn in
                     let noteMatch = txn.note?.localizedCaseInsensitiveContains(searchText) ?? false

@@ -6,19 +6,46 @@ private struct BackdateTarget: Identifiable, Equatable {
     let date: Date
 }
 
+/// Thin wrapper that creates the view model lazily on first appearance.
+/// `State(wrappedValue:)` evaluates its argument on *every* init of the view,
+/// so building the VM there meant a throwaway `HomeViewModel` (months array +
+/// two Combine subscriptions) was constructed each time ContentView's body
+/// re-evaluated. The optional-@State + onAppear idiom constructs it exactly once.
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel: HomeViewModel
+    @State private var viewModel: HomeViewModel?
+
+    var body: some View {
+        Group {
+            if let viewModel {
+                HomeContentView(viewModel: viewModel)
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear {
+            if viewModel == nil {
+                viewModel = HomeViewModel(modelContext: modelContext)
+            }
+        }
+    }
+}
+
+struct HomeContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var viewModel: HomeViewModel
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
     @State private var isSearchPresented = false
     @State private var backdateTarget: BackdateTarget?
+    @State private var isVisible = false
+    private var router = AppRouter.shared
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
-    
-    init(modelContext: ModelContext) {
-        _viewModel = State(wrappedValue: HomeViewModel(modelContext: modelContext))
+
+    init(viewModel: HomeViewModel) {
+        self.viewModel = viewModel
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -47,10 +74,19 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $viewModel.searchText)
             .searchToolbarBehavior(.minimize)
-            .task {
-                // Yield briefly to let the first frame render before querying DB
-                try? await Task.sleep(for: .milliseconds(100))
-                viewModel.refreshData()
+            // Visibility gating: the VM refreshes on .dataDidUpdate only while
+            // this tab is on screen; changes that arrive while hidden are
+            // applied on the next appearance. The first onAppear also performs
+            // the initial load (the fetch itself runs off-main, so it doesn't
+            // block the first frame).
+            .onAppear {
+                isVisible = true
+                viewModel.setVisible(true)
+                consumePendingAddTransaction()
+            }
+            .onDisappear {
+                isVisible = false
+                viewModel.setVisible(false)
             }
             .sheet(isPresented: $showingAddTransaction) {
                 AddTransactionContainer(transaction: nil, isNewTransaction: true)
@@ -62,37 +98,16 @@ struct HomeView: View {
             .sheet(item: $backdateTarget) { target in
                 AddTransactionContainer(transaction: nil, isNewTransaction: true, initialDate: target.date)
             }
-            .onChange(of: showingAddTransaction) { oldValue, newValue in
-                if !newValue {
-                    viewModel.refreshData()
-                }
-            }
-            .onChange(of: transactionToEdit) { oldValue, newValue in
-                if newValue == nil {
-                     viewModel.refreshData()
-                }
-            }
-            .onChange(of: backdateTarget) { oldValue, newValue in
-                if newValue == nil {
-                    viewModel.refreshData()
-                }
-            }
-            // Warm launch: app was in background, user tapped the Home Screen quick action.
-            // ContentView switches to tab 0 simultaneously; wait 0.4 s for that animation
-            // to settle before presenting the sheet (presenting from a non-visible tab is
-            // silently ignored by UIKit).
-            .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    showingAddTransaction = true
-                }
-            }
-            // Cold launch: shortcut opened the app from scratch; HomeView picks up the
-            // pending action after the splash/auth sequence has settled (1.5 s buffer).
-            .task {
-                guard AppDelegate.pendingShortcutType == AppDelegate.ShortcutType.addTransaction else { return }
-                AppDelegate.pendingShortcutType = nil
-                try? await Task.sleep(for: .milliseconds(1500))
-                showingAddTransaction = true
+            // NOTE: no onChange(sheet-dismissed) refreshes here — saves post
+            // .dataDidUpdate, which is the single refresh channel. The old
+            // dismissal hooks triple-fetched the same data during the dismiss
+            // animation.
+            // Quick-action deep link (warm or cold launch): ContentView/the App
+            // stage the intent on the router; we consume it only while actually
+            // visible, so the presentation can never be swallowed by a
+            // mid-animation tab switch — and never waits on an arbitrary timer.
+            .onChange(of: router.pendingAddTransaction) { _, _ in
+                consumePendingAddTransaction()
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -119,6 +134,14 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// Presents the Add Transaction sheet for a staged quick-action intent,
+    /// but only while this tab is actually on screen.
+    private func consumePendingAddTransaction() {
+        guard isVisible, router.pendingAddTransaction else { return }
+        router.pendingAddTransaction = false
+        showingAddTransaction = true
     }
 
     private var summaryHeader: some View {
@@ -313,9 +336,10 @@ struct DailyHeader: View {
                 .font(.app(.subheadline))
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
             if let onAddTapped {
-                // 44pt hit target (HIG minimum) without inflating the header:
-                // the frame+contentShape define the tappable area, the negative
-                // padding collapses the layout footprint back to icon size.
+                // 44pt hit target (HIG minimum). Honest layout: the previous
+                // `.padding(-13)` collapsed the footprint but left the 44pt hit
+                // area overlapping the daily-total text next to it — taps near
+                // the total could trigger "add on this day" unexpectedly.
                 Button(action: onAddTapped) {
                     Image(systemName: "plus.circle")
                         .font(.subheadline)
@@ -324,7 +348,6 @@ struct DailyHeader: View {
                 }
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
-                .padding(-13)
                 .accessibilityLabel("Add transaction on \(section.date.appFormatted(date: .long, time: .omitted))")
             }
         }
@@ -333,26 +356,14 @@ struct DailyHeader: View {
 }
 
 
-// Reusing TransactionRow if it exists, otherwise defining a simple one.
-// I think we defined TransactionRow in WalletDetailView?
-// I should likely move it to a shared file or redefine it here.
-// I will verify if I can import or redefine.
-// Let's use a simple one here for now.
-
-
 /// Circular glass FAB used for floating primary actions (Home's add button, the
-/// Add Transaction sheet's scan button).
+/// Add Transaction sheet's scan button). Deployment target is iOS 26, so the
+/// Liquid Glass style needs no availability guard.
 struct CircularFABStyle: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content
-                .buttonStyle(.glassProminent)
-                .clipShape(.circle)
-        } else {
-            content
-                .buttonStyle(.borderedProminent)
-                .clipShape(.circle)
-        }
+        content
+            .buttonStyle(.glassProminent)
+            .clipShape(.circle)
     }
 }
 
@@ -387,6 +398,6 @@ struct CircularFABStyle: ViewModifier {
         try? context.save()
     }
 
-    return HomeView(modelContext: context)
+    return HomeView()
         .modelContainer(container)
 }

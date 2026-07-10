@@ -8,6 +8,32 @@ import Combine
 class AnalysisViewModel {
     private var modelContext: ModelContext?
     private var cancellables = Set<AnyCancellable>()
+
+    /// In-flight refresh; cancelled + generation-checked so rapid filter changes
+    /// can't apply stale results out of order.
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
+
+    /// Visibility gating — see HomeViewModel.setVisible. Prevents every save in
+    /// the app from re-running this screen's aggregation while it's off-screen.
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
+
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            refreshData()
+        }
+    }
+
+    private func handleDataDidUpdate() {
+        if isVisible {
+            refreshData()
+        } else {
+            needsRefresh = true
+        }
+    }
     
     // MARK: - Filters
     
@@ -99,7 +125,7 @@ class AnalysisViewModel {
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshData()
+                self?.handleDataDidUpdate()
             }
             .store(in: &self.cancellables)
     }
@@ -143,7 +169,10 @@ class AnalysisViewModel {
 
         guard let container = container else { return }
 
-        Task.detached(priority: .userInitiated) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
 
             async let nw = Self.computeNetWorth(container: container, walletIds: walletIds, rates: rates, targetCurrency: preferredCurrency)
@@ -158,16 +187,17 @@ class AnalysisViewModel {
                 rates: rates,
                 targetCurrency: preferredCurrency
             )
-            
+
             let finalNW = await nw
-            await MainActor.run {
-                self.netWorth = finalNW
-            }
-            await self.applyAnalysisResult(result)
+            guard !Task.isCancelled else { return }
+            await self.applyAnalysisResult(result, netWorth: finalNW, generation: generation)
         }
     }
-    
-    private func applyAnalysisResult(_ result: AnalysisDataProcessor.AnalysisResult) {
+
+    private func applyAnalysisResult(_ result: AnalysisDataProcessor.AnalysisResult, netWorth: Decimal, generation: Int) {
+        // A newer refresh superseded this one while it was in flight.
+        guard generation == refreshGeneration else { return }
+        self.netWorth = netWorth
         self.totalIncome = result.totalIncome
         self.totalExpense = result.totalExpense
         self.savingsRate = result.savingsRate

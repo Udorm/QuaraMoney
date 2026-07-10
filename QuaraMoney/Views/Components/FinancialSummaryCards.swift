@@ -256,10 +256,8 @@ struct FinancialSummaryCards: View {
     
     // Short month name for current period
     private var currentMonthName: String {
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: startDate)
+        AppDateFormatterCache.formatter(dateFormat: "MMMM", locale: .app)
+            .string(from: startDate)
     }
     
     // Short month name for previous period
@@ -268,10 +266,8 @@ struct FinancialSummaryCards: View {
         guard let prevDate = calendar.date(byAdding: .month, value: -1, to: startDate) else {
             return L10n.Analysis.previousMonth
         }
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: prevDate)
+        return AppDateFormatterCache.formatter(dateFormat: "MMMM", locale: .app)
+            .string(from: prevDate)
     }
     
     var body: some View {

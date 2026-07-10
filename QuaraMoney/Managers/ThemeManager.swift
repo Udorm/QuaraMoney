@@ -1,26 +1,40 @@
 import SwiftUI
-import Combine
+import Observation
 
-class ThemeManager: ObservableObject {
+/// Income/expense accent colors. `@Observable` so views that read only
+/// `incomeColor` re-render only when that value changes (property-level
+/// tracking), instead of on any published change as with ObservableObject —
+/// and so reads from view `init`s (row views cache these) stay cheap.
+@Observable
+final class ThemeManager {
     static let shared = ThemeManager()
-    
-    @AppStorage("incomeColorHex") var incomeColorHex: String = "#34C759" // Default Green
-    @AppStorage("expenseColorHex") var expenseColorHex: String = "#FF3B30" // Default Red
-    
+
+    var incomeColorHex: String {
+        didSet { UserDefaults.standard.set(incomeColorHex, forKey: "incomeColorHex") }
+    }
+    var expenseColorHex: String {
+        didSet { UserDefaults.standard.set(expenseColorHex, forKey: "expenseColorHex") }
+    }
+
+    private init() {
+        incomeColorHex = UserDefaults.standard.string(forKey: "incomeColorHex") ?? "#34C759" // Default Green
+        expenseColorHex = UserDefaults.standard.string(forKey: "expenseColorHex") ?? "#FF3B30" // Default Red
+    }
+
     var incomeColor: Color {
         Color(hex: incomeColorHex) ?? .green
     }
-    
+
     var expenseColor: Color {
         Color(hex: expenseColorHex) ?? .red
     }
-    
+
     func setIncomeColor(_ color: Color) {
         if let hex = color.toHex() {
             incomeColorHex = hex
         }
     }
-    
+
     func setExpenseColor(_ color: Color) {
         if let hex = color.toHex() {
             expenseColorHex = hex

@@ -72,7 +72,8 @@ private struct WalletListContent: View {
     @State private var walletToDelete: Wallet?
     @State private var showingDeleteAlert = false
     @State private var walletToReassign: Wallet?
-    @State private var refreshToken = 0
+    /// Balances + sparkline series computed off-main; rows read it as plain data.
+    @State private var balanceStore = WalletBalanceStore()
 
     init(walletToEdit: Binding<Wallet?>, searchText: String) {
         self._walletToEdit = walletToEdit
@@ -92,7 +93,12 @@ private struct WalletListContent: View {
         List {
             if searchText.isEmpty {
                 Section {
-                    NetWorthCard(wallets: activeWallets, refreshToken: refreshToken)
+                    NetWorthCard(
+                        total: balanceStore.netWorthTotal,
+                        series: balanceStore.netWorthSeries,
+                        currencyCode: CurrencyManager.shared.preferredCurrencyCode,
+                        hasLoaded: balanceStore.hasLoaded
+                    )
                 }
             }
 
@@ -118,12 +124,14 @@ private struct WalletListContent: View {
             }
         }
         .syncPullToRefresh(modelContext)
-        .onReceive(NotificationCenter.default.publisher(for: .dataDidUpdate)) { _ in
-            // Balances are @Transient-cached and not observed by @Query; invalidate
-            // them and bump the token so rows recompute after any data change.
-            for wallet in wallets { wallet.invalidateBalanceCache() }
-            refreshToken &+= 1
+        // The store listens for .dataDidUpdate itself (visibility-gated) and
+        // recomputes everything on a background context — no more invalidating
+        // every wallet's cache and re-walking relationships on the main thread.
+        .onAppear {
+            balanceStore.configure(container: modelContext.container)
+            balanceStore.setVisible(true)
         }
+        .onDisappear { balanceStore.setVisible(false) }
         .sheet(item: $quickAction) { action in
             quickActionSheet(action)
         }
@@ -197,8 +205,12 @@ private struct WalletListContent: View {
 
     @ViewBuilder
     private func walletRow(_ wallet: Wallet, isArchived: Bool) -> some View {
-        NavigationLink(destination: WalletDetailView(wallet: wallet, modelContext: modelContext)) {
-            WalletRowView(wallet: wallet, refreshToken: refreshToken)
+        // LazyView: NavigationLink(destination:) builds its destination eagerly
+        // when the ROW renders — without this, every list render constructed a
+        // WalletDetailView + its view model (Combine subscriptions and all) for
+        // every wallet, pushed or not.
+        NavigationLink(destination: LazyView(WalletDetailView(wallet: wallet, modelContext: modelContext))) {
+            WalletRowView(wallet: wallet, figures: balanceStore.figures[wallet.id])
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if isArchived {

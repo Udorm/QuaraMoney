@@ -40,11 +40,17 @@ struct CompactAddTransactionView: View {
     @FocusState private var noteFieldFocused: Bool
     @FocusState private var rateFieldFocused: Bool
 
-    // Suggestion engine: cached, contextual rankings (same wiring as classic)
+    // Suggestion engine: cached, contextual rankings (same wiring as classic —
+    // computed on a background context, resolved back to @Query models).
     @State private var scoredWallets: [ScoredWallet] = []
     @State private var scoredCategories: [ScoredCategory] = []
     @State private var scoredTags: [ScoredTag] = []
-    @State private var tagSourceTransactions: [Transaction] = []
+    /// In-flight suggestion compute; each recompute cancels its predecessor.
+    @State private var suggestionTask: Task<Void, Never>?
+    /// Provisional auto-picks (vs. deliberate user choices) that a late-arriving
+    /// ranking is allowed to upgrade.
+    @State private var autoSelectedWalletID: UUID?
+    @State private var autoSelectedCategoryID: UUID?
     /// Ranking signal only — never written to the transaction's location.
     @State private var backgroundLocationKey: String?
     @State private var locationService = CurrentLocationService()
@@ -115,25 +121,61 @@ struct CompactAddTransactionView: View {
 
     private func recomputeSuggestions() {
         let location = scoringLocation()
-        scoredWallets = TransactionSuggestionEngine.rankWallets(
-            wallets,
-            type: viewModel.type,
-            selectedCategory: viewModel.selectedCategory,
-            location: location
-        )
-        scoredCategories = TransactionSuggestionEngine.rankCategories(
-            categories,
-            type: viewModel.type,
-            selectedWallet: viewModel.selectedWallet,
-            location: location
-        )
-        scoredTags = TransactionSuggestionEngine.rankTags(
-            in: tagSourceTransactions,
-            type: viewModel.type,
-            selectedWallet: viewModel.selectedWallet,
-            selectedCategory: viewModel.selectedCategory,
-            location: location
-        )
+        let type = viewModel.type
+        let walletID = viewModel.selectedWallet?.id
+        let categoryID = viewModel.selectedCategory?.id
+        let container = modelContext.container
+
+        suggestionTask?.cancel()
+        suggestionTask = Task {
+            let snapshot = await TransactionSuggestionEngine.computeSuggestions(
+                container: container,
+                type: type,
+                selectedWalletID: walletID,
+                selectedCategoryID: categoryID,
+                location: location
+            )
+            guard !Task.isCancelled else { return }
+            applySuggestions(snapshot)
+        }
+    }
+
+    /// Resolves the background-ranked IDs back to this view's @Query models and
+    /// upgrades provisional auto-selections to the ranked top picks.
+    private func applySuggestions(_ snapshot: SuggestionSnapshot) {
+        let walletsByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        scoredWallets = snapshot.wallets.compactMap { ranked in
+            walletsByID[ranked.id].map {
+                ScoredWallet(wallet: $0, score: ranked.score, lastUsed: ranked.lastUsed)
+            }
+        }
+        scoredCategories = snapshot.categories.compactMap { ranked in
+            categoriesByID[ranked.id].map {
+                ScoredCategory(category: $0, score: ranked.score, lastUsed: ranked.lastUsed, isHighlighted: ranked.isHighlighted)
+            }
+        }
+        scoredTags = snapshot.tags
+
+        guard isNewTransaction else { return }
+
+        // Wallet: upgrade only if the current selection is still our auto-pick.
+        if let current = viewModel.selectedWallet,
+           current.id == autoSelectedWalletID,
+           let top = scoredWallets.first?.wallet,
+           top.id != current.id {
+            autoSelectedWalletID = top.id
+            selectWallet(top)
+        }
+
+        // Category: same rule (the compact view auto-picks a category too).
+        if viewModel.selectedCategory?.id == autoSelectedCategoryID,
+           let top = orderedCategories.first?.category,
+           top.id != viewModel.selectedCategory?.id {
+            autoSelectedCategoryID = top.id
+            viewModel.selectedCategory = top
+        }
     }
 
     // MARK: - Tag suggestions
@@ -170,14 +212,6 @@ struct CompactAddTransactionView: View {
         note += "#\(tag) "
         viewModel.note = note
         HapticManager.shared.selection()
-    }
-
-    private func loadTagSourceTransactions() {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date()) ?? .distantPast
-        let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= cutoff && $0.note != nil && $0.deletedAt == nil }
-        )
-        tagSourceTransactions = (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func startBackgroundLocationFetch() {
@@ -323,30 +357,36 @@ struct CompactAddTransactionView: View {
                 AddCategoryView(initialType: viewModel.type)
             }
             .onAppear {
-                loadTagSourceTransactions()
-                recomputeSuggestions()
-                if viewModel.selectedWallet == nil, let wallet = scoredWallets.first?.wallet ?? wallets.first {
+                // Provisional preselection (name order) so the form is instantly
+                // savable; upgraded to the ranked top picks when the background
+                // suggestion compute lands (see applySuggestions).
+                if viewModel.selectedWallet == nil, let wallet = wallets.first {
+                    autoSelectedWalletID = wallet.id
                     viewModel.selectedWallet = wallet
                     viewModel.syncCurrencyToWallet()
-                    recomputeSuggestions()
                 }
                 if isNewTransaction {
                     startBackgroundLocationFetch()
-                    if let topCategory = orderedCategories.first?.category {
+                    if let topCategory = filteredCategories.first {
+                        autoSelectedCategoryID = topCategory.id
                         viewModel.selectedCategory = topCategory
                     }
                 }
+                recomputeSuggestions()
                 relativeDayOffset = daysBetween(referenceDate, viewModel.date)
             }
             .onChange(of: viewModel.type) { _, _ in
-                recomputeSuggestions()
                 if isNewTransaction {
-                    if let topCategory = orderedCategories.first?.category {
+                    // Provisional per-type pick; the recompute upgrades it.
+                    if let topCategory = filteredCategories.first {
+                        autoSelectedCategoryID = topCategory.id
                         viewModel.selectedCategory = topCategory
                     } else {
+                        autoSelectedCategoryID = nil
                         viewModel.selectedCategory = nil
                     }
                 }
+                recomputeSuggestions()
             }
             .onChange(of: viewModel.selectedWallet) { _, _ in recomputeSuggestions() }
             .onChange(of: viewModel.selectedCategory) { _, _ in recomputeSuggestions() }
@@ -492,14 +532,8 @@ struct CompactAddTransactionView: View {
     }
     
     private func formatAmount(_ value: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSeparator = ","
         let doubleValue = NSDecimalNumber(decimal: value).doubleValue
-        return formatter.string(from: NSNumber(value: doubleValue)) ?? "0"
+        return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
 
     private var amountCard: some View {

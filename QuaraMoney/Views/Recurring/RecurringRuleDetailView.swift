@@ -168,7 +168,7 @@ struct RecurringRuleDetailView: View {
         rule.needsSync = true
         try? modelContext.save()
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
     }
     
     private func deleteTransaction(_ transaction: Transaction) {

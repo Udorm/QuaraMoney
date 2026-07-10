@@ -15,36 +15,32 @@ struct QuaraMoneyApp: App {
     @StateObject private var errorService = ErrorService.shared
     @StateObject private var securityManager = SecurityManager.shared
     @StateObject private var authManager = SupabaseAuthManager.shared
-    @ObservedObject private var syncEngine = SyncEngine.shared
+    // NOTE: deliberately NOT observing SyncEngine here — its isSyncing/lastSyncDate
+    // churn would invalidate the whole scene on every auto-sync. The conflict
+    // sheet observes it from a leaf modifier instead (SyncConflictPresenter).
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
     @State private var showSplash = !_hasShownSplash
-    nonisolated(unsafe) private static var _hasShownSplash = false
+    /// Main-actor-only (read in the App's init and written from the splash
+    /// completion, both on the main actor).
+    @MainActor private static var _hasShownSplash = false
     
     init() {
         // All heavy work deferred to .task{} modifiers
     }
     
     // MARK: - ModelContainer (lazily created on first access)
-    
-    /// Cached container – created once, reused across body evaluations.
-    /// Using nonisolated(unsafe) static because App struct is recreated on every body eval.
-    nonisolated(unsafe) private static var _cachedContainer: ModelContainer?
-    
-    private var sharedModelContainer: ModelContainer {
-        Self.sharedContainer()
-    }
 
-    /// Static access to the one shared container, for non-SwiftUI entry points
-    /// (the notification delegate, BGTask handlers) that run outside `body`.
-    static func sharedContainer() -> ModelContainer {
-        if let cached = _cachedContainer {
-            return cached
-        }
-        let container = makeModelContainer()
-        _cachedContainer = container
-        return container
+    /// The one shared container, also used by non-SwiftUI entry points (the
+    /// notification delegate, BGTask handlers). `static let` gives thread-safe,
+    /// lazy, once-only initialization (guaranteed by Swift) — replacing the
+    /// previous unsynchronized `nonisolated(unsafe)` cache, which could race
+    /// and build two containers when first touched off the main thread.
+    static let sharedContainer: ModelContainer = makeModelContainer()
+
+    private var sharedModelContainer: ModelContainer {
+        Self.sharedContainer
     }
     
     // Derive the active schema from the versioned baseline so the container and
@@ -150,6 +146,10 @@ struct QuaraMoneyApp: App {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showSplash = false
                         }
+                        // Cold-launch quick action: hand the staged shortcut to
+                        // the router now that the splash is gone — HomeView
+                        // presents the sheet as soon as it's visible.
+                        Self.transferPendingShortcutToRouter()
                     }
                     .transition(.opacity)
                 }
@@ -211,12 +211,6 @@ struct QuaraMoneyApp: App {
                     SyncRealtime.shared.stop()
                 }
             }
-            .onChange(of: syncEngine.conflictState) { _, newState in
-                // Conflict resolved — start Realtime now (was deferred above).
-                if newState == .none && authManager.isSignedIn {
-                    SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
-                }
-            }
             .preferredColorScheme(selectedTheme.colorScheme)
             .task {
                 // Deferred from init() — runs after first frame renders
@@ -235,12 +229,9 @@ struct QuaraMoneyApp: App {
                     }
                 )
             }
-            .sheet(isPresented: Binding(
-                get: { syncEngine.conflictState != .none },
-                set: { _ in }
-            )) {
-                DataConflictResolutionView()
-            }
+            // Conflict sheet + deferred-Realtime start; observes SyncEngine in a
+            // leaf modifier so sync ticks don't invalidate the whole scene.
+            .syncConflictPresenter(mainContext: sharedModelContainer.mainContext)
             .overlay {
                 if showPrivacyOverlay {
                     ZStack {
@@ -289,6 +280,11 @@ struct QuaraMoneyApp: App {
                 if securityManager.isAppLockEnabled {
                     securityManager.isAppLocked = true
                 }
+                // Rare path: a shortcut arrived on a scene (re)connect in a
+                // process where the splash won't show — hand it over directly.
+                if !showSplash {
+                    Self.transferPendingShortcutToRouter()
+                }
             }
         }
         .modelContainer(sharedModelContainer)
@@ -321,9 +317,18 @@ struct QuaraMoneyApp: App {
         }
     }
     
+    /// Once per launch: the `.task` that calls this is attached to ContentView,
+    /// whose identity resets on language change (`.id(fontRefreshID)`) — without
+    /// the guard, every language switch re-ran budget rollovers, category
+    /// stamping, and the notification setup.
+    @MainActor private static var didRunSetupServices = false
+
     private func setupServices() {
+        guard !Self.didRunSetupServices else { return }
+        Self.didRunSetupServices = true
+
         let container = sharedModelContainer
-        
+
         // Capture MainActor data to pass to background tasks
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
@@ -403,5 +408,14 @@ struct QuaraMoneyApp: App {
     @MainActor
     private static func rescheduleRecurringReminders(_ container: ModelContainer) async {
         await RecurringNotificationService.rescheduleAll(in: ModelContext(container))
+    }
+
+    /// Moves a cold-launch quick-action shortcut onto the router, where the
+    /// Home tab consumes it once visible. Replaces the old 1.5 s launch sleep.
+    @MainActor
+    private static func transferPendingShortcutToRouter() {
+        guard AppDelegate.pendingShortcutType == AppDelegate.ShortcutType.addTransaction else { return }
+        AppDelegate.pendingShortcutType = nil
+        AppRouter.shared.pendingAddTransaction = true
     }
 }

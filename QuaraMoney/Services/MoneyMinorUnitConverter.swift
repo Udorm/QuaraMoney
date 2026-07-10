@@ -1,12 +1,22 @@
 import Foundation
 
 enum MoneyMinorUnitConverter {
+    // ISO fraction digits are constant per currency; resolving them requires a
+    // NumberFormatter (expensive to build) and this runs inside every
+    // `formattedAmount` call, so the answers are memoized.
+    private static let digitsLock = NSLock()
+    nonisolated(unsafe) private static var digitsByCurrency: [String: Int] = [:]
+
     nonisolated static func fractionDigits(for currencyCode: String) -> Int {
+        digitsLock.lock(); defer { digitsLock.unlock() }
+        if let cached = digitsByCurrency[currencyCode] { return cached }
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        return max(0, formatter.maximumFractionDigits)
+        let digits = max(0, formatter.maximumFractionDigits)
+        digitsByCurrency[currencyCode] = digits
+        return digits
     }
 
     nonisolated static func toMinorUnits(_ amount: Decimal, currencyCode: String) -> Int64 {

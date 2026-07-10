@@ -39,27 +39,19 @@ struct TransactionFilterConfig: Sendable, Equatable {
         let sameYear = calendar.component(.year, from: startDate) == calendar.component(.year, from: endDate)
         let sameMonth = sameYear && calendar.component(.month, from: startDate) == calendar.component(.month, from: endDate)
 
-        let startFormatter = DateFormatter()
-        let endFormatter = DateFormatter()
-        startFormatter.locale = LanguageManager.shared.selectedLanguage.locale
-        endFormatter.locale = LanguageManager.shared.selectedLanguage.locale
+        func formatter(_ dateFormat: String) -> DateFormatter {
+            AppDateFormatterCache.formatter(dateFormat: dateFormat, locale: .app)
+        }
+        // endDate is exclusive (< endDate), show day before
+        let displayEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
 
         if sameMonth {
-            startFormatter.dateFormat = "MMM d"
-            // endDate is exclusive (< endDate), show day before
-            let displayEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-            endFormatter.dateFormat = "d, yyyy"
-            return "\(startFormatter.string(from: startDate)) – \(endFormatter.string(from: displayEnd))"
+            return "\(formatter("MMM d").string(from: startDate)) – \(formatter("d, yyyy").string(from: displayEnd))"
         } else if sameYear {
-            startFormatter.dateFormat = "MMM d"
-            let displayEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-            endFormatter.dateFormat = "MMM d, yyyy"
-            return "\(startFormatter.string(from: startDate)) – \(endFormatter.string(from: displayEnd))"
+            return "\(formatter("MMM d").string(from: startDate)) – \(formatter("MMM d, yyyy").string(from: displayEnd))"
         } else {
-            startFormatter.dateFormat = "MMM d, yyyy"
-            let displayEnd = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-            endFormatter.dateFormat = "MMM d, yyyy"
-            return "\(startFormatter.string(from: startDate)) – \(endFormatter.string(from: displayEnd))"
+            let f = formatter("MMM d, yyyy")
+            return "\(f.string(from: startDate)) – \(f.string(from: displayEnd))"
         }
     }
 

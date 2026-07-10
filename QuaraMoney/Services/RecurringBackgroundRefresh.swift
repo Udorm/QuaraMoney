@@ -57,7 +57,7 @@ enum RecurringBackgroundRefresh {
         schedule()
 
         let work = Task { @MainActor in
-            let context = ModelContext(QuaraMoneyApp.sharedContainer())
+            let context = ModelContext(QuaraMoneyApp.sharedContainer)
             await RecurringNotificationService.rescheduleAll(in: context)
             task.setTaskCompleted(success: true)
         }

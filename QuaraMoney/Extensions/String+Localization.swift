@@ -44,6 +44,9 @@ class LanguageManager: ObservableObject {
             guard newValue != selectedLanguage else { return }
             selectedLanguageRaw = newValue.rawValue
             updateBundle()
+            // Locale-derived formatter caches must rebuild for the new language.
+            CurrencyFormatterCache.invalidate()
+            AppDateFormatterCache.invalidate()
             // Update font refresh ID to trigger view updates
             fontRefreshID = UUID()
             // Refresh UIKit appearance proxies

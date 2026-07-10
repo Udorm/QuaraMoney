@@ -67,6 +67,40 @@ enum RecurringNotificationService {
         return status == .authorized || status == .provisional
     }
 
+    // MARK: - Snapshot
+
+    /// Value snapshot of the fields a reminder needs. Captured **synchronously
+    /// while the model is alive** so scheduling work never touches a
+    /// `RecurringRule` after a suspension point.
+    ///
+    /// Why this exists: the old fire-and-forget pattern
+    /// (`Task { await reschedule(for: rule) }`) suspended at the authorization
+    /// check and then read the model's fields on resume. Any reschedule that
+    /// outlived the rule's `ModelContainer` — e.g. a test's per-case in-memory
+    /// container, or a future short-lived background context — crashed with
+    /// "This model instance was destroyed by calling ModelContext.reset"
+    /// (SwiftData/BackingData.swift:835), killing the whole process.
+    struct ReminderSnapshot: Sendable {
+        let id: UUID
+        let name: String
+        let amount: Decimal
+        let currencyCode: String
+        let nextDueDate: Date
+        let endDate: Date?
+        /// isActive && not soft-deleted && remindersEnabled at capture time.
+        let wantsReminder: Bool
+
+        init(_ rule: RecurringRule) {
+            id = rule.id
+            name = rule.name
+            amount = rule.amount
+            currencyCode = rule.currencyCode
+            nextDueDate = rule.nextDueDate
+            endDate = rule.endDate
+            wantsReminder = rule.isActive && rule.deletedAt == nil && rule.remindersEnabled
+        }
+    }
+
     // MARK: - Scheduling
 
     /// Remove a single rule's pending reminder (call on delete/pause/disable).
@@ -76,15 +110,32 @@ enum RecurringNotificationService {
             .removePendingNotificationRequests(withIdentifiers: [identifier(for: ruleID)])
     }
 
+    /// Fire-and-forget reschedule: snapshots the rule synchronously, then does
+    /// the async notification-center work with **no model references**. This is
+    /// the only safe way to reschedule without awaiting the result — the task
+    /// may outlive the rule's ModelContainer.
+    @MainActor
+    static func rescheduleDetached(for rule: RecurringRule) {
+        let snapshot = ReminderSnapshot(rule)
+        Task { await reschedule(snapshot: snapshot) }
+    }
+
     /// Re-create a single rule's reminder to match its current state. No-ops
     /// (after clearing) when the rule is paused/deleted/reminders-off, the next
     /// due date is past its end date, or the fire time has already passed.
+    /// The snapshot is taken before the first suspension point, so the model is
+    /// never touched after an await.
     @MainActor
     static func reschedule(for rule: RecurringRule) async {
-        cancel(for: rule.id)
-        guard rule.isActive, rule.deletedAt == nil, rule.remindersEnabled else { return }
+        await reschedule(snapshot: ReminderSnapshot(rule))
+    }
+
+    @MainActor
+    private static func reschedule(snapshot: ReminderSnapshot) async {
+        cancel(for: snapshot.id)
+        guard snapshot.wantsReminder else { return }
         guard await isAuthorized() else { return }
-        await scheduleRequest(for: rule)
+        await scheduleRequest(for: snapshot)
     }
 
     /// Rebuild every recurring reminder from scratch (call on launch). Clears
@@ -102,24 +153,28 @@ enum RecurringNotificationService {
             predicate: #Predicate { $0.isActive && $0.deletedAt == nil }
         )
         let rules = (try? context.fetch(descriptor)) ?? []
-        for rule in rules where rule.remindersEnabled {
-            await scheduleRequest(for: rule)
+        // Snapshot + count synchronously, before the per-rule awaits, so no
+        // model is read after a suspension point (same crash class as above).
+        let snapshots = rules.filter(\.remindersEnabled).map(ReminderSnapshot.init)
+        let dueCount = rules.filter { RecurringRuleService.isDue($0) }.count
+
+        for snapshot in snapshots {
+            await scheduleRequest(for: snapshot)
         }
         // Keep the app-icon badge in step with what's actually due.
-        let dueCount = rules.filter { RecurringRuleService.isDue($0) }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(dueCount)
     }
 
     // MARK: - Helpers
 
     @MainActor
-    private static func scheduleRequest(for rule: RecurringRule) async {
-        guard let fireDate = fireDate(for: rule), fireDate > Date() else { return }
+    private static func scheduleRequest(for snapshot: ReminderSnapshot) async {
+        guard let fireDate = fireDate(for: snapshot), fireDate > Date() else { return }
         let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
         let request = UNNotificationRequest(
-            identifier: identifier(for: rule.id),
-            content: makeContent(for: rule),
+            identifier: identifier(for: snapshot.id),
+            content: makeContent(for: snapshot),
             trigger: trigger
         )
         try? await UNUserNotificationCenter.current().add(request)
@@ -127,20 +182,20 @@ enum RecurringNotificationService {
 
     /// `reminderHour` on the due day, or `nil` if the next due date is past the
     /// rule's end date.
-    private static func fireDate(for rule: RecurringRule) -> Date? {
-        if let end = rule.endDate, rule.nextDueDate > end { return nil }
+    private static func fireDate(for snapshot: ReminderSnapshot) -> Date? {
+        if let end = snapshot.endDate, snapshot.nextDueDate > end { return nil }
         let cal = Calendar.current
-        let day = cal.startOfDay(for: rule.nextDueDate)
+        let day = cal.startOfDay(for: snapshot.nextDueDate)
         return cal.date(byAdding: .hour, value: reminderHour, to: day)
     }
 
-    private static func makeContent(for rule: RecurringRule) -> UNMutableNotificationContent {
+    private static func makeContent(for snapshot: ReminderSnapshot) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
         content.title = L10n.Recurring.Reminder.title
-        content.body = L10n.Recurring.Reminder.body(rule.name, rule.amount.formattedAmount(for: rule.currencyCode))
+        content.body = L10n.Recurring.Reminder.body(snapshot.name, snapshot.amount.formattedAmount(for: snapshot.currencyCode))
         content.sound = .default
         content.categoryIdentifier = categoryIdentifier
-        content.userInfo = ["recurringRuleID": rule.id.uuidString]
+        content.userInfo = ["recurringRuleID": snapshot.id.uuidString]
         return content
     }
 }

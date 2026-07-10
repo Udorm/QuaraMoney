@@ -54,12 +54,33 @@ struct ScoredCategory: Identifiable {
     var id: UUID { category.id }
 }
 
-struct ScoredTag: Identifiable {
+struct ScoredTag: Identifiable, Sendable {
     /// Display spelling (most recently used casing wins).
     let tag: String
     let score: Double
     let lastUsed: Date?
     var id: String { tag.lowercased() }
+}
+
+/// A ranked wallet/category reference that can cross actor boundaries: the
+/// background compute returns IDs + scores, and the view resolves them back to
+/// its `@Query` model objects on the main actor.
+struct RankedSuggestionID: Sendable {
+    let id: UUID
+    let score: Double
+    let lastUsed: Date?
+    let isHighlighted: Bool
+}
+
+/// Full suggestion result computed on a background context — `Sendable` so the
+/// Add Transaction sheet never runs the O(all transactions) scoring pass on the
+/// main actor (previously it did, synchronously, during sheet presentation).
+struct SuggestionSnapshot: Sendable {
+    let wallets: [RankedSuggestionID]
+    let categories: [RankedSuggestionID]
+    let tags: [ScoredTag]
+
+    static let empty = SuggestionSnapshot(wallets: [], categories: [], tags: [])
 }
 
 /// Recency-weighted, contextual ranking for the wallet/category quick-pickers on Add Transaction.
@@ -69,10 +90,82 @@ struct ScoredTag: Identifiable {
 /// precomputed score. See the plan for the full scoring model.
 enum TransactionSuggestionEngine {
 
-    // MARK: - Public API
+    // MARK: - Public API (async, off-main)
 
-    @MainActor
-    static func rankWallets(
+    /// Computes the full suggestion set (wallets, categories, tags) on a
+    /// detached background context and returns `Sendable` ranked IDs.
+    ///
+    /// This is the entry point views should use: the ranking walks every
+    /// relevant transaction of every wallet/category (bounded by the 365-day
+    /// scoring window), which is far too much work for the main actor during
+    /// sheet presentation.
+    static func computeSuggestions(
+        container: ModelContainer,
+        type: TransactionType,
+        selectedWalletID: UUID?,
+        selectedCategoryID: UUID?,
+        location: SuggestionLocationContext?
+    ) async -> SuggestionSnapshot {
+        let work = Task.detached(priority: .userInitiated) { () -> SuggestionSnapshot in
+            let context = ModelContext(container)
+
+            let walletDescriptor = FetchDescriptor<Wallet>(
+                predicate: #Predicate { !$0.isArchived && $0.deletedAt == nil },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            let categoryDescriptor = FetchDescriptor<Category>(
+                predicate: #Predicate { $0.deletedAt == nil },
+                sortBy: [SortDescriptor(\.name)]
+            )
+            guard let wallets = try? context.fetch(walletDescriptor),
+                  let categories = try? context.fetch(categoryDescriptor) else {
+                return .empty
+            }
+
+            let selectedWallet = wallets.first { $0.id == selectedWalletID }
+            let selectedCategory = categories.first { $0.id == selectedCategoryID }
+
+            // Tag candidates: recent noted transactions, bounded — tags have no
+            // model, so they're mined from the notes themselves. The limit keeps
+            // heavy users from faulting years of rows for chip suggestions.
+            let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date()) ?? .distantPast
+            var tagDescriptor = FetchDescriptor<Transaction>(
+                predicate: #Predicate { $0.date >= cutoff && $0.note != nil && $0.deletedAt == nil },
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            tagDescriptor.fetchLimit = 1000
+            let tagSource = (try? context.fetch(tagDescriptor)) ?? []
+
+            let rankedWallets = rankWallets(
+                wallets, type: type, selectedCategory: selectedCategory, location: location
+            )
+            let rankedCategories = rankCategories(
+                categories, type: type, selectedWallet: selectedWallet, location: location
+            )
+            let rankedTags = rankTags(
+                in: tagSource, type: type,
+                selectedWallet: selectedWallet, selectedCategory: selectedCategory,
+                location: location
+            )
+
+            return SuggestionSnapshot(
+                wallets: rankedWallets.map {
+                    RankedSuggestionID(id: $0.wallet.id, score: $0.score, lastUsed: $0.lastUsed, isHighlighted: false)
+                },
+                categories: rankedCategories.map {
+                    RankedSuggestionID(id: $0.category.id, score: $0.score, lastUsed: $0.lastUsed, isHighlighted: $0.isHighlighted)
+                },
+                tags: rankedTags
+            )
+        }
+        return await work.value
+    }
+
+    // MARK: - Ranking primitives
+    // Nonisolated: pass models that belong to the calling context. The async
+    // facade above calls these on its own background context.
+
+    nonisolated static func rankWallets(
         _ wallets: [Wallet],
         type: TransactionType,
         selectedCategory: Category?,
@@ -99,8 +192,7 @@ enum TransactionSuggestionEngine {
         }
     }
 
-    @MainActor
-    static func rankCategories(
+    nonisolated static func rankCategories(
         _ categories: [Category],
         type: TransactionType,
         selectedWallet: Wallet?,
@@ -155,8 +247,7 @@ enum TransactionSuggestionEngine {
     /// Each transaction's contextual weight (recency × weekday × hour ×
     /// wallet/category co-occurrence × location) is credited to every tag it
     /// carries; same scoring model as the other rankers.
-    @MainActor
-    static func rankTags(
+    nonisolated static func rankTags(
         in transactions: [Transaction],
         type: TransactionType,
         selectedWallet: Wallet?,

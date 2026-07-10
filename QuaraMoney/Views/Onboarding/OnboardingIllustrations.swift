@@ -83,7 +83,7 @@ struct OnboardingWelcomeIllustration: View {
 /// Looping mini-app demo: tap +, type the amount, pick a category, saved.
 struct OnboardingTrackIllustration: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var themeManager = ThemeManager.shared
+    private var themeManager = ThemeManager.shared
 
     /// 0 = home screen (tap +), 1 = keypad typing, 2 = category pick, 3 = saved
     @State private var phase = 0
@@ -448,7 +448,7 @@ struct OnboardingWalletsIllustration: View {
 /// Mini analytics card: weekly bars grow in, a budget bar fills to 65%.
 struct OnboardingInsightsIllustration: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var themeManager = ThemeManager.shared
+    private var themeManager = ThemeManager.shared
     @State private var grow = false
 
     private let bars: [CGFloat] = [0.35, 0.55, 0.4, 0.95, 0.5, 0.7, 0.3]

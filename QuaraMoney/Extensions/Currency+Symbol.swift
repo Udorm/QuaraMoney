@@ -5,10 +5,7 @@ extension String {
     /// - Parameter currencyCode: The 3-letter ISO currency code (e.g., "USD", "KHR")
     /// - Returns: The native currency symbol (e.g., "$", "៛") or the code itself if not found
     static func currencySymbol(for currencyCode: String) -> String {
-        let locale = NSLocale(localeIdentifier: currencyCode)
-        if let symbol = locale.displayName(forKey: .currencySymbol, value: currencyCode) {
-            return symbol
-        }
-        return currencyCode
+        // NSLocale construction + displayName lookup is expensive; cached.
+        CurrencyFormatterCache.symbol(for: currencyCode)
     }
 }

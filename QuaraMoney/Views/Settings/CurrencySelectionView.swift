@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct CurrencySelectionView: View {
-    @ObservedObject var currencyManager = CurrencyManager.shared
+    // Not `private`: a private stored property would make the synthesized
+    // memberwise init private too, breaking CurrencySelectionView(selection:).
+    var currencyManager = CurrencyManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool

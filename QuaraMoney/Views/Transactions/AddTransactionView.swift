@@ -26,13 +26,18 @@ struct AddTransactionView: View {
 
     @Environment(\.modelContext) private var modelContext
 
-    // Suggestion engine: cached, contextual rankings (recomputed on context changes, not every body pass)
+    // Suggestion engine: cached, contextual rankings. Computed on a background
+    // context (the scoring walks every relevant transaction — too heavy for the
+    // main actor during sheet presentation) and resolved back to @Query models.
     @State private var scoredWallets: [ScoredWallet] = []
     @State private var scoredCategories: [ScoredCategory] = []
     @State private var scoredTags: [ScoredTag] = []
-    /// Recent transactions used as the tag-candidate pool. Fetched once on
-    /// appear (tags aren't queryable via #Predicate — they're a Codable array).
-    @State private var tagSourceTransactions: [Transaction] = []
+    /// In-flight suggestion compute; each recompute cancels its predecessor so
+    /// burst triggers (appear + preselect + location fix) coalesce.
+    @State private var suggestionTask: Task<Void, Never>?
+    /// The wallet this view auto-preselected (vs. a deliberate user pick), so a
+    /// late-arriving ranking may upgrade it without stomping a user choice.
+    @State private var autoSelectedWalletID: UUID?
     /// Device current-location spatial key, fetched in the background for ranking ONLY.
     /// Never written to the transaction's location field.
     @State private var backgroundLocationKey: String?
@@ -122,25 +127,53 @@ struct AddTransactionView: View {
 
     private func recomputeSuggestions() {
         let location = scoringLocation()
-        scoredWallets = TransactionSuggestionEngine.rankWallets(
-            wallets,
-            type: viewModel.type,
-            selectedCategory: viewModel.selectedCategory,
-            location: location
-        )
-        scoredCategories = TransactionSuggestionEngine.rankCategories(
-            categories,
-            type: viewModel.type,
-            selectedWallet: viewModel.selectedWallet,
-            location: location
-        )
-        scoredTags = TransactionSuggestionEngine.rankTags(
-            in: tagSourceTransactions,
-            type: viewModel.type,
-            selectedWallet: viewModel.selectedWallet,
-            selectedCategory: viewModel.selectedCategory,
-            location: location
-        )
+        let type = viewModel.type
+        let walletID = viewModel.selectedWallet?.id
+        let categoryID = viewModel.selectedCategory?.id
+        let container = modelContext.container
+
+        suggestionTask?.cancel()
+        suggestionTask = Task {
+            let snapshot = await TransactionSuggestionEngine.computeSuggestions(
+                container: container,
+                type: type,
+                selectedWalletID: walletID,
+                selectedCategoryID: categoryID,
+                location: location
+            )
+            guard !Task.isCancelled else { return }
+            applySuggestions(snapshot)
+        }
+    }
+
+    /// Resolves the background-ranked IDs back to this view's @Query models.
+    private func applySuggestions(_ snapshot: SuggestionSnapshot) {
+        let walletsByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        scoredWallets = snapshot.wallets.compactMap { ranked in
+            walletsByID[ranked.id].map {
+                ScoredWallet(wallet: $0, score: ranked.score, lastUsed: ranked.lastUsed)
+            }
+        }
+        scoredCategories = snapshot.categories.compactMap { ranked in
+            categoriesByID[ranked.id].map {
+                ScoredCategory(category: $0, score: ranked.score, lastUsed: ranked.lastUsed, isHighlighted: ranked.isHighlighted)
+            }
+        }
+        scoredTags = snapshot.tags
+
+        // Upgrade the provisional (name-order) auto-preselection to the ranked
+        // top wallet — but never stomp a wallet the user deliberately chose.
+        if isNewTransaction,
+           let current = viewModel.selectedWallet,
+           current.id == autoSelectedWalletID,
+           let top = scoredWallets.first?.wallet,
+           top.id != current.id {
+            autoSelectedWalletID = top.id
+            viewModel.selectedWallet = top
+            viewModel.syncCurrencyToWallet()
+        }
     }
 
     // MARK: - Tag suggestions
@@ -187,16 +220,6 @@ struct AddTransactionView: View {
         HapticManager.shared.selection()
     }
 
-    /// Fetches the recent noted transactions the tag ranker mines for candidates.
-    /// Date-range only (indexed); tag extraction happens in the engine.
-    private func loadTagSourceTransactions() {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -365, to: Date()) ?? .distantPast
-        let descriptor = FetchDescriptor<Transaction>(
-            predicate: #Predicate { $0.date >= cutoff && $0.note != nil && $0.deletedAt == nil }
-        )
-        tagSourceTransactions = (try? modelContext.fetch(descriptor)) ?? []
-    }
-
     /// Fetches the device's current location in the background to bias suggestions.
     /// Scoring signal only — silently ignores denial/failure and never sets a transaction location.
     private func startBackgroundLocationFetch() {
@@ -241,14 +264,10 @@ struct AddTransactionView: View {
     
     var body: some View {
         NavigationStack {
+            // NOTE: a Color.clear tap-to-dismiss layer used to sit here BEHIND
+            // the List — the List consumed every touch, so it could never fire.
+            // Keyboard dismissal is handled by .scrollDismissesKeyboard below.
             ZStack(alignment: .bottomTrailing) {
-                // Tap to dismiss keyboard
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        dismissKeyboard()
-                    }
-                
                 VStack(spacing: 16) {
                     List {
                         // MARK: - Amount & Type (Fluid row)
@@ -490,15 +509,15 @@ struct AddTransactionView: View {
                 }
             }
             .onAppear {
-                loadTagSourceTransactions()
-                recomputeSuggestions()
-                // Preselect the top contextually-ranked wallet
-                if viewModel.selectedWallet == nil, let wallet = scoredWallets.first?.wallet ?? wallets.first {
+                // Provisional preselection (name order) so the form is instantly
+                // savable; upgraded to the ranked top wallet when the background
+                // suggestion compute lands (see applySuggestions).
+                if viewModel.selectedWallet == nil, let wallet = wallets.first {
+                    autoSelectedWalletID = wallet.id
                     viewModel.selectedWallet = wallet
                     viewModel.syncCurrencyToWallet()
-                    // Selected wallet now informs category co-occurrence ranking
-                    recomputeSuggestions()
                 }
+                recomputeSuggestions()
                 // Only show keyboard for new transactions
                 showKeyboard = isNewTransaction
 

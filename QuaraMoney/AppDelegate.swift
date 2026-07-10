@@ -106,7 +106,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         ruleID: UUID?,
         mutate: (RecurringRule, ModelContext) -> Void
     ) {
-        let context = QuaraMoneyApp.sharedContainer().mainContext
+        let context = QuaraMoneyApp.sharedContainer.mainContext
         guard let ruleID, let rule = RecurringRuleService.rule(withID: ruleID, in: context) else { return }
         mutate(rule, context)
         Task { await RecurringNotificationService.refreshBadgeCount(in: context) }

@@ -19,8 +19,10 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 
     // Warm launch: the app was backgrounded and the user tapped the shortcut.
-    // Post the notification after a brief delay so ContentView's tab switch
-    // animation completes before HomeView presents the sheet.
+    // Post immediately — ContentView switches the tab and stages the intent on
+    // AppRouter; HomeView presents the sheet once it is actually visible, so no
+    // settle-delay is needed (the old 0.4 s timer could fire too early on a
+    // slow device and the presentation was silently dropped).
     func windowScene(
         _ windowScene: UIWindowScene,
         performActionFor shortcutItem: UIApplicationShortcutItem,
@@ -30,9 +32,7 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
             completionHandler(false)
             return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            NotificationCenter.default.post(name: .openAddTransaction, object: nil)
-        }
+        NotificationCenter.default.post(name: .openAddTransaction, object: nil)
         completionHandler(true)
     }
 }

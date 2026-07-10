@@ -180,7 +180,7 @@ enum RecurringRuleService {
         advanceNextDueDate(rule)
         touchForSync(rule)
         guard commit(context, invalidating: wallet) else { return nil }
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
         return RecurringMutation(ruleID: rule.persistentModelID,
                                  previousNextDueDate: previousDue,
                                  createdTransactionIDs: [txn.persistentModelID],
@@ -197,7 +197,7 @@ enum RecurringRuleService {
         advanceNextDueDate(rule)
         touchForSync(rule)
         guard commit(context, invalidating: nil) else { return nil }
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
         return RecurringMutation(ruleID: rule.persistentModelID,
                                  previousNextDueDate: previousDue,
                                  createdTransactionIDs: [],
@@ -222,7 +222,7 @@ enum RecurringRuleService {
         guard !created.isEmpty else { return nil }
         touchForSync(rule)
         guard commit(context, invalidating: wallet) else { return nil }
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
         return RecurringMutation(ruleID: rule.persistentModelID,
                                  previousNextDueDate: previousDue,
                                  createdTransactionIDs: created.map(\.persistentModelID),
@@ -245,7 +245,7 @@ enum RecurringRuleService {
         guard skipped > 0 else { return nil }
         touchForSync(rule)
         guard commit(context, invalidating: nil) else { return nil }
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
         return RecurringMutation(ruleID: rule.persistentModelID,
                                  previousNextDueDate: previousDue,
                                  createdTransactionIDs: [],
@@ -267,7 +267,7 @@ enum RecurringRuleService {
         rule.nextDueDate = mutation.previousNextDueDate
         touchForSync(rule)
         _ = commit(context, invalidating: wallet)
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
     }
 
     // MARK: - Private helpers

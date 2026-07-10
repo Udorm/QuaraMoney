@@ -9,6 +9,8 @@ struct MoreView: View {
     @AppStorage("isSupabaseSyncEnabled") private var syncEnabled = false
     @ObservedObject private var auth = SupabaseAuthManager.shared
     @State private var avatarImage: UIImage?
+    @State private var isVisible = false
+    private var router = AppRouter.shared
 
     // Simple predicate only (a compound `isActive && deletedAt == nil` #Predicate
     // can hang SwiftData here); `isActive`/`isDue` filtering happens in memory.
@@ -115,28 +117,34 @@ struct MoreView: View {
             .navigationDestination(isPresented: $navigateToRecurring) {
                 RecurringRuleListView()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
-                navigateToRecurring = true
+            // Recurring deep link: consumed from the router (staged by
+            // ContentView) once this tab is actually visible — same pattern as
+            // the Home quick action, no notification/timer race.
+            .onChange(of: router.pendingRecurringReview) { _, _ in
+                consumePendingRecurringReview()
             }
             .onReceive(NotificationCenter.default.publisher(for: .profileDidChange)) { _ in
                 // A sync replaced/removed the avatar file — reload the banner image.
                 loadAvatar()
             }
             .onAppear {
+                isVisible = true
                 loadAvatar()
                 // Consume a deep-link that arrived before this view existed
                 // (LazyView delays creation until the More tab is selected).
-                if Self.pendingRecurringReview {
-                    Self.pendingRecurringReview = false
-                    navigateToRecurring = true
-                }
+                consumePendingRecurringReview()
             }
+            .onDisappear { isVisible = false }
         }
     }
 
-    /// Set by ContentView when the recurring deep-link fires, so a freshly
-    /// lazy-created MoreView still routes to the Recurring screen on appear.
-    nonisolated(unsafe) static var pendingRecurringReview = false
+    /// Pushes the Recurring review screen for a staged deep link, but only
+    /// while this tab is actually on screen.
+    private func consumePendingRecurringReview() {
+        guard isVisible, router.pendingRecurringReview else { return }
+        router.pendingRecurringReview = false
+        navigateToRecurring = true
+    }
 
     /// Banner subtitle: signed-in account email when cloud sync is active,
     /// otherwise the edit-profile hint.

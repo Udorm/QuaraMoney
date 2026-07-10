@@ -121,43 +121,36 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
     
     /// Format the period for display
     func formatPeriod(startDate: Date, endDate: Date? = nil) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
+        func formatter(_ dateFormat: String) -> DateFormatter {
+            AppDateFormatterCache.formatter(dateFormat: dateFormat, locale: .app)
+        }
 
         switch self {
-        case .weekly:
-            formatter.dateFormat = "MMM d"
+        case .weekly, .biweekly:
+            let f = formatter("MMM d")
             let range = dateRange(from: startDate)
             let endDisplay = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.end
-            return "\(formatter.string(from: range.start)) - \(formatter.string(from: endDisplay))"
-            
-        case .biweekly:
-            formatter.dateFormat = "MMM d"
-            let range = dateRange(from: startDate)
-            let endDisplay = Calendar.current.date(byAdding: .day, value: -1, to: range.end) ?? range.end
-            return "\(formatter.string(from: range.start)) - \(formatter.string(from: endDisplay))"
-            
+            return "\(f.string(from: range.start)) - \(f.string(from: endDisplay))"
+
         case .monthly:
-            formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: startDate)
-            
+            return formatter("MMMM yyyy").string(from: startDate)
+
         case .quarterly:
             let calendar = Calendar.current
             let month = calendar.component(.month, from: startDate)
             let year = calendar.component(.year, from: startDate)
             let quarter = ((month - 1) / 3) + 1
             return "Q\(quarter) \(year)"
-            
+
         case .yearly:
-            formatter.dateFormat = "yyyy"
-            return formatter.string(from: startDate)
-            
+            return formatter("yyyy").string(from: startDate)
+
         case .custom:
-            formatter.dateFormat = "MMM d, yyyy"
+            let f = formatter("MMM d, yyyy")
             if let end = endDate {
-                return "\(formatter.string(from: startDate)) - \(formatter.string(from: end))"
+                return "\(f.string(from: startDate)) - \(f.string(from: end))"
             }
-            return formatter.string(from: startDate)
+            return f.string(from: startDate)
         }
     }
     

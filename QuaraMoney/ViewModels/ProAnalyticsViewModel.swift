@@ -12,6 +12,32 @@ final class ProAnalyticsViewModel {
     private var modelContext: ModelContext?
     private var cancellables = Set<AnyCancellable>()
 
+    /// In-flight refresh; cancelled + generation-checked so rapid filter changes
+    /// can't apply stale results out of order.
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
+
+    /// Visibility gating — see HomeViewModel.setVisible. Prevents every save in
+    /// the app from re-running the full dashboard aggregation while off-screen.
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
+
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            refreshData()
+        }
+    }
+
+    private func handleDataDidUpdate() {
+        if isVisible {
+            refreshData()
+        } else {
+            needsRefresh = true
+        }
+    }
+
     // MARK: - Filters
 
     var selectedPeriod: AnalysisPeriod = .month {
@@ -109,7 +135,7 @@ final class ProAnalyticsViewModel {
         updateDateRange()
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshData() }
+            .sink { [weak self] _ in self?.handleDataDidUpdate() }
             .store(in: &cancellables)
     }
 
@@ -238,7 +264,10 @@ final class ProAnalyticsViewModel {
         guard let container = modelContext?.container else { return }
 
         isLoading = true
-        Task.detached(priority: .userInitiated) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
             let result = ProAnalyticsProcessor.process(
                 context: context,
@@ -252,11 +281,14 @@ final class ProAnalyticsViewModel {
                 targetCurrency: preferredCurrency,
                 now: now
             )
-            await self.apply(result)
+            guard !Task.isCancelled else { return }
+            await self.apply(result, generation: generation)
         }
     }
 
-    private func apply(_ result: ProAnalyticsProcessor.Result) {
+    private func apply(_ result: ProAnalyticsProcessor.Result, generation: Int) {
+        // A newer refresh superseded this one while it was in flight.
+        guard generation == refreshGeneration else { return }
         self.result = result
         self.isLoading = false
     }

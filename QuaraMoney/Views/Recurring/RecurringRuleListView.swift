@@ -211,7 +211,7 @@ struct RecurringRuleListView: View {
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
         // Keep the due-date reminder in sync: a paused rule must stop reminding,
         // a resumed one must be re-armed.
-        Task { await RecurringNotificationService.reschedule(for: rule) }
+        RecurringNotificationService.rescheduleDetached(for: rule)
     }
 
     private func delete(_ rule: RecurringRule) {

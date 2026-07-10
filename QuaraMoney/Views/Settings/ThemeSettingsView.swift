@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ThemeSettingsView: View {
-    @ObservedObject private var themeManager = ThemeManager.shared
+    @Bindable private var themeManager = ThemeManager.shared
     
     var body: some View {
         Form {

@@ -2,18 +2,11 @@ import SwiftUI
 import SwiftData
 import Combine
 
+// NOTE: the pre-iOS-18 `LegacyContentView` (NavigationSplitView + tag-based
+// TabView) was deleted — the deployment target is iOS 26, so the #available
+// branch could never take the fallback path. iPad/regular width is handled by
+// `.tabViewStyle(.sidebarAdaptable)` below.
 struct ContentView: View {
-    var body: some View {
-        if #available(iOS 18.0, *) {
-            iOS18ContentView()
-        } else {
-            LegacyContentView()
-        }
-    }
-}
-
-@available(iOS 18.0, *)
-struct iOS18ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
@@ -26,7 +19,7 @@ struct iOS18ContentView: View {
             if useSidebarOniPad {
                 TabView(selection: $selectedTab) {
                     Tab(value: 0) {
-                        HomeView(modelContext: modelContext)
+                        HomeView()
                     } label: {
                         VStack {
                             Image(systemName: "house.fill")
@@ -34,7 +27,7 @@ struct iOS18ContentView: View {
                                 .appFont(.caption2)
                         }
                     }
-                    
+
                     Tab(value: 1) {
                         LazyView(AnalysisView())
                     } label: {
@@ -44,7 +37,7 @@ struct iOS18ContentView: View {
                                 .appFont(.caption2)
                         }
                     }
-                    
+
                     Tab(value: 2) {
                         LazyView(BudgetTabView())
                     } label: {
@@ -69,13 +62,13 @@ struct iOS18ContentView: View {
             } else {
                 TabView(selection: $selectedTab) {
                     Tab(L10n.Tab.home, systemImage: "house.fill", value: 0) {
-                        HomeView(modelContext: modelContext)
+                        HomeView()
                     }
-                    
+
                     Tab(L10n.Tab.analysis, systemImage: "chart.pie", value: 1) {
                         LazyView(AnalysisView())
                     }
-                    
+
                     Tab(L10n.Budget.title, systemImage: "dollarsign.circle.fill", value: 2) {
                         LazyView(BudgetTabView())
                     }
@@ -92,11 +85,16 @@ struct iOS18ContentView: View {
                 showCreateWallet = true
             }
         }
+        // Cross-tab deep links: switch the tab and stage the intent on the
+        // router; the destination view consumes it in onAppear/onChange once it
+        // is actually visible. No timers — state + visibility can't race the
+        // tab-switch animation.
         .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
             selectedTab = 0
+            AppRouter.shared.pendingAddTransaction = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
-            MoreView.pendingRecurringReview = true // consumed by MoreView on appear
+            AppRouter.shared.pendingRecurringReview = true
             selectedTab = 3 // More tab — MoreView pushes the Recurring screen
         }
         .onReceive(NotificationCenter.default.publisher(for: .openProAnalytics)) { _ in
@@ -107,119 +105,6 @@ struct iOS18ContentView: View {
             AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
                 .interactiveDismissDisabled()
         }
-    }
-}
-
-struct LegacyContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
-    @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
-    @AppStorage("analyticsProMode") private var analyticsProMode: Bool = false
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var showCreateWallet = false
-    @State private var selectedTab: Int? = 0
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
-
-    var body: some View {
-        Group {
-            if horizontalSizeClass == .regular && useSidebarOniPad {
-                // Sidebar for iPad / Mac / Regular width screens
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    List(selection: $selectedTab) {
-                        NavigationLink(value: 0) {
-                            Label(L10n.Tab.home, systemImage: "house.fill")
-                        }
-                        NavigationLink(value: 1) {
-                            Label(L10n.Tab.analysis, systemImage: "chart.pie")
-                        }
-                        NavigationLink(value: 2) {
-                            Label(L10n.Budget.title, systemImage: "dollarsign.circle.fill")
-                        }
-                        NavigationLink(value: 3) {
-                            Label(L10n.Tab.more, systemImage: "ellipsis.circle")
-                        }
-                    }
-                    .listStyle(.sidebar)
-                    .navigationTitle("QuaraMoney")
-                    .appFont(.body)
-                } detail: {
-                    if let selectedTab = selectedTab {
-                        detailView(for: selectedTab)
-                            .id(selectedTab)
-                    } else {
-                        Text("Select an item")
-                            .appFont(.headline)
-                    }
-                }
-            } else {
-                // Tab Bar for iPhone / Compact width screens
-                TabView(selection: Binding($selectedTab, replacingNilWith: 0)) {
-                    HomeView(modelContext: modelContext)
-                        .tabItem {
-                            Label(L10n.Tab.home, systemImage: "house.fill")
-                        }
-                        .tag(0)
-                    
-                    LazyView(AnalysisView())
-                        .tabItem {
-                            Label(L10n.Tab.analysis, systemImage: "chart.pie")
-                        }
-                        .tag(1)
-                    
-                    LazyView(BudgetTabView())
-                        .tabItem {
-                            Label(L10n.Budget.title, systemImage: "dollarsign.circle.fill")
-                        }
-                        .tag(2)
-
-                    LazyView(MoreView())
-                        .tabItem {
-                            Label(L10n.Tab.more, systemImage: "ellipsis.circle")
-                        }
-                        .tag(3)
-                }
-            }
-        }
-        .onAppear {
-            if wallets.isEmpty {
-                showCreateWallet = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openAddTransaction)) { _ in
-            selectedTab = 0
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
-            MoreView.pendingRecurringReview = true // consumed by MoreView on appear
-            selectedTab = 3 // More tab — MoreView pushes the Recurring screen
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openProAnalytics)) { _ in
-            analyticsProMode = true
-            selectedTab = 1 // Analysis tab — routes to the Pro dashboard
-        }
-        .sheet(isPresented: $showCreateWallet) {
-            AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
-                .interactiveDismissDisabled()
-        }
-    }
-
-    @ViewBuilder
-    private func detailView(for tab: Int) -> some View {
-        switch tab {
-        case 0: HomeView(modelContext: modelContext)
-        case 1: LazyView(AnalysisView())
-        case 2: LazyView(BudgetTabView())
-        case 3: LazyView(MoreView())
-        default: HomeView(modelContext: modelContext)
-        }
-    }
-}
-
-extension Binding {
-    init(_ source: Binding<Value?>, replacingNilWith defaultValue: Value) {
-        self.init(
-            get: { source.wrappedValue ?? defaultValue },
-            set: { source.wrappedValue = $0 }
-        )
     }
 }
 

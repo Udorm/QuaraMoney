@@ -16,8 +16,11 @@ struct AnalysisView: View {
             AnalysisContentView(vm: viewModel, proMode: $proMode)
                 .onAppear {
                     viewModel.configure(modelContext: modelContext)
-                    viewModel.refreshData()
+                    // Visibility gating: refreshes on appear only when data
+                    // changed while hidden (or on first load).
+                    viewModel.setVisible(true)
                 }
+                .onDisappear { viewModel.setVisible(false) }
         }
     }
 }
@@ -109,10 +112,11 @@ struct SpendingTrendChart: View {
                 // Back Button
                 Button {
                     slideDirection = 1
+                    // Completion-based reset: a timer could desync from the
+                    // animation if the user tapped again within 0.3 s.
                     withAnimation(.easeInOut(duration: 0.3)) {
                         vm.navigateBack()
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    } completion: {
                         slideDirection = 0
                     }
                 } label: {
@@ -143,8 +147,7 @@ struct SpendingTrendChart: View {
                     slideDirection = -1
                     withAnimation(.easeInOut(duration: 0.3)) {
                         vm.navigateForward()
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    } completion: {
                         slideDirection = 0
                     }
                 } label: {
@@ -188,6 +191,8 @@ struct SpendingTrendChart: View {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     dragOffset = 0
                                     vm.navigateBack()
+                                } completion: {
+                                    slideDirection = 0
                                 }
                             } else if value.translation.width < -60 {
                                 // Swipe left -> go forward
@@ -195,16 +200,14 @@ struct SpendingTrendChart: View {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     dragOffset = 0
                                     vm.navigateForward()
+                                } completion: {
+                                    slideDirection = 0
                                 }
                             } else {
                                 // Snap back
                                 withAnimation(.spring()) {
                                     dragOffset = 0
                                 }
-                            }
-                            
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                slideDirection = 0
                             }
                         }
                 )
@@ -310,6 +313,12 @@ struct CategoryBreakdownChart: View {
                 
             }
             
+            // Totals hoisted out of the ForEach: computing `total` inside every
+            // row was O(n²) Decimal addition per render.
+            let maxAmount = vm.categoryStats.first?.amount ?? 1
+            let total = vm.categoryStats.reduce(0) { $0 + $1.amount }
+            let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
+
             LazyVStack(spacing: 0) {
                 ForEach(vm.categoryStats) { stat in
                     Button {
@@ -326,29 +335,20 @@ struct CategoryBreakdownChart: View {
                                     Text(stat.name)
                                         .font(.app(.subheadline, weight: .medium))
 
-                                    GeometryReader { geo in
-                                        ZStack(alignment: .leading) {
-                                            Capsule().fill(Color(.systemGray4).opacity(0.5))
-                                                .frame(height: 6)
-
-                                            let maxAmount = vm.categoryStats.first?.amount ?? 1
-                                            let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
-
-                                            Capsule().fill(Color(hex: stat.colorHex) ?? .blue)
-                                                .frame(width: geo.size.width * CGFloat(ratio), height: 6)
-                                        }
-                                    }
-                                    .frame(height: 6)
+                                    let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
+                                    CategoryShareBar(
+                                        ratio: ratio,
+                                        tint: Color(hex: stat.colorHex) ?? .blue
+                                    )
                                 }
 
                                 Spacer()
 
                                 VStack(alignment: .trailing) {
-                                    Text(stat.amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
+                                    Text(stat.amount.formattedAmount(for: preferredCurrency))
                                         .font(.app(.callout))
                                         .monospacedDigit()
 
-                                    let total = vm.categoryStats.reduce(0) { $0 + $1.amount }
                                     let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
                                     Text(percent.formatted(.percent.precision(.fractionLength(0))))
                                         .font(.app(.caption2))
@@ -395,6 +395,22 @@ struct CategoryBreakdownChart: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+    }
+}
+
+/// Proportional share bar for category rows. Native linear ProgressView
+/// instead of the previous per-row GeometryReader capsule (which forced an
+/// extra layout pass for every row).
+private struct CategoryShareBar: View {
+    let ratio: Double
+    let tint: Color
+
+    var body: some View {
+        ProgressView(value: max(0, min(1, ratio)))
+            .progressViewStyle(.linear)
+            .tint(tint)
+            .scaleEffect(x: 1, y: 1.5, anchor: .center)
+            .frame(height: 6)
     }
 }
 

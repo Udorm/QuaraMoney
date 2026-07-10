@@ -44,22 +44,36 @@ struct AddTransactionContainer: View {
         return true
     }
 
-    var body: some View {
-        let viewModel = AddTransactionViewModel(
-            dataService: SwiftDataService(modelContext: modelContext),
-            initialWallet: initialWallet,
-            transaction: transaction,
-            initialDate: initialDate,
-            initialDebt: initialDebt,
-            initialCategory: initialCategory,
-            initialAmount: initialAmount,
-            initialType: initialType
-        )
+    /// Created lazily on first appearance — building it inline in `body` meant
+    /// a full view model (copying every field of the edited transaction) was
+    /// constructed on every container re-evaluation and then discarded.
+    @State private var viewModel: AddTransactionViewModel?
 
-        if usesCompactEntry {
-            CompactAddTransactionView(viewModel: viewModel, isNewTransaction: isNewTransaction)
-        } else {
-            AddTransactionView(viewModel: viewModel, isNewTransaction: isNewTransaction)
+    var body: some View {
+        Group {
+            if let viewModel {
+                if usesCompactEntry {
+                    CompactAddTransactionView(viewModel: viewModel, isNewTransaction: isNewTransaction)
+                } else {
+                    AddTransactionView(viewModel: viewModel, isNewTransaction: isNewTransaction)
+                }
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear {
+            if viewModel == nil {
+                viewModel = AddTransactionViewModel(
+                    dataService: SwiftDataService(modelContext: modelContext),
+                    initialWallet: initialWallet,
+                    transaction: transaction,
+                    initialDate: initialDate,
+                    initialDebt: initialDebt,
+                    initialCategory: initialCategory,
+                    initialAmount: initialAmount,
+                    initialType: initialType
+                )
+            }
         }
     }
 }

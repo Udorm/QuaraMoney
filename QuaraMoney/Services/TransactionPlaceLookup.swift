@@ -63,12 +63,9 @@ enum TransactionPlaceLookup {
         let shortAddress = mapItem.address?.shortAddress
         let representations = mapItem.addressRepresentations
 
-        var applePlaceID: String?
-        var alternatePlaceIDs: [String] = []
-        if #available(iOS 18.0, *) {
-            applePlaceID = mapItem.identifier?.rawValue
-            alternatePlaceIDs = mapItem.alternateIdentifiers.map(\.rawValue)
-        }
+        // Deployment target is iOS 26 — no availability guard needed.
+        let applePlaceID = mapItem.identifier?.rawValue
+        let alternatePlaceIDs = mapItem.alternateIdentifiers.map(\.rawValue)
 
         return TransactionLocationSelection(
             displayName: mapItem.name ?? fullAddress,

@@ -43,25 +43,29 @@ class WalletDetailViewModel {
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let searchSubject = PassthroughSubject<String, Never>()
 
+    /// In-flight fetch; cancelled + generation-checked so rapid period/search
+    /// changes can't apply stale results out of order.
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshGeneration = 0
+
     @ObservationIgnored private var startDate: Date = Date()
     @ObservationIgnored private var endDate: Date = Date()
 
     var filterDescription: String {
         let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
 
         switch selectedTab {
         case .month(let date):
             if calendar.isDate(date, equalTo: Date(), toGranularity: .month) {
                 return "This Month"
             } else {
-                formatter.dateFormat = "MMMM yyyy"
-                return formatter.string(from: date)
+                return AppDateFormatterCache.formatter(dateFormat: "MMMM yyyy", locale: .app)
+                    .string(from: date)
             }
         case .custom:
-            formatter.dateStyle = .medium
-            return "\(formatter.string(from: startDate)) - \(formatter.string(from: endDate))"
+            let start = startDate.appFormatted(date: .abbreviated, time: .omitted)
+            let end = endDate.appFormatted(date: .abbreviated, time: .omitted)
+            return "\(start) - \(end)"
         }
     }
 
@@ -132,7 +136,10 @@ class WalletDetailViewModel {
         let rates = CurrencyManager.shared.rates
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
 
-        Task.detached(priority: .userInitiated) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        refreshTask?.cancel()
+        refreshTask = Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)
 
             let result = TransactionProcessor.fetchAndProcess(
@@ -146,11 +153,14 @@ class WalletDetailViewModel {
                 sortOption: currentSortOption
             )
 
-            await self.applyTransactions(result)
+            guard !Task.isCancelled else { return }
+            await self.applyTransactions(result, generation: generation)
         }
     }
 
-    private func applyTransactions(_ result: ProcessedTransactionDataID) {
+    private func applyTransactions(_ result: ProcessedTransactionDataID, generation: Int) {
+        // A newer fetch superseded this one while it was in flight.
+        guard generation == refreshGeneration else { return }
         var resolvedTransactions: [Transaction] = []
 
         for id in result.sortedTransactionIds {

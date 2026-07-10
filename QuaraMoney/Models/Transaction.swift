@@ -3,11 +3,16 @@ import Foundation
 
 @Model
 final class Transaction {
-    // Index the date column to accelerate the date-range scans used throughout
-    // reporting/budgets (TransactionProcessor.makeDescriptor, BudgetCalculator).
+    // Indexes (store-level; additive, no schema version bump needed):
+    // - [date]            — date-range scans used throughout reporting/budgets
+    //                       (TransactionProcessor.makeDescriptor, BudgetCalculator).
+    // - [deletedAt, date] — every read path filters the soft-delete tombstones
+    //                       (`deletedAt == nil`) before the date range; the
+    //                       compound index lets SQLite satisfy both together.
+    // - [needsSync]       — the sync engine's dirty-row scans run on every push.
     // Note: only primitive columns are indexable — `type` is a Codable enum and
     // cannot participate in a SwiftData index.
-    #Index<Transaction>([\.date])
+    #Index<Transaction>([\.date], [\.deletedAt, \.date], [\.needsSync])
 
     var id: UUID
 

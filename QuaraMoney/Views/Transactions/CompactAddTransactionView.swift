@@ -14,6 +14,10 @@ struct CompactAddTransactionView: View {
     @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
 
+    /// Shared with `AddTransactionContainer`; flipping it swaps this screen for
+    /// the classic layout live (the container keeps the same view model).
+    @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
+
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -278,7 +282,6 @@ struct CompactAddTransactionView: View {
                 bottomBar
             }
             .background(Color(.systemGroupedBackground))
-            .ignoresSafeArea(.container, edges: .bottom)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -291,6 +294,9 @@ struct CompactAddTransactionView: View {
                         Image(systemName: "xmark")
                     }
                     .accessibilityLabel(L10n.Common.cancel)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    layoutMenu
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
                     Button {
@@ -471,9 +477,8 @@ struct CompactAddTransactionView: View {
         guard let wallet = viewModel.selectedWallet,
               viewModel.selectedCurrencyCode != wallet.currencyCode else { return nil }
 
-        let rate = viewModel.exchangeRate
-        let rateString = rate.formatted(.number.precision(.significantDigits(2...6)))
-        return "1 \(viewModel.selectedCurrencyCode) ≈ \(rateString) \(wallet.currencyCode)"
+        let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
+        return "≈ \(convertedAmount.formattedAmount(for: wallet.currencyCode))"
     }
 
     private var amountDisplayText: String {
@@ -536,6 +541,22 @@ struct CompactAddTransactionView: View {
         return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
 
+    /// Nav-bar overflow menu: pick the classic or compact entry layout.
+    @ViewBuilder
+    private var layoutMenu: some View {
+        Menu {
+            Picker("transaction.layout.menu".localized, selection: $useCompactTransactionEntry) {
+                Label("transaction.layout.classic".localized, systemImage: "list.bullet.rectangle")
+                    .tag(false)
+                Label("transaction.layout.compact".localized, systemImage: "rectangle.compress.vertical")
+                    .tag(true)
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("transaction.layout.menu".localized)
+    }
+
     private var amountCard: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
@@ -547,6 +568,10 @@ struct CompactAddTransactionView: View {
                 
                 // Amount input in the middle at the right
                 HStack(alignment: .center, spacing: 4) {
+                    Text(String.currencySymbol(for: viewModel.selectedCurrencyCode))
+                        .font(.app(size: 28, weight: .semibold))
+                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
+
                     Text(amountDisplayText)
                         .font(.app(size: 44, weight: .bold))
                         .minimumScaleFactor(0.4)
@@ -571,7 +596,7 @@ struct CompactAddTransactionView: View {
             .padding(.horizontal, 8)
             
             if let exchangeRateStr = exchangeRateString {
-                Label(exchangeRateStr, systemImage: "lock.fill")
+                Text(exchangeRateStr)
                     .font(.app(.footnote))
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 6)

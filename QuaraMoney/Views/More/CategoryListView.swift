@@ -6,44 +6,48 @@ struct CategoryListView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingAddCategory = false
     @State private var categoryToEdit: Category?
-    
+    @State private var searchText = ""
+
+    private var filteredCategories: [Category] {
+        guard !searchText.isEmpty else { return categories }
+        return categories.filter {
+            $0.displayName.localizedCaseInsensitiveContains(searchText)
+                || $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
     var incomeCategories: [Category] {
-        categories.filter { $0.type == .income }
+        filteredCategories.filter { $0.type == .income }
     }
-    
+
     var expenseCategories: [Category] {
-        categories.filter { $0.type == .expense }
+        filteredCategories.filter { $0.type == .expense }
     }
-    
+
     var body: some View {
         List {
+            if incomeCategories.isEmpty && expenseCategories.isEmpty {
+                if !searchText.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             if !incomeCategories.isEmpty {
                 Section(L10n.Transaction.TransactionType.income) {
                     ForEach(incomeCategories) { category in
-                        CategoryRow(category: category)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if !category.isSystem {
-                                    categoryToEdit = category
-                                }
-                            }
+                        categoryRow(category)
                     }
                     .onDelete { indexSet in
                         deleteCategory(at: indexSet, from: incomeCategories)
                     }
                 }
             }
-            
+
             if !expenseCategories.isEmpty {
                 Section(L10n.Transaction.TransactionType.expense) {
                     ForEach(expenseCategories) { category in
-                        CategoryRow(category: category)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if !category.isSystem {
-                                    categoryToEdit = category
-                                }
-                            }
+                        categoryRow(category)
                     }
                     .onDelete { indexSet in
                         deleteCategory(at: indexSet, from: expenseCategories)
@@ -52,6 +56,8 @@ struct CategoryListView: View {
             }
         }
         .navigationTitle(L10n.Category.title)
+        .searchable(text: $searchText)
+        .searchToolbarBehavior(.minimize)
         .syncPullToRefresh(modelContext)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -67,7 +73,17 @@ struct CategoryListView: View {
             AddCategoryView(categoryToEdit: category)
         }
     }
-    
+
+    // Every row is tappable — system categories open in read-only detail,
+    // user categories open the editor.
+    private func categoryRow(_ category: Category) -> some View {
+        CategoryRow(category: category)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                categoryToEdit = category
+            }
+    }
+
     private func deleteCategory(at offsets: IndexSet, from list: [Category]) {
         for index in offsets {
             let category = list[index]
@@ -86,24 +102,31 @@ struct CategoryListView: View {
 
 struct CategoryRow: View {
     let category: Category
-    
+
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: category.icon)
+                .font(.app(.subheadline))
+                .foregroundColor(.white)
                 .frame(width: 32, height: 32)
                 .background(Color(hex: category.colorHex) ?? .gray)
-                .foregroundColor(.white)
                 .clipShape(Circle())
-            
+
             Text(category.displayName)
 
             Spacer()
-            
+
+            // Lock badge signals the category can be viewed but not edited/deleted.
             if category.isSystem {
                 Image(systemName: "lock.fill")
-                    .font(.caption)
+                    .font(.app(.caption))
                     .foregroundColor(.secondary)
             }
+
+            // Chevron signals the whole row is tappable (opens detail).
+            Image(systemName: "chevron.right")
+                .font(.app(.footnote, weight: .semibold))
+                .foregroundStyle(.tertiary)
         }
         .deleteDisabled(category.isSystem)
     }

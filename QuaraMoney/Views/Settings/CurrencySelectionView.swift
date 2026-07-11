@@ -11,6 +11,10 @@ struct CurrencySelectionView: View {
     // Optional binding for selection mode. If nil, acts as Settings mode (updates preferredCurrencyCode).
     var selection: Binding<String>?
 
+    // Optional currencies pinned to a "Quick Select" section at the top (e.g. the
+    // app's primary USD/KHR pair). Empty = section hidden.
+    var quickSelectCurrencies: [String] = []
+
     var filteredCurrencies: [String] {
         let all = currencyManager.availableCurrencies
         if searchText.isEmpty { return all }
@@ -22,6 +26,16 @@ struct CurrencySelectionView: View {
 
     var body: some View {
         List {
+            if searchText.isEmpty && !quickSelectCurrencies.isEmpty {
+                Section {
+                    ForEach(quickSelectCurrencies, id: \.self) { code in
+                        currencyRow(code)
+                    }
+                } header: {
+                    sectionHeader("Quick Select")
+                }
+            }
+
             if searchText.isEmpty && !currencyManager.recentCurrencies.isEmpty {
                 Section {
                     ForEach(currencyManager.recentCurrencies, id: \.self) { code in

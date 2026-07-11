@@ -16,20 +16,31 @@ struct AuthSheetView: View {
     @EnvironmentObject private var auth: SupabaseAuthManager
     @Environment(\.dismiss) private var dismiss
 
+    @State private var name = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
     @State private var showPassword = false
     @FocusState private var focusedField: Field?
 
-    private enum Field { case email, password }
+    private enum Field { case name, email, password, confirmPassword }
 
     private var isSignIn: Bool { mode == .signIn }
 
+    /// Only shown/validated in create-account mode.
+    private var passwordsMatch: Bool { password == confirmPassword }
+
     private var canSubmit: Bool {
-        !auth.isWorking
-            && !email.trimmingCharacters(in: .whitespaces).isEmpty
-            // Supabase enforces a 6-character minimum on new passwords.
-            && password.count >= (isSignIn ? 1 : 6)
+        guard !auth.isWorking,
+              !email.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        if isSignIn {
+            return password.count >= 1
+        }
+        // Create account: name required, 6-char password minimum (Supabase
+        // enforces it), and the confirmation must match.
+        return !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && password.count >= 6
+            && passwordsMatch
     }
 
     var body: some View {
@@ -50,7 +61,10 @@ struct AuthSheetView: View {
                     submitButton
 
                     if isSignIn {
-                        magicLinkButton
+                        VStack(spacing: 14) {
+                            magicLinkButton
+                            forgotPasswordButton
+                        }
                     }
 
                     if let error = auth.errorMessage {
@@ -130,11 +144,21 @@ struct AuthSheetView: View {
     private var credentialFields: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Image(systemName: "envelope")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24)
+                if !isSignIn {
+                    fieldRow(icon: "person") {
+                        TextField("Name", text: $name)
+                            .font(.app(.body))
+                            .textContentType(.name)
+                            .textInputAutocapitalization(.words)
+                            .autocorrectionDisabled()
+                            .focused($focusedField, equals: .name)
+                            .submitLabel(.next)
+                            .onSubmit { focusedField = .email }
+                    }
+                    fieldDivider
+                }
 
+                fieldRow(icon: "envelope") {
                     TextField("Email", text: $email)
                         .font(.app(.body))
                         .textContentType(.emailAddress)
@@ -145,17 +169,10 @@ struct AuthSheetView: View {
                         .submitLabel(.next)
                         .onSubmit { focusedField = .password }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
 
-                Divider()
-                    .padding(.leading, 52)
+                fieldDivider
 
-                HStack(spacing: 12) {
-                    Image(systemName: "lock")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24)
-
+                fieldRow(icon: "lock") {
                     Group {
                         if showPassword {
                             TextField("Password", text: $password)
@@ -168,8 +185,14 @@ struct AuthSheetView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .focused($focusedField, equals: .password)
-                    .submitLabel(.go)
-                    .onSubmit { if canSubmit { submit() } }
+                    .submitLabel(isSignIn ? .go : .next)
+                    .onSubmit {
+                        if isSignIn {
+                            if canSubmit { submit() }
+                        } else {
+                            focusedField = .confirmPassword
+                        }
+                    }
 
                     Button {
                         showPassword.toggle()
@@ -181,8 +204,27 @@ struct AuthSheetView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(showPassword ? "Hide password" : "Show password")
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+
+                if !isSignIn {
+                    fieldDivider
+
+                    fieldRow(icon: "lock.rotation") {
+                        Group {
+                            if showPassword {
+                                TextField("Confirm password", text: $confirmPassword)
+                            } else {
+                                SecureField("Confirm password", text: $confirmPassword)
+                            }
+                        }
+                        .font(.app(.body))
+                        .textContentType(.newPassword)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .confirmPassword)
+                        .submitLabel(.go)
+                        .onSubmit { if canSubmit { submit() } }
+                    }
+                }
             }
             .background(
                 Color(.secondarySystemGroupedBackground),
@@ -190,12 +232,38 @@ struct AuthSheetView: View {
             )
 
             if !isSignIn {
-                Text("Use at least 6 characters.")
-                    .font(.app(.caption))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 16)
+                if !confirmPassword.isEmpty && !passwordsMatch {
+                    Label("Passwords don't match.", systemImage: "exclamationmark.circle")
+                        .font(.app(.caption))
+                        .foregroundStyle(.red)
+                        .padding(.leading, 16)
+                } else {
+                    Text("Use at least 6 characters.")
+                        .font(.app(.caption))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 16)
+                }
             }
         }
+    }
+
+    /// One labelled input row inside the grouped field card.
+    private func fieldRow<Content: View>(
+        icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
+
+    private var fieldDivider: some View {
+        Divider().padding(.leading, 52)
     }
 
     // MARK: - Actions
@@ -226,6 +294,16 @@ struct AuthSheetView: View {
             Task { await auth.sendMagicLink(email: email) }
         } label: {
             Label("Email me a sign-in link instead", systemImage: "wand.and.sparkles")
+                .font(.app(.footnote, weight: .medium))
+        }
+        .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    private var forgotPasswordButton: some View {
+        Button {
+            Task { await auth.sendPasswordReset(email: email) }
+        } label: {
+            Text("Forgot password?")
                 .font(.app(.footnote, weight: .medium))
         }
         .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -273,7 +351,7 @@ struct AuthSheetView: View {
         Task {
             switch mode {
             case .signIn: await auth.signIn(email: email, password: password)
-            case .signUp: await auth.signUp(email: email, password: password)
+            case .signUp: await auth.signUp(email: email, password: password, name: name)
             }
         }
     }

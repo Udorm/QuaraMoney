@@ -170,9 +170,16 @@ struct QuaraMoneyApp: App {
             .environmentObject(languageManager)
             .environmentObject(authManager)
             .onOpenURL { url in
-                // Auth callbacks (magic link / email confirmation) for the
-                // quaramoney:// scheme. No-op when sync is off / unconfigured.
+                // Auth callbacks (magic link / email confirmation / password
+                // recovery) for the quaramoney:// scheme. No-op when sync is
+                // off / unconfigured.
                 authManager.handleCallback(url)
+            }
+            // Password-recovery links sign the user in and must land on the
+            // "set new password" step, wherever the app was when the link opened.
+            .sheet(isPresented: $authManager.passwordRecoveryPending) {
+                ResetPasswordSheetView()
+                    .environmentObject(authManager)
             }
             .task {
                 // Track local edits so the sync engine can detect changes.
@@ -187,28 +194,21 @@ struct QuaraMoneyApp: App {
             }
             .onChange(of: authManager.state) { _, _ in
                 if authManager.isSignedIn {
-                    let context = sharedModelContainer.mainContext
-                    // If a different account previously owned this device's local
-                    // data, clear it before adopting the new account (prevents
-                    // cross-account data mixing).
-                    SyncEngine.shared.reconcileAccountIfNeeded(context: context)
-                    Task {
-                        // On first-ever sign-in: check whether both the device and
-                        // cloud have existing data. `.conflict` pauses sync and
-                        // shows the resolution sheet; `.checkFailed` (network)
-                        // blocks sync entirely — proceeding could push duplicate
-                        // data into an unverified cloud state. Realtime is also
-                        // deferred in both cases.
-                        switch await SyncEngine.shared.checkFirstSignInConflict(context: context) {
-                        case .noConflict:
-                            await SyncEngine.shared.syncIfOperational(context: context)
-                            SyncRealtime.shared.start(context: context)
-                        case .conflict, .checkFailed:
-                            break
-                        }
-                    }
+                    // A password-recovery link signs the user in, but they came
+                    // to set a new password — deferring the pipeline keeps the
+                    // data-conflict sheet from landing on top of the reset
+                    // sheet. Re-run below when the reset finishes.
+                    guard !authManager.passwordRecoveryPending else { return }
+                    runPostSignInPipeline()
                 } else {
                     SyncRealtime.shared.stop()
+                }
+            }
+            .onChange(of: authManager.passwordRecoveryPending) { _, pending in
+                // Password reset finished (saved or dismissed): run the pipeline
+                // that was deferred when the recovery link signed the user in.
+                if !pending && authManager.isSignedIn {
+                    runPostSignInPipeline()
                 }
             }
             .preferredColorScheme(selectedTheme.colorScheme)
@@ -317,6 +317,32 @@ struct QuaraMoneyApp: App {
         }
     }
     
+    /// Post-sign-in sync pipeline: account reconcile + first-sign-in conflict
+    /// check, then sync + Realtime. Runs on auth-state change — or, when the
+    /// sign-in came from a password-recovery link, after the reset sheet closes.
+    private func runPostSignInPipeline() {
+        let context = sharedModelContainer.mainContext
+        // If a different account previously owned this device's local
+        // data, clear it before adopting the new account (prevents
+        // cross-account data mixing).
+        SyncEngine.shared.reconcileAccountIfNeeded(context: context)
+        Task {
+            // On first-ever sign-in: check whether both the device and
+            // cloud have existing data. `.conflict` pauses sync and
+            // shows the resolution sheet; `.checkFailed` (network)
+            // blocks sync entirely — proceeding could push duplicate
+            // data into an unverified cloud state. Realtime is also
+            // deferred in both cases.
+            switch await SyncEngine.shared.checkFirstSignInConflict(context: context) {
+            case .noConflict:
+                await SyncEngine.shared.syncIfOperational(context: context)
+                SyncRealtime.shared.start(context: context)
+            case .conflict, .checkFailed:
+                break
+            }
+        }
+    }
+
     /// Once per launch: the `.task` that calls this is attached to ContentView,
     /// whose identity resets on language change (`.id(fontRefreshID)`) — without
     /// the guard, every language switch re-ran budget rollovers, category

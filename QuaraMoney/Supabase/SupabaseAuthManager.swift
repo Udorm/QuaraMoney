@@ -28,6 +28,21 @@ final class SupabaseAuthManager: ObservableObject {
     @Published var infoMessage: String?
     /// True while an auth network call is in flight.
     @Published var isWorking = false
+    /// True after the app was opened from a password-recovery link: the user is
+    /// signed in with a recovery session and must be shown the "set new
+    /// password" sheet. Cleared when the password is updated or the sheet is
+    /// dismissed. While true, the app defers the post-sign-in sync pipeline
+    /// (account reconcile + first-sign-in conflict check) so the data-conflict
+    /// sheet can't appear on top of the password reset.
+    @Published var passwordRecoveryPending = false
+
+    /// Persisted marker that THIS device requested a password reset, so the next
+    /// auth deep-link callback is treated as the recovery link. Needed because
+    /// the PKCE flow (the SDK default, which this app uses) never emits the
+    /// `.passwordRecovery` event — only `.signedIn`. PKCE links can only be
+    /// completed on the requesting device (the code verifier is local), so a
+    /// device-local flag is exactly as reliable as the flow itself.
+    private let recoveryFlowRequestedKey = "authRecoveryFlowRequested.v1"
 
     private var observationTask: Task<Void, Never>?
 
@@ -39,6 +54,16 @@ final class SupabaseAuthManager: ObservableObject {
     var currentEmail: String? {
         if case let .signedIn(email) = state { return email }
         return nil
+    }
+
+    /// The display name stored on the Supabase auth account (captured at
+    /// sign-up, in `user_metadata.display_name`). The `profiles` table remains
+    /// the syncing source of truth; this is the account-level fallback used when
+    /// no profile row exists yet.
+    var currentDisplayName: String? {
+        guard let name = client?.auth.currentUser?.userMetadata["display_name"]?.stringValue,
+              !name.isEmpty else { return nil }
+        return name
     }
 
     private var client: SupabaseClient? { SupabaseManager.shared.client }
@@ -65,6 +90,13 @@ final class SupabaseAuthManager: ObservableObject {
                     }
                 case .signedOut:
                     self.state = .signedOut
+                case .passwordRecovery:
+                    // Opened from a reset-password email link: the session is
+                    // valid, but the user came here to choose a new password.
+                    if let session = change.session, !session.isExpired {
+                        self.state = .signedIn(email: session.user.email ?? "")
+                        self.passwordRecoveryPending = true
+                    }
                 default:
                     break
                 }
@@ -74,12 +106,24 @@ final class SupabaseAuthManager: ObservableObject {
 
     // MARK: - Actions
 
-    func signUp(email: String, password: String) async {
+    func signUp(email: String, password: String, name: String = "") async {
         guard let client else { return }
         beginWork()
         defer { isWorking = false }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let response = try await client.auth.signUp(email: email, password: password)
+            let response = try await client.auth.signUp(
+                email: email,
+                password: password,
+                // Stash the name on the auth account so it survives even before
+                // a `profiles` row exists (and on any future fresh device).
+                data: trimmedName.isEmpty ? nil : ["display_name": .string(trimmedName)]
+            )
+            // Seed the name locally so it shows immediately and the next sync
+            // pushes it up to the `profiles` table (the syncing source of truth).
+            if !trimmedName.isEmpty {
+                ProfileSyncService.shared.setDisplayNameLocally(trimmedName)
+            }
             // When email confirmation is enabled, no session is returned yet.
             if response.session == nil {
                 infoMessage = "Check your email to confirm your account, then sign in."
@@ -95,6 +139,9 @@ final class SupabaseAuthManager: ObservableObject {
         defer { isWorking = false }
         do {
             _ = try await client.auth.signIn(email: email, password: password)
+            // Signed in normally — any earlier reset request is moot; don't let
+            // its marker hijack a future magic-link callback.
+            UserDefaults.standard.removeObject(forKey: recoveryFlowRequestedKey)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -109,9 +156,48 @@ final class SupabaseAuthManager: ObservableObject {
                 email: email,
                 redirectTo: SupabaseConfig.authCallbackURL
             )
+            // A magic-link request supersedes any earlier reset request — its
+            // callback must not be misread as a recovery link.
+            UserDefaults.standard.removeObject(forKey: recoveryFlowRequestedKey)
             infoMessage = "We emailed you a sign-in link. Open it on this device."
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Emails a password-reset link. The link opens the app via the same
+    /// `quaramoney://auth-callback` deep link as magic links; the resulting
+    /// `.passwordRecovery` event surfaces the "set new password" sheet.
+    func sendPasswordReset(email: String) async {
+        guard let client else { return }
+        beginWork()
+        defer { isWorking = false }
+        do {
+            try await client.auth.resetPasswordForEmail(
+                email.trimmingCharacters(in: .whitespaces),
+                redirectTo: SupabaseConfig.authCallbackURL
+            )
+            UserDefaults.standard.set(true, forKey: recoveryFlowRequestedKey)
+            infoMessage = "We emailed you a password-reset link. Open it on this device."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Sets a new password for the signed-in (recovery) session. Returns true
+    /// on success so the sheet knows to dismiss.
+    func updatePassword(_ newPassword: String) async -> Bool {
+        guard let client else { return false }
+        beginWork()
+        defer { isWorking = false }
+        do {
+            _ = try await client.auth.update(user: UserAttributes(password: newPassword))
+            passwordRecoveryPending = false
+            infoMessage = "Your password has been updated."
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -163,16 +249,48 @@ final class SupabaseAuthManager: ObservableObject {
     }
 
     /// Completes an auth flow opened via the `quaramoney://auth-callback` deep link
-    /// (magic link / email confirmation). Wired from the app's `.onOpenURL`.
+    /// (magic link / email confirmation / password recovery). Wired from the
+    /// app's `.onOpenURL`.
     func handleCallback(_ url: URL) {
         guard let client else { return }
+        // Recovery must be detected app-side: under PKCE the SDK never emits
+        // `.passwordRecovery`, and the flag has to be up BEFORE the exchange so
+        // the `.signedIn` state change already sees a recovery in progress.
+        let isRecovery = UserDefaults.standard.bool(forKey: recoveryFlowRequestedKey)
+            || Self.urlIndicatesRecovery(url)
+        if isRecovery { passwordRecoveryPending = true }
         Task {
             do {
                 try await client.auth.session(from: url)
+                if isRecovery {
+                    UserDefaults.standard.removeObject(forKey: recoveryFlowRequestedKey)
+                }
             } catch {
+                // Expired/invalid link: stand down so the reset sheet doesn't
+                // sit on top of a signed-out app.
+                if isRecovery { passwordRecoveryPending = false }
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    /// True when the callback URL itself is marked as a recovery link
+    /// (`type=recovery` in the query or fragment — present in implicit-flow
+    /// links; the persisted request marker covers PKCE).
+    private nonisolated static func urlIndicatesRecovery(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+        if components.queryItems?.contains(where: { $0.name == "type" && $0.value == "recovery" }) == true {
+            return true
+        }
+        if let fragment = components.fragment {
+            var fragmentComponents = URLComponents()
+            fragmentComponents.query = fragment
+            return fragmentComponents.queryItems?
+                .contains(where: { $0.name == "type" && $0.value == "recovery" }) == true
+        }
+        return false
     }
 
     private func beginWork() {

@@ -33,7 +33,7 @@ struct TransactionWalletPickerSheet: View {
                             ) {
                                 onSelect(wallet)
                             }
-                            .alignmentGuide(.listRowSeparatorLeading) { _ in 44 }
+                            .alignmentGuide(.listRowSeparatorLeading) { _ in 52 }
                         }
                     }
                 } header: {
@@ -110,11 +110,17 @@ struct WalletColorRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: wallet.icon)
-                    .font(.app(.subheadline))
-                    .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(color)
-                    .clipShape(Circle())
+                    .font(.app(.title3))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        LinearGradient(
+                            colors: [color, color.opacity(0.72)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(wallet.name)

@@ -12,11 +12,17 @@ struct TransactionCategoryPickerSheet: View {
     /// Engine-ranked categories for the current context (score 0 = no signal).
     let rankedSuggestions: [ScoredCategory]
     let selectedCategoryID: UUID?
+    /// The transaction's type, used to seed a newly created category.
+    let transactionType: TransactionType
     let onSelect: (Category) -> Void
     let onDismiss: () -> Void
 
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
+    @State private var showingAddCategory = false
+    /// Snapshot of category IDs taken just before opening the add sheet so the
+    /// freshly created category can be identified and auto-selected on dismiss.
+    @State private var knownCategoryIDsBeforeAdd: Set<UUID> = []
     /// Persisted layout preference for the full list (suggestions are always a grid).
     @AppStorage("categoryPicker.useGridLayout") private var useGridLayout = true
 
@@ -61,6 +67,14 @@ struct TransactionCategoryPickerSheet: View {
                     }
                     .accessibilityLabel(L10n.Common.cancel)
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        knownCategoryIDsBeforeAdd = Set(allCategories.map(\.id))
+                        showingAddCategory = true
+                    } label: {
+                        Label(L10n.Category.add, systemImage: "plus")
+                    }
+                }
             }
             .safeAreaBar(edge: .bottom) {
                 searchBar
@@ -69,6 +83,16 @@ struct TransactionCategoryPickerSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemGroupedBackground))
+        .sheet(isPresented: $showingAddCategory, onDismiss: selectNewlyCreatedCategory) {
+            AddCategoryView(initialType: transactionType)
+        }
+    }
+
+    /// After the add-category sheet closes, find the category that wasn't present
+    /// beforehand and select it (which dismisses the picker).
+    private func selectNewlyCreatedCategory() {
+        guard let newCategory = allCategories.first(where: { !knownCategoryIDsBeforeAdd.contains($0.id) }) else { return }
+        onSelect(newCategory)
     }
 
     // MARK: - Search Bar

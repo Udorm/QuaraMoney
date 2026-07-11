@@ -867,6 +867,7 @@ struct AddTransactionView: View {
             allCategories: filteredCategories,
             rankedSuggestions: orderedCategories,
             selectedCategoryID: viewModel.selectedCategory?.id,
+            transactionType: viewModel.type,
             onSelect: { category in
                 viewModel.selectedCategory = category
                 showAllCategories = false

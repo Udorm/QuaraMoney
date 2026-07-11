@@ -519,6 +519,16 @@ final class SyncEngine: ObservableObject {
             #endif
             return
         }
+        // A password-recovery sign-in defers the whole sync pipeline until the
+        // user has set their new password: an un-owned store would otherwise
+        // raise the first-sign-in conflict modal (via the check below) on top of
+        // the reset sheet. The app re-triggers sync when the reset finishes.
+        guard !SupabaseAuthManager.shared.passwordRecoveryPending else {
+            #if DEBUG
+            print("[SyncEngine] syncNow deferred: password recovery in progress")
+            #endif
+            return
+        }
         guard SupabaseFeatureFlags.isOperational, let client = SupabaseManager.shared.client else {
             #if DEBUG
             print("[SyncEngine] syncNow failed: not operational")

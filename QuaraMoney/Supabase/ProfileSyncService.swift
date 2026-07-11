@@ -55,6 +55,16 @@ final class ProfileSyncService {
         defaults.set(Date().timeIntervalSince1970, forKey: updatedAtKey)
     }
 
+    /// Seeds the local display name (e.g. captured at sign-up) and marks it for
+    /// the next push, so a brand-new account's name lands in the `profiles`
+    /// table on the first sync.
+    func setDisplayNameLocally(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        defaults.set(trimmed, forKey: nameKey)
+        noteLocalEdit()
+    }
+
     /// Clears the device copy of the profile. Called on sign-out and on
     /// account switch — profile identity belongs to the account, not the device.
     func clearLocal() {
@@ -127,6 +137,11 @@ final class ProfileSyncService {
     private func apply(_ remote: SyncProfileRow, _ client: SupabaseClient) async throws {
         if let name = remote.display_name, !name.isEmpty {
             defaults.set(name, forKey: nameKey)
+        } else if let metaName = client.auth.currentUser?.userMetadata["display_name"]?.stringValue,
+                  !metaName.isEmpty {
+            // Remote row has no name yet (created before name capture) — fall
+            // back to the name stored on the auth account at sign-up.
+            defaults.set(metaName, forKey: nameKey)
         } else {
             defaults.removeObject(forKey: nameKey)
         }

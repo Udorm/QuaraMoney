@@ -25,16 +25,16 @@ struct EventTransactionListView: View {
         }
         
         guard let payerId = transaction.paidByMemberId else { return "Unknown" }
-        return memberById[payerId]?.name ?? "Unknown"
+        return memberById[payerId]?.name ?? "common.unknown".localized
     }
     
     var body: some View {
         if transactions.isEmpty {
             Section {
                 ContentUnavailableView(
-                    "No Expenses Yet",
+                    "event.noExpensesYet".localized,
                     systemImage: "creditcard",
-                    description: Text("Start tracking by adding an expense.")
+                    description: Text("event.emptyExpenses".localized)
                 )
                 .listRowBackground(Color.clear)
             }
@@ -63,13 +63,13 @@ struct EventTransactionListView: View {
                                 HapticManager.shared.impact(style: .medium)
                                 onDelete(transaction)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(L10n.Common.delete, systemImage: "trash")
                             }
-                            
+
                             Button {
                                 onSelect(transaction)
                             } label: {
-                                Label("Edit", systemImage: "pencil")
+                                Label(L10n.Common.edit, systemImage: "pencil")
                             }
                             .tint(.blue)
                         }
@@ -77,13 +77,13 @@ struct EventTransactionListView: View {
                             Button {
                                 onSelect(transaction)
                             } label: {
-                                Label("Edit", systemImage: "pencil")
+                                Label(L10n.Common.edit, systemImage: "pencil")
                             }
                             Button(role: .destructive) {
                                 HapticManager.shared.impact(style: .medium)
                                 onDelete(transaction)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(L10n.Common.delete, systemImage: "trash")
                             }
                         }
                     }

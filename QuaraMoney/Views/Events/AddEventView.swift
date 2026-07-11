@@ -43,7 +43,7 @@ struct AddEventView: View {
                     TextField(L10n.Event.name, text: $title)
                     
                     HStack {
-                        TextField("Location (Optional)", text: $location)
+                        TextField("event.locationOptional".localized, text: $location)
                         Button {
                             showingLocationPicker = true
                         } label: {
@@ -51,7 +51,7 @@ struct AddEventView: View {
                         }
                     }
                     
-                    Picker("Currency", selection: $currencyCode) {
+                    Picker("transaction.currency".localized, selection: $currencyCode) {
                         ForEach(CurrencyManager.shared.availableCurrencies, id: \.self) { code in
                             Text(code).tag(code)
                         }
@@ -101,10 +101,10 @@ struct AddEventView: View {
                 Section(L10n.EventAdditional.dateTime) {
                     DatePicker(L10n.Budget.startDate, selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                     
-                    Toggle("End Date", isOn: $hasEndDate)
-                    
+                    Toggle("event.endDate".localized, isOn: $hasEndDate)
+
                     if hasEndDate {
-                        DatePicker("End Date", selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
+                        DatePicker("event.endDate".localized, selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
                     }
                 }
                 

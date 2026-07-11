@@ -66,13 +66,13 @@ struct WalletDetailView: View {
                 if case .custom = viewModel.selectedTab {
                     HStack {
                         Spacer()
-                        DatePicker("Start", selection: $viewModel.customStartDate, displayedComponents: .date)
+                        DatePicker("filter.startDate".localized, selection: $viewModel.customStartDate, displayedComponents: .date)
                             .labelsHidden()
                             .appFont(.subheadline)
                         Text("-")
                             .foregroundStyle(.secondary)
                             .appFont(.subheadline)
-                        DatePicker("End", selection: $viewModel.customEndDate, displayedComponents: .date)
+                        DatePicker("filter.endDate".localized, selection: $viewModel.customEndDate, displayedComponents: .date)
                             .labelsHidden()
                             .appFont(.subheadline)
                         Spacer()
@@ -87,9 +87,9 @@ struct WalletDetailView: View {
             if viewModel.transactions.isEmpty {
                 Section {
                     AppEmptyStateView(
-                        "No Transactions",
+                        "home.emptyPeriod.title".localized,
                         systemImage: "list.bullet.clipboard",
-                        description: "No transactions in this period."
+                        description: "home.noTransactions".localized
                     )
                 }
             } else {
@@ -125,7 +125,7 @@ struct WalletDetailView: View {
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Sort transactions")
+                .accessibilityLabel("a11y.sortTransactions".localized)
 
                 Button {
                     showingEditWallet = true

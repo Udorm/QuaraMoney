@@ -54,7 +54,7 @@ struct AddCategoryView: View {
                         .disabled(isSystemCategory)
 
                     // Dropdown menu style type picker.
-                    Picker("Type", selection: $selectedType) {
+                    Picker("common.type".localized, selection: $selectedType) {
                         Text("category.expense".localized).tag(TransactionType.expense)
                         Text("category.income".localized).tag(TransactionType.income)
                     }

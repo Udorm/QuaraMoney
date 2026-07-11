@@ -241,19 +241,19 @@ struct AccountView: View {
                     .frame(width: 30, height: 30)
                     .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
-                Text("Cloud Sync")
+                Text("account.cloudSync".localized)
                     .font(.app(.headline, weight: .semibold))
 
                 Spacer()
 
                 if viewModel.isConfigured {
-                    Toggle("Cloud Sync", isOn: $syncEnabled)
+                    Toggle("account.cloudSync".localized, isOn: $syncEnabled)
                         .labelsHidden()
                 }
             }
 
             if !viewModel.isConfigured {
-                Label("Cloud sync isn't configured in this build.",
+                Label("account.notConfigured".localized,
                       systemImage: "exclamationmark.triangle")
                     .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
@@ -265,7 +265,7 @@ struct AccountView: View {
                     signedOutSection
                 }
             } else {
-                Text("When off, QuaraMoney runs fully offline on this device.")
+                Text("account.offlineFooter".localized)
                     .font(.app(.caption))
                     .foregroundStyle(.secondary)
             }
@@ -288,7 +288,7 @@ struct AccountView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text("This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device.")
+                    Text("account.unsyncedWarning".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -299,10 +299,10 @@ struct AccountView: View {
             }
 
             VStack(spacing: 4) {
-                Text("Back Up Your Data")
+                Text("account.backUp.title".localized)
                     .font(.app(.subheadline, weight: .semibold))
 
-                Text("Sign in so your wallets, transactions, and budgets are safely backed up and follow you to any device.")
+                Text("account.backUp.message".localized)
                     .font(.app(.caption))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -313,7 +313,7 @@ struct AccountView: View {
                 Button {
                     authSheetMode = .signIn
                 } label: {
-                    Text("Sign In")
+                    Text("account.signIn".localized)
                         .font(.app(.body, weight: .semibold))
                         .frame(maxWidth: .infinity)
                 }
@@ -323,7 +323,7 @@ struct AccountView: View {
                 Button {
                     authSheetMode = .signUp
                 } label: {
-                    Text("Create Account")
+                    Text("account.createAccount".localized)
                         .font(.app(.body, weight: .semibold))
                         .frame(maxWidth: .infinity)
                 }
@@ -353,7 +353,7 @@ struct AccountView: View {
                     Circle()
                         .fill(.green)
                         .frame(width: 6, height: 6)
-                    Text("Signed in")
+                    Text("account.signedIn".localized)
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }
@@ -390,11 +390,11 @@ struct AccountView: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
             .disabled(sync.isSyncing)
-            .accessibilityLabel("Sync Now")
+            .accessibilityLabel("account.syncNow".localized)
         }
 
         if sync.isInitialSyncInProgress {
-            Text("Uploading your existing data for the first time. Keep the app open.")
+            Text("account.initialUpload".localized)
                 .font(.app(.caption))
                 .foregroundStyle(.secondary)
         }
@@ -420,20 +420,20 @@ struct AccountView: View {
     }
 
     private var syncStatusTitle: String {
-        if sync.isInitialSyncInProgress { return "Setting up cloud sync…" }
-        if sync.isSyncing { return "Syncing…" }
-        if sync.lastError != nil { return "Sync issue" }
-        if sync.lastSyncDate != nil { return "Up to date" }
-        return "Waiting for first sync"
+        if sync.isInitialSyncInProgress { return "account.sync.settingUp".localized }
+        if sync.isSyncing { return "account.sync.syncing".localized }
+        if sync.lastError != nil { return "account.sync.issue".localized }
+        if sync.lastSyncDate != nil { return "account.sync.upToDate".localized }
+        return "account.sync.waiting".localized
     }
 
     private var syncStatusDetail: String {
         if let error = sync.lastError { return error }
-        if sync.isSyncing { return "Updating your data" }
+        if sync.isSyncing { return "account.sync.updating".localized }
         if let last = sync.lastSyncDate {
-            return "Last synced \(last.formatted(.relative(presentation: .named).locale(.app)))"
+            return "account.sync.lastSynced".localized(with: last.formatted(.relative(presentation: .named).locale(.app)))
         }
-        return "Tap sync to upload your data"
+        return "account.sync.tapToUpload".localized
     }
 
     // MARK: - Sign out / Delete account
@@ -450,7 +450,7 @@ struct AccountView: View {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .font(.app(.subheadline, weight: .semibold))
                     }
-                    Text("Sign Out")
+                    Text("account.signOut".localized)
                         .font(.app(.body, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
@@ -472,7 +472,7 @@ struct AccountView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "trash.fill")
                         .font(.app(.subheadline, weight: .semibold))
-                    Text("Delete Account…")
+                    Text("account.deleteAccount".localized)
                         .font(.app(.body, weight: .semibold))
                 }
                 .foregroundStyle(.red)
@@ -488,23 +488,23 @@ struct AccountView: View {
             }
             .disabled(auth.isWorking || sync.isSyncing)
 
-            Text("Permanently deletes your account and all synced data from the cloud and this device.")
+            Text("account.deleteFooter".localized)
                 .font(.app(.caption))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
         }
         .confirmationDialog(
-            "Delete your account?",
+            "account.deleteConfirm.title".localized,
             isPresented: $showDeleteAccountConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete Account & All Data", role: .destructive) {
+            Button("account.deleteConfirm.action".localized, role: .destructive) {
                 Task { await auth.deleteAccount() }
             }
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: {
-            Text("This permanently deletes your account, all synced data, and receipt images from the cloud, and removes the data from this device. This cannot be undone.")
+            Text("account.deleteConfirm.message".localized)
         }
     }
 

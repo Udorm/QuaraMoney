@@ -120,7 +120,7 @@ struct HomeContentView: View {
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                     }
-                    .accessibilityLabel("Sort transactions")
+                    .accessibilityLabel("a11y.sortTransactions".localized)
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
@@ -349,7 +349,7 @@ struct DailyHeader: View {
                 }
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Add transaction on \(section.date.appFormatted(date: .long, time: .omitted))")
+                .accessibilityLabel("a11y.addTransactionOn".localized(with: section.date.appFormatted(date: .long, time: .omitted)))
             }
         }
         .padding(.vertical, 4)

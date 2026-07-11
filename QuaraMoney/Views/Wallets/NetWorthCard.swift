@@ -75,7 +75,7 @@ struct NetWorthCard: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Net worth, \(total.formattedAmount(for: currencyCode))")
+        .accessibilityLabel("a11y.netWorth".localized(with: total.formattedAmount(for: currencyCode)))
     }
 }
 

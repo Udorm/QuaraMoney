@@ -51,12 +51,12 @@ struct CurrencySelectionView: View {
                     currencyRow(code)
                 }
             } header: {
-                sectionHeader(searchText.isEmpty ? "All Currencies" : "Search Results")
+                sectionHeader(searchText.isEmpty ? "currency.allCurrencies".localized : "common.searchResults".localized)
             }
         }
         .listStyle(.insetGrouped)
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Select Currency")
+        .navigationTitle("settings.selectCurrency".localized)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

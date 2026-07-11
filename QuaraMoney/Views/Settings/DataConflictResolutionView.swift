@@ -19,10 +19,10 @@ struct DataConflictResolutionView: View {
                             .font(.system(size: 52, weight: .light))
                             .foregroundStyle(.orange)
 
-                        Text("Data Conflict")
+                        Text("sync.conflict.title".localized)
                             .appFont(size: 24, weight: .bold)
 
-                        Text("This device has existing data and your cloud account also has data. Choose which one to keep — the other will be permanently deleted.")
+                        Text("sync.conflict.message".localized)
                             .appFont(size: 15)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -50,9 +50,9 @@ struct DataConflictResolutionView: View {
                         ConflictOptionCard(
                             icon: "icloud.and.arrow.down",
                             iconColor: .blue,
-                            title: "Use Cloud Data",
-                            description: "Keep the data from your cloud account. This device's local data will be permanently deleted.",
-                            isDestructiveAction: "This device's data will be deleted",
+                            title: "sync.conflict.useCloud.title".localized,
+                            description: "sync.conflict.useCloud.message".localized,
+                            isDestructiveAction: "sync.conflict.useCloud.warning".localized,
                             isDisabled: isResolving
                         ) {
                             Task { await syncEngine.resolveUseCloud() }
@@ -61,9 +61,9 @@ struct DataConflictResolutionView: View {
                         ConflictOptionCard(
                             icon: "iphone",
                             iconColor: .green,
-                            title: "Keep This Device's Data",
-                            description: "Keep the data on this device and upload it to the cloud. Your existing cloud data will be permanently deleted.",
-                            isDestructiveAction: "Cloud data will be deleted",
+                            title: "sync.conflict.keepLocal.title".localized,
+                            description: "sync.conflict.keepLocal.message".localized,
+                            isDestructiveAction: "sync.conflict.keepLocal.warning".localized,
                             isDisabled: isResolving
                         ) {
                             Task { await syncEngine.resolveKeepLocal() }
@@ -75,13 +75,13 @@ struct DataConflictResolutionView: View {
                     // untouched; the user can re-enable sync in Settings later and
                     // will be asked again.
                     VStack(spacing: 6) {
-                        Button("Decide Later") {
+                        Button("sync.conflict.decideLater".localized) {
                             syncEngine.deferConflictDecision()
                         }
                         .appFont(size: 16, weight: .semibold)
                         .disabled(isResolving)
 
-                        Text("Turns off cloud sync for now — nothing is deleted. You can turn it back on anytime in Settings.")
+                        Text("sync.conflict.decideLater.footer".localized)
                             .appFont(size: 12)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -91,7 +91,7 @@ struct DataConflictResolutionView: View {
                     if isResolving {
                         VStack(spacing: 8) {
                             ProgressView()
-                            Text("Applying…")
+                            Text("sync.conflict.applying".localized)
                                 .appFont(size: 13)
                                 .foregroundStyle(.secondary)
                         }

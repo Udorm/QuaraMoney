@@ -33,7 +33,7 @@ struct SavingsGoalRowView: View {
                             .foregroundStyle(.green)
                             .font(.app(.caption))
                     } else if !goal.isOnTrack(converter: CurrencyManager.shared.convert) {
-                        Text("Behind")
+                        Text("savings.behind".localized)
                             .font(.app(.caption2, weight: .medium))
                             .foregroundStyle(.orange)
                             .padding(.horizontal, 6)

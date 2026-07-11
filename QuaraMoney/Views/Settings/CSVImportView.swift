@@ -28,7 +28,7 @@ struct CSVImportView: View {
                     completionView
                 }
             }
-            .navigationTitle("Import Transactions")
+            .navigationTitle("csv.title".localized)
             .navigationBarTitleDisplayMode(.inline)
 
             .fileImporter(
@@ -46,10 +46,10 @@ struct CSVImportView: View {
                     viewModel.showError = true
                 }
             }
-            .alert("Error", isPresented: $viewModel.showError) {
-                Button("OK", role: .cancel) { }
+            .alert(L10n.Common.error, isPresented: $viewModel.showError) {
+                Button(L10n.Common.ok, role: .cancel) { }
             } message: {
-                Text(viewModel.errorMessage ?? "An error occurred.")
+                Text(viewModel.errorMessage ?? "common.errorOccurred".localized)
             }
         }
     }
@@ -64,10 +64,10 @@ struct CSVImportView: View {
                 .foregroundStyle(.secondary)
             
             VStack(spacing: 8) {
-                Text("Import from CSV".localized)
+                Text("settings.importCSV".localized)
                     .font(.app(.title2, weight: .semibold))
                 
-                Text("Select a CSV file containing your transactions to import.")
+                Text("csv.selectFilePrompt".localized)
                     .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -77,7 +77,7 @@ struct CSVImportView: View {
             Button {
                 showFilePicker = true
             } label: {
-                Label("Select CSV File".localized, systemImage: "folder")
+                Label("csv.selectFile".localized, systemImage: "folder")
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -91,13 +91,13 @@ struct CSVImportView: View {
             
             // Info section
             VStack(alignment: .leading, spacing: 12) {
-                Text("Supported Columns")
+                Text("csv.supportedColumns".localized)
                     .font(.app(.caption, weight: .semibold))
                     .foregroundStyle(.secondary)
-                
+
                 HStack(spacing: 16) {
-                    ForEach(["Date", "Amount", "Category", "Note", "Wallet"], id: \.self) { col in
-                        Text(col)
+                    ForEach([CSVField.date, .amount, .category, .note, .wallet]) { col in
+                        Text(col.displayName)
                             .font(.app(.caption2))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -124,26 +124,26 @@ struct CSVImportView: View {
     private var columnMappingView: some View {
         Form {
             Section {
-                Text("Map your CSV columns to transaction fields.")
+                Text("csv.mapPrompt".localized)
                     .font(.app(.subheadline))
                     .foregroundStyle(.secondary)
             }
             
-            Section("Required Fields") {
+            Section("csv.requiredFields".localized) {
                 columnPicker(for: .date)
                 columnPicker(for: .amount)
             }
             
-            Section("Optional Fields") {
+            Section("csv.optionalFields".localized) {
                 columnPicker(for: .type)
                 columnPicker(for: .category)
                 columnPicker(for: .wallet)
                 columnPicker(for: .note)
             }
             
-            Section("Default Wallet") {
-                Picker("Fallback Wallet".localized, selection: $viewModel.selectedDefaultWallet) {
-                    Text("None".localized).tag(nil as Wallet?)
+            Section("csv.defaultWalletSection".localized) {
+                Picker("csv.fallbackWallet".localized, selection: $viewModel.selectedDefaultWallet) {
+                    Text("common.none".localized).tag(nil as Wallet?)
                     ForEach(viewModel.wallets) { wallet in
                         Text(wallet.name).tag(wallet as Wallet?)
                     }
@@ -152,21 +152,21 @@ struct CSVImportView: View {
             
             Section {
                 HStack {
-                    Text("Total Rows Detected")
+                    Text("csv.totalRows".localized)
                     Spacer()
                     Text("\(viewModel.totalDetectedRows)")
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack {
-                    Text("Rows Analyzed (Preview)")
+                    Text("csv.rowsAnalyzed".localized)
                     Spacer()
                     Text("\(viewModel.previewRawRows.count)")
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack {
-                    Text("Valid Preview Rows")
+                    Text("csv.validPreviewRows".localized)
                     Spacer()
                     Text("\(viewModel.validPreviewCount)")
                         .foregroundStyle(viewModel.validPreviewCount > 0 ? .green : .red)
@@ -177,7 +177,7 @@ struct CSVImportView: View {
             Button {
                 viewModel.proceedToPreview()
             } label: {
-                Text("Preview Import".localized)
+                Text("csv.previewImport".localized)
                     .font(.app(.headline))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -192,7 +192,7 @@ struct CSVImportView: View {
     }
     
     private func columnPicker(for field: CSVField) -> some View {
-        Picker(field.rawValue + (field.isRequired ? " *" : ""), selection: Binding(
+        Picker(field.displayName + (field.isRequired ? " *" : ""), selection: Binding(
             get: { viewModel.getColumnIndex(for: field) },
             set: { viewModel.updateMapping(field, to: $0) }
         )) {
@@ -208,7 +208,7 @@ struct CSVImportView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Preview based on first \(viewModel.previewRawRows.count) rows")
+                    Text("csv.previewBasedOn".localized(with: viewModel.previewRawRows.count))
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                     
@@ -251,7 +251,7 @@ struct CSVImportView: View {
                 }
                 
                 if viewModel.totalDetectedRows > viewModel.parsedPreviewRows.count {
-                    Text("... and \(viewModel.totalDetectedRows - viewModel.parsedPreviewRows.count) more rows not shown")
+                    Text("csv.moreRowsNotShown".localized(with: viewModel.totalDetectedRows - viewModel.parsedPreviewRows.count))
                         .foregroundStyle(.secondary)
                         .font(.app(.caption))
                         .listRowBackground(Color.clear)
@@ -259,13 +259,13 @@ struct CSVImportView: View {
             }
             
             if viewModel.invalidPreviewCount > 0 {
-                Section("Skipped Rows (Preview)") {
+                Section("csv.skippedRowsPreview".localized) {
                     ForEach(viewModel.parsedPreviewRows) { row in
                         if !row.isValid {
                             HStack {
-                                Text("Row \(row.rowIndex + 1)")
+                                Text("csv.rowError".localized(with: row.rowIndex + 1))
                                 Spacer()
-                                Text(row.errorMessage ?? "Invalid")
+                                Text(row.errorMessage ?? "common.invalid".localized)
                                     .font(.app(.caption))
                                     .foregroundStyle(.red)
                             }

@@ -184,7 +184,7 @@ struct EventDetailViewV2: View {
                     Button {
                         showingEditEvent = true
                     } label: {
-                        Label("Edit Event", systemImage: "pencil")
+                        Label("event.edit".localized, systemImage: "pencil")
                     }
                     Button {
                         showingExportSpending = true

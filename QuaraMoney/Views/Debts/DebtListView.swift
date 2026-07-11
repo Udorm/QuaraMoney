@@ -235,7 +235,7 @@ struct DebtListView: View {
     // MARK: - Filter
 
     private var typeFilter: some View {
-        Picker("Filter", selection: $viewModel.selectedType) {
+        Picker(L10n.Filter.title, selection: $viewModel.selectedType) {
             Text("debt.filterAll".localized).tag(Optional<DebtType>.none)
             Text(L10n.Debt.owedToMe).tag(Optional(DebtType.owedToMe))
             Text(L10n.Debt.iOwe).tag(Optional(DebtType.iOwe))

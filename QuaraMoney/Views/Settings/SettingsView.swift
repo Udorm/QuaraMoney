@@ -78,7 +78,7 @@ struct SettingsView: View {
                 Text("settings.compactEntry.footer".localized)
             }
 
-            Section("Appearance") {
+            Section("settings.appearance".localized) {
                 Picker(selection: $selectedTheme) {
                     ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
                         Label(theme.rawValue, systemImage: theme.icon)
@@ -86,14 +86,14 @@ struct SettingsView: View {
                     }
                 } label: {
                     Label {
-                        Text("App Theme")
+                        Text("settings.appTheme".localized)
                     } icon: {
                         ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
                     }
                 }
             }
 
-            Section("Currency") {
+            Section("settings.currency".localized) {
                 NavigationLink(destination: CurrencySelectionView()) {
                     Label {
                         LabeledContent {
@@ -112,15 +112,15 @@ struct SettingsView: View {
                         LabeledContent {
                             Group {
                                 if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
-                                    Text("1 USD ≈ \(rate.formatted(.number.precision(.fractionLength(2)))) \(currencyManager.preferredCurrencyCode)")
+                                    Text("settings.exchangeRateValue".localized(with: rate.formatted(.number.precision(.fractionLength(2))), currencyManager.preferredCurrencyCode))
                                 } else {
-                                    Text("Fetching...")
+                                    Text("settings.fetchingRate".localized)
                                         .task { await currencyManager.fetchRates() }
                                 }
                             }
                             .foregroundStyle(.secondary)
                         } label: {
-                            Text("Exchange Rate")
+                            Text("settings.exchangeRate".localized)
                         }
                     } icon: {
                         ListIconView(systemImage: "arrow.2.squarepath", color: .teal)
@@ -128,10 +128,10 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Notifications") {
+            Section("settings.notifications".localized) {
                 Toggle(isOn: $notificationManager.isDailyReminderEnabled) {
                     Label {
-                        Text("Daily Reminder")
+                        Text("settings.dailyReminder".localized)
                     } icon: {
                         ListIconView(systemImage: "bell.fill", color: .red)
                     }
@@ -143,7 +143,7 @@ struct SettingsView: View {
                 if notificationManager.isDailyReminderEnabled {
                     DatePicker(selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute) {
                         Label {
-                            Text("Time")
+                            Text("settings.reminderTime".localized)
                         } icon: {
                             ListIconView(systemImage: "clock.fill", color: .orange)
                         }
@@ -152,10 +152,10 @@ struct SettingsView: View {
             }
 
 
-            Section("Security") {
+            Section("settings.security".localized) {
                 Toggle(isOn: $securityManager.isAppLockEnabled) {
                     Label {
-                        Text("App Lock")
+                        Text("settings.appLock".localized)
                     } icon: {
                         ListIconView(systemImage: "lock.fill", color: Color(.systemGray2))
                     }
@@ -188,7 +188,7 @@ struct SettingsView: View {
             Section(L10n.Settings.dataManagement) {
                 NavigationLink(destination: ExportOptionsView()) {
                     Label {
-                        Text("Export Transactions")
+                        Text("settings.exportTransactions".localized)
                     } icon: {
                         ListIconView(systemImage: "square.and.arrow.up.fill", color: .blue)
                     }
@@ -291,7 +291,7 @@ struct SettingsView: View {
                     do {
                         try await service.populate()
                     } catch {
-                        errorMessage = "Error populating data: \(error.localizedDescription)"
+                        errorMessage = "settings.populateError".localized(with: error.localizedDescription)
                         showError = true
                     }
                     isPopulating = false
@@ -309,7 +309,7 @@ struct SettingsView: View {
                     do {
                         try await service.deleteAllTransactions()
                     } catch {
-                        errorMessage = "Error deleting transactions: \(error.localizedDescription)"
+                        errorMessage = "settings.deleteError".localized(with: error.localizedDescription)
                         showError = true
                     }
                     isDeleting = false

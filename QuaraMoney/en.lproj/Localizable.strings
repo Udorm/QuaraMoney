@@ -936,3 +936,145 @@
 "recurring.needsReview" = "Needs Review";
 "recurring.thisMonth" = "This Month";
 "recurring.nextMonth" = "Next Month";
+
+// MARK: - UX consistency pass: Settings
+"settings.appearance" = "Appearance";
+"settings.appTheme" = "App Theme";
+"settings.currency" = "Currency";
+"settings.exchangeRate" = "Exchange Rate";
+"settings.exchangeRateValue" = "1 USD ≈ %@ %@";
+"settings.fetchingRate" = "Fetching...";
+"settings.notifications" = "Notifications";
+"settings.dailyReminder" = "Daily Reminder";
+"settings.reminderTime" = "Time";
+"settings.security" = "Security";
+"settings.appLock" = "App Lock";
+"settings.exportTransactions" = "Export Transactions";
+"settings.selectCurrency" = "Select Currency";
+"settings.populateError" = "Error populating data: %@";
+"settings.deleteError" = "Error deleting transactions: %@";
+
+// MARK: - UX consistency pass: Sync conflict
+"sync.conflict.title" = "Data Conflict";
+"sync.conflict.message" = "This device has existing data and your cloud account also has data. Choose which one to keep — the other will be permanently deleted.";
+"sync.conflict.useCloud.title" = "Use Cloud Data";
+"sync.conflict.useCloud.message" = "Keep the data from your cloud account. This device's local data will be permanently deleted.";
+"sync.conflict.useCloud.warning" = "This device's data will be deleted";
+"sync.conflict.keepLocal.title" = "Keep This Device's Data";
+"sync.conflict.keepLocal.message" = "Keep the data on this device and upload it to the cloud. Your existing cloud data will be permanently deleted.";
+"sync.conflict.keepLocal.warning" = "Cloud data will be deleted";
+"sync.conflict.decideLater" = "Decide Later";
+"sync.conflict.decideLater.footer" = "Turns off cloud sync for now — nothing is deleted. You can turn it back on anytime in Settings.";
+"sync.conflict.applying" = "Applying…";
+
+// MARK: - UX consistency pass: CSV import
+"csv.selectFilePrompt" = "Select a CSV file containing your transactions to import.";
+"csv.supportedColumns" = "Supported Columns";
+"csv.mapPrompt" = "Map your CSV columns to transaction fields.";
+"csv.requiredFields" = "Required Fields";
+"csv.optionalFields" = "Optional Fields";
+"csv.defaultWalletSection" = "Default Wallet";
+"csv.totalRows" = "Total Rows Detected";
+"csv.rowsAnalyzed" = "Rows Analyzed (Preview)";
+"csv.validPreviewRows" = "Valid Preview Rows";
+"csv.previewBasedOn" = "Preview based on first %d rows";
+"csv.skippedRowsPreview" = "Skipped Rows (Preview)";
+
+// MARK: - UX consistency pass: Auth
+"auth.password" = "Password";
+"auth.confirmPassword" = "Confirm password";
+"auth.newPassword" = "New password";
+"auth.confirmNewPassword" = "Confirm new password";
+"auth.passwordsDontMatch" = "Passwords don't match.";
+"auth.passwordMinLength" = "Use at least 6 characters.";
+"auth.magicLinkInstead" = "Email me a sign-in link instead";
+"auth.forgotPassword" = "Forgot password?";
+"auth.setNewPassword" = "Set a New Password";
+"auth.updatePassword" = "Update Password";
+
+// MARK: - UX consistency pass: Account
+"account.cloudSync" = "Cloud Sync";
+"account.notConfigured" = "Cloud sync isn't configured in this build.";
+"account.offlineFooter" = "When off, QuaraMoney runs fully offline on this device.";
+"account.unsyncedWarning" = "This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device.";
+"account.backUp.title" = "Back Up Your Data";
+"account.backUp.message" = "Sign in so your wallets, transactions, and budgets are safely backed up and follow you to any device.";
+"account.signIn" = "Sign In";
+"account.createAccount" = "Create Account";
+"account.signedIn" = "Signed in";
+"account.syncNow" = "Sync Now";
+"account.initialUpload" = "Uploading your existing data for the first time. Keep the app open.";
+"account.signOut" = "Sign Out";
+"account.deleteAccount" = "Delete Account…";
+"account.deleteFooter" = "Permanently deletes your account and all synced data from the cloud and this device.";
+"account.deleteConfirm.title" = "Delete your account?";
+"account.deleteConfirm.action" = "Delete Account & All Data";
+"account.deleteConfirm.message" = "This permanently deletes your account, all synced data, and receipt images from the cloud, and removes the data from this device. This cannot be undone.";
+"account.sync.settingUp" = "Setting up cloud sync…";
+"account.sync.syncing" = "Syncing…";
+"account.sync.issue" = "Sync issue";
+"account.sync.upToDate" = "Up to date";
+"account.sync.waiting" = "Waiting for first sync";
+"account.sync.updating" = "Updating your data";
+"account.sync.lastSynced" = "Last synced %@";
+"account.sync.tapToUpload" = "Tap sync to upload your data";
+
+// MARK: - UX consistency pass: Accessibility
+"a11y.sortTransactions" = "Sort transactions";
+"a11y.addTransactionOn" = "Add transaction on %@";
+"a11y.scanReceipt" = "Scan receipt";
+"a11y.saveTransaction" = "Save transaction";
+"a11y.netWorth" = "Net worth, %@";
+"a11y.editBudget" = "Edit budget";
+"a11y.budgetPercentUsed" = "Budget %d percent used";
+"a11y.budgetPercentOver" = "Budget %d percent over budget";
+
+// MARK: - UX consistency pass: misc
+"common.type" = "Type";
+"common.section" = "Section";
+"savings.behind" = "Behind";
+"budget.insights.overBudgetFrequency" = "Over budget %@ of the time";
+"event.poolLabel" = "Pool:";
+"event.edit" = "Edit Event";
+"event.endDate" = "End Date";
+"event.member.isMe" = "This is me";
+"event.member.selectIcon" = "Select Icon";
+"event.ledger.useEventWallet" = "Use Event Wallet";
+"event.ledger.splitEqually" = "Split equally with everyone";
+"event.ledger.contributionFooter" = "Contribution increases Event Wallet balance.";
+"event.ledger.entryType" = "Entry Type";
+"event.emptyExpenses" = "Start tracking by adding an expense.";
+
+// MARK: - UX consistency pass: extras discovered in deep read
+"auth.welcomeBack" = "Welcome Back";
+"auth.createYourAccount" = "Create Your Account";
+"auth.signInSubtitle" = "Sign in to keep your data backed up and in sync.";
+"auth.signUpSubtitle" = "Your wallets, transactions, and budgets — securely backed up in the cloud.";
+"auth.name" = "Name";
+"auth.email" = "Email";
+"auth.showPassword" = "Show password";
+"auth.hidePassword" = "Hide password";
+"auth.noAccountPrompt" = "Don't have an account?";
+"auth.haveAccountPrompt" = "Already have an account?";
+"auth.signUp" = "Sign Up";
+"common.none" = "None";
+"common.errorOccurred" = "An error occurred.";
+"common.invalid" = "Invalid";
+"csv.fallbackWallet" = "Fallback Wallet";
+"csv.previewImport" = "Preview Import";
+"csv.moreRowsNotShown" = "... and %d more rows not shown";
+"csv.field.date" = "Date";
+"csv.field.amount" = "Amount";
+"csv.field.type" = "Type";
+"csv.field.category" = "Category";
+"csv.field.note" = "Note";
+"csv.field.wallet" = "Wallet";
+"auth.resetSubtitleWithEmail" = "You're signed in as %@. Choose a new password to finish resetting it.";
+"auth.resetSubtitle" = "You're signed in. Choose a new password to finish resetting it.";
+"currency.allCurrencies" = "All Currencies";
+"common.searchResults" = "Search Results";
+"budget.insights.periodsCount" = "%d periods";
+"common.name" = "Name";
+"event.locationOptional" = "Location (Optional)";
+"event.noExpensesYet" = "No Expenses Yet";
+"common.unknown" = "Unknown";

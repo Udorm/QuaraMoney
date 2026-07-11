@@ -150,7 +150,7 @@ struct AddDebtView: View {
             .alert(L10n.Common.error, isPresented: $viewModel.showError) {
                 Button(L10n.Common.ok, role: .cancel) { }
             } message: {
-                Text(viewModel.errorMessage ?? "An unknown error occurred")
+                Text(viewModel.errorMessage ?? "common.errorOccurred".localized)
             }
         }
     }
@@ -158,7 +158,7 @@ struct AddDebtView: View {
     // MARK: - Type selector
 
     private var typeSelector: some View {
-        Picker("Type", selection: $viewModel.type) {
+        Picker("common.type".localized, selection: $viewModel.type) {
             Text(L10n.Debt.owedToMe).tag(DebtType.owedToMe)
             Text(L10n.Debt.iOwe).tag(DebtType.iOwe)
         }

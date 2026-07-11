@@ -123,7 +123,9 @@ struct BudgetDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Budget \(Int(progress * 100)) percent \(isOverBudget ? "over budget" : "used")")
+                        .accessibilityLabel(isOverBudget
+                            ? "a11y.budgetPercentOver".localized(with: Int(progress * 100))
+                            : "a11y.budgetPercentUsed".localized(with: Int(progress * 100)))
                     }
                 }
                 .padding(.vertical, 8)
@@ -323,7 +325,7 @@ struct BudgetDetailView: View {
                 } label: {
                     Image(systemName: "pencil")
                 }
-                .accessibilityLabel("Edit budget")
+                .accessibilityLabel("a11y.editBudget".localized)
             }
         }
         .sheet(isPresented: $showEditBudget) {

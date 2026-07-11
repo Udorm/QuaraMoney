@@ -19,7 +19,7 @@ struct BudgetTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Section", selection: $selectedSection) {
+                Picker("common.section".localized, selection: $selectedSection) {
                     ForEach(BudgetSection.allCases, id: \.self) { section in
                         Text(section.displayName).tag(section)
                     }

@@ -464,7 +464,7 @@ struct AddTransactionView: View {
                     .controlSize(.large)
                     .padding(.trailing)
                     .padding(.bottom, 8)
-                    .accessibilityLabel("Scan receipt")
+                    .accessibilityLabel("a11y.scanReceipt".localized)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -501,7 +501,7 @@ struct AddTransactionView: View {
                     } label: {
                         Image(systemName: "xmark")
                     }
-                    .accessibilityLabel("Cancel")
+                    .accessibilityLabel(L10n.Common.cancel)
                 }
                 if canSwitchLayout {
                     ToolbarItem(placement: .topBarLeading) {
@@ -519,7 +519,7 @@ struct AddTransactionView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
-                    .accessibilityLabel("Save transaction")
+                    .accessibilityLabel("a11y.saveTransaction".localized)
                 }
             }
             .sheet(isPresented: $showScanner) {

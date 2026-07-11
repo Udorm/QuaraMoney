@@ -499,14 +499,14 @@ struct OverspendingCategoriesCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.category.displayName)
                             .font(.app(.subheadline))
-                        Text("Over budget \(item.percentage) of the time")
+                        Text("budget.insights.overBudgetFrequency".localized(with: item.percentage))
                             .font(.app(.caption))
                             .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
                     
-                    Text("\(item.totalPeriods) periods")
+                    Text("budget.insights.periodsCount".localized(with: item.totalPeriods))
                         .font(.app(.caption))
                         .foregroundStyle(.secondary)
                 }

@@ -9,6 +9,10 @@ struct AmountDisplayView: View {
     /// non-interactive currency label (used where the currency is fixed, e.g.
     /// recording a repayment against an existing debt).
     let showsCurrencyPicker: Bool
+    /// When false, the whole top currency row (picker or static label) is
+    /// omitted — the currency symbol beside the amount still shows. Used where
+    /// the currency is fixed and already conveyed by the symbol.
+    let showsCurrencyHeader: Bool
     /// When false, the "= result" calculation preview under the amount is hidden
     /// (the transaction entry screens show a converted amount there instead).
     let showsCalculationPreview: Bool
@@ -17,12 +21,13 @@ struct AmountDisplayView: View {
     let convertedAmountText: String?
     var onTap: (() -> Void)? = nil
 
-    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, showsCurrencyPicker: Bool = true, showsCalculationPreview: Bool = true, convertedAmountText: String? = nil, onTap: (() -> Void)? = nil) {
+    init(amount: Decimal, currencyCode: Binding<String>, expression: String = "", isEditing: Bool = false, showsCurrencyPicker: Bool = true, showsCurrencyHeader: Bool = true, showsCalculationPreview: Bool = true, convertedAmountText: String? = nil, onTap: (() -> Void)? = nil) {
         self.amount = amount
         self._currencyCode = currencyCode
         self.expression = expression
         self.isEditing = isEditing
         self.showsCurrencyPicker = showsCurrencyPicker
+        self.showsCurrencyHeader = showsCurrencyHeader
         self.showsCalculationPreview = showsCalculationPreview
         self.convertedAmountText = convertedAmountText
         self.onTap = onTap
@@ -108,15 +113,17 @@ struct AmountDisplayView: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            if showsCurrencyPicker {
-                CurrencySegmentedPicker(currencyCode: $currencyCode)
-            } else {
-                Text(currencyCode)
-                    .font(.app(.caption, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 32)
-                    .background(Color(.tertiarySystemFill), in: Capsule())
+            if showsCurrencyHeader {
+                if showsCurrencyPicker {
+                    CurrencySegmentedPicker(currencyCode: $currencyCode)
+                } else {
+                    Text(currencyCode)
+                        .font(.app(.caption, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 32)
+                        .background(Color(.tertiarySystemFill), in: Capsule())
+                }
             }
 
             // Main amount/expression display & converted-amount preview

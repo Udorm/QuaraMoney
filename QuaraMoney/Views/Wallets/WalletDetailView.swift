@@ -5,14 +5,11 @@ struct WalletDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: WalletDetailViewModel
 
-    @State private var showingAddTransaction = false
-    @State private var showingTransfer = false
+    @State private var showingAddExpense = false
+    @State private var showingAddIncome = false
     @State private var transactionToEdit: Transaction?
     @State private var showingEditWallet = false
     @State private var showingAdjustBalance = false
-    @State private var balanceSeries: [Wallet.BalancePoint] = []
-
-    private static let historyDays = 30
 
     init(wallet: Wallet, modelContext: ModelContext) {
         _viewModel = State(wrappedValue: WalletDetailViewModel(modelContext: modelContext, wallet: wallet))
@@ -144,11 +141,11 @@ struct WalletDetailView: View {
                 walletToEdit: viewModel.wallet
             ))
         }
-        .sheet(isPresented: $showingAddTransaction) {
-            AddTransactionContainer(isNewTransaction: true, initialWallet: viewModel.wallet)
+        .sheet(isPresented: $showingAddExpense) {
+            AddTransactionContainer(isNewTransaction: true, initialWallet: viewModel.wallet, initialType: .expense)
         }
-        .sheet(isPresented: $showingTransfer) {
-            AddTransactionContainer(isNewTransaction: true, initialWallet: viewModel.wallet, initialType: .transfer)
+        .sheet(isPresented: $showingAddIncome) {
+            AddTransactionContainer(isNewTransaction: true, initialWallet: viewModel.wallet, initialType: .income)
         }
         .sheet(isPresented: $showingAdjustBalance) {
             AdjustBalanceView(
@@ -162,15 +159,14 @@ struct WalletDetailView: View {
         .debtDeletionBlockedAlert($viewModel.blockedDeletionMessage)
         .onAppear {
             viewModel.fetchTransactions()
-            recomputeSeries()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .dataDidUpdate)) { _ in
-            recomputeSeries()
-        }
-        .onChange(of: showingAddTransaction) { _, newValue in
+        .onChange(of: showingAddExpense) { _, newValue in
             if !newValue { viewModel.fetchTransactions() }
         }
-        .onChange(of: showingTransfer) { _, newValue in
+        .onChange(of: showingAddIncome) { _, newValue in
+            if !newValue { viewModel.fetchTransactions() }
+        }
+        .onChange(of: showingAdjustBalance) { _, newValue in
             if !newValue { viewModel.fetchTransactions() }
         }
         .onChange(of: transactionToEdit) { _, newValue in
@@ -261,16 +257,6 @@ struct WalletDetailView: View {
                     .fill(.white.opacity(0.05))
                     .frame(width: 240, height: 240)
                     .offset(x: -140, y: 110)
-
-                // Balance trend, tucked behind the content as decoration.
-                // Line only — the area fill reads as a milky band on the
-                // tinted glass, especially for flat balance series.
-                if balanceSeries.count > 1 {
-                    WalletSparkline(points: balanceSeries, tint: .white.opacity(0.4), showsArea: false, lineWidth: 1.5)
-                        .frame(height: 56)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, 10)
-                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         )
@@ -303,21 +289,23 @@ struct WalletDetailView: View {
 
     private var quickActionsRow: some View {
         HStack(spacing: 12) {
+            // Icons mirror the hero card's in/out stat glyphs so the actions
+            // read as "money out" / "money in" at a glance.
             quickActionButton(
-                icon: "plus",
-                title: L10n.Common.add
+                icon: "arrow.up.right",
+                title: "wallet.action.addExpense".localized
             ) {
-                showingAddTransaction = true
+                showingAddExpense = true
             }
             quickActionButton(
-                icon: "arrow.left.arrow.right",
-                title: "transaction.type.transfer".localized
+                icon: "arrow.down.left",
+                title: "wallet.action.addIncome".localized
             ) {
-                showingTransfer = true
+                showingAddIncome = true
             }
             quickActionButton(
                 icon: "slider.horizontal.3",
-                title: "wallet.adjust".localized
+                title: "wallet.adjustBalance".localized
             ) {
                 showingAdjustBalance = true
             }
@@ -341,10 +329,6 @@ struct WalletDetailView: View {
             .background(walletColor, in: Capsule())
         }
         .buttonStyle(QuickActionPressStyle())
-    }
-
-    private func recomputeSeries() {
-        balanceSeries = viewModel.wallet.dailyBalanceSeries(days: Self.historyDays)
     }
 }
 

@@ -7,8 +7,11 @@ class AdjustBalanceViewModel {
     private let dataService: DataService
     let wallet: Wallet
 
-    // Input is now the TARGET balance
-    var targetBalanceString: String = ""
+    // Calculator-keyboard state (mirrors AddTransactionViewModel): the raw
+    // expression the user is typing plus its evaluated value. The evaluated
+    // amount IS the new/target balance for the wallet.
+    var expression: String = ""
+    var evaluatedAmount: Decimal = 0
     var date: Date = Date()
     var note: String = ""
     var excludeFromReports: Bool = true
@@ -16,21 +19,18 @@ class AdjustBalanceViewModel {
     init(wallet: Wallet, dataService: DataService) {
         self.wallet = wallet
         self.dataService = dataService
-        // Initialize with current balance so user can edit it
-        self.targetBalanceString = format(decimal: wallet.balance)
+        // Start empty — the user must actively type the new balance, and can't
+        // save until it differs from the current one.
     }
 
-    private func format(decimal: Decimal) -> String {
-        let doubleValue = NSDecimalNumber(decimal: decimal).doubleValue
-        if doubleValue.truncatingRemainder(dividingBy: 1) == 0 {
-            return String(format: "%.0f", doubleValue)
-        } else {
-            return String(format: "%.2f", doubleValue)
-        }
+    /// Whether the user has typed anything into the amount field.
+    var hasInput: Bool {
+        !expression.isEmpty
     }
 
-    var targetBalance: Decimal? {
-        Decimal(string: targetBalanceString)
+    /// The new balance the user is setting (the evaluated calculator value).
+    var targetBalance: Decimal {
+        evaluatedAmount
     }
 
     var currentBalance: Decimal {
@@ -38,13 +38,12 @@ class AdjustBalanceViewModel {
     }
 
     var difference: Decimal {
-        (targetBalance ?? 0) - currentBalance
+        targetBalance - currentBalance
     }
 
     var isValid: Bool {
-        guard targetBalance != nil else { return false }
-        // Valid if target is different from current
-        return difference != 0
+        // Requires actual input AND a target that differs from the current balance.
+        hasInput && difference != 0
     }
 
     func save() {

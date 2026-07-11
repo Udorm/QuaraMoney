@@ -299,17 +299,14 @@ struct CompactAddTransactionView: View {
                     layoutMenu
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
-                    Button {
+                    // Reads `isValid` inside its own body so a keystroke (which
+                    // changes the amount → validity) only re-renders this button,
+                    // not the whole screen.
+                    CompactSaveButton(viewModel: viewModel) {
                         if viewModel.saveTransaction() {
                             dismiss()
                         }
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .fontWeight(.semibold)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!viewModel.isValid)
-                    .accessibilityLabel("common.save".localized)
                 }
             }
             .sheet(isPresented: $showScanner) {
@@ -446,7 +443,13 @@ struct CompactAddTransactionView: View {
 
     private var formContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            amountCard
+            // Self-contained View so amount keystrokes only invalidate the card,
+            // leaving the wallet/category/detail sections below untouched.
+            CompactAmountCard(
+                viewModel: viewModel,
+                isNoteBarVisible: isNoteBarVisible,
+                onTap: { endNoteEditing() }
+            )
 
             walletSection
 
@@ -460,85 +463,6 @@ struct CompactAddTransactionView: View {
 
 
         }
-    }
-
-    // MARK: - Amount card
-
-    private var amountBackground: Color {
-        switch viewModel.type {
-        case .expense: return ThemeManager.shared.expenseColor.opacity(0.15)
-        case .income: return ThemeManager.shared.incomeColor.opacity(0.15)
-        case .transfer: return Color.blue.opacity(0.1)
-        default: return Color(.secondarySystemGroupedBackground)
-        }
-    }
-
-    private var exchangeRateString: String? {
-        guard let wallet = viewModel.selectedWallet,
-              viewModel.selectedCurrencyCode != wallet.currencyCode else { return nil }
-
-        let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
-        return "≈ \(convertedAmount.formattedAmount(for: wallet.currencyCode))"
-    }
-
-    private var amountDisplayText: String {
-        if !isNoteBarVisible && !viewModel.expression.isEmpty {
-            return formatExpressionForDisplay(viewModel.expression)
-        } else if viewModel.evaluatedAmount > 0 {
-            return formatAmount(viewModel.evaluatedAmount)
-        } else {
-            return "0"
-        }
-    }
-    
-    private var amountHasOperators: Bool {
-        let operators = CharacterSet(charactersIn: "+-×÷")
-        return viewModel.expression.rangeOfCharacter(from: operators) != nil
-    }
-    
-    private func formatExpressionForDisplay(_ expr: String) -> String {
-        var result = ""
-        var currentNumber = ""
-        for char in expr {
-            if char.isNumber || char == "." {
-                currentNumber.append(char)
-            } else if "+-×÷".contains(char) {
-                if !currentNumber.isEmpty {
-                    result += formatNumberString(currentNumber)
-                    currentNumber = ""
-                }
-                result.append(char)
-            }
-        }
-        if !currentNumber.isEmpty {
-            result += formatNumberString(currentNumber)
-        }
-        return result
-    }
-    
-    private func formatNumberString(_ numStr: String) -> String {
-        let parts = numStr.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let intPart = parts.first else { return numStr }
-        let reversed = String(intPart.reversed())
-        var formatted = ""
-        for (index, char) in reversed.enumerated() {
-            if index > 0 && index % 3 == 0 {
-                formatted.append(",")
-            }
-            formatted.append(char)
-        }
-        let intFormatted = String(formatted.reversed())
-        if parts.count > 1 {
-            return "\(intFormatted).\(parts[1])"
-        } else if numStr.hasSuffix(".") {
-            return "\(intFormatted)."
-        }
-        return intFormatted
-    }
-    
-    private func formatAmount(_ value: Decimal) -> String {
-        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
-        return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
 
     /// Nav-bar overflow menu: pick the classic or compact entry layout.
@@ -555,66 +479,6 @@ struct CompactAddTransactionView: View {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("transaction.layout.menu".localized)
-    }
-
-    private var amountCard: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                // Currency selector inline on the left
-                CurrencySegmentedPicker(currencyCode: $viewModel.selectedCurrencyCode)
-                    .padding(.leading, 8)
-                
-                Spacer()
-                
-                // Amount input in the middle at the right
-                HStack(alignment: .center, spacing: 4) {
-                    Text(String.currencySymbol(for: viewModel.selectedCurrencyCode))
-                        .font(.app(size: 28, weight: .semibold))
-                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
-
-                    Text(amountDisplayText)
-                        .font(.app(size: 44, weight: .bold))
-                        .minimumScaleFactor(0.4)
-                        .lineLimit(1)
-                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.1), value: amountDisplayText)
-                    
-                    if !isNoteBarVisible {
-                        Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(width: 2, height: 34)
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    endNoteEditing()
-                }
-                .padding(.trailing, 8)
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 8)
-            
-            if let exchangeRateStr = exchangeRateString {
-                Text(exchangeRateStr)
-                    .font(.app(.footnote))
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 6)
-            }
-            
-            if amountHasOperators && viewModel.evaluatedAmount > 0 {
-                HStack {
-                    Spacer()
-                    Text("= \(formatAmount(viewModel.evaluatedAmount))")
-                        .font(.app(.callout))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .background(amountBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Type selector
@@ -752,11 +616,12 @@ struct CompactAddTransactionView: View {
 
                     Spacer(minLength: 4)
 
-                    let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
-                    Text("≈ \(convertedAmount.formattedAmount(for: dest.currencyCode))")
-                        .font(.app(.caption))
-                        .foregroundStyle(.blue)
-                        .lineLimit(1)
+                    // Isolated so per-keystroke amount changes don't re-render
+                    // the surrounding wallet row / rate field.
+                    TransferConvertedAmount(
+                        viewModel: viewModel,
+                        destinationCurrencyCode: dest.currencyCode
+                    )
                 }
                 .padding(.top, 2)
                 .padding(.leading, 4)
@@ -1183,16 +1048,13 @@ struct CompactAddTransactionView: View {
                     calculatorSuggestionBar
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                CalculatorKeyboardView(
-                    expression: $viewModel.expression,
-                    evaluatedAmount: $viewModel.evaluatedAmount,
-                    onSave: {
-                        if viewModel.saveTransaction() {
-                            dismiss()
-                        }
-                    },
-                    isSaveDisabled: !viewModel.isValid
-                )
+                // Reads `isValid` (amount-dependent) inside its own body so a
+                // keystroke re-renders only the keypad, not the form above it.
+                CompactKeypad(viewModel: viewModel) {
+                    if viewModel.saveTransaction() {
+                        dismiss()
+                    }
+                }
             }
             .transition(.move(edge: .bottom))
         }
@@ -1244,6 +1106,210 @@ struct CompactAddTransactionView: View {
         .background(.bar)
         .overlay(alignment: .top) { Divider() }
         .onAppear { noteFieldFocused = true }
+    }
+}
+
+// MARK: - Amount Card (isolated for per-keystroke updates)
+
+/// The amount/expression display. Extracted into its own `View` so that typing
+/// on the keypad — which mutates `expression`/`evaluatedAmount` — only
+/// invalidates this subtree, leaving the wallet/category/detail sections of
+/// `CompactAddTransactionView` untouched (they don't read the amount, and the
+/// parent body no longer does either).
+private struct CompactAmountCard: View {
+    @Bindable var viewModel: AddTransactionViewModel
+    let isNoteBarVisible: Bool
+    let onTap: () -> Void
+
+    private var amountBackground: Color {
+        switch viewModel.type {
+        case .expense: return ThemeManager.shared.expenseColor.opacity(0.15)
+        case .income: return ThemeManager.shared.incomeColor.opacity(0.15)
+        case .transfer: return Color.blue.opacity(0.1)
+        default: return Color(.secondarySystemGroupedBackground)
+        }
+    }
+
+    private var exchangeRateString: String? {
+        guard let wallet = viewModel.selectedWallet,
+              viewModel.selectedCurrencyCode != wallet.currencyCode else { return nil }
+
+        let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
+        return "≈ \(convertedAmount.formattedAmount(for: wallet.currencyCode))"
+    }
+
+    private var amountDisplayText: String {
+        if !isNoteBarVisible && !viewModel.expression.isEmpty {
+            return formatExpressionForDisplay(viewModel.expression)
+        } else if viewModel.evaluatedAmount > 0 {
+            return formatAmount(viewModel.evaluatedAmount)
+        } else {
+            return "0"
+        }
+    }
+
+    private var amountHasOperators: Bool {
+        let operators = CharacterSet(charactersIn: "+-×÷")
+        return viewModel.expression.rangeOfCharacter(from: operators) != nil
+    }
+
+    private func formatExpressionForDisplay(_ expr: String) -> String {
+        var result = ""
+        var currentNumber = ""
+        for char in expr {
+            if char.isNumber || char == "." {
+                currentNumber.append(char)
+            } else if "+-×÷".contains(char) {
+                if !currentNumber.isEmpty {
+                    result += formatNumberString(currentNumber)
+                    currentNumber = ""
+                }
+                result.append(char)
+            }
+        }
+        if !currentNumber.isEmpty {
+            result += formatNumberString(currentNumber)
+        }
+        return result
+    }
+
+    private func formatNumberString(_ numStr: String) -> String {
+        let parts = numStr.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let intPart = parts.first else { return numStr }
+        let reversed = String(intPart.reversed())
+        var formatted = ""
+        for (index, char) in reversed.enumerated() {
+            if index > 0 && index % 3 == 0 {
+                formatted.append(",")
+            }
+            formatted.append(char)
+        }
+        let intFormatted = String(formatted.reversed())
+        if parts.count > 1 {
+            return "\(intFormatted).\(parts[1])"
+        } else if numStr.hasSuffix(".") {
+            return "\(intFormatted)."
+        }
+        return intFormatted
+    }
+
+    private func formatAmount(_ value: Decimal) -> String {
+        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
+        return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                // Currency selector inline on the left
+                CurrencySegmentedPicker(currencyCode: $viewModel.selectedCurrencyCode)
+                    .padding(.leading, 8)
+
+                Spacer()
+
+                // Amount input in the middle at the right
+                HStack(alignment: .center, spacing: 4) {
+                    Text(String.currencySymbol(for: viewModel.selectedCurrencyCode))
+                        .font(.app(size: 28, weight: .semibold))
+                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
+
+                    Text(amountDisplayText)
+                        .font(.app(size: 44, weight: .bold))
+                        .minimumScaleFactor(0.4)
+                        .lineLimit(1)
+                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.1), value: amountDisplayText)
+
+                    if !isNoteBarVisible {
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(width: 2, height: 34)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    onTap()
+                }
+                .padding(.trailing, 8)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+
+            if let exchangeRateStr = exchangeRateString {
+                Text(exchangeRateStr)
+                    .font(.app(.footnote))
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 6)
+            }
+
+            if amountHasOperators && viewModel.evaluatedAmount > 0 {
+                HStack {
+                    Spacer()
+                    Text("= \(formatAmount(viewModel.evaluatedAmount))")
+                        .font(.app(.callout))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(amountBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+// MARK: - Transfer converted-amount (isolated amount reader)
+
+/// The "≈ converted" preview shown on cross-currency transfers. Isolated so its
+/// per-keystroke amount reads don't re-render the surrounding destination row.
+private struct TransferConvertedAmount: View {
+    let viewModel: AddTransactionViewModel
+    let destinationCurrencyCode: String
+
+    var body: some View {
+        let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
+        Text("≈ \(convertedAmount.formattedAmount(for: destinationCurrencyCode))")
+            .font(.app(.caption))
+            .foregroundStyle(.blue)
+            .lineLimit(1)
+    }
+}
+
+// MARK: - Save affordances (isolated `isValid` readers)
+
+/// Toolbar save button. Reads `isValid` (which depends on the amount) in its own
+/// body so amount changes don't invalidate the parent screen.
+private struct CompactSaveButton: View {
+    let viewModel: AddTransactionViewModel
+    let onSave: () -> Void
+
+    var body: some View {
+        Button {
+            onSave()
+        } label: {
+            Image(systemName: "checkmark")
+                .fontWeight(.semibold)
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(!viewModel.isValid)
+        .accessibilityLabel("common.save".localized)
+    }
+}
+
+/// Wraps the shared `CalculatorKeyboardView` so the amount-dependent
+/// `isSaveDisabled` read happens here, not in the parent's body.
+private struct CompactKeypad: View {
+    @Bindable var viewModel: AddTransactionViewModel
+    let onSave: () -> Void
+
+    var body: some View {
+        CalculatorKeyboardView(
+            expression: $viewModel.expression,
+            evaluatedAmount: $viewModel.evaluatedAmount,
+            onSave: onSave,
+            isSaveDisabled: !viewModel.isValid
+        )
     }
 }
 

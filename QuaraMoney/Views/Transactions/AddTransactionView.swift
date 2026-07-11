@@ -126,10 +126,26 @@ struct AddTransactionView: View {
         return items
     }
 
-    /// Contextually-ranked wallets for the quick chips (falls back to name order until first compute).
+    /// Contextually-ranked wallets for the quick grid (falls back to name order until first compute).
+    /// Keeps the grid to a single row of 4: when a "More" cell is needed (i.e. there
+    /// are more wallets than fit), only 3 wallets are shown alongside it.
     private var frequentWallets: [Wallet] {
         let ordered = scoredWallets.isEmpty ? wallets : scoredWallets.map(\.wallet)
-        return Array(ordered.prefix(maxQuickWallets))
+        // Reserve the 4th slot for the More cell when the list overflows.
+        let limit = wallets.count > maxQuickWallets ? maxQuickWallets - 1 : maxQuickWallets
+
+        var items = Array(ordered.prefix(limit))
+
+        // Ensure a deliberately-picked wallet stays visible even if it ranks below the cut.
+        if let selected = viewModel.selectedWallet, !items.contains(where: { $0.id == selected.id }) {
+            if !items.isEmpty {
+                items[items.count - 1] = selected
+            } else {
+                items.append(selected)
+            }
+        }
+
+        return items
     }
 
     // MARK: - Suggestion recompute
@@ -658,45 +674,21 @@ struct AddTransactionView: View {
                 AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
             }
         } else {
-            VStack(alignment: .leading, spacing: 12) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(frequentWallets) { wallet in
-                            WalletChip(
-                                wallet: wallet,
-                                isSelected: viewModel.selectedWallet?.id == wallet.id
-                            ) {
-                                selectWallet(wallet)
-                            }
-                        }
-
-                        if wallets.count > maxQuickWallets {
-                            Button {
-                                showAllWallets = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "ellipsis")
-                                        .font(.app(.caption2))
-                                    Text("common.more".localized)
-                                        .font(.app(.subheadline, weight: .medium))
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color(.tertiarySystemGroupedBackground))
-                                .foregroundColor(.secondary)
-                                .cornerRadius(16)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                ForEach(frequentWallets) { wallet in
+                    WalletGridItem(
+                        wallet: wallet,
+                        isSelected: viewModel.selectedWallet?.id == wallet.id
+                    ) {
+                        selectWallet(wallet)
                     }
                 }
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+                if wallets.count > maxQuickWallets {
+                    moreWalletsButton { showAllWallets = true }
+                }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
             .overlay(
                 Group {
                     if viewModel.type == .adjustment {
@@ -709,6 +701,30 @@ struct AddTransactionView: View {
                 walletPickerSheet
             }
         }
+    }
+
+    /// "More" cell for the wallet grid — a rounded-rect tile (matching the wallet
+    /// card shape) so the grid reads uniformly, with the same caption below.
+    private func moreWalletsButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: "ellipsis")
+                    .font(.app(.title3))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 40, height: 40)
+                    .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+                    .frame(width: 46, height: 46)
+
+                Text("common.more".localized)
+                    .font(.app(.caption2))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     /// Auto-selects the wallet the user just created so a first-time entry can be
@@ -751,20 +767,18 @@ struct AddTransactionView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(availableWallets) { wallet in
-                            WalletChip(
-                                wallet: wallet,
-                                isSelected: viewModel.destinationWallet?.id == wallet.id
-                            ) {
-                                viewModel.destinationWallet = wallet
-                                viewModel.updateExchangeRate()
-                            }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+                    ForEach(availableWallets) { wallet in
+                        WalletGridItem(
+                            wallet: wallet,
+                            isSelected: viewModel.destinationWallet?.id == wallet.id
+                        ) {
+                            viewModel.destinationWallet = wallet
+                            viewModel.updateExchangeRate()
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
             }
             
             // Exchange rate if different currencies

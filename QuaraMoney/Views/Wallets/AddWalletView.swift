@@ -7,6 +7,8 @@ struct AddWalletView: View {
     // Focus state for keyboard
     @FocusState private var isNameFocused: Bool
     @State private var showingDeleteAlert = false
+    @State private var showingCurrencyPicker = false
+    @State private var showingIconPicker = false
 
     private var walletColor: Color {
         Color(hex: viewModel.colorHex) ?? .blue
@@ -20,7 +22,7 @@ struct AddWalletView: View {
                     cardPreview
                         .frame(maxWidth: .infinity)
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        .listRowInsets(EdgeInsets()) // Full-width card — aligns with sections below
                         .listRowSeparator(.hidden)
                 }
 
@@ -30,28 +32,43 @@ struct AddWalletView: View {
                         .focused($isNameFocused)
                         .submitLabel(.done)
 
-                    Picker(L10n.Wallet.currency, selection: $viewModel.currencyCode) {
-                        Text("USD").tag("USD")
-                        Text("KHR").tag("KHR")
-                        Text("EUR").tag("EUR")
-                        Text("JPY").tag("JPY")
+                    Button {
+                        showingCurrencyPicker = true
+                    } label: {
+                        HStack {
+                            Text(L10n.Wallet.currency)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(viewModel.currencyCode)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.app(.footnote, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
 
                 Section(L10n.Wallet.appearance) {
                     colorSwatches
 
-                    NavigationLink {
-                        IconPickerView(selectedIcon: $viewModel.icon, selectedColorHex: $viewModel.colorHex)
-                            .navigationTitle(L10n.Category.selectIcon)
+                    Button {
+                        showingIconPicker = true
                     } label: {
                         HStack {
                             Text(L10n.Wallet.icon)
+                                .foregroundStyle(.primary)
                             Spacer()
                             Image(systemName: viewModel.icon)
                                 .foregroundStyle(walletColor)
+                            Image(systemName: "chevron.right")
+                                .font(.app(.footnote, weight: .semibold))
+                                .foregroundStyle(.tertiary)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
 
                 // MARK: - Actions (only when editing)
@@ -112,6 +129,28 @@ struct AddWalletView: View {
                 }
             } message: {
                 Text(L10n.Wallet.deleteRelatedTransactionsWarning((viewModel.walletToEdit?.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
+            }
+            .sheet(isPresented: $showingCurrencyPicker) {
+                NavigationStack {
+                    CurrencySelectionView(selection: $viewModel.currencyCode, quickSelectCurrencies: ["USD", "KHR"])
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Color(.systemGroupedBackground))
+            }
+            .sheet(isPresented: $showingIconPicker) {
+                NavigationStack {
+                    IconPickerView(selectedIcon: $viewModel.icon, selectedColorHex: $viewModel.colorHex)
+                        .navigationTitle(L10n.Category.selectIcon)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button(L10n.Common.done) {
+                                    showingIconPicker = false
+                                }
+                            }
+                        }
+                }
             }
         }
     }

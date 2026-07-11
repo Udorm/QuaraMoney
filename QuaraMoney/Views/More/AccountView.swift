@@ -136,8 +136,10 @@ struct AccountView: View {
             isPresented: $showPhotoOptions,
             titleVisibility: .visible
         ) {
-            Button(L10n.Profile.takePhoto) {
-                showCamera = true
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button(L10n.Profile.takePhoto) {
+                    showCamera = true
+                }
             }
 
             Button(L10n.Profile.chooseFromLibrary) {
@@ -622,13 +624,16 @@ struct AccountView: View {
     private func loadPhoto(from item: PhotosPickerItem?) async {
         guard let item else { return }
 
-        if let data = try? await item.loadTransferable(type: Data.self),
-           let image = UIImage(data: data) {
-            await MainActor.run {
+        let data = try? await item.loadTransferable(type: Data.self)
+        let image = data.flatMap { UIImage(data: $0) }
+
+        await MainActor.run {
+            if let image {
                 pendingCrop = CropCandidate(image: image)
-                // Reset so picking the same photo again re-triggers onChange.
-                selectedPhotoItem = nil
             }
+            // Reset (even on failure) so picking the same photo again
+            // re-triggers onChange.
+            selectedPhotoItem = nil
         }
     }
 

@@ -898,7 +898,7 @@ struct AddTransactionView: View {
             .font(.app(.footnote, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 29, height: 29)
-            .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(color, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
             .accessibilityHidden(true)
     }
 

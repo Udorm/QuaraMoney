@@ -71,7 +71,7 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [Color.accentColor, Color.accentColor.opacity(0.7)],

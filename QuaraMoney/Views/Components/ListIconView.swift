@@ -9,6 +9,6 @@ struct ListIconView: View {
             .appFont(size: 14, weight: .medium)
             .foregroundStyle(.white)
             .frame(width: 28, height: 28)
-            .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(color, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
     }
 }

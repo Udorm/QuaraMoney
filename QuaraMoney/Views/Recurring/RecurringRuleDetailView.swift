@@ -335,7 +335,7 @@ private struct RecurringHeroCard: View {
                 .font(.app(.footnote, weight: .semibold))
                 .foregroundStyle(iconTint)
                 .frame(width: 30, height: 30)
-                .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
 
             Text(label)
                 .font(.app(.subheadline))

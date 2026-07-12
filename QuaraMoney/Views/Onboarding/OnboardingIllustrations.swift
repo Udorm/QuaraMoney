@@ -537,7 +537,7 @@ struct OnboardingInsightsIllustration: View {
         .padding(18)
         .frame(width: 262)
         .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
                 .shadow(color: .black.opacity(0.10), radius: 22, y: 12)
         )

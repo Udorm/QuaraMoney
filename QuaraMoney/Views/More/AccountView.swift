@@ -239,7 +239,7 @@ struct AccountView: View {
                     .font(.app(.subheadline, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
 
                 Text("account.cloudSync".localized)
                     .font(.app(.headline, weight: .semibold))

@@ -118,7 +118,7 @@ struct AmountDisplayView: View {
                     CurrencySegmentedPicker(currencyCode: $currencyCode)
                 } else {
                     Text(currencyCode)
-                        .font(.app(.caption, weight: .bold))
+                        .appFont(.caption, weight: .bold)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
                         .frame(minHeight: 32)
@@ -130,11 +130,11 @@ struct AmountDisplayView: View {
             VStack(spacing: 4) {
                 HStack(alignment: .center, spacing: 4) {
                     Text(String.currencySymbol(for: currencyCode))
-                        .font(.app(size: 30, weight: .semibold))
+                        .appFont(size: 30, weight: .semibold)
                         .foregroundStyle((expression.isEmpty && amount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
 
                     Text(displayText)
-                        .font(.app(size: 48, weight: .bold))
+                        .appFont(size: 48, weight: .bold)
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
                         // Use ternary for color based on amount/expression
@@ -155,12 +155,12 @@ struct AmountDisplayView: View {
                 // the calculation preview when operators are present.
                 if let convertedAmountText {
                     Text(convertedAmountText)
-                        .font(.app(.callout))
+                        .appFont(.callout)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
                 } else if showsCalculationPreview && hasOperators && amount > 0 {
                     Text("= \(formatAmount(amount))")
-                        .font(.app(.callout))
+                        .appFont(.callout)
                         .foregroundStyle(.secondary)
                         .transition(.opacity)
                 }
@@ -224,7 +224,7 @@ struct CurrencySegmentedPicker: View {
             HStack(spacing: 2) {
                 if let label {
                     Text(label)
-                        .font(.app(.caption, weight: isSelected ? .bold : .medium))
+                        .appFont(.caption, weight: isSelected ? .bold : .medium)
                 }
                 if let icon = systemImageName {
                     Image(systemName: icon)

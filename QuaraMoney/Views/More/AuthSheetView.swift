@@ -121,13 +121,13 @@ struct AuthSheetView: View {
 
             VStack(spacing: 6) {
                 Text(isSignIn ? "auth.welcomeBack".localized : "auth.createYourAccount".localized)
-                    .font(.app(.title2, weight: .bold))
+                    .appFont(.title2, weight: .bold)
                     .contentTransition(.opacity)
 
                 Text(isSignIn
                      ? "auth.signInSubtitle".localized
                      : "auth.signUpSubtitle".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -144,7 +144,7 @@ struct AuthSheetView: View {
                 if !isSignIn {
                     fieldRow(icon: "person") {
                         TextField("auth.name".localized, text: $name)
-                            .font(.app(.body))
+                            .appFont(.body)
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
@@ -157,7 +157,7 @@ struct AuthSheetView: View {
 
                 fieldRow(icon: "envelope") {
                     TextField("auth.email".localized, text: $email)
-                        .font(.app(.body))
+                        .appFont(.body)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -177,7 +177,7 @@ struct AuthSheetView: View {
                             SecureField("auth.password".localized, text: $password)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(isSignIn ? .password : .newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -195,7 +195,7 @@ struct AuthSheetView: View {
                         showPassword.toggle()
                     } label: {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -213,7 +213,7 @@ struct AuthSheetView: View {
                                 SecureField("auth.confirmPassword".localized, text: $confirmPassword)
                             }
                         }
-                        .font(.app(.body))
+                        .appFont(.body)
                         .textContentType(.newPassword)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -231,12 +231,12 @@ struct AuthSheetView: View {
             if !isSignIn {
                 if !confirmPassword.isEmpty && !passwordsMatch {
                     Label("auth.passwordsDontMatch".localized, systemImage: "exclamationmark.circle")
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.red)
                         .padding(.leading, 16)
                 } else {
                     Text("auth.passwordMinLength".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 16)
                 }
@@ -278,7 +278,7 @@ struct AuthSheetView: View {
                     Text(isSignIn ? "account.signIn".localized : "account.createAccount".localized)
                 }
             }
-            .font(.app(.body, weight: .semibold))
+            .appFont(.body, weight: .semibold)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
@@ -291,7 +291,7 @@ struct AuthSheetView: View {
             Task { await auth.sendMagicLink(email: email) }
         } label: {
             Label("auth.magicLinkInstead".localized, systemImage: "wand.and.sparkles")
-                .font(.app(.footnote, weight: .medium))
+                .appFont(.footnote, weight: .medium)
         }
         .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
     }
@@ -301,7 +301,7 @@ struct AuthSheetView: View {
             Task { await auth.sendPasswordReset(email: email) }
         } label: {
             Text("auth.forgotPassword".localized)
-                .font(.app(.footnote, weight: .medium))
+                .appFont(.footnote, weight: .medium)
         }
         .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
     }
@@ -320,7 +320,7 @@ struct AuthSheetView: View {
             .fontWeight(.semibold)
             .disabled(auth.isWorking)
         }
-        .font(.app(.footnote))
+        .appFont(.footnote)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .background(.bar)
@@ -331,7 +331,7 @@ struct AuthSheetView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

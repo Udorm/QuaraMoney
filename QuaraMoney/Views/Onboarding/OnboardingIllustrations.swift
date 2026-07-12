@@ -16,22 +16,22 @@ struct OnboardingWelcomeIllustration: View {
 
             orbitBadge(offset: CGSize(width: -98, height: -66), drift: -8) {
                 Image(systemName: "dollarsign")
-                    .font(.app(.title3, weight: .bold))
+                    .appFont(.title3, weight: .bold)
                     .foregroundStyle(.green)
             }
             orbitBadge(offset: CGSize(width: 102, height: -44), drift: 8) {
                 Text("៛")
-                    .font(.app(.title3, weight: .bold))
+                    .appFont(.title3, weight: .bold)
                     .foregroundStyle(.purple)
             }
             orbitBadge(offset: CGSize(width: -84, height: 82), drift: 7) {
                 Image(systemName: "chart.pie.fill")
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(.orange)
             }
             orbitBadge(offset: CGSize(width: 92, height: 92), drift: -7) {
                 Image(systemName: "banknote.fill")
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(.blue)
             }
 
@@ -46,7 +46,7 @@ struct OnboardingWelcomeIllustration: View {
                 .frame(width: 124, height: 124)
                 .overlay(
                     Image(systemName: "wallet.pass.fill")
-                        .font(.app(size: 54, weight: .medium))
+                        .appFont(size: 54, weight: .medium)
                         .foregroundStyle(.white)
                 )
                 .shadow(color: Color.accentColor.opacity(0.35), radius: 20, y: 10)
@@ -123,10 +123,10 @@ struct OnboardingTrackIllustration: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("onboarding.demo.totalBalance".localized)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
                 Text("$248.00")
-                    .font(.app(.title3, weight: .bold))
+                    .appFont(.title3, weight: .bold)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
@@ -152,7 +152,7 @@ struct OnboardingTrackIllustration: View {
                     .frame(width: 50, height: 50)
                     .overlay(
                         Image(systemName: "plus")
-                            .font(.app(.title3, weight: .bold))
+                            .appFont(.title3, weight: .bold)
                             .foregroundStyle(.white)
                     )
                     .scaleEffect(fabPressed ? 0.85 : 1)
@@ -169,7 +169,7 @@ struct OnboardingTrackIllustration: View {
                 .frame(width: 32, height: 32)
                 .overlay(
                     Image(systemName: icon)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(tint)
                 )
             VStack(alignment: .leading, spacing: 5) {
@@ -185,7 +185,7 @@ struct OnboardingTrackIllustration: View {
     private var addScreen: some View {
         VStack(spacing: 12) {
             Text("$" + (typed.isEmpty ? "0" : typed))
-                .font(.app(size: 36, weight: .bold))
+                .appFont(size: 36, weight: .bold)
                 .foregroundStyle(typed.isEmpty ? Color.secondary : Color.primary)
                 .contentTransition(.numericText())
                 .lineLimit(1)
@@ -205,7 +205,7 @@ struct OnboardingTrackIllustration: View {
                         .frame(height: 32)
                         .overlay(
                             Text(key)
-                                .font(.app(.subheadline, weight: .semibold))
+                                .appFont(.subheadline, weight: .semibold)
                         )
                         .scaleEffect(pressedKey == key ? 0.9 : 1)
                 }
@@ -223,9 +223,9 @@ struct OnboardingTrackIllustration: View {
     private func categoryChip(_ icon: String, _ title: String, selected: Bool) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.app(.caption2))
+                .appFont(.caption2)
             Text(title)
-                .font(.app(.caption2, weight: .semibold))
+                .appFont(.caption2, weight: .semibold)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -239,11 +239,11 @@ struct OnboardingTrackIllustration: View {
     private var savedOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.app(size: 56))
+                .appFont(size: 56)
                 .foregroundStyle(themeManager.incomeColor)
                 .transition(.scale(scale: 0.4).combined(with: .opacity))
             Text("−$4.50 · " + "onboarding.demo.food".localized)
-                .font(.app(.subheadline, weight: .semibold))
+                .appFont(.subheadline, weight: .semibold)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -268,7 +268,7 @@ struct OnboardingTrackIllustration: View {
             Image(systemName: phase == 3 ? "checkmark.circle.fill" : "hand.tap.fill")
             Text(stepText)
         }
-        .font(.app(.footnote, weight: .semibold))
+        .appFont(.footnote, weight: .semibold)
         .foregroundStyle(phase == 3 ? themeManager.incomeColor : Color.accentColor)
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -377,7 +377,7 @@ struct OnboardingWalletsIllustration: View {
                 Image(systemName: "hand.draw.fill")
                 Text("onboarding.demo.swipeHint".localized)
             }
-            .font(.app(.footnote, weight: .semibold))
+            .appFont(.footnote, weight: .semibold)
             .foregroundStyle(Color.accentColor)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -393,18 +393,18 @@ struct OnboardingWalletsIllustration: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: wallet.icon)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                 Text(wallet.nameKey.localized)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                 Spacer()
                 Image(systemName: "creditcard.fill")
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .opacity(0.6)
             }
             .foregroundStyle(.white.opacity(0.92))
             Spacer()
             Text(wallet.amount)
-                .font(.app(.title, weight: .bold))
+                .appFont(.title, weight: .bold)
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -459,10 +459,10 @@ struct OnboardingInsightsIllustration: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("onboarding.demo.thisMonth".localized)
-                        .font(.app(.caption2))
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                     Text("$412.80")
-                        .font(.app(.title3, weight: .bold))
+                        .appFont(.title3, weight: .bold)
                 }
                 Spacer()
                 Circle()
@@ -470,7 +470,7 @@ struct OnboardingInsightsIllustration: View {
                     .frame(width: 38, height: 38)
                     .overlay(
                         Image(systemName: "chart.bar.fill")
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(Color.accentColor)
                     )
             }
@@ -484,7 +484,7 @@ struct OnboardingInsightsIllustration: View {
                         .overlay(alignment: .top) {
                             if index == highlightIndex {
                                 Text("$86")
-                                    .font(.app(.caption2, weight: .bold))
+                                    .appFont(.caption2, weight: .bold)
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
@@ -509,16 +509,16 @@ struct OnboardingInsightsIllustration: View {
                     .frame(width: 34, height: 34)
                     .overlay(
                         Image(systemName: "fork.knife")
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.orange)
                     )
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("onboarding.demo.foodBudget".localized)
-                            .font(.app(.footnote, weight: .semibold))
+                            .appFont(.footnote, weight: .semibold)
                         Spacer()
                         Text("$35 " + "onboarding.demo.left".localized)
-                            .font(.app(.caption2, weight: .semibold))
+                            .appFont(.caption2, weight: .semibold)
                             .foregroundStyle(themeManager.incomeColor)
                     }
                     GeometryReader { geo in

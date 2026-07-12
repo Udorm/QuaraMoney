@@ -65,10 +65,10 @@ struct CSVImportView: View {
             
             VStack(spacing: 8) {
                 Text("settings.importCSV".localized)
-                    .font(.app(.title2, weight: .semibold))
+                    .appFont(.title2, weight: .semibold)
                 
                 Text("csv.selectFilePrompt".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -78,7 +78,7 @@ struct CSVImportView: View {
                 showFilePicker = true
             } label: {
                 Label("csv.selectFile".localized, systemImage: "folder")
-                    .font(.app(.headline))
+                    .appFont(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.accentColor)
@@ -92,13 +92,13 @@ struct CSVImportView: View {
             // Info section
             VStack(alignment: .leading, spacing: 12) {
                 Text("csv.supportedColumns".localized)
-                    .font(.app(.caption, weight: .semibold))
+                    .appFont(.caption, weight: .semibold)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 16) {
                     ForEach([CSVField.date, .amount, .category, .note, .wallet]) { col in
                         Text(col.displayName)
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color(.systemGray5))
@@ -125,7 +125,7 @@ struct CSVImportView: View {
         Form {
             Section {
                 Text("csv.mapPrompt".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
             }
             
@@ -178,7 +178,7 @@ struct CSVImportView: View {
                 viewModel.proceedToPreview()
             } label: {
                 Text("csv.previewImport".localized)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(viewModel.canProceedToPreview ? Color.accentColor : Color(.systemGray))
@@ -209,16 +209,16 @@ struct CSVImportView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("csv.previewBasedOn".localized(with: viewModel.previewRawRows.count))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                     
                     HStack {
                         VStack(alignment: .leading) {
                             Text("\(viewModel.validPreviewCount)")
-                                .font(.app(.title, weight: .bold))
+                                .appFont(.title, weight: .bold)
                                 .foregroundStyle(.green)
                             Text("csv.valid".localized)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -226,10 +226,10 @@ struct CSVImportView: View {
                         
                         VStack(alignment: .trailing) {
                             Text("\(viewModel.invalidPreviewCount)")
-                                .font(.app(.title, weight: .bold))
+                                .appFont(.title, weight: .bold)
                                 .foregroundStyle(viewModel.invalidPreviewCount > 0 ? .red : .secondary)
                             Text("csv.skipped".localized)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -253,7 +253,7 @@ struct CSVImportView: View {
                 if viewModel.totalDetectedRows > viewModel.parsedPreviewRows.count {
                     Text("csv.moreRowsNotShown".localized(with: viewModel.totalDetectedRows - viewModel.parsedPreviewRows.count))
                         .foregroundStyle(.secondary)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .listRowBackground(Color.clear)
                 }
             }
@@ -266,7 +266,7 @@ struct CSVImportView: View {
                                 Text("csv.rowError".localized(with: row.rowIndex + 1))
                                 Spacer()
                                 Text(row.errorMessage ?? "common.invalid".localized)
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.red)
                             }
                         }
@@ -280,7 +280,7 @@ struct CSVImportView: View {
                     viewModel.goBackToMapping()
                 } label: {
                     Text("csv.adjustMapping".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(Color.accentColor)
                 }
                 
@@ -288,7 +288,7 @@ struct CSVImportView: View {
                     viewModel.executeImport()
                 } label: {
                     Text(String(format: "csv.importAll".localized, viewModel.totalDetectedRows))
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(viewModel.canImport ? Color.accentColor : Color(.systemGray))
@@ -311,10 +311,10 @@ struct CSVImportView: View {
                 .scaleEffect(1.5)
             
             Text("csv.importing".localized)
-                .font(.app(.headline))
+                .appFont(.headline)
             
             Text("csv.pleaseWait".localized)
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             
@@ -334,16 +334,16 @@ struct CSVImportView: View {
             
             VStack(spacing: 8) {
                 Text("csv.importComplete".localized)
-                    .font(.app(.title2, weight: .semibold))
+                    .appFont(.title2, weight: .semibold)
                 
                 if let result = viewModel.importResult {
                     Text(String(format: "csv.importedCount".localized, result.successCount))
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                     
                     if result.skippedCount > 0 {
                         Text(String(format: "csv.skippedCount".localized, result.skippedCount))
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.orange)
                     }
                 }
@@ -355,7 +355,7 @@ struct CSVImportView: View {
                 dismiss()
             } label: {
                 Text(L10n.Common.done)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.accentColor)
@@ -378,7 +378,7 @@ struct CSVImportView: View {
                     .scaleEffect(1.5)
                     .tint(.primary)
                 Text("csv.processing".localized)
-                    .font(.app(.headline))
+                    .appFont(.headline)
             }
             .padding(24)
             .background(.thickMaterial)
@@ -405,7 +405,7 @@ struct PreviewRowView: View {
             HStack {
                 if let date = row.date {
                     Text(date.appFormatted(date: .abbreviated))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -414,7 +414,7 @@ struct PreviewRowView: View {
                 if let amount = row.amount {
                     let amountDouble = NSDecimalNumber(decimal: amount).doubleValue
                     Text(amountDouble, format: .currency(code: "USD"))
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .foregroundStyle(row.type == .income ? .green : .red)
                 }
             }
@@ -422,7 +422,7 @@ struct PreviewRowView: View {
             // Note
             if let note = row.note, !note.isEmpty {
                 Text(note)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .lineLimit(1)
             }
             
@@ -435,14 +435,14 @@ struct PreviewRowView: View {
                     HStack(spacing: 4) {
                         if let cat = row.matchedCategory {
                             Image(systemName: cat.icon)
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                             Text(cat.displayName)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         } else {
                             Image(systemName: "questionmark.circle")
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                             Text(row.categoryName ?? "csv.noCategory".localized)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -466,14 +466,14 @@ struct PreviewRowView: View {
                     HStack(spacing: 4) {
                         if let wallet = row.matchedWallet {
                             Image(systemName: wallet.icon)
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                             Text(wallet.name)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         } else {
                             Image(systemName: "wallet.pass")
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                             Text(row.walletName ?? "csv.defaultWallet".localized)
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                         }
                     }
                     .padding(.horizontal, 8)

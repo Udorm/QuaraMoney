@@ -20,11 +20,11 @@ struct RecurringProgressHeaderView: View {
             // Card title with the current month for context.
             HStack {
                 Text(L10n.Recurring.monthlyProgress)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                     .foregroundStyle(.primary)
                 Spacer()
                 Text(Date().formatted(.dateTime.month(.wide).locale(.app)))
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
                     .foregroundStyle(.secondary)
             }
 
@@ -53,10 +53,10 @@ struct RecurringProgressHeaderView: View {
             } else {
                 HStack(spacing: 10) {
                     Image(systemName: "calendar.badge.checkmark")
-                        .font(.app(.title3))
+                        .appFont(.title3)
                         .foregroundStyle(.secondary)
                     Text(L10n.Recurring.noProgressThisMonth)
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }
@@ -83,24 +83,24 @@ struct RecurringProgressHeaderView: View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
-                    .font(.app(.footnote, weight: .bold))
+                    .appFont(.footnote, weight: .bold)
                     .foregroundStyle(color)
                     .frame(width: 34, height: 34)
                     .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                         .foregroundStyle(.primary)
                     Text("\(Int((percentage * 100).rounded()))%")
-                        .font(.app(.caption2, weight: .medium))
+                        .appFont(.caption2, weight: .medium)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer(minLength: 8)
 
                 // Paid amount in tint, expected as a muted denominator.
-                Text("\(Text(paid.formattedAmount(for: currencyCode)).font(.app(.callout, weight: .bold)).foregroundColor(color))\(Text(" / \(expected.formattedAmount(for: currencyCode))").font(.app(.caption, weight: .medium)).foregroundColor(.secondary))")
+                Text("\(Text(paid.formattedAmount(for: currencyCode)).appFont(.callout, weight: .bold).foregroundColor(color))\(Text(" / \(expected.formattedAmount(for: currencyCode))").appFont(.caption, weight: .medium).foregroundColor(.secondary))")
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             }

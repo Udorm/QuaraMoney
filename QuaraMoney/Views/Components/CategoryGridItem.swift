@@ -26,7 +26,7 @@ struct CategoryGridItem: View {
                     }
 
                     Image(systemName: category.icon)
-                        .font(.app(.title3))
+                        .appFont(.title3)
                         .foregroundColor(isSelected ? .white : categoryColor)
                         .frame(width: 40, height: 40)
                         .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
@@ -49,7 +49,7 @@ struct CategoryGridItem: View {
                 .frame(width: 46, height: 46)
 
                 Text(category.displayName)
-                    .font(.app(.caption2, weight: isSelected ? .bold : .regular))
+                    .appFont(.caption2, weight: isSelected ? .bold : .regular)
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? categoryColor : .secondary)
             }

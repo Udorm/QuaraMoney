@@ -82,20 +82,20 @@ struct OnboardingView: View {
                 .frame(width: 96, height: 96)
                 .overlay(
                     Image(systemName: "wallet.pass.fill")
-                        .font(.app(size: 42, weight: .medium))
+                        .appFont(size: 42, weight: .medium)
                         .foregroundStyle(.white)
                 )
                 .shadow(color: Color.accentColor.opacity(0.35), radius: 18, y: 10)
 
             Text("QuaraMoney")
-                .font(.app(.largeTitle, weight: .bold))
+                .appFont(.largeTitle, weight: .bold)
                 .padding(.top, 20)
 
             VStack(spacing: 3) {
                 Text("Choose your language")
                 Text("ជ្រើសរើសភាសារបស់អ្នក")
             }
-            .font(.app(.subheadline))
+            .appFont(.subheadline)
             .foregroundStyle(.secondary)
             .padding(.top, 24)
 
@@ -136,24 +136,24 @@ struct OnboardingView: View {
         } label: {
             HStack(spacing: 14) {
                 Text(glyph)
-                    .font(.app(.title3, weight: .bold))
+                    .appFont(.title3, weight: .bold)
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 52, height: 52)
                     .background(Circle().fill(Color.accentColor.opacity(0.12)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.app(.footnote))
+                        .appFont(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.right")
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                     .foregroundStyle(.tertiary)
             }
             .padding(16)
@@ -221,7 +221,7 @@ struct OnboardingView: View {
                 }
             } label: {
                 Text(page == .ready ? "onboarding.getStarted".localized : "onboarding.continue".localized)
-                    .font(.app(.body, weight: .semibold))
+                    .appFont(.body, weight: .semibold)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -258,7 +258,7 @@ struct OnboardingView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.backward")
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                         .frame(width: 38, height: 38)
                 }
                 .buttonStyle(.glass)
@@ -272,7 +272,7 @@ struct OnboardingView: View {
                     }
                 } label: {
                     Text("onboarding.skip".localized)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                         .padding(.horizontal, 6)
                         .frame(height: 38)
                 }
@@ -300,10 +300,10 @@ struct OnboardingView: View {
 
             VStack(spacing: 12) {
                 Text(title)
-                    .font(.app(.title, weight: .bold))
+                    .appFont(.title, weight: .bold)
                     .multilineTextAlignment(.center)
                 Text(description)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -326,10 +326,10 @@ struct OnboardingView: View {
 
             VStack(spacing: 12) {
                 Text("onboarding.finalTitle".localized)
-                    .font(.app(.title, weight: .bold))
+                    .appFont(.title, weight: .bold)
                     .multilineTextAlignment(.center)
                 Text("onboarding.ready.description".localized)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -344,7 +344,7 @@ struct OnboardingView: View {
             .padding(.top, 22)
 
             Text("onboarding.ready.changeLater".localized)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 14)
@@ -380,7 +380,7 @@ struct OnboardingView: View {
                 .frame(width: 84, height: 84)
                 .overlay(
                     Image(systemName: "checkmark")
-                        .font(.app(size: 38, weight: .bold))
+                        .appFont(size: 38, weight: .bold)
                         .foregroundStyle(.white)
                 )
                 .shadow(color: Color.green.opacity(0.35), radius: 16, y: 8)
@@ -398,17 +398,17 @@ struct OnboardingView: View {
         } label: {
             VStack(spacing: 8) {
                 Text(symbol)
-                    .font(.app(.title2, weight: .bold))
+                    .appFont(.title2, weight: .bold)
                     .foregroundStyle(isSelected ? Color.white : Color.accentColor)
                     .frame(width: 48, height: 48)
                     .background(Circle().fill(isSelected ? Color.accentColor : Color.accentColor.opacity(0.12)))
                 Text(name)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(code)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)

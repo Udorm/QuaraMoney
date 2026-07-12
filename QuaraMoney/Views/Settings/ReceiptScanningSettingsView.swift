@@ -19,7 +19,7 @@ struct ReceiptScanningSettingsView: View {
         Form {
             Section {
                 Text("settings.aiScanning.intro".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
@@ -89,7 +89,7 @@ struct ReceiptScanningSettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                     if active {
                         Image(systemName: "checkmark.circle.fill")
                             .appFont(size: 13)
@@ -97,7 +97,7 @@ struct ReceiptScanningSettingsView: View {
                     }
                 }
                 Text(body)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }

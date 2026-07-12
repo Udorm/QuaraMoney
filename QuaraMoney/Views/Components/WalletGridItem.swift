@@ -54,7 +54,7 @@ struct WalletGridItem: View {
                 .frame(width: 46, height: 46)
 
                 Text(wallet.name)
-                    .font(.app(.caption2, weight: isSelected ? .bold : .regular))
+                    .appFont(.caption2, weight: isSelected ? .bold : .regular)
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? walletColor : .secondary)
             }

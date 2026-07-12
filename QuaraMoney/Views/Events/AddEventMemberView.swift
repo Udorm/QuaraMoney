@@ -51,7 +51,7 @@ struct AddEventMemberView: View {
                                     showingIconPicker = true
                                 }
                             }
-                            .font(.app(.caption, weight: .medium))
+                            .appFont(.caption, weight: .medium)
                         }
                         Spacer()
                     }
@@ -91,7 +91,7 @@ struct AddEventMemberView: View {
                     Section {
                         Text(errorMessage)
                             .foregroundStyle(.red)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
             }

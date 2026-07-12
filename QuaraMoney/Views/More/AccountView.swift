@@ -182,7 +182,7 @@ struct AccountView: View {
                 if editingName {
                     HStack(spacing: 12) {
                         TextField(L10n.Profile.namePlaceholder, text: $tempName)
-                            .font(.app(.title2, weight: .bold))
+                            .appFont(.title2, weight: .bold)
                             .multilineTextAlignment(.center)
                             .focused($isNameFocused)
                             .submitLabel(.done)
@@ -207,7 +207,7 @@ struct AccountView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(displayName.isEmpty ? L10n.Profile.namePlaceholder : displayName)
-                                .font(.app(.title2, weight: .bold))
+                                .appFont(.title2, weight: .bold)
                                 .foregroundStyle(displayName.isEmpty ? .secondary : .primary)
 
                             Image(systemName: "pencil.circle.fill")
@@ -236,13 +236,13 @@ struct AccountView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
                 Image(systemName: "icloud.fill")
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
 
                 Text("account.cloudSync".localized)
-                    .font(.app(.headline, weight: .semibold))
+                    .appFont(.headline, weight: .semibold)
 
                 Spacer()
 
@@ -255,7 +255,7 @@ struct AccountView: View {
             if !viewModel.isConfigured {
                 Label("account.notConfigured".localized,
                       systemImage: "exclamationmark.triangle")
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
             } else if syncEnabled {
                 Divider()
@@ -266,7 +266,7 @@ struct AccountView: View {
                 }
             } else {
                 Text("account.offlineFooter".localized)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -289,7 +289,7 @@ struct AccountView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                     Text("account.unsyncedWarning".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(10)
@@ -300,10 +300,10 @@ struct AccountView: View {
 
             VStack(spacing: 4) {
                 Text("account.backUp.title".localized)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
 
                 Text("account.backUp.message".localized)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -314,7 +314,7 @@ struct AccountView: View {
                     authSheetMode = .signIn
                 } label: {
                     Text("account.signIn".localized)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -324,7 +324,7 @@ struct AccountView: View {
                     authSheetMode = .signUp
                 } label: {
                     Text("account.createAccount".localized)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -345,7 +345,7 @@ struct AccountView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(auth.currentEmail ?? "")
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -354,7 +354,7 @@ struct AccountView: View {
                         .fill(.green)
                         .frame(width: 6, height: 6)
                     Text("account.signedIn".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -371,10 +371,10 @@ struct AccountView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(syncStatusTitle)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
 
                 Text(syncStatusDetail)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(sync.lastError == nil ? Color.secondary : Color.red)
                     .lineLimit(3)
             }
@@ -385,7 +385,7 @@ struct AccountView: View {
                 Task { await sync.syncNow(context: modelContext) }
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
@@ -395,7 +395,7 @@ struct AccountView: View {
 
         if sync.isInitialSyncInProgress {
             Text("account.initialUpload".localized)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -448,10 +448,10 @@ struct AccountView: View {
                         ProgressView()
                     } else {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.app(.subheadline, weight: .semibold))
+                            .appFont(.subheadline, weight: .semibold)
                     }
                     Text("account.signOut".localized)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -471,9 +471,9 @@ struct AccountView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "trash.fill")
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                     Text("account.deleteAccount".localized)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                 }
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
@@ -489,7 +489,7 @@ struct AccountView: View {
             .disabled(auth.isWorking || sync.isSyncing)
 
             Text("account.deleteFooter".localized)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
@@ -549,11 +549,11 @@ struct AccountView: View {
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.app(.title, weight: .bold))
+                .appFont(.title, weight: .bold)
                 .foregroundStyle(.primary)
 
             Text(label)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -575,11 +575,11 @@ struct AccountView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.Profile.memberSince)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
 
                 Text(memberSinceFormatted)
-                    .font(.app(.body, weight: .medium))
+                    .appFont(.body, weight: .medium)
                     .foregroundStyle(.primary)
             }
 

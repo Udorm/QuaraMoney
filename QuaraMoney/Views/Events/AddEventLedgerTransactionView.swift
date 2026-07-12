@@ -74,14 +74,14 @@ struct AddEventLedgerTransactionView: View {
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "ellipsis.circle.fill")
-                                                .font(.app(.title3))
+                                                .appFont(.title3)
                                                 .foregroundColor(.secondary)
                                                 .frame(width: 40, height: 40)
                                                 .background(Color(.tertiarySystemGroupedBackground))
                                                 .clipShape(Circle())
                                             
                                             Text("common.more".localized)
-                                                .font(.app(.caption2))
+                                                .appFont(.caption2)
                                                 .foregroundStyle(.secondary)
                                         }
                                     }

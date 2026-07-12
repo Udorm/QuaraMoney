@@ -83,7 +83,7 @@ struct BudgetListView: View {
                         }
                     }
 
-                    Section(header: Text(headerTitle).font(.app(.subheadline)).textCase(nil)) {
+                    Section(header: Text(headerTitle).appFont(.subheadline).textCase(nil)) {
                         ForEach(shownBudgets) { budget in
                             NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
                                 BudgetRowView(
@@ -226,20 +226,20 @@ struct BudgetSummarySection: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.Budget.totalSpent)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                     Text(totalSpent.formattedAmount(for: preferredCurrency))
-                        .font(.app(.title2, weight: .bold))
+                        .appFont(.title2, weight: .bold)
                 }
                 
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(L10n.Budget.totalBudgeted)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                     Text(totalBudgeted.formattedAmount(for: preferredCurrency))
-                        .font(.app(.title2, weight: .bold))
+                        .appFont(.title2, weight: .bold)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -251,13 +251,13 @@ struct BudgetSummarySection: View {
                 
                 HStack {
                     Text(L10n.Budget.percentUsed(Int(progress * 100)))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                     
                     Spacer()
                     
                     Text(L10n.Budget.onTrackCount(onTrackCount, budgets.count - onTrackCount))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -336,7 +336,7 @@ struct BudgetRowView: View {
                     .frame(width: 48, height: 48)
                 
                 Image(systemName: budgetIcon)
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(iconColor)
             }
             
@@ -345,7 +345,7 @@ struct BudgetRowView: View {
                 // Title Row
                 HStack {
                     Text(budget.displayName)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .lineLimit(1)
                     
                     Spacer()
@@ -354,11 +354,11 @@ struct BudgetRowView: View {
                     // Here we focus on "Amount Left" as it's usually what users care about
                     if isOverBudget {
                         Text(spent.formattedAmount(for: preferredCurrency))
-                            .font(.app(.body, weight: .bold))
+                            .appFont(.body, weight: .bold)
                             .foregroundStyle(ThemeManager.shared.expenseColor)
                     } else {
                         Text(remaining.formattedAmount(for: preferredCurrency))
-                            .font(.app(.body, weight: .bold))
+                            .appFont(.body, weight: .bold)
                             .foregroundStyle(Color.primary)
                     }
                 }
@@ -383,17 +383,17 @@ struct BudgetRowView: View {
                     HStack(spacing: 4) {
                         if budget.isRecurring {
                             Image(systemName: "repeat")
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         
                         if isOverBudget {
                              Text(L10n.Budget.overBy((spent - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(ThemeManager.shared.expenseColor)
                         } else {
                             Text(L10n.Budget.leftOf(budgetLimitConverted.formattedAmount(for: preferredCurrency)))
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -403,11 +403,11 @@ struct BudgetRowView: View {
                     // Right: Time Info
                     if budget.isActive {
                         Text(L10n.Budget.daysLeft(budget.daysRemaining))
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     } else if budget.isPeriodEnded {
                         Text(L10n.Budget.ended)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

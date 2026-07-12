@@ -182,11 +182,11 @@ struct WalletDetailView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.wallet.currencyCode)
-                        .font(.app(.caption2, weight: .semibold))
+                        .appFont(.caption2, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.7))
                         .textCase(.uppercase)
                     Text(viewModel.wallet.name)
-                        .font(.app(.title2, weight: .bold))
+                        .appFont(.title2, weight: .bold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -196,7 +196,7 @@ struct WalletDetailView: View {
 
                 if viewModel.wallet.isArchived {
                     Text(L10n.Wallet.archived)
-                        .font(.app(.caption2, weight: .bold))
+                        .appFont(.caption2, weight: .bold)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -215,7 +215,7 @@ struct WalletDetailView: View {
             // Balance + period in/out
             VStack(alignment: .leading, spacing: 8) {
                 Text(viewModel.wallet.balance.formattedAmount(for: viewModel.wallet.currencyCode))
-                    .font(.app(.title, weight: .bold))
+                    .appFont(.title, weight: .bold)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(.white)
@@ -269,15 +269,15 @@ struct WalletDetailView: View {
     private func heroStat(icon: String, label: String, amount: Decimal) -> some View {
         HStack(spacing: 7) {
             Image(systemName: icon)
-                .font(.app(.caption2, weight: .bold))
+                .appFont(.caption2, weight: .bold)
                 .frame(width: 24, height: 24)
                 .background(.white.opacity(0.18), in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                     .opacity(0.7)
                 Text(amount.formattedAmountShort(for: viewModel.wallet.currencyCode))
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                     .monospacedDigit()
                     .lineLimit(1)
             }
@@ -316,9 +316,9 @@ struct WalletDetailView: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                 Text(title)
-                    .font(.app(.footnote, weight: .medium))
+                    .appFont(.footnote, weight: .medium)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }

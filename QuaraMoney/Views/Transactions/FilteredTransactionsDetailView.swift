@@ -125,13 +125,13 @@ struct FilteredTransactionsDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if displayCategories.count == 1, let cat = displayCategories.first {
                         Text(cat.name)
-                            .font(.app(.subheadline, weight: .semibold))
+                            .appFont(.subheadline, weight: .semibold)
                     } else if displayCategories.count > 1 {
                         FlowLayout(spacing: 4) {
                             ForEach(displayCategories) { cat in
                                 let c = Color(hex: cat.colorHex) ?? .blue
                                 Text(cat.name)
-                                    .font(.app(.caption2, weight: .medium))
+                                    .appFont(.caption2, weight: .medium)
                                     .foregroundStyle(c)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -145,20 +145,20 @@ struct FilteredTransactionsDetailView: View {
                         Image(systemName: "calendar")
                             .appFont(size: 10)
                         Text(config.formattedDateRange)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                         if let walletName = config.walletName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "wallet.bifold")
                                 .appFont(size: 10)
                             Text(walletName)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         }
                         if let goalName = config.savingsGoalName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "target")
                                 .appFont(size: 10)
                             Text(goalName)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         }
                     }
                     .foregroundStyle(.secondary)
@@ -174,7 +174,7 @@ struct FilteredTransactionsDetailView: View {
                         Image(systemName: isExpense ? "arrow.down" : "arrow.up")
                             .appFont(size: 10, weight: .bold)
                         Text(isExpense ? L10n.Transaction.TransactionType.expense : L10n.Transaction.TransactionType.income)
-                            .font(.app(.caption, weight: .semibold))
+                            .appFont(.caption, weight: .semibold)
                     }
                     .foregroundStyle(typeColor)
                     .padding(.horizontal, 8)
@@ -191,13 +191,13 @@ struct FilteredTransactionsDetailView: View {
             // MARK: Stats — total amount | transaction count
             HStack(alignment: .firstTextBaseline) {
                 Text(vm.totalAmount.formattedAmount(for: preferredCurrency))
-                    .font(.app(.title2, weight: .bold))
+                    .appFont(.title2, weight: .bold)
                     .monospacedDigit()
 
                 Spacer()
 
                 Text("filteredTransactions.count".localized(with: vm.transactions.count))
-                    .font(.app(.callout))
+                    .appFont(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }

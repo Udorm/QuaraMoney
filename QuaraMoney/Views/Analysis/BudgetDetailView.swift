@@ -50,7 +50,7 @@ struct BudgetDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 8) {
                                 Text(budget.displayName)
-                                    .font(.app(.title2, weight: .bold))
+                                    .appFont(.title2, weight: .bold)
                                 
                                 // Badges
                                 if budget.isRecurring {
@@ -60,12 +60,12 @@ struct BudgetDetailView: View {
                             }
                             
                             Text(budget.periodDisplayString)
-                                .font(.app(.subheadline))
+                                .appFont(.subheadline)
                                 .foregroundStyle(.secondary)
                             
                             if budget.isActive {
                                 Text(L10n.Budget.daysLeft(budget.daysRemaining))
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -73,7 +73,7 @@ struct BudgetDetailView: View {
                         Spacer()
                         
                         Image(systemName: budgetIcon)
-                            .font(.app(.title2))
+                            .appFont(.title2)
                             .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
                             .background(progressColor.gradient)
@@ -115,11 +115,11 @@ struct BudgetDetailView: View {
                         // Center Label
                         VStack(spacing: 4) {
                             Text("\(Int(progress * 100))%")
-                                .font(.app(.largeTitle, weight: .bold))
+                                .appFont(.largeTitle, weight: .bold)
                                 .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
                             
                             Text(isOverBudget ? L10n.Budget.overBudgetLabel : L10n.Budget.used)
-                                .font(.app(.subheadline, weight: .medium))
+                                .appFont(.subheadline, weight: .medium)
                                 .foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
@@ -163,7 +163,7 @@ struct BudgetDetailView: View {
                     Text(L10n.Budget.remaining)
                     Spacer()
                     Text(remaining.formattedAmount(for: preferredCurrency))
-                        .font(.app(.body, weight: .medium))
+                        .appFont(.body, weight: .medium)
                         .foregroundStyle(remaining >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
                 }
                 
@@ -173,7 +173,7 @@ struct BudgetDetailView: View {
                         Spacer()
                         Text(budget.amountLimit.formattedAmount(for: budget.currencyCode))
                             .foregroundStyle(.secondary)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
             }
@@ -206,7 +206,7 @@ struct BudgetDetailView: View {
                                 .foregroundStyle(projectedSpending > budgetLimitConverted ? ThemeManager.shared.expenseColor : .secondary)
                             if projectedSpending > budgetLimitConverted {
                                 Text(L10n.Budget.overBy((projectedSpending - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
-                                    .font(.app(.caption2))
+                                    .appFont(.caption2)
                                     .foregroundStyle(ThemeManager.shared.expenseColor)
                             }
                         }
@@ -222,7 +222,7 @@ struct BudgetDetailView: View {
                     HStack(spacing: 8) {
                         if budget.alertAt50 {
                             Text("50%")
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.accentColor.opacity(0.2))
@@ -231,7 +231,7 @@ struct BudgetDetailView: View {
                         }
                         if budget.alertAt80 {
                             Text("80%")
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.orange.opacity(0.2))
@@ -240,7 +240,7 @@ struct BudgetDetailView: View {
                         }
                         if budget.alertAt100 {
                             Text("100%")
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.red.opacity(0.2))
@@ -249,7 +249,7 @@ struct BudgetDetailView: View {
                         }
                         if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
                             Text("budget.threshold.none".localized)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -305,9 +305,9 @@ struct BudgetDetailView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(relevantTransactions.count) " + "filteredTransactions.transactionsLabel".localized)
-                                    .font(.app(.subheadline, weight: .medium))
+                                    .appFont(.subheadline, weight: .medium)
                                 Text(totalSpent.formattedAmount(for: preferredCurrency))
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()

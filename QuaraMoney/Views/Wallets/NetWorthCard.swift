@@ -33,12 +33,12 @@ struct NetWorthCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(L10n.Wallet.netWorth)
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
 
                 Text(total.formattedAmount(for: currencyCode))
-                    .font(.app(.largeTitle, weight: .bold))
+                    .appFont(.largeTitle, weight: .bold)
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .foregroundStyle(total >= 0 ? Color.primary : ThemeManager.shared.expenseColor)
@@ -56,9 +56,9 @@ struct NetWorthCard: View {
                 if let change {
                     HStack(spacing: 3) {
                         Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                            .font(.app(.caption2, weight: .bold))
+                            .appFont(.caption2, weight: .bold)
                         Text(change.magnitude.formattedAmountShort(for: currencyCode))
-                            .font(.app(.caption, weight: .semibold))
+                            .appFont(.caption, weight: .semibold)
                             .monospacedDigit()
                     }
                     .foregroundStyle(changeColor)
@@ -68,7 +68,7 @@ struct NetWorthCard: View {
                 }
 
                 Text("wallet.last30Days".localized)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }

@@ -52,7 +52,7 @@ struct AnalysisContentView: View {
                 VStack(spacing: 20) {
                     // Filter Description
                     Text(vm.filterDescription)
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
@@ -138,12 +138,12 @@ struct SpendingTrendChart: View {
                 
                 VStack(spacing: 4) {
                     Text(vm.selectedTransactionType == .expense ? "analysis.totalSpending".localized : "analysis.totalIncome".localized)
-                        .font(.app(.caption, weight: .semibold))
+                        .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.secondary)
                     
                     let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
                     Text(amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                        .font(.app(.title, weight: .bold))
+                        .appFont(.title, weight: .bold)
                         .foregroundStyle(Color.primary)
                     
                 }
@@ -315,7 +315,7 @@ struct CategoryBreakdownChart: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(vm.selectedTransactionType == .expense ? "analysis.topSpendingCategories".localized : "analysis.topIncomeCategories".localized)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                 
                 Spacer()
                 
@@ -341,7 +341,7 @@ struct CategoryBreakdownChart: View {
 
                                 VStack(alignment: .leading) {
                                     Text(stat.name)
-                                        .font(.app(.subheadline, weight: .medium))
+                                        .appFont(.subheadline, weight: .medium)
 
                                     let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
                                     CategoryShareBar(
@@ -354,17 +354,17 @@ struct CategoryBreakdownChart: View {
 
                                 VStack(alignment: .trailing) {
                                     Text(stat.amount.formattedAmount(for: preferredCurrency))
-                                        .font(.app(.callout))
+                                        .appFont(.callout)
                                         .monospacedDigit()
 
                                     let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
                                     Text(percent.formatted(.percent.precision(.fractionLength(0))))
-                                        .font(.app(.caption2))
+                                        .appFont(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
 
                                 Image(systemName: "chevron.right")
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 8)

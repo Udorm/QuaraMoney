@@ -79,7 +79,7 @@ struct RecurringRuleEditorView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Text(currencyCode)
-                                    .font(.app(.subheadline, weight: .bold))
+                                    .appFont(.subheadline, weight: .bold)
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
                                     .fontWeight(.bold)

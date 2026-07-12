@@ -38,7 +38,7 @@ struct UndoToastModifier<Item: Identifiable>: ViewModifier {
     private func toast(_ item: Item) -> some View {
         HStack(spacing: 12) {
             Text(message(item))
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
             Spacer(minLength: 8)
@@ -48,7 +48,7 @@ struct UndoToastModifier<Item: Identifiable>: ViewModifier {
                 self.item = nil
             } label: {
                 Text("common.undo".localized)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(Color.accentColor)
             }
             .buttonStyle(.plain)

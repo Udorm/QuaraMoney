@@ -28,7 +28,7 @@ struct TransactionListView: View {
             if let listHeader, !listHeader.isEmpty {
                 Section(header:
                     Text(listHeader)
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 8)
                 ) {
@@ -59,14 +59,14 @@ struct TransactionListView: View {
                                 onEdit(txn)
                             } label: {
                                 Label(L10n.Common.edit, systemImage: "pencil")
-                                    .font(.app(.body))
+                                    .appFont(.body)
                             }
                             Button(role: .destructive) {
                                 HapticManager.shared.impact(style: .medium)
                                 onDelete(txn)
                             } label: {
                                 Label(L10n.Common.delete, systemImage: "trash")
-                                    .font(.app(.body))
+                                    .appFont(.body)
                             }
                         }
                     }
@@ -99,14 +99,14 @@ struct TransactionListView: View {
                             onEdit(txn)
                         } label: {
                             Label(L10n.Common.edit, systemImage: "pencil")
-                                .font(.app(.body))
+                                .appFont(.body)
                         }
                         Button(role: .destructive) {
                             HapticManager.shared.impact(style: .medium)
                             onDelete(txn)
                         } label: {
                             Label(L10n.Common.delete, systemImage: "trash")
-                                .font(.app(.body))
+                                .appFont(.body)
                         }
                     }
                 }
@@ -117,7 +117,7 @@ struct TransactionListView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if index == 0, let listHeader, !listHeader.isEmpty {
                             Text(listHeader)
-                                .font(.app(.subheadline))
+                                .appFont(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .padding(.bottom, 4)
                         }
@@ -151,14 +151,14 @@ struct TransactionListView: View {
                                 onEdit(txn)
                             } label: {
                                 Label(L10n.Common.edit, systemImage: "pencil")
-                                    .font(.app(.body))
+                                    .appFont(.body)
                             }
                             Button(role: .destructive) {
                                 HapticManager.shared.impact(style: .medium)
                                 onDelete(txn)
                             } label: {
                                 Label(L10n.Common.delete, systemImage: "trash")
-                                    .font(.app(.body))
+                                    .appFont(.body)
                             }
                         }
                     }
@@ -187,10 +187,10 @@ struct DailySectionHeader: View {
     var body: some View {
         HStack {
             Text(section.date.appFormatted(date: .abbreviated))
-                .font(.app(.headline))
+                .appFont(.headline)
             Spacer()
             Text(section.dailyTotal.formattedAmount(for: currencyCode))
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(section.dailyTotal >= 0 ? incomeColor : expenseColor)
         }
         .padding(.vertical, 4)

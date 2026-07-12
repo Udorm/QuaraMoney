@@ -131,17 +131,17 @@ struct EventRowView: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(event.title)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     
                     VStack(alignment: .leading, spacing: 0) {
                         Text(formatDateRange(start: event.startDate, end: event.endDate))
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                         
                         if let location = event.location, !location.isEmpty {
                             Text(location)
-                                .font(.app(.subheadline))
+                                .appFont(.subheadline)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }

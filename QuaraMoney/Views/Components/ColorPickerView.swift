@@ -18,7 +18,7 @@ struct ColorPickerView: View {
                         // Selection Indicator
                         if selectedColorHex == colorHex {
                             Image(systemName: "checkmark")
-                                .font(.app(.body, weight: .bold)) // size 16 is ~body
+                                .appFont(.body, weight: .bold) // size 16 is ~body
                                 .foregroundColor(.white)
                         }
                     }

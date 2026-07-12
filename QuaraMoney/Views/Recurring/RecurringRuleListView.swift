@@ -70,7 +70,7 @@ struct RecurringRuleListView: View {
                 Section {
                     NavigationLink(destination: RecurringReviewView(allRules: rules)) {
                         Label(L10n.Recurring.Review.banner(dueRules.count), systemImage: "tray.full")
-                            .font(.app(.headline))
+                            .appFont(.headline)
                             .foregroundStyle(Color.accentColor)
                     }
                 }
@@ -172,7 +172,7 @@ struct RecurringRuleListView: View {
                             .foregroundStyle(.green)
                     }
                 }
-                .font(.app(.caption, weight: .semibold))
+                .appFont(.caption, weight: .semibold)
             }
         }
     }
@@ -268,7 +268,7 @@ private struct RecurringRuleRow: View {
         HStack(spacing: 14) {
             // Tinted icon badge
             Image(systemName: icon)
-                .font(.app(.body, weight: .semibold))
+                .appFont(.body, weight: .semibold)
                 .foregroundStyle(rule.isActive ? tint : Color.secondary)
                 .frame(width: 42, height: 42)
                 .background(
@@ -279,11 +279,11 @@ private struct RecurringRuleRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(rule.name)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .lineLimit(1)
                     if !rule.isActive {
                         Text(L10n.Recurring.paused)
-                            .font(.app(.caption2, weight: .bold))
+                            .appFont(.caption2, weight: .bold)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.secondary.opacity(0.15))
@@ -300,11 +300,11 @@ private struct RecurringRuleRow: View {
                         Text(due.text)
                             .foregroundStyle(due.color)
                     }
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .lineLimit(1)
                 } else {
                     Text(rule.frequency.displayName(interval: rule.interval))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -313,7 +313,7 @@ private struct RecurringRuleRow: View {
             Spacer(minLength: 8)
 
             Text(signedAmount)
-                .font(.app(.body, weight: .semibold))
+                .appFont(.body, weight: .semibold)
                 .foregroundStyle(rule.type == .income ? tint : Color.primary)
                 .lineLimit(1)
         }

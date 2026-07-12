@@ -183,14 +183,14 @@ private struct WalletListContent: View {
                 HStack(spacing: 6) {
                     Text(L10n.Wallet.Status.archivedWallets)
                     Text("\(archivedWallets.count)")
-                        .font(.app(.caption2, weight: .semibold))
+                        .appFont(.caption2, weight: .semibold)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                     Spacer()
                     Image(systemName: "chevron.down")
-                        .font(.app(.caption2, weight: .semibold))
+                        .appFont(.caption2, weight: .semibold)
                         .rotationEffect(.degrees(isArchivedExpanded ? 0 : -90))
                 }
                 .contentShape(Rectangle())

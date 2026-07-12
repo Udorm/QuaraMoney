@@ -120,7 +120,7 @@ struct RecurringReviewView: View {
         let t = totals
         return HStack(alignment: .firstTextBaseline) {
             Text(L10n.Recurring.Review.summary(t.occurrences))
-                .font(.app(.headline))
+                .appFont(.headline)
             Spacer()
             HStack(spacing: 10) {
                 if t.expense > 0 {
@@ -132,7 +132,7 @@ struct RecurringReviewView: View {
                         .foregroundStyle(.green)
                 }
             }
-            .font(.app(.subheadline, weight: .semibold))
+            .appFont(.subheadline, weight: .semibold)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
         }
@@ -178,13 +178,13 @@ struct RecurringDueRow: View {
                     .foregroundStyle(rule.type == .income ? .green : .red)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(rule.name).font(.app(.headline))
-                    Text(dueLabel).font(.app(.caption)).foregroundStyle(.secondary)
+                    Text(rule.name).appFont(.headline)
+                    Text(dueLabel).appFont(.caption).foregroundStyle(.secondary)
                     metaChips
                 }
                 Spacer()
                 Text(signedAmount)
-                    .font(.app(.body, weight: .semibold))
+                    .appFont(.body, weight: .semibold)
                     .foregroundStyle(rule.type == .income ? Color.green : Color.primary)
             }
             HStack(spacing: 8) {
@@ -194,7 +194,7 @@ struct RecurringDueRow: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(.secondary)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                 }
                 Spacer(minLength: 16)
                 // Skip recedes (gray) — it silently drops the occurrence, so it
@@ -232,7 +232,7 @@ struct RecurringDueRow: View {
             Image(systemName: icon)
             Text(text).lineLimit(1)
         }
-        .font(.app(.caption2))
+        .appFont(.caption2)
         .foregroundStyle(tint)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)

@@ -100,11 +100,11 @@ struct TransactionCategoryPickerSheet: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.app(.body))
+                .appFont(.body)
                 .foregroundStyle(.secondary)
 
             TextField("transaction.searchCategories".localized, text: $searchText)
-                .font(.app(.body))
+                .appFont(.body)
                 .autocorrectionDisabled()
                 .focused($isSearchFocused)
 
@@ -198,7 +198,7 @@ struct TransactionCategoryPickerSheet: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.app(.headline))
+            .appFont(.headline)
             .foregroundStyle(.primary)
             .textCase(nil)
     }
@@ -217,14 +217,14 @@ private struct CategoryColorRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: category.icon)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundColor(.white)
                     .frame(width: 32, height: 32)
                     .background(color)
                     .clipShape(Circle())
 
                 Text(category.displayName)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .foregroundStyle(.primary)
 
                 Spacer()

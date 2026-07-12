@@ -86,25 +86,25 @@ struct NotificationRowView: View {
                     .frame(width: 44, height: 44)
                 
                 Image(systemName: notification.alertType.icon)
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(Color(hex: notification.alertType.color) ?? Color(.systemGray))
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(notification.alertType.rawValue)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .foregroundStyle(notification.isRead ? .secondary : .primary)
                     
                     Spacer()
                     
                     Text(notification.timeAgo)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 Text(notification.alertType.message(budgetName: notification.budgetName))
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 
@@ -114,7 +114,7 @@ struct NotificationRowView: View {
                         .tint(Color(hex: notification.alertType.color) ?? .blue)
                     
                     Text("\(notification.progressPercent)%")
-                        .font(.app(.caption, weight: .medium))
+                        .appFont(.caption, weight: .medium)
                         .foregroundStyle(Color(hex: notification.alertType.color) ?? .gray)
                 }
             }
@@ -142,11 +142,11 @@ struct NotificationBellButton: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")
-                    .font(.app(.title3))
+                    .appFont(.title3)
                 
                 if notificationService.unreadCount > 0 {
                     Text("\(min(notificationService.unreadCount, 99))")
-                        .font(.app(.caption2, weight: .bold))
+                        .appFont(.caption2, weight: .bold)
                         .foregroundStyle(.white)
                         .padding(4)
                         .background(Color.red)

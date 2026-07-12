@@ -204,7 +204,7 @@ struct TransactionLocationPickerView: View {
         HStack(spacing: 10) {
             ProgressView()
             Text(key.localized)
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
@@ -214,11 +214,11 @@ struct TransactionLocationPickerView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.app(.body))
+                .appFont(.body)
                 .foregroundStyle(.secondary)
 
             TextField("transaction.location.searchPrompt".localized, text: $searchModel.query)
-                .font(.app(.body))
+                .appFont(.body)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .focused($isSearchFocused)
@@ -391,7 +391,7 @@ private struct TransactionManualMapPinView: View {
                         SelectedLocationRow(selection: resolvedSelection)
                     } else {
                         Text("transaction.location.moveMapToPin".localized)
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -408,7 +408,7 @@ private struct TransactionManualMapPinView: View {
                                 Image(systemName: "checkmark.circle.fill")
                             }
                         }
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -579,19 +579,19 @@ private struct LocationActionRow: View {
                     ProgressView()
                 } else {
                     Image(systemName: systemImage)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                         .foregroundStyle(.blue)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.app(.body, weight: isSelected ? .semibold : .regular))
+                    .appFont(.body, weight: isSelected ? .semibold : .regular)
                     .foregroundStyle(.primary)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -601,7 +601,7 @@ private struct LocationActionRow: View {
 
             if isSelected {
                 Image(systemName: "checkmark")
-                    .font(.app(.subheadline, weight: .bold))
+                    .appFont(.subheadline, weight: .bold)
                     .foregroundStyle(.blue)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -617,19 +617,19 @@ private struct LocationSelectionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isSelected ? "mappin.circle.fill" : "mappin.circle")
-                .font(.app(.title3))
+                .appFont(.title3)
                 .foregroundStyle(.blue)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(selection.title)
-                    .font(.app(.body, weight: isSelected ? .semibold : .regular))
+                    .appFont(.body, weight: isSelected ? .semibold : .regular)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 if let subtitle = selection.subtitle {
                     Text(subtitle)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -639,7 +639,7 @@ private struct LocationSelectionRow: View {
 
             if isSelected {
                 Image(systemName: "checkmark")
-                    .font(.app(.subheadline, weight: .bold))
+                    .appFont(.subheadline, weight: .bold)
                     .foregroundStyle(.blue)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -654,19 +654,19 @@ private struct SearchCompletionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.app(.body))
+                .appFont(.body)
                 .foregroundStyle(.secondary)
                 .frame(width: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(completion.title)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 if !completion.subtitle.isEmpty {
                     Text(completion.subtitle)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -685,11 +685,11 @@ private struct SelectedLocationRow: View {
         Label {
             VStack(alignment: .leading, spacing: 3) {
                 Text(selection.title)
-                    .font(.app(.body, weight: .medium))
+                    .appFont(.body, weight: .medium)
 
                 if let subtitle = selection.subtitle {
                     Text(subtitle)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }

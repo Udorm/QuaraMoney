@@ -87,10 +87,10 @@ struct ResetPasswordSheetView: View {
 
             VStack(spacing: 6) {
                 Text("auth.setNewPassword".localized)
-                    .font(.app(.title2, weight: .bold))
+                    .appFont(.title2, weight: .bold)
 
                 Text(auth.currentEmail.map { "auth.resetSubtitleWithEmail".localized(with: $0) } ?? "auth.resetSubtitle".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,7 +116,7 @@ struct ResetPasswordSheetView: View {
                             SecureField("auth.newPassword".localized, text: $password)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -128,7 +128,7 @@ struct ResetPasswordSheetView: View {
                         showPassword.toggle()
                     } label: {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
@@ -152,7 +152,7 @@ struct ResetPasswordSheetView: View {
                             SecureField("auth.confirmNewPassword".localized, text: $confirmPassword)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -170,12 +170,12 @@ struct ResetPasswordSheetView: View {
 
             if !confirmPassword.isEmpty && !passwordsMatch {
                 Label("auth.passwordsDontMatch".localized, systemImage: "exclamationmark.circle")
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.red)
                     .padding(.leading, 16)
             } else {
                 Text("auth.passwordMinLength".localized)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 16)
             }
@@ -197,7 +197,7 @@ struct ResetPasswordSheetView: View {
                     Text("auth.updatePassword".localized)
                 }
             }
-            .font(.app(.body, weight: .semibold))
+            .appFont(.body, weight: .semibold)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
@@ -210,7 +210,7 @@ struct ResetPasswordSheetView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

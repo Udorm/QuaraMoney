@@ -21,17 +21,17 @@ struct TransactionSetupPrompt: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.app(.title3, weight: .semibold))
+                    .appFont(.title3, weight: .semibold)
                     .foregroundStyle(tint)
                     .frame(width: 44, height: 44)
                     .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
                         .foregroundStyle(.primary)
                     Text(message)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -40,7 +40,7 @@ struct TransactionSetupPrompt: View {
                 Spacer(minLength: 8)
 
                 Text(actionTitle)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)

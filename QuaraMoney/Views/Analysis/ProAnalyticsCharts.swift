@@ -244,7 +244,7 @@ struct ProFlowCard: View {
                     if let v = value.as(Double.self) {
                         // Mirrored chart: the negative half is expenses, label it unsigned.
                         Text(abs(v).formattedAmountShort(for: vm.preferredCurrency))
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -338,7 +338,7 @@ struct ProFlowCard: View {
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(v.formattedAmountShort(for: vm.preferredCurrency))
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -673,7 +673,7 @@ struct ProCategoriesCard: View {
                     AxisValueLabel {
                         if let name = value.as(String.self) {
                             Text(name)
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .frame(maxWidth: 76, alignment: .trailing)
@@ -688,7 +688,7 @@ struct ProCategoriesCard: View {
                     AxisValueLabel {
                         if let v = value.as(Double.self) {
                             Text(v.formattedAmountShort(for: vm.preferredCurrency))
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -1483,7 +1483,7 @@ struct ProPatternsCard: View {
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(v.formattedAmountShort(for: vm.preferredCurrency))
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }

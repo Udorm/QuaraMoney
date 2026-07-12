@@ -224,18 +224,18 @@ private struct RecurringHeroCard: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: icon)
-                    .font(.app(.title3, weight: .semibold))
+                    .appFont(.title3, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
                     .background(.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(rule.name)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Text(rule.frequency.displayName(interval: rule.interval))
-                        .font(.app(.subheadline, weight: .medium))
+                        .appFont(.subheadline, weight: .medium)
                         .foregroundStyle(.white.opacity(0.85))
                 }
 
@@ -247,12 +247,12 @@ private struct RecurringHeroCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(amountString)
-                        .font(.app(.largeTitle, weight: .bold))
+                        .appFont(.largeTitle, weight: .bold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                     Text(rule.currencyCode)
-                        .font(.app(.headline, weight: .semibold))
+                        .appFont(.headline, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.8))
                 }
 
@@ -262,7 +262,7 @@ private struct RecurringHeroCard: View {
                     } icon: {
                         Image(systemName: "calendar")
                     }
-                    .font(.app(.footnote, weight: .medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(nextDueState.color)
                 }
             }
@@ -292,7 +292,7 @@ private struct RecurringHeroCard: View {
             Image(systemName: systemImage)
             Text(text)
         }
-        .font(.app(.caption2, weight: .bold))
+        .appFont(.caption2, weight: .bold)
         .foregroundStyle(.white)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -332,19 +332,19 @@ private struct RecurringHeroCard: View {
     private func detailRow(icon: String, iconTint: Color, label: String, value: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.app(.footnote, weight: .semibold))
+                .appFont(.footnote, weight: .semibold)
                 .foregroundStyle(iconTint)
                 .frame(width: 30, height: 30)
                 .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
 
             Text(label)
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 12)
 
             Text(value)
-                .font(.app(.subheadline, weight: .semibold))
+                .appFont(.subheadline, weight: .semibold)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }

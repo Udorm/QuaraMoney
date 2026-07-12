@@ -147,13 +147,13 @@ struct EventDetailViewV2: View {
             } header: {
                 HStack {
                     Text(L10n.EventDetail.members)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                     Spacer()
                     Button {
                         showingAllMembers = true
                     } label: {
                         Text(L10n.EventDetail.showAll)
-                            .font(.app(.subheadline, weight: .medium))
+                            .appFont(.subheadline, weight: .medium)
                             .foregroundStyle(.blue)
                             .textCase(nil)
                     }
@@ -341,7 +341,7 @@ private struct ExportSpendingSheet: View {
                         Text(L10n.EventDetail.yourSpending)
                         Spacer()
                         Text(formatMinor(spendingAmount))
-                            .font(.app(.headline, weight: .bold))
+                            .appFont(.headline, weight: .bold)
                             .foregroundStyle(ThemeManager.shared.expenseColor)
                     }
                 } footer: {

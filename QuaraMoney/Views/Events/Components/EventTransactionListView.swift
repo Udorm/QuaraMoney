@@ -102,11 +102,11 @@ private struct EventDailySectionHeader: View {
     var body: some View {
         HStack {
             Text(date.appFormatted(date: .abbreviated))
-                .font(.app(.headline))
+                .appFont(.headline)
                 .textCase(nil) // Ensure natural casing
             Spacer()
             Text(total.formattedAmount(for: currencyCode))
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(total >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
         }
         .padding(.vertical, 4)

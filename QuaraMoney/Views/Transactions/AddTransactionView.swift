@@ -353,22 +353,22 @@ struct AddTransactionView: View {
                                 } label: {
                                     HStack(spacing: 12) {
                                         Image(systemName: debt.type == .owedToMe ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
-                                            .font(.app(.title3))
+                                            .appFont(.title3)
                                             .foregroundStyle(debt.type.accentColor)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(debt.type == .owedToMe ? "transaction.linkedToDebt".localized : "transaction.linkedToLoan".localized)
-                                                .font(.app(.caption2))
+                                                .appFont(.caption2)
                                                 .foregroundStyle(.secondary)
                                             Text(debt.personName)
-                                                .font(.app(.subheadline, weight: .semibold))
+                                                .appFont(.subheadline, weight: .semibold)
                                                 .foregroundStyle(.primary)
                                         }
                                         Spacer()
                                         Text("debt.viewDebt".localized)
-                                            .font(.app(.caption, weight: .medium))
+                                            .appFont(.caption, weight: .medium)
                                             .foregroundStyle(.tint)
                                         Image(systemName: "chevron.right")
-                                            .font(.app(.caption2, weight: .semibold))
+                                            .appFont(.caption2, weight: .semibold)
                                             .foregroundStyle(.secondary)
                                     }
                                     .contentShape(Rectangle())
@@ -387,14 +387,14 @@ struct AddTransactionView: View {
                                         .foregroundStyle(Color(hex: goal.colorHex) ?? .green)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(L10n.Savings.selectGoal)
-                                            .font(.app(.caption2))
+                                            .appFont(.caption2)
                                             .foregroundStyle(.secondary)
                                         Text(goal.name)
-                                            .font(.app(.subheadline, weight: .semibold))
+                                            .appFont(.subheadline, weight: .semibold)
                                     }
                                     Spacer()
                                     Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                                        .font(.app(.caption))
+                                        .appFont(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
@@ -608,10 +608,10 @@ struct AddTransactionView: View {
                     Image(systemName: "slider.horizontal.3")
                         .foregroundStyle(.orange)
                     Text("transaction.type.adjustment".localized)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                     Spacer()
                     Image(systemName: "lock.fill")
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding()
@@ -709,7 +709,7 @@ struct AddTransactionView: View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: "ellipsis")
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(.secondary)
                     .frame(width: 40, height: 40)
                     .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -720,7 +720,7 @@ struct AddTransactionView: View {
                     .frame(width: 46, height: 46)
 
                 Text("common.more".localized)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -788,19 +788,19 @@ struct AddTransactionView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("1 \(source.currencyCode) =")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                         TextField(L10n.Transaction.rate, value: $viewModel.exchangeRate, format: .number)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
                         Text(dest.currencyCode)
-                            .font(.app(.subheadline, weight: .semibold))
+                            .appFont(.subheadline, weight: .semibold)
                     }
                     
                     let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
                     Text("≈ \(convertedAmount.formattedAmount(for: dest.currencyCode))")
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.blue)
                 }
                 .padding(.top, 4)
@@ -844,7 +844,7 @@ struct AddTransactionView: View {
                             VStack(spacing: 4) {
                                 ZStack {
                                     Image(systemName: "ellipsis")
-                                        .font(.app(.title3))
+                                        .appFont(.title3)
                                         .foregroundStyle(.secondary)
                                         .frame(width: 40, height: 40)
                                         .background(Color(.tertiarySystemGroupedBackground))
@@ -857,7 +857,7 @@ struct AddTransactionView: View {
                                 .frame(width: 46, height: 46)
 
                                 Text("common.more".localized)
-                                    .font(.app(.caption2))
+                                    .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -895,7 +895,7 @@ struct AddTransactionView: View {
     /// Settings-style rounded-square icon tile for consistent, native-looking form rows.
     private func fieldIcon(_ systemName: String, color: Color) -> some View {
         Image(systemName: systemName)
-            .font(.app(.footnote, weight: .semibold))
+            .appFont(.footnote, weight: .semibold)
             .foregroundStyle(.white)
             .frame(width: 29, height: 29)
             .background(color, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
@@ -947,7 +947,7 @@ struct AddTransactionView: View {
                                 insertTag(scored.tag)
                             } label: {
                                 Text("#\(scored.tag)")
-                                    .font(.app(.footnote, weight: .medium))
+                                    .appFont(.footnote, weight: .medium)
                                     .foregroundStyle(Color.accentColor)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
@@ -998,7 +998,7 @@ struct AddTransactionView: View {
                             ProgressView()
                         } else {
                             Image(systemName: "location.fill")
-                                .font(.app(.footnote, weight: .semibold))
+                                .appFont(.footnote, weight: .semibold)
                                 .foregroundStyle(.blue)
                         }
                     }
@@ -1055,9 +1055,9 @@ struct WalletChip: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: wallet.icon)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                 Text(wallet.name)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

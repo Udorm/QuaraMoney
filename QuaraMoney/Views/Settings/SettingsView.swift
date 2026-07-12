@@ -261,7 +261,7 @@ struct SettingsView: View {
                 Text(L10n.Settings.version)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .foregroundStyle(.secondary)
-                    .font(.app(.footnote))
+                    .appFont(.footnote)
             }
         }
         .navigationTitle(L10n.Settings.title)
@@ -277,7 +277,7 @@ struct SettingsView: View {
                             .scaleEffect(1.5)
                             .tint(.primary)
                         Text(L10n.Status.populatingData)
-                            .font(.app(.headline))
+                            .appFont(.headline)
                     }
                     .padding(24)
                     .background(.thickMaterial)

@@ -140,7 +140,7 @@ struct EventSettlementView: View {
                             Text(localMember.name)
                             Spacer()
                             Text(localNetLabel(for: localNetMinor))
-                                .font(.app(.body, weight: .semibold))
+                                .appFont(.body, weight: .semibold)
                                 .foregroundStyle(localNetColor(for: localNetMinor))
                         }
                     }
@@ -252,7 +252,7 @@ struct EventSettlementView: View {
                                     Text("\("event.settlement.paid".localized) \(formatMinor(balance.personalPaidMinor))")
                                     Text("\("event.settlement.share".localized) \(formatMinor(balance.shareMinor))")
                                 }
-                                .font(.app(.caption2))
+                                .appFont(.caption2)
                                 .foregroundStyle(.secondary)
                             }
                             .padding(.vertical, 2)
@@ -264,7 +264,7 @@ struct EventSettlementView: View {
                     Section {
                         Text(errorMessage)
                             .foregroundStyle(.red)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
             }
@@ -336,9 +336,9 @@ struct EventSettlementView: View {
     private func transferRow(from: String, to: String, amountMinor: Int64) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("event.settlement.paysFormat".localized(with: from, to))
-                .font(.app(.body, weight: .medium))
+                .appFont(.body, weight: .medium)
             Text(formatMinor(amountMinor))
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)

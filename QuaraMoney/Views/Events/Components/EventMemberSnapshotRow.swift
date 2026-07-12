@@ -23,7 +23,7 @@ struct EventMemberSnapshotRow: View {
                             )
                         
                         Text(L10n.Common.add)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -67,13 +67,13 @@ private struct MemberSnapshotItem: View {
                     .frame(width: 56, height: 56)
                     .overlay(
                         Text(member.initials)
-                            .font(.app(.headline))
+                            .appFont(.headline)
                             .foregroundStyle(.secondary)
                     )
             }
             
             Text(member.name)
-                .font(.app(.caption, weight: .medium))
+                .appFont(.caption, weight: .medium)
                 .lineLimit(1)
         }
         .frame(width: 70)

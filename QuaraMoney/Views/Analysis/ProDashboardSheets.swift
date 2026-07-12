@@ -82,7 +82,7 @@ struct ProDashboardFilterSheet: View {
             }
             .pickerStyle(.segmented)
         } header: {
-            Text("analysis.transactionType".localized).font(.app(.caption))
+            Text("analysis.transactionType".localized).appFont(.caption)
         }
         .onChange(of: pendingFilter.transactionType) { _, _ in
             // Drop category selections that no longer match the chosen type.
@@ -112,7 +112,7 @@ struct ProDashboardFilterSheet: View {
                 Text(L10n.Period.custom).tag(AnalysisPeriod.custom)
             }
             .pickerStyle(.menu)
-            .font(.app(.body))
+            .appFont(.body)
             .onChange(of: pendingPeriod) { _, _ in
                 // Matches the header's old behavior: switching the period type snaps back
                 // to the current instance (this week / this month / etc.).
@@ -121,9 +121,9 @@ struct ProDashboardFilterSheet: View {
 
             if pendingPeriod == .custom {
                 DatePicker("filter.startDate".localized, selection: $pendingStart, displayedComponents: .date)
-                    .font(.app(.body))
+                    .appFont(.body)
                 DatePicker("filter.endDate".localized, selection: $pendingEnd, in: pendingStart..., displayedComponents: .date)
-                    .font(.app(.body))
+                    .appFont(.body)
             } else {
                 // Which instance of the period — "which week", "which month", etc.
                 HStack {
@@ -161,7 +161,7 @@ struct ProDashboardFilterSheet: View {
                 }
             }
         } header: {
-            Text("filter.period".localized).font(.app(.caption))
+            Text("filter.period".localized).appFont(.caption)
         }
     }
 
@@ -187,11 +187,11 @@ struct ProDashboardFilterSheet: View {
             }
         } header: {
             HStack {
-                Text("filter.wallet".localized).font(.app(.caption))
+                Text("filter.wallet".localized).appFont(.caption)
                 Spacer()
                 if !pendingFilter.walletIds.isEmpty {
                     Text("analysis.pro.filter.nSelected".localized(with: pendingFilter.walletIds.count))
-                        .font(.app(.caption2))
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -226,11 +226,11 @@ struct ProDashboardFilterSheet: View {
             }
         } header: {
             HStack {
-                Text("filter.category".localized).font(.app(.caption))
+                Text("filter.category".localized).appFont(.caption)
                 Spacer()
                 if !pendingFilter.categoryIds.isEmpty {
                     Text("analysis.pro.filter.nSelected".localized(with: pendingFilter.categoryIds.count))
-                        .font(.app(.caption2))
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -246,7 +246,7 @@ struct ProDashboardFilterSheet: View {
                 TextField("0", text: $minAmountText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .frame(maxWidth: 140)
             }
             HStack {
@@ -256,11 +256,11 @@ struct ProDashboardFilterSheet: View {
                 TextField("∞", text: $maxAmountText)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
-                    .font(.app(.body))
+                    .appFont(.body)
                     .frame(maxWidth: 140)
             }
         } header: {
-            Text("analysis.pro.filter.amountRange".localized(with: vm.preferredCurrency)).font(.app(.caption))
+            Text("analysis.pro.filter.amountRange".localized(with: vm.preferredCurrency)).appFont(.caption)
         }
     }
 
@@ -275,7 +275,7 @@ struct ProDashboardFilterSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .font(.app(.body))
+            .appFont(.body)
         }
     }
 
@@ -376,13 +376,13 @@ struct ProCustomizeSheet: View {
                                     .foregroundStyle(isVisible ? .primary : .secondary)
                             }
                         }
-                        .font(.app(.body))
+                        .appFont(.body)
                     }
                     .onMove { from, to in
                         vm.layout.order.move(fromOffsets: from, toOffset: to)
                     }
                 } header: {
-                    Text("analysis.pro.customize.subtitle".localized).font(.app(.caption))
+                    Text("analysis.pro.customize.subtitle".localized).appFont(.caption)
                 }
             }
             .environment(\.editMode, $editMode)

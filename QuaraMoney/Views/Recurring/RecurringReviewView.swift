@@ -162,8 +162,11 @@ struct RecurringDueRow: View {
 
     private var dueLabel: String {
         let isOverdue = rule.nextDueDate < Calendar.current.startOfDay(for: Date())
-        let base = isOverdue ? L10n.Recurring.overdue : L10n.Recurring.dueToday
-        return pendingCount > 1 ? "\(base) · \(L10n.Recurring.dueCount(pendingCount))" : base
+        let status = isOverdue ? L10n.Recurring.overdue : L10n.Recurring.dueToday
+        let date = rule.nextDueDate.appFormatted(date: .abbreviated, time: .omitted)
+        var parts = [date, status]
+        if pendingCount > 1 { parts.append(L10n.Recurring.dueCount(pendingCount)) }
+        return parts.joined(separator: " · ")
     }
 
     private var signedAmount: String {
@@ -189,12 +192,9 @@ struct RecurringDueRow: View {
             }
             HStack(spacing: 8) {
                 if let onEdit {
-                    Button(action: onEdit) {
-                        Label(L10n.Common.edit, systemImage: "slider.horizontal.3")
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.secondary)
-                    .appFont(.subheadline)
+                    Button(L10n.Common.edit, action: onEdit)
+                        .buttonStyle(.bordered)
+                        .tint(.secondary)
                 }
                 Spacer(minLength: 16)
                 // Skip recedes (gray) — it silently drops the occurrence, so it
@@ -210,20 +210,13 @@ struct RecurringDueRow: View {
         .padding(.vertical, 4)
     }
 
-    /// Small pills surfacing where this occurrence posts — the destination
-    /// wallet (and category). A missing wallet is flagged so the user
-    /// understands why Post would fail.
+    /// The category and destination wallet are already conveyed by the row's
+    /// icon and the rule's context, so no chips are shown for them. A *missing*
+    /// wallet is still flagged, since it's the reason Post would fail.
     @ViewBuilder
     private var metaChips: some View {
-        HStack(spacing: 6) {
-            if let wallet = rule.wallet {
-                chip(icon: "wallet.pass.fill", text: wallet.name, tint: .secondary)
-            } else {
-                chip(icon: "exclamationmark.triangle.fill", text: "recurring.noWallet".localized, tint: .orange)
-            }
-            if let category = rule.category {
-                chip(icon: category.icon, text: category.displayName, tint: .secondary)
-            }
+        if rule.wallet == nil {
+            chip(icon: "exclamationmark.triangle.fill", text: "recurring.noWallet".localized, tint: .orange)
         }
     }
 

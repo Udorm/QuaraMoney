@@ -609,6 +609,29 @@
 "event.settlement.saving" = "កំពុងរក្សាទុក...";
 "event.settlement.confirm" = "បញ្ជាក់";
 
+/* Settlement — plain-language redesign */
+"event.settlement.whoPaysWhom" = "អ្នកណាបង់ឱ្យអ្នកណា";
+"event.settlement.allSettledUp" = "អ្នករាល់គ្នាបានទូទាត់រួចរាល់។";
+"event.settlement.paysFormat" = "%1$@ បង់ឱ្យ %2$@";
+"event.settlement.yourResult" = "លទ្ធផលរបស់អ្នក";
+"event.settlement.youReceiveFormat" = "អ្នកទទួល %@";
+"event.settlement.youPayFormat" = "អ្នកបង់ %@";
+"event.settlement.receiveFormat" = "ទទួល %@";
+"event.settlement.payFormat" = "បង់ %@";
+"event.settlement.settled" = "បានទូទាត់";
+"event.settlement.unknownMember" = "មិនស្គាល់";
+"event.settlement.settleThroughOne" = "ទូទាត់តាមរយៈមនុស្សម្នាក់";
+"event.settlement.settleThroughOneHint" = "អ្នករាល់គ្នាបង់ ឬ ទទួលប្រាក់តាមរយៈមនុស្សម្នាក់ ជំនួសឱ្យការបង់ឱ្យគ្នាទៅវិញទៅមកដោយផ្ទាល់។";
+"event.settlement.whoSettles" = "អ្នកណាទូទាត់ជំនួសអ្នករាល់គ្នា?";
+"event.settlement.totals" = "សរុប";
+"event.settlement.moneyLeftInWallet" = "ប្រាក់នៅសល់ក្នុងកាបូបព្រឹត្តិការណ៍";
+"event.settlement.memberBreakdown" = "ព័ត៌មានលម្អិតតាមសមាជិក";
+"event.settlement.deposited" = "បានដាក់";
+"event.settlement.paid" = "បានបង់";
+"event.settlement.share" = "ចំណែក";
+"event.settlement.addShareToWallet" = "បន្ថែមចំណែករបស់ខ្ញុំទៅកាបូប";
+"event.settlement.addShareToWalletHint" = "កត់ត្រាចំនួនសុទ្ធរបស់អ្នកសម្រាប់ព្រឹត្តិការណ៍នេះជាប្រតិបត្តិការចំណាយតែមួយ ក្នុងកាបូបដែលអ្នកជ្រើសរើស។ ធាតុនីមួយៗនៃព្រឹត្តិការណ៍នៅដាច់ដោយឡែក។";
+
 "event.transaction.paymentAndSplitting" = "ការទូទាត់ និងការបែងចែក";
 "event.transaction.contributor" = "អ្នកចូលរួមចំណែក";
 "event.transaction.selectPayer" = "ជ្រើសរើសអ្នកបង់ប្រាក់";
@@ -624,6 +647,12 @@
 "event.detail.exporting" = "កំពុងនាំចេញ...";
 "event.detail.export" = "នាំចេញ";
 "event.detail.unknownError" = "មានកំហុសមិនស្គាល់";
+"event.detail.yourShareHint" = "នេះជាចំណែករបស់អ្នកនៃការចំណាយទាំងអស់ក្នុងព្រឹត្តិការណ៍នេះ។";
+"event.detail.alreadyExported" = "បានបញ្ចេញការចំណាយសម្រាប់ព្រឹត្តិការណ៍នេះរួចហើយ។";
+"event.detail.exportHint" = "ប្រតិបត្តិការចំណាយមួយនឹងត្រូវបានបន្ថែមទៅកាបូបដែលបានជ្រើសរើស។";
+"event.detail.noExpensesToExport" = "គ្មានការចំណាយដើម្បីបញ្ចេញ។";
+"event.detail.exportedToFormat" = "បានបញ្ចេញការចំណាយទៅ %@";
+"event.detail.noSpendingToExport" = "គ្មានការចំណាយដើម្បីបញ្ចេញ។";
 
 "event.member.details" = "ព័ត៌មានលម្អិត";
 "event.member.color" = "ពណ៌";

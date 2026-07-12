@@ -343,17 +343,17 @@ private struct ExportSpendingSheet: View {
                             .foregroundStyle(ThemeManager.shared.expenseColor)
                     }
                 } footer: {
-                    Text("This is your share of all expenses in this event.")
+                    Text("event.detail.yourShareHint".localized)
                 }
-                
+
                 if alreadyExported {
                     Section {
-                        Label("Spending already exported for this event.", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                        Label("event.detail.alreadyExported".localized, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(ThemeManager.shared.incomeColor)
                     }
                 } else if spendingAmount > 0 {
                     Section {
-                        Picker("Wallet", selection: Binding(
+                        Picker(L10n.EventSettlement.wallet, selection: Binding(
                             get: { selectedWallet?.id },
                             set: { newId in
                                 selectedWallet = wallets.first(where: { $0.id == newId })
@@ -365,11 +365,11 @@ private struct ExportSpendingSheet: View {
                         }
                         .pickerStyle(.menu)
                     } footer: {
-                        Text("One expense transaction will be added to the selected wallet.")
+                        Text("event.detail.exportHint".localized)
                     }
                 } else {
                     Section {
-                        Text("No expenses to export.")
+                        Text("event.detail.noExpensesToExport".localized)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -422,9 +422,9 @@ private struct ExportSpendingSheet: View {
             )
             if transaction != nil {
                 dismiss()
-                onSuccess("Spending exported to \(selectedWallet.name)")
+                onSuccess("event.detail.exportedToFormat".localized(with: selectedWallet.name))
             } else {
-                onError("No spending to export.")
+                onError("event.detail.noSpendingToExport".localized)
                 dismiss()
             }
         } catch {

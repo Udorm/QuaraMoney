@@ -609,6 +609,29 @@
 "event.settlement.saving" = "Saving...";
 "event.settlement.confirm" = "Confirm";
 
+/* Settlement — plain-language redesign */
+"event.settlement.whoPaysWhom" = "Who Pays Whom";
+"event.settlement.allSettledUp" = "Everyone's settled up.";
+"event.settlement.paysFormat" = "%1$@ pays %2$@";
+"event.settlement.yourResult" = "Your Result";
+"event.settlement.youReceiveFormat" = "You receive %@";
+"event.settlement.youPayFormat" = "You pay %@";
+"event.settlement.receiveFormat" = "Receive %@";
+"event.settlement.payFormat" = "Pay %@";
+"event.settlement.settled" = "Settled";
+"event.settlement.unknownMember" = "Unknown";
+"event.settlement.settleThroughOne" = "Settle through one person";
+"event.settlement.settleThroughOneHint" = "Everyone pays or gets paid through a single person instead of paying each other directly.";
+"event.settlement.whoSettles" = "Who settles for everyone?";
+"event.settlement.totals" = "Totals";
+"event.settlement.moneyLeftInWallet" = "Money left in event wallet";
+"event.settlement.memberBreakdown" = "Member Breakdown";
+"event.settlement.deposited" = "Deposited";
+"event.settlement.paid" = "Paid";
+"event.settlement.share" = "Share";
+"event.settlement.addShareToWallet" = "Add my share to a wallet";
+"event.settlement.addShareToWalletHint" = "Records your net for this event as a single expense in the wallet you pick. Individual event entries stay separate.";
+
 "event.transaction.paymentAndSplitting" = "Payment & Splitting";
 "event.transaction.contributor" = "Contributor";
 "event.transaction.selectPayer" = "Select Payer";
@@ -624,6 +647,12 @@
 "event.detail.exporting" = "Exporting...";
 "event.detail.export" = "Export";
 "event.detail.unknownError" = "Unknown error";
+"event.detail.yourShareHint" = "This is your share of all expenses in this event.";
+"event.detail.alreadyExported" = "Spending already exported for this event.";
+"event.detail.exportHint" = "One expense transaction will be added to the selected wallet.";
+"event.detail.noExpensesToExport" = "No expenses to export.";
+"event.detail.exportedToFormat" = "Spending exported to %@";
+"event.detail.noSpendingToExport" = "No spending to export.";
 
 "event.member.details" = "Details";
 "event.member.color" = "Color";

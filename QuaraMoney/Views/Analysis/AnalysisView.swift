@@ -97,7 +97,15 @@ struct SpendingTrendChart: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // 1. Segmented Control
+            // 1a. Income/Expense toggle — the most common switch, kept one tap
+            // away in the chart card instead of buried in the filter sheet.
+            Picker("analysis.transactionType".localized, selection: $vm.selectedTransactionType) {
+                Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
+                Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
+            }
+            .pickerStyle(.segmented)
+
+            // 1b. Period Segmented Control
             Picker(L10n.Filter.title, selection: $vm.selectedPeriod) {
                 Text("analysis.period.w".localized).tag(AnalysisPeriod.week)
                 Text("analysis.period.m".localized).tag(AnalysisPeriod.month)
@@ -106,7 +114,7 @@ struct SpendingTrendChart: View {
                 Text("analysis.period.ly".localized).tag(AnalysisPeriod.lastYear)
             }
             .pickerStyle(.segmented)
-            
+
             // 2. Header Stats with Navigation
             HStack {
                 // Back Button
@@ -414,14 +422,14 @@ private struct CategoryShareBar: View {
     }
 }
 
-// MARK: - Analysis Filter Button (wraps FilterSheetButton with transaction type picker)
+// MARK: - Analysis Filter Button (wallet filtering only)
+//
+// The income/expense toggle used to live here; it now sits in the chart card
+// (SpendingTrendChart) since it's the most-used switch and deserves one tap.
 
 private struct AnalysisFilterButton: View {
     @Bindable var vm: AnalysisViewModel
     var wallets: [Wallet]
-
-    // Pending transaction type (applied on Done via onApply)
-    @State private var pendingTransactionType: TransactionTypeFilter = .expense
 
     var body: some View {
         FilterSheetButton(
@@ -430,24 +438,9 @@ private struct AnalysisFilterButton: View {
             customStartDate: $vm.customStartDate,
             customEndDate: $vm.customEndDate,
             wallets: wallets,
-            showPeriodFilter: false,
-            onApply: {
-                vm.selectedTransactionType = pendingTransactionType
-            }
+            showPeriodFilter: false
         ) {
-            Section("analysis.transactionType".localized) {
-                Picker("analysis.transactionType".localized, selection: $pendingTransactionType) {
-                    Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
-                    Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
-                }
-                .pickerStyle(.segmented)
-            }
-        }
-        .onAppear {
-            pendingTransactionType = vm.selectedTransactionType
-        }
-        .onChange(of: vm.selectedTransactionType) { _, newValue in
-            pendingTransactionType = newValue
+            EmptyView()
         }
     }
 }

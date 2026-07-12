@@ -34,7 +34,7 @@ struct BudgetTabView: View {
                     SavingsGoalListView()
                 }
             }
-            .navigationTitle(selectedSection.displayName)
+            .navigationTitle("tab.plan".localized)
         }
     }
 }

@@ -37,6 +37,7 @@
 "tab.home" = "ទំព័រដើម";
 "tab.wallets" = "កាបូប";
 "tab.analysis" = "ការវិភាគ";
+"tab.plan" = "ផែនការ";
 "tab.more" = "បន្ថែមទៀត";
 
 // MARK: - Home (ទំព័រដើម)
@@ -975,6 +976,9 @@
 // MARK: - UX consistency pass: Settings
 "settings.appearance" = "រូបរាង";
 "settings.appTheme" = "រចនាបថកម្មវិធី";
+"settings.theme.system" = "ប្រព័ន្ធ";
+"settings.theme.light" = "ភ្លឺ";
+"settings.theme.dark" = "ងងឹត";
 "settings.currency" = "រូបិយប័ណ្ណ";
 "settings.exchangeRate" = "អត្រាប្តូរប្រាក់";
 "settings.exchangeRateValue" = "1 USD ≈ %@ %@";

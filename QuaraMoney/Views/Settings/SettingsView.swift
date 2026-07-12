@@ -36,25 +36,6 @@ struct SettingsView: View {
                     }
                 }
 
-                NavigationLink(destination: ThemeSettingsView()) {
-                    Label {
-                        LabeledContent {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(ThemeManager.shared.incomeColor)
-                                    .frame(width: 10, height: 10)
-                                Circle()
-                                    .fill(ThemeManager.shared.expenseColor)
-                                    .frame(width: 10, height: 10)
-                            }
-                        } label: {
-                            Text(L10n.Settings.themeColors)
-                        }
-                    } icon: {
-                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
-                    }
-                }
-
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     Toggle(isOn: $useSidebarOniPad) {
                         Label {
@@ -81,7 +62,7 @@ struct SettingsView: View {
             Section("settings.appearance".localized) {
                 Picker(selection: $selectedTheme) {
                     ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
-                        Label(theme.rawValue, systemImage: theme.icon)
+                        Label(theme.displayName, systemImage: theme.icon)
                             .tag(theme)
                     }
                 } label: {
@@ -89,6 +70,25 @@ struct SettingsView: View {
                         Text("settings.appTheme".localized)
                     } icon: {
                         ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
+                    }
+                }
+
+                NavigationLink(destination: ThemeSettingsView()) {
+                    Label {
+                        LabeledContent {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(ThemeManager.shared.incomeColor)
+                                    .frame(width: 10, height: 10)
+                                Circle()
+                                    .fill(ThemeManager.shared.expenseColor)
+                                    .frame(width: 10, height: 10)
+                            }
+                        } label: {
+                            Text(L10n.Settings.themeColors)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
                     }
                 }
             }

@@ -42,8 +42,8 @@ struct ContentView: View {
                         LazyView(BudgetTabView())
                     } label: {
                         VStack {
-                            Image(systemName: "dollarsign.circle.fill")
-                            Text(L10n.Budget.title)
+                            Image(systemName: "target")
+                            Text("tab.plan".localized)
                                 .appFont(.caption2)
                         }
                     }
@@ -69,7 +69,7 @@ struct ContentView: View {
                         LazyView(AnalysisView())
                     }
 
-                    Tab(L10n.Budget.title, systemImage: "dollarsign.circle.fill", value: 2) {
+                    Tab("tab.plan".localized, systemImage: "target", value: 2) {
                         LazyView(BudgetTabView())
                     }
 

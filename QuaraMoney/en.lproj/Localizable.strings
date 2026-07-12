@@ -37,6 +37,7 @@
 "tab.home" = "Home";
 "tab.wallets" = "Wallets";
 "tab.analysis" = "Analysis";
+"tab.plan" = "Plan";
 "tab.more" = "More";
 
 // MARK: - Home
@@ -975,6 +976,9 @@
 // MARK: - UX consistency pass: Settings
 "settings.appearance" = "Appearance";
 "settings.appTheme" = "App Theme";
+"settings.theme.system" = "System";
+"settings.theme.light" = "Light";
+"settings.theme.dark" = "Dark";
 "settings.currency" = "Currency";
 "settings.exchangeRate" = "Exchange Rate";
 "settings.exchangeRateValue" = "1 USD ≈ %@ %@";

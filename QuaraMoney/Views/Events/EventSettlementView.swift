@@ -324,8 +324,10 @@ struct EventSettlementView: View {
                     excludeFromReports: true
                 )
             }
+            HapticManager.shared.success()
             dismiss()
         } catch {
+            HapticManager.shared.error()
             errorMessage = error.localizedDescription
         }
     }

@@ -375,7 +375,8 @@ struct EditBudgetView: View {
         
         // Update category type
         budget.budgetCategoryType = budgetCategoryType
-        
+
+        HapticManager.shared.success()
     }
 }
 

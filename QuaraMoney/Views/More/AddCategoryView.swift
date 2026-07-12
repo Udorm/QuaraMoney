@@ -232,5 +232,6 @@ struct AddCategoryView: View {
             let category = Category(name: name, icon: selectedIcon, colorHex: selectedColorHex, type: selectedType)
             modelContext.insert(category)
         }
+        HapticManager.shared.success()
     }
 }

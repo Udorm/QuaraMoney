@@ -308,6 +308,7 @@ struct SettingsView: View {
             Button(L10n.Common.cancel, role: .cancel) { }
             Button(L10n.Common.delete, role: .destructive) {
                 isDeleting = true
+                HapticManager.shared.warning()
                 Task {
                     let service = SampleDataService(modelContext: modelContext)
                     do {

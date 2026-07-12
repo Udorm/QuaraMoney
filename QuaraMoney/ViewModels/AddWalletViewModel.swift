@@ -54,8 +54,9 @@ class AddWalletViewModel: BaseViewModel {
             )
             dataService.insert(newWallet)
         }
+        HapticManager.shared.success()
     }
-    
+
     func archiveWallet() {
         guard let wallet = walletToEdit else { return }
         wallet.isArchived = true

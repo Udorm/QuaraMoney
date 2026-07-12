@@ -276,6 +276,7 @@ struct AddSavingsGoalView: View {
         }
 
         modelContext.insert(goal)
+        HapticManager.shared.success()
     }
 }
 

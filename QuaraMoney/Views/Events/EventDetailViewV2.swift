@@ -289,6 +289,7 @@ struct EventDetailViewV2: View {
     private func deleteTransaction(_ transaction: EventLedgerTransaction) {
         do {
             try service.deleteTransaction(transaction)
+            HapticManager.shared.warning()
             // Offer a transient Undo — the tombstone makes restore trivial.
             recentlyDeletedTransaction = transaction
         } catch {
@@ -308,6 +309,7 @@ struct EventDetailViewV2: View {
     private func removeMember(_ member: EventMember) {
         do {
             try service.removeOrArchiveMember(member)
+            HapticManager.shared.warning()
         } catch {
             errorMessage = error.localizedDescription
         }

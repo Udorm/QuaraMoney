@@ -289,7 +289,7 @@ struct EditBudgetView: View {
                             Text(L10n.Budget.rolloverAmountLabel)
                             Spacer()
                             Text(budget.rolloverAmount.formattedAmount(for: budget.currencyCode))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(ThemeManager.shared.incomeColor)
                         }
                     }
                 }

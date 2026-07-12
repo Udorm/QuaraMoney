@@ -91,7 +91,7 @@ struct DebtDetailView: View {
                         Label(L10n.Debt.markCompleted, systemImage: "checkmark.circle.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .tint(.green)
+                    .tint(ThemeManager.shared.incomeColor)
                 }
             }
         }
@@ -310,8 +310,8 @@ struct DebtDetailView: View {
             .appFont(.caption2, weight: .semibold)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background((settled ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
-            .foregroundStyle(settled ? .green : .secondary)
+            .background((settled ? ThemeManager.shared.incomeColor : Color.secondary).opacity(0.15), in: Capsule())
+            .foregroundStyle(settled ? ThemeManager.shared.incomeColor : .secondary)
     }
 
     // MARK: - Actions

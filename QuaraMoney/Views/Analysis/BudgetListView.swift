@@ -288,7 +288,7 @@ struct BudgetRowView: View {
     
     private var progressColor: Color {
         if isOverBudget {
-            return .red
+            return ThemeManager.shared.expenseColor
         } else if progress > 0.9 {
             return .orange
         } else {
@@ -355,7 +355,7 @@ struct BudgetRowView: View {
                     if isOverBudget {
                         Text(spent.formattedAmount(for: preferredCurrency))
                             .font(.app(.body, weight: .bold))
-                            .foregroundStyle(.red)
+                            .foregroundStyle(ThemeManager.shared.expenseColor)
                     } else {
                         Text(remaining.formattedAmount(for: preferredCurrency))
                             .font(.app(.body, weight: .bold))
@@ -390,7 +390,7 @@ struct BudgetRowView: View {
                         if isOverBudget {
                              Text(L10n.Budget.overBy((spent - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
                                 .font(.app(.caption))
-                                .foregroundStyle(.red)
+                                .foregroundStyle(ThemeManager.shared.expenseColor)
                         } else {
                             Text(L10n.Budget.leftOf(budgetLimitConverted.formattedAmount(for: preferredCurrency)))
                                 .font(.app(.caption))

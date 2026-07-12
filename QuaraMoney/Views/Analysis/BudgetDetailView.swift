@@ -145,10 +145,10 @@ struct BudgetDetailView: View {
                 if budget.rolloverAmount > 0 {
                     HStack {
                         Label(L10n.Budget.rolloverTitle, systemImage: "arrow.up.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ThemeManager.shared.incomeColor)
                         Spacer()
                         Text("+\(budget.rolloverAmount.formattedAmount(for: preferredCurrency))")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ThemeManager.shared.incomeColor)
                     }
                 }
                 

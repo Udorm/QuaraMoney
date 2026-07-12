@@ -155,7 +155,7 @@ struct BudgetInsightsView: View {
                         title: "budget.budgetsMet".localized,
                         value: "\(Int(budgetPerformanceScore * 100))%",
                         subtitle: "common.last".localized + " \(selectedTimeRange.months) " + "common.months".localized,
-                        color: budgetPerformanceScore >= 0.7 ? .green : (budgetPerformanceScore >= 0.5 ? .orange : .red)
+                        color: budgetPerformanceScore >= 0.7 ? ThemeManager.shared.incomeColor : (budgetPerformanceScore >= 0.5 ? .orange : ThemeManager.shared.expenseColor)
                     )
                     
                     MetricCard(
@@ -259,8 +259,8 @@ enum SpendingTrend {
     
     var color: Color {
         switch self {
-        case .increasing: return .red
-        case .decreasing: return .green
+        case .increasing: return ThemeManager.shared.expenseColor
+        case .decreasing: return ThemeManager.shared.incomeColor
         case .stable: return .accentColor
         }
     }
@@ -306,9 +306,9 @@ struct PerformanceScoreCard: View {
     let activeBudgetsCount: Int
     
     private var scoreColor: Color {
-        if score >= 0.8 { return .green }
+        if score >= 0.8 { return ThemeManager.shared.incomeColor }
         if score >= 0.6 { return .orange }
-        return .red
+        return ThemeManager.shared.expenseColor
     }
     
     private var scoreGrade: String {
@@ -403,7 +403,7 @@ struct MonthlyTrendChart: View {
                         x: .value("Month", stat.month, unit: .month),
                         y: .value("Spent", stat.spent)
                     )
-                    .foregroundStyle(stat.spent > stat.budgeted ? Color.red.gradient : Color.green.gradient)
+                    .foregroundStyle(stat.spent > stat.budgeted ? ThemeManager.shared.expenseColor.gradient : ThemeManager.shared.incomeColor.gradient)
                     .cornerRadius(4)
                 }
             }
@@ -428,7 +428,7 @@ struct MonthlyTrendChart: View {
                 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.green)
+                        .fill(ThemeManager.shared.incomeColor)
                         .frame(width: 10, height: 10)
                     Text("budget.underBudget".localized)
                         .font(.app(.caption))
@@ -437,7 +437,7 @@ struct MonthlyTrendChart: View {
                 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.red)
+                        .fill(ThemeManager.shared.expenseColor)
                         .frame(width: 10, height: 10)
                     Text("budget.overBudget".localized)
                         .font(.app(.caption))
@@ -547,7 +547,7 @@ struct ActiveBudgetsSummary: View {
                             .font(.app(.subheadline, weight: .medium))
                         
                         ProgressView(value: min(progress, 1.0))
-                            .tint(progress > 1 ? .red : (progress > 0.8 ? .orange : .green))
+                            .tint(progress > 1 ? ThemeManager.shared.expenseColor : (progress > 0.8 ? .orange : ThemeManager.shared.incomeColor))
                     }
                     
                     Spacer()
@@ -555,7 +555,7 @@ struct ActiveBudgetsSummary: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(Int(progress * 100))%")
                             .font(.app(.caption, weight: .semibold))
-                            .foregroundStyle(progress > 1 ? .red : (progress > 0.8 ? .orange : .green))
+                            .foregroundStyle(progress > 1 ? ThemeManager.shared.expenseColor : (progress > 0.8 ? .orange : ThemeManager.shared.incomeColor))
                         
                         Text("\(budget.daysRemaining)d left")
                             .font(.app(.caption2))

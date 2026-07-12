@@ -146,7 +146,7 @@ struct DebtListView: View {
 
                 Text(abs(net).formattedAmount(for: preferredCurrency))
                     .appFont(size: 30, weight: .bold)
-                    .foregroundStyle(net == 0 ? Color.primary : (net > 0 ? Color.green : Color.red))
+                    .foregroundStyle(net == 0 ? Color.primary : (net > 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor))
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
@@ -159,9 +159,9 @@ struct DebtListView: View {
             divergingBar(owed: owed, owe: owe)
 
             HStack(spacing: 0) {
-                heroStat(title: "debt.youAreOwed".localized, amount: owed, color: .green, icon: "arrow.down.left")
+                heroStat(title: "debt.youAreOwed".localized, amount: owed, color: ThemeManager.shared.incomeColor, icon: "arrow.down.left")
                 Divider().frame(height: 32)
-                heroStat(title: "debt.youOwe".localized, amount: owe, color: .red, icon: "arrow.up.right")
+                heroStat(title: "debt.youOwe".localized, amount: owe, color: ThemeManager.shared.expenseColor, icon: "arrow.up.right")
             }
         }
         .padding(.vertical, 2)
@@ -186,7 +186,7 @@ struct DebtListView: View {
             let oweWidth = (geo.size.width - 2) - owedWidth
             HStack(spacing: 2) {
                 Capsule()
-                    .fill(Color.green.gradient)
+                    .fill(ThemeManager.shared.incomeColor.gradient)
                     .frame(width: owedWidth)
                     .overlay {
                         if owedWidth > 22 {
@@ -196,7 +196,7 @@ struct DebtListView: View {
                         }
                     }
                 Capsule()
-                    .fill(Color.red.gradient)
+                    .fill(ThemeManager.shared.expenseColor.gradient)
                     .overlay {
                         if oweWidth > 22 {
                             Image(systemName: "arrow.up.right")
@@ -272,7 +272,7 @@ struct DebtListView: View {
         VStack(spacing: 8) {
             Image(systemName: "checkmark.seal.fill")
                 .appFont(size: 32, weight: .semibold)
-                .foregroundStyle(.green)
+                .foregroundStyle(ThemeManager.shared.incomeColor)
             Text("debt.allSettled".localized)
                 .appFont(.headline)
             Text("debt.allSettledDescription".localized)

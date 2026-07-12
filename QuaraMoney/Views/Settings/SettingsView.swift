@@ -162,27 +162,21 @@ struct SettingsView: View {
                 }
             }
 
-            Section("AI Scanning") {
-                Label {
-                    SecureField("Gemini API Key", text: Binding(
-                        get: { securityManager.getAPIKey() ?? "" },
-                        set: { newValue in
-                            if newValue.isEmpty {
-                                securityManager.deleteAPIKey()
-                            } else {
-                                _ = securityManager.saveAPIKey(newValue)
-                            }
+            Section("settings.aiScanning.title".localized) {
+                NavigationLink(destination: ReceiptScanningSettingsView()) {
+                    Label {
+                        LabeledContent {
+                            Text(securityManager.getAPIKey()?.isEmpty == false
+                                 ? "settings.aiScanning.statusCloud".localized
+                                 : "settings.aiScanning.statusOnDevice".localized)
+                            .foregroundStyle(.secondary)
+                        } label: {
+                            Text("settings.aiScanning.rowTitle".localized)
                         }
-                    ))
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                } icon: {
-                    ListIconView(systemImage: "sparkles", color: .purple)
+                    } icon: {
+                        ListIconView(systemImage: "sparkles", color: .purple)
+                    }
                 }
-
-                Text("Enter your Gemini API Key to enable smart receipt scanning. When enabled, receipt photos and your wallet names are sent to Google for processing. If left empty, the app uses standard on-device OCR and nothing leaves your device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Section(L10n.Settings.dataManagement) {
@@ -201,26 +195,12 @@ struct SettingsView: View {
                         ListIconView(systemImage: "square.and.arrow.down.fill", color: .teal)
                     }
                 }
+            }
 
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Label {
-                        if isDeleting {
-                            HStack {
-                                Text(L10n.Status.deleting)
-                                Spacer()
-                                ProgressView()
-                            }
-                        } else {
-                            Text(L10n.Settings.deleteAllTransactions)
-                        }
-                    } icon: {
-                        ListIconView(systemImage: "trash.fill", color: .red)
-                    }
-                }
-                .disabled(isPopulating || isDeleting)
-
+            #if DEBUG
+            // Developer-only tools. Sample data would pollute a synced account
+            // and onboarding reset is a debug affordance — never ship these.
+            Section("Developer") {
                 Button {
                     showPopulateConfirmation = true
                 } label: {
@@ -251,6 +231,30 @@ struct SettingsView: View {
                         ListIconView(systemImage: "arrow.counterclockwise", color: Color(.systemOrange))
                     }
                 }
+            }
+            #endif
+
+            // Destructive action isolated in its own section (HIG) so it isn't
+            // one mis-tap away from routine data tools.
+            Section {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label {
+                        if isDeleting {
+                            HStack {
+                                Text(L10n.Status.deleting)
+                                Spacer()
+                                ProgressView()
+                            }
+                        } else {
+                            Text(L10n.Settings.deleteAllTransactions)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "trash.fill", color: .red)
+                    }
+                }
+                .disabled(isPopulating || isDeleting)
             }
 
             Section {

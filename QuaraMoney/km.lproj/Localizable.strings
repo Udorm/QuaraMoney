@@ -988,6 +988,23 @@
 "settings.reminderTime" = "ម៉ោង";
 "settings.security" = "សុវត្ថិភាព";
 "settings.appLock" = "ចាក់សោកម្មវិធី";
+
+/* Smart Receipt Scanning (Gemini) */
+"settings.aiScanning.title" = "ការស្កេនវិក្កយបត្រឆ្លាតវៃ";
+"settings.aiScanning.rowTitle" = "ការស្កេនវិក្កយបត្រ";
+"settings.aiScanning.statusCloud" = "AI លើ Cloud";
+"settings.aiScanning.statusOnDevice" = "លើឧបករណ៍";
+"settings.aiScanning.intro" = "ថតរូបវិក្កយបត្រ ហើយ QuaraMoney នឹងបំពេញចំនួនទឹកប្រាក់ កាលបរិច្ឆេទ និងអ្នកលក់ជូនអ្នក។";
+"settings.aiScanning.onDeviceTitle" = "ការស្កេនលើឧបករណ៍";
+"settings.aiScanning.onDeviceBody" = "បើគ្មានកូនសោ ការស្កេនដំណើរការទាំងស្រុងនៅលើឧបករណ៍របស់អ្នក ដោយប្រើការស្គាល់អក្សរស្តង់ដារ។ គ្មានអ្វីចេញពីទូរស័ព្ទរបស់អ្នកឡើយ។";
+"settings.aiScanning.cloudTitle" = "ការស្កេនលើ Cloud (ស្រេចចិត្ត)";
+"settings.aiScanning.cloudBody" = "បន្ថែមកូនសោ Google Gemini API ដោយឥតគិតថ្លៃ ដើម្បីភាពត្រឹមត្រូវខ្ពស់ជាង។ រូបវិក្កយបត្រ និងឈ្មោះកាបូបរបស់អ្នកនឹងត្រូវផ្ញើទៅ Google ដើម្បីដំណើរការ។";
+"settings.aiScanning.keySection" = "កូនសោ Google Gemini API";
+"settings.aiScanning.apiKeyPrompt" = "បិទភ្ជាប់កូនសោ API របស់អ្នក";
+"settings.aiScanning.getKey" = "ទទួលកូនសោ API ដោយឥតគិតថ្លៃ";
+"settings.aiScanning.getKeyFooter" = "បើក Google AI Studio ដែលអ្នកអាចបង្កើតកូនសោដោយឥតគិតថ្លៃ។";
+"settings.aiScanning.removeKey" = "លុបកូនសោ";
+
 "settings.exportTransactions" = "នាំចេញប្រតិបត្តិការ";
 "settings.selectCurrency" = "ជ្រើសរើសរូបិយប័ណ្ណ";
 "settings.populateError" = "មានកំហុសក្នុងការបញ្ចូលទិន្នន័យគំរូ៖ %@";

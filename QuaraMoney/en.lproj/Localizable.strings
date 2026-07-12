@@ -988,6 +988,23 @@
 "settings.reminderTime" = "Time";
 "settings.security" = "Security";
 "settings.appLock" = "App Lock";
+
+/* Smart Receipt Scanning (Gemini) */
+"settings.aiScanning.title" = "Smart Receipt Scanning";
+"settings.aiScanning.rowTitle" = "Receipt Scanning";
+"settings.aiScanning.statusCloud" = "Cloud AI";
+"settings.aiScanning.statusOnDevice" = "On-device";
+"settings.aiScanning.intro" = "Snap a photo of a receipt and QuaraMoney fills in the amount, date, and merchant for you.";
+"settings.aiScanning.onDeviceTitle" = "On-device scanning";
+"settings.aiScanning.onDeviceBody" = "Without a key, scanning runs entirely on your device using standard text recognition. Nothing leaves your phone.";
+"settings.aiScanning.cloudTitle" = "Cloud scanning (optional)";
+"settings.aiScanning.cloudBody" = "Add a free Google Gemini API key for higher accuracy. Receipt photos and your wallet names are then sent to Google for processing.";
+"settings.aiScanning.keySection" = "Google Gemini API Key";
+"settings.aiScanning.apiKeyPrompt" = "Paste your API key";
+"settings.aiScanning.getKey" = "Get a free API key";
+"settings.aiScanning.getKeyFooter" = "Opens Google AI Studio, where you can create a key for free.";
+"settings.aiScanning.removeKey" = "Remove Key";
+
 "settings.exportTransactions" = "Export Transactions";
 "settings.selectCurrency" = "Select Currency";
 "settings.populateError" = "Error populating data: %@";

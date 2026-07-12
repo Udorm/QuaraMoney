@@ -120,7 +120,7 @@ struct HomeContentView: View {
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                     }
-                    .accessibilityLabel("Sort transactions")
+                    .accessibilityLabel("a11y.sortTransactions".localized)
 
                     FilterSheetButton(
                         selectedPeriod: $viewModel.selectedPeriod,
@@ -147,7 +147,7 @@ struct HomeContentView: View {
     private var summaryHeader: some View {
         HStack {
             Text(walletFilterDescription)
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
             Spacer()
         }
         .textCase(nil)
@@ -175,16 +175,16 @@ struct HomeContentView: View {
         List {
             if isFirstRunEmpty {
                 Section {
-                    ContentUnavailableView {
-                        Label("home.empty.title".localized, systemImage: "list.bullet.rectangle.portrait")
-                    } description: {
-                        Text("home.empty.message".localized)
-                    } actions: {
+                    AppEmptyStateView(
+                        "home.empty.title".localized,
+                        systemImage: "list.bullet.rectangle.portrait",
+                        description: "home.empty.message".localized
+                    ) {
                         Button {
                             showingAddTransaction = true
                         } label: {
                             Text("transaction.add".localized)
-                                .font(.app(.body, weight: .semibold))
+                                .appFont(.body, weight: .semibold)
                         }
                         .buttonStyle(.glassProminent)
                     }
@@ -224,13 +224,13 @@ struct HomeContentView: View {
                                 Spacer()
                                 DatePicker("filter.startDate".localized, selection: $viewModel.customStartDate, displayedComponents: .date)
                                     .labelsHidden()
-                                    .font(.app(.headline))
+                                    .appFont(.headline)
                                 Text("-")
                                     .foregroundStyle(.secondary)
-                                    .font(.app(.headline))
+                                    .appFont(.headline)
                                 DatePicker("filter.endDate".localized, selection: $viewModel.customEndDate, displayedComponents: .date)
                                     .labelsHidden()
-                                    .font(.app(.headline))
+                                    .appFont(.headline)
                                 Spacer()
                             }
                             .padding(.top, 4)
@@ -314,11 +314,11 @@ struct HomeTransactionRow: View {
         .contextMenu {
             Button(action: onEdit) {
                 Label(L10n.Common.edit, systemImage: "pencil")
-                    .font(.app(.body))
+                    .appFont(.body)
             }
             Button(role: .destructive, action: onDelete) {
                 Label(L10n.Common.delete, systemImage: "trash")
-                    .font(.app(.body))
+                    .appFont(.body)
             }
         }
     }
@@ -330,10 +330,10 @@ struct DailyHeader: View {
     var body: some View {
         HStack {
             Text(section.date.appFormatted(date: .long, time: .omitted))
-                .font(.app(.headline))
+                .appFont(.headline)
             Spacer()
             Text(section.dailyTotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
             if let onAddTapped {
                 // Icon-sized tap target, flush with the row's trailing edge
@@ -349,7 +349,7 @@ struct DailyHeader: View {
                 }
                 .foregroundStyle(.secondary)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Add transaction on \(section.date.appFormatted(date: .long, time: .omitted))")
+                .accessibilityLabel("a11y.addTransactionOn".localized(with: section.date.appFormatted(date: .long, time: .omitted)))
             }
         }
         .padding(.vertical, 4)

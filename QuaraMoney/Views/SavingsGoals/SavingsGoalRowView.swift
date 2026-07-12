@@ -16,7 +16,7 @@ struct SavingsGoalRowView: View {
                     .frame(width: 48, height: 48)
 
                 Image(systemName: goal.iconName)
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(goalColor)
             }
 
@@ -25,16 +25,16 @@ struct SavingsGoalRowView: View {
                 // Title + status badge
                 HStack(spacing: 6) {
                     Text(goal.name)
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.body, weight: .semibold)
                         .lineLimit(1)
 
                     if goal.isCompleted {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     } else if !goal.isOnTrack(converter: CurrencyManager.shared.convert) {
-                        Text("Behind")
-                            .font(.app(.caption2, weight: .medium))
+                        Text("savings.behind".localized)
+                            .appFont(.caption2, weight: .medium)
                             .foregroundStyle(.orange)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -71,19 +71,19 @@ struct SavingsGoalRowView: View {
                 // Footer row
                 HStack(spacing: 0) {
                     Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
 
                     Text(" \u{2022} ")
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
 
                     Text(goal.totalSaved(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                        .font(.app(.caption, weight: .medium))
+                        .appFont(.caption, weight: .medium)
                         .foregroundStyle(goalColor)
 
                     Text(L10n.Budget.leftOf(goal.targetAmount.formattedAmount(for: goal.currencyCode)))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
 
                     Spacer(minLength: 4)
@@ -91,14 +91,14 @@ struct SavingsGoalRowView: View {
                     // Days remaining pill or Complete tag
                     if goal.isCompleted {
                         Text(L10n.Savings.complete)
-                            .font(.app(.caption2, weight: .medium))
+                            .appFont(.caption2, weight: .medium)
                             .foregroundStyle(.green)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.green.opacity(0.12), in: Capsule())
                     } else if let days = goal.daysRemaining {
                         Text(days > 0 ? "\(days)d" : L10n.Savings.Status.pastDate)
-                            .font(.app(.caption2, weight: .medium))
+                            .appFont(.caption2, weight: .medium)
                             .foregroundStyle(days < 30 ? .orange : .secondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

@@ -299,7 +299,15 @@ struct QuaraMoneyApp: App {
         case dark = "Dark"
         
         var id: String { rawValue }
-        
+
+        var displayName: String {
+            switch self {
+            case .system: return "settings.theme.system".localized
+            case .light: return "settings.theme.light".localized
+            case .dark: return "settings.theme.dark".localized
+            }
+        }
+
         var colorScheme: ColorScheme? {
             switch self {
             case .system: return nil

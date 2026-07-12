@@ -35,7 +35,7 @@ struct WalletRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: wallet.icon)
-                .font(.app(.title3))
+                .appFont(.title3)
                 .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(
@@ -49,10 +49,10 @@ struct WalletRowView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(wallet.name)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                     .lineLimit(1)
                 Text(wallet.currencyCode)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -65,7 +65,7 @@ struct WalletRowView: View {
 
             if let figures {
                 Text(figures.balance.formattedAmount(for: wallet.currencyCode))
-                    .font(.app(.body, weight: .semibold))
+                    .appFont(.body, weight: .semibold)
                     .monospacedDigit()
                     .foregroundStyle(figures.balance >= 0 ? Color.primary : expenseColor)
                     .lineLimit(1)
@@ -73,7 +73,7 @@ struct WalletRowView: View {
             } else {
                 // First load: figures land a beat later (computed off-main).
                 Text(verbatim: "–")
-                    .font(.app(.body, weight: .semibold))
+                    .appFont(.body, weight: .semibold)
                     .foregroundStyle(.tertiary)
             }
         }

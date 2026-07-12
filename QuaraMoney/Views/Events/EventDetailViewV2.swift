@@ -30,6 +30,7 @@ struct EventDetailViewV2: View {
     @State private var transactionToEdit: EventLedgerTransaction?
     @State private var errorMessage: String?
     @State private var exportSuccessMessage: String?
+    @State private var recentlyDeletedTransaction: EventLedgerTransaction?
     
     // -- Computed Business Logic --
     private var service: EventLedgerService {
@@ -146,13 +147,13 @@ struct EventDetailViewV2: View {
             } header: {
                 HStack {
                     Text(L10n.EventDetail.members)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                     Spacer()
                     Button {
                         showingAllMembers = true
                     } label: {
                         Text(L10n.EventDetail.showAll)
-                            .font(.app(.subheadline, weight: .medium))
+                            .appFont(.subheadline, weight: .medium)
                             .foregroundStyle(.blue)
                             .textCase(nil)
                     }
@@ -184,7 +185,7 @@ struct EventDetailViewV2: View {
                     Button {
                         showingEditEvent = true
                     } label: {
-                        Label("Edit Event", systemImage: "pencil")
+                        Label("event.edit".localized, systemImage: "pencil")
                     }
                     Button {
                         showingExportSpending = true
@@ -250,7 +251,7 @@ struct EventDetailViewV2: View {
         } message: {
             Text(errorMessage ?? L10n.EventDetail.unknownError)
         }
-        .alert(L10n.Common.ok, isPresented: Binding(
+        .alert("common.success".localized, isPresented: Binding(
             get: { exportSuccessMessage != nil },
             set: { _ in exportSuccessMessage = nil }
         )) {
@@ -258,6 +259,11 @@ struct EventDetailViewV2: View {
         } message: {
             Text(exportSuccessMessage ?? "")
         }
+        .undoToast($recentlyDeletedTransaction, message: { _ in
+            "event.transaction.deleted".localized
+        }, onUndo: { transaction in
+            restoreTransaction(transaction)
+        })
         .onAppear {
             prepareEventContext()
         }
@@ -283,6 +289,18 @@ struct EventDetailViewV2: View {
     private func deleteTransaction(_ transaction: EventLedgerTransaction) {
         do {
             try service.deleteTransaction(transaction)
+            HapticManager.shared.warning()
+            // Offer a transient Undo — the tombstone makes restore trivial.
+            recentlyDeletedTransaction = transaction
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreTransaction(_ transaction: EventLedgerTransaction) {
+        do {
+            try service.restoreTransaction(transaction)
+            HapticManager.shared.selection()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -291,6 +309,7 @@ struct EventDetailViewV2: View {
     private func removeMember(_ member: EventMember) {
         do {
             try service.removeOrArchiveMember(member)
+            HapticManager.shared.warning()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -322,21 +341,21 @@ private struct ExportSpendingSheet: View {
                         Text(L10n.EventDetail.yourSpending)
                         Spacer()
                         Text(formatMinor(spendingAmount))
-                            .font(.app(.headline, weight: .bold))
+                            .appFont(.headline, weight: .bold)
                             .foregroundStyle(ThemeManager.shared.expenseColor)
                     }
                 } footer: {
-                    Text("This is your share of all expenses in this event.")
+                    Text("event.detail.yourShareHint".localized)
                 }
-                
+
                 if alreadyExported {
                     Section {
-                        Label("Spending already exported for this event.", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                        Label("event.detail.alreadyExported".localized, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(ThemeManager.shared.incomeColor)
                     }
                 } else if spendingAmount > 0 {
                     Section {
-                        Picker("Wallet", selection: Binding(
+                        Picker(L10n.EventSettlement.wallet, selection: Binding(
                             get: { selectedWallet?.id },
                             set: { newId in
                                 selectedWallet = wallets.first(where: { $0.id == newId })
@@ -348,11 +367,11 @@ private struct ExportSpendingSheet: View {
                         }
                         .pickerStyle(.menu)
                     } footer: {
-                        Text("One expense transaction will be added to the selected wallet.")
+                        Text("event.detail.exportHint".localized)
                     }
                 } else {
                     Section {
-                        Text("No expenses to export.")
+                        Text("event.detail.noExpensesToExport".localized)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -405,9 +424,9 @@ private struct ExportSpendingSheet: View {
             )
             if transaction != nil {
                 dismiss()
-                onSuccess("Spending exported to \(selectedWallet.name)")
+                onSuccess("event.detail.exportedToFormat".localized(with: selectedWallet.name))
             } else {
-                onError("No spending to export.")
+                onError("event.detail.noSpendingToExport".localized)
                 dismiss()
             }
         } catch {

@@ -74,14 +74,14 @@ struct AddEventLedgerTransactionView: View {
                                     } label: {
                                         VStack(spacing: 4) {
                                             Image(systemName: "ellipsis.circle.fill")
-                                                .font(.app(.title3))
+                                                .appFont(.title3)
                                                 .foregroundColor(.secondary)
                                                 .frame(width: 40, height: 40)
                                                 .background(Color(.tertiarySystemGroupedBackground))
                                                 .clipShape(Circle())
                                             
                                             Text("common.more".localized)
-                                                .font(.app(.caption2))
+                                                .appFont(.caption2)
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
@@ -94,7 +94,7 @@ struct AddEventLedgerTransactionView: View {
                     
                     // MARK: - Payment & Splitting
                     Section(L10n.EventTransaction.paymentAndSplitting) {
-                        Toggle("Use Event Wallet", isOn: $viewModel.useEventWallet.animation(.default))
+                        Toggle("event.ledger.useEventWallet".localized, isOn: $viewModel.useEventWallet.animation(.default))
                         
                         if !viewModel.useEventWallet {
                             VStack(alignment: .leading, spacing: 12) {
@@ -124,7 +124,7 @@ struct AddEventLedgerTransactionView: View {
                         }
                         
                         // Split
-                        Toggle("Split equally with everyone", isOn: Binding(
+                        Toggle("event.ledger.splitEqually".localized, isOn: Binding(
                             get: { !viewModel.isCustomSplit },
                             set: {
                                 viewModel.isCustomSplit = !$0
@@ -183,7 +183,7 @@ struct AddEventLedgerTransactionView: View {
                             .padding(.vertical, 8)
                         }
                         
-                        Text("Contribution increases Event Wallet balance.")
+                        Text("event.ledger.contributionFooter".localized)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -293,7 +293,7 @@ struct AddEventLedgerTransactionView: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Picker("Entry Type", selection: $viewModel.transactionKind) {
+                    Picker("event.ledger.entryType".localized, selection: $viewModel.transactionKind) {
                         Text(L10n.EventTransaction.tabExpense).tag(EventLedgerTransactionKind.expense)
                         Text(L10n.EventTransaction.tabContribution).tag(EventLedgerTransactionKind.contribution)
                     }

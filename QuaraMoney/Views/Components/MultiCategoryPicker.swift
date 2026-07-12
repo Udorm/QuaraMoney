@@ -64,7 +64,7 @@ struct MultiCategoryPicker: View {
                         }
                     } label: {
                         Text(selectedCategories.isEmpty ? L10n.Common.selectAll : L10n.Common.deselectAll)
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                     }
                 }
             }

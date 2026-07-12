@@ -3,9 +3,6 @@ import SwiftUI
 /// "Set a new password" sheet, presented from the app root when a
 /// password-recovery deep link signs the user in (`quaramoney://auth-callback`
 /// with `type=recovery` → `SupabaseAuthManager.passwordRecoveryPending`).
-///
-/// Cloud-sync/auth copy is intentionally English-only for now, matching
-/// `AuthSheetView`.
 struct ResetPasswordSheetView: View {
     @EnvironmentObject private var auth: SupabaseAuthManager
     @Environment(\.dismiss) private var dismiss
@@ -84,16 +81,16 @@ struct ResetPasswordSheetView: View {
                     .shadow(color: .blue.opacity(0.3), radius: 12, y: 6)
 
                 Image(systemName: "key.fill")
-                    .font(.system(size: 32, weight: .medium))
+                    .appFont(size: 32, weight: .medium)
                     .foregroundStyle(.white)
             }
 
             VStack(spacing: 6) {
-                Text("Set a New Password")
-                    .font(.app(.title2, weight: .bold))
+                Text("auth.setNewPassword".localized)
+                    .appFont(.title2, weight: .bold)
 
-                Text("You're signed in\(auth.currentEmail.map { " as \($0)" } ?? ""). Choose a new password to finish resetting it.")
-                    .font(.app(.subheadline))
+                Text(auth.currentEmail.map { "auth.resetSubtitleWithEmail".localized(with: $0) } ?? "auth.resetSubtitle".localized)
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -114,12 +111,12 @@ struct ResetPasswordSheetView: View {
 
                     Group {
                         if showPassword {
-                            TextField("New password", text: $password)
+                            TextField("auth.newPassword".localized, text: $password)
                         } else {
-                            SecureField("New password", text: $password)
+                            SecureField("auth.newPassword".localized, text: $password)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -131,11 +128,11 @@ struct ResetPasswordSheetView: View {
                         showPassword.toggle()
                     } label: {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                    .accessibilityLabel(showPassword ? "auth.hidePassword".localized : "auth.showPassword".localized)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -150,12 +147,12 @@ struct ResetPasswordSheetView: View {
 
                     Group {
                         if showPassword {
-                            TextField("Confirm new password", text: $confirmPassword)
+                            TextField("auth.confirmNewPassword".localized, text: $confirmPassword)
                         } else {
-                            SecureField("Confirm new password", text: $confirmPassword)
+                            SecureField("auth.confirmNewPassword".localized, text: $confirmPassword)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -172,13 +169,13 @@ struct ResetPasswordSheetView: View {
             )
 
             if !confirmPassword.isEmpty && !passwordsMatch {
-                Label("Passwords don't match.", systemImage: "exclamationmark.circle")
-                    .font(.app(.caption))
+                Label("auth.passwordsDontMatch".localized, systemImage: "exclamationmark.circle")
+                    .appFont(.caption)
                     .foregroundStyle(.red)
                     .padding(.leading, 16)
             } else {
-                Text("Use at least 6 characters.")
-                    .font(.app(.caption))
+                Text("auth.passwordMinLength".localized)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 16)
             }
@@ -193,14 +190,14 @@ struct ResetPasswordSheetView: View {
         } label: {
             ZStack {
                 // Keep the button height stable while the label swaps to a spinner.
-                Text("Update Password").hidden()
+                Text("auth.updatePassword".localized).hidden()
                 if auth.isWorking {
                     ProgressView()
                 } else {
-                    Text("Update Password")
+                    Text("auth.updatePassword".localized)
                 }
             }
-            .font(.app(.body, weight: .semibold))
+            .appFont(.body, weight: .semibold)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
@@ -213,7 +210,7 @@ struct ResetPasswordSheetView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

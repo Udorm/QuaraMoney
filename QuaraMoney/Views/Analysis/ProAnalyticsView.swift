@@ -94,7 +94,7 @@ struct ProAnalyticsView: View {
                         }
                     } label: {
                         Image(systemName: vm.filter.hasActiveConstraints ? "ellipsis.circle.fill" : "ellipsis.circle")
-                            .font(.app(.title3))
+                            .appFont(.title3)
                             .foregroundStyle(vm.filter.hasActiveConstraints ? Color.accentColor : .primary)
                     }
                 }

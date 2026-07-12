@@ -128,7 +128,7 @@ struct AddBudgetView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("\(Int(percentageValue))%")
-                                    .font(.app(.title2, weight: .bold))
+                                    .appFont(.title2, weight: .bold)
                                     .monospacedDigit()
                                 Spacer()
                                 Text(L10n.Budget.ofIncome)
@@ -160,7 +160,7 @@ struct AddBudgetView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Text(selectedCurrency)
-                                        .font(.app(.subheadline, weight: .bold))
+                                        .appFont(.subheadline, weight: .bold)
                                     Image(systemName: "chevron.down")
                                         .font(.caption2)
                                         .fontWeight(.bold)
@@ -233,7 +233,7 @@ struct AddBudgetView: View {
                         Toggle(L10n.Budget.alertAt(100), isOn: $alertAt100)
                     } header: {
                         Label(L10n.Budget.notifications, systemImage: "bell.fill")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     

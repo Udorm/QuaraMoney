@@ -155,13 +155,13 @@ struct TransactionRowView: View {
                     .frame(width: 34, height: 34)
 
                 Image(systemName: iconName)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(Color(hex: iconColorHex) ?? .gray)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(titleText)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -173,7 +173,7 @@ struct TransactionRowView: View {
 
                         if let subtitleText {
                             Text(subtitleText)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -186,12 +186,12 @@ struct TransactionRowView: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(amountText)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(isPositive ? incomeColor : expenseColor)
                     .lineLimit(1)
 
                 Text(timeText)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -208,9 +208,9 @@ struct TransactionRowView: View {
     private func debtBadge(_ debt: Debt) -> some View {
         HStack(spacing: 3) {
             Image(systemName: debt.type.directionIcon)
-                .font(.system(size: 9, weight: .bold))
+                .appFont(size: 9, weight: .bold)
             Text(debt.personName)
-                .font(.app(.caption2, weight: .medium))
+                .appFont(.caption2, weight: .medium)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }

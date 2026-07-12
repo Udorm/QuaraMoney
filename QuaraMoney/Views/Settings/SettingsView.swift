@@ -36,25 +36,6 @@ struct SettingsView: View {
                     }
                 }
 
-                NavigationLink(destination: ThemeSettingsView()) {
-                    Label {
-                        LabeledContent {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(ThemeManager.shared.incomeColor)
-                                    .frame(width: 10, height: 10)
-                                Circle()
-                                    .fill(ThemeManager.shared.expenseColor)
-                                    .frame(width: 10, height: 10)
-                            }
-                        } label: {
-                            Text(L10n.Settings.themeColors)
-                        }
-                    } icon: {
-                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
-                    }
-                }
-
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     Toggle(isOn: $useSidebarOniPad) {
                         Label {
@@ -78,22 +59,41 @@ struct SettingsView: View {
                 Text("settings.compactEntry.footer".localized)
             }
 
-            Section("Appearance") {
+            Section("settings.appearance".localized) {
                 Picker(selection: $selectedTheme) {
                     ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
-                        Label(theme.rawValue, systemImage: theme.icon)
+                        Label(theme.displayName, systemImage: theme.icon)
                             .tag(theme)
                     }
                 } label: {
                     Label {
-                        Text("App Theme")
+                        Text("settings.appTheme".localized)
                     } icon: {
                         ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
                     }
                 }
+
+                NavigationLink(destination: ThemeSettingsView()) {
+                    Label {
+                        LabeledContent {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(ThemeManager.shared.incomeColor)
+                                    .frame(width: 10, height: 10)
+                                Circle()
+                                    .fill(ThemeManager.shared.expenseColor)
+                                    .frame(width: 10, height: 10)
+                            }
+                        } label: {
+                            Text(L10n.Settings.themeColors)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
+                    }
+                }
             }
 
-            Section("Currency") {
+            Section("settings.currency".localized) {
                 NavigationLink(destination: CurrencySelectionView()) {
                     Label {
                         LabeledContent {
@@ -112,15 +112,15 @@ struct SettingsView: View {
                         LabeledContent {
                             Group {
                                 if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
-                                    Text("1 USD ≈ \(rate.formatted(.number.precision(.fractionLength(2)))) \(currencyManager.preferredCurrencyCode)")
+                                    Text("settings.exchangeRateValue".localized(with: rate.formatted(.number.precision(.fractionLength(2))), currencyManager.preferredCurrencyCode))
                                 } else {
-                                    Text("Fetching...")
+                                    Text("settings.fetchingRate".localized)
                                         .task { await currencyManager.fetchRates() }
                                 }
                             }
                             .foregroundStyle(.secondary)
                         } label: {
-                            Text("Exchange Rate")
+                            Text("settings.exchangeRate".localized)
                         }
                     } icon: {
                         ListIconView(systemImage: "arrow.2.squarepath", color: .teal)
@@ -128,10 +128,10 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Notifications") {
+            Section("settings.notifications".localized) {
                 Toggle(isOn: $notificationManager.isDailyReminderEnabled) {
                     Label {
-                        Text("Daily Reminder")
+                        Text("settings.dailyReminder".localized)
                     } icon: {
                         ListIconView(systemImage: "bell.fill", color: .red)
                     }
@@ -143,7 +143,7 @@ struct SettingsView: View {
                 if notificationManager.isDailyReminderEnabled {
                     DatePicker(selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute) {
                         Label {
-                            Text("Time")
+                            Text("settings.reminderTime".localized)
                         } icon: {
                             ListIconView(systemImage: "clock.fill", color: .orange)
                         }
@@ -152,43 +152,37 @@ struct SettingsView: View {
             }
 
 
-            Section("Security") {
+            Section("settings.security".localized) {
                 Toggle(isOn: $securityManager.isAppLockEnabled) {
                     Label {
-                        Text("App Lock")
+                        Text("settings.appLock".localized)
                     } icon: {
                         ListIconView(systemImage: "lock.fill", color: Color(.systemGray2))
                     }
                 }
             }
 
-            Section("AI Scanning") {
-                Label {
-                    SecureField("Gemini API Key", text: Binding(
-                        get: { securityManager.getAPIKey() ?? "" },
-                        set: { newValue in
-                            if newValue.isEmpty {
-                                securityManager.deleteAPIKey()
-                            } else {
-                                _ = securityManager.saveAPIKey(newValue)
-                            }
+            Section("settings.aiScanning.title".localized) {
+                NavigationLink(destination: ReceiptScanningSettingsView()) {
+                    Label {
+                        LabeledContent {
+                            Text(securityManager.getAPIKey()?.isEmpty == false
+                                 ? "settings.aiScanning.statusCloud".localized
+                                 : "settings.aiScanning.statusOnDevice".localized)
+                            .foregroundStyle(.secondary)
+                        } label: {
+                            Text("settings.aiScanning.rowTitle".localized)
                         }
-                    ))
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                } icon: {
-                    ListIconView(systemImage: "sparkles", color: .purple)
+                    } icon: {
+                        ListIconView(systemImage: "sparkles", color: .purple)
+                    }
                 }
-
-                Text("Enter your Gemini API Key to enable smart receipt scanning. When enabled, receipt photos and your wallet names are sent to Google for processing. If left empty, the app uses standard on-device OCR and nothing leaves your device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Section(L10n.Settings.dataManagement) {
                 NavigationLink(destination: ExportOptionsView()) {
                     Label {
-                        Text("Export Transactions")
+                        Text("settings.exportTransactions".localized)
                     } icon: {
                         ListIconView(systemImage: "square.and.arrow.up.fill", color: .blue)
                     }
@@ -201,26 +195,12 @@ struct SettingsView: View {
                         ListIconView(systemImage: "square.and.arrow.down.fill", color: .teal)
                     }
                 }
+            }
 
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
-                } label: {
-                    Label {
-                        if isDeleting {
-                            HStack {
-                                Text(L10n.Status.deleting)
-                                Spacer()
-                                ProgressView()
-                            }
-                        } else {
-                            Text(L10n.Settings.deleteAllTransactions)
-                        }
-                    } icon: {
-                        ListIconView(systemImage: "trash.fill", color: .red)
-                    }
-                }
-                .disabled(isPopulating || isDeleting)
-
+            #if DEBUG
+            // Developer-only tools. Sample data would pollute a synced account
+            // and onboarding reset is a debug affordance — never ship these.
+            Section("Developer") {
                 Button {
                     showPopulateConfirmation = true
                 } label: {
@@ -252,12 +232,36 @@ struct SettingsView: View {
                     }
                 }
             }
+            #endif
+
+            // Destructive action isolated in its own section (HIG) so it isn't
+            // one mis-tap away from routine data tools.
+            Section {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label {
+                        if isDeleting {
+                            HStack {
+                                Text(L10n.Status.deleting)
+                                Spacer()
+                                ProgressView()
+                            }
+                        } else {
+                            Text(L10n.Settings.deleteAllTransactions)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "trash.fill", color: .red)
+                    }
+                }
+                .disabled(isPopulating || isDeleting)
+            }
 
             Section {
                 Text(L10n.Settings.version)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .foregroundStyle(.secondary)
-                    .font(.app(.footnote))
+                    .appFont(.footnote)
             }
         }
         .navigationTitle(L10n.Settings.title)
@@ -273,7 +277,7 @@ struct SettingsView: View {
                             .scaleEffect(1.5)
                             .tint(.primary)
                         Text(L10n.Status.populatingData)
-                            .font(.app(.headline))
+                            .appFont(.headline)
                     }
                     .padding(24)
                     .background(.thickMaterial)
@@ -291,7 +295,7 @@ struct SettingsView: View {
                     do {
                         try await service.populate()
                     } catch {
-                        errorMessage = "Error populating data: \(error.localizedDescription)"
+                        errorMessage = "settings.populateError".localized(with: error.localizedDescription)
                         showError = true
                     }
                     isPopulating = false
@@ -304,12 +308,13 @@ struct SettingsView: View {
             Button(L10n.Common.cancel, role: .cancel) { }
             Button(L10n.Common.delete, role: .destructive) {
                 isDeleting = true
+                HapticManager.shared.warning()
                 Task {
                     let service = SampleDataService(modelContext: modelContext)
                     do {
                         try await service.deleteAllTransactions()
                     } catch {
-                        errorMessage = "Error deleting transactions: \(error.localizedDescription)"
+                        errorMessage = "settings.deleteError".localized(with: error.localizedDescription)
                         showError = true
                     }
                     isDeleting = false

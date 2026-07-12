@@ -503,7 +503,7 @@ struct CompactAddTransactionView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.app(.footnote, weight: .medium))
+            .appFont(.footnote, weight: .medium)
             .foregroundStyle(.secondary)
             .textCase(.uppercase)
             .padding(.leading, 4)
@@ -580,7 +580,7 @@ struct CompactAddTransactionView: View {
             sectionLabel("transaction.toWallet".localized)
             if availableWallets.isEmpty {
                 Text("transaction.noOtherWallets".localized)
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 4)
             } else {
@@ -605,7 +605,7 @@ struct CompactAddTransactionView: View {
                source.currencyCode != dest.currencyCode {
                 HStack(spacing: 6) {
                     Text("1 \(source.currencyCode) =")
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                     TextField(L10n.Transaction.rate, value: $viewModel.exchangeRate, format: .number)
                         .keyboardType(.decimalPad)
@@ -613,7 +613,7 @@ struct CompactAddTransactionView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 90)
                     Text(dest.currencyCode)
-                        .font(.app(.subheadline, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
 
                     Spacer(minLength: 4)
 
@@ -634,9 +634,9 @@ struct CompactAddTransactionView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: "ellipsis")
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                 Text("common.more".localized)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -716,10 +716,10 @@ struct CompactAddTransactionView: View {
     ) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.app(.footnote, weight: .semibold))
+                .appFont(.footnote, weight: .semibold)
                 .foregroundStyle(iconColor)
             Text(text)
-                .font(.app(.subheadline, weight: .medium))
+                .appFont(.subheadline, weight: .medium)
                 .foregroundStyle(isSet ? .primary : .secondary)
                 .lineLimit(1)
         }
@@ -773,7 +773,7 @@ struct CompactAddTransactionView: View {
                 adjustDate(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.app(.footnote, weight: .bold))
+                    .appFont(.footnote, weight: .bold)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 12)
                     .padding(.trailing, 8)
@@ -783,13 +783,13 @@ struct CompactAddTransactionView: View {
             
             HStack(spacing: 4) {
                 Image(systemName: "calendar")
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                     .foregroundStyle(.red)
                 
                 TabView(selection: $relativeDayOffset) {
                     ForEach(-365...365, id: \.self) { offset in
                         Text(dateLabel(forOffset: offset))
-                            .font(.app(.subheadline, weight: .medium))
+                            .appFont(.subheadline, weight: .medium)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .tag(offset)
@@ -823,7 +823,7 @@ struct CompactAddTransactionView: View {
                 adjustDate(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.app(.footnote, weight: .bold))
+                    .appFont(.footnote, weight: .bold)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 8)
                     .padding(.trailing, 12)
@@ -891,7 +891,7 @@ struct CompactAddTransactionView: View {
                     ProgressView()
                         .controlSize(.small)
                     Text("transaction.location".localized)
-                        .font(.app(.subheadline, weight: .medium))
+                        .appFont(.subheadline, weight: .medium)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
@@ -908,10 +908,10 @@ struct CompactAddTransactionView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.selectedLocation == nil ? "mappin.and.ellipse" : "mappin.circle.fill")
-                                .font(.app(.footnote, weight: .semibold))
+                                .appFont(.footnote, weight: .semibold)
                                 .foregroundStyle(.blue)
                             Text(viewModel.selectedLocation?.title ?? "transaction.location".localized)
-                                .font(.app(.subheadline, weight: .medium))
+                                .appFont(.subheadline, weight: .medium)
                                 .foregroundStyle(viewModel.selectedLocation != nil ? .primary : .secondary)
                                 .lineLimit(1)
                         }
@@ -925,7 +925,7 @@ struct CompactAddTransactionView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundStyle(.secondary)
-                                .font(.app(.footnote))
+                                .appFont(.footnote)
                         }
                         .buttonStyle(.plain)
                         .padding(.leading, 2)
@@ -994,10 +994,10 @@ struct CompactAddTransactionView: View {
                                     .controlSize(.small)
                             } else {
                                 Image(systemName: "location.fill")
-                                    .font(.app(.caption2))
+                                    .appFont(.caption2)
                             }
                             Text("transaction.location.useCurrent".localized)
-                                .font(.app(.footnote, weight: .medium))
+                                .appFont(.footnote, weight: .medium)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -1015,7 +1015,7 @@ struct CompactAddTransactionView: View {
                         insertTag(scored.tag)
                     } label: {
                         Text("#\(scored.tag)")
-                            .font(.app(.footnote, weight: .medium))
+                            .appFont(.footnote, weight: .medium)
                             .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -1071,7 +1071,7 @@ struct CompactAddTransactionView: View {
                                 insertTag(scored.tag)
                             } label: {
                                 Text("#\(scored.tag)")
-                                    .font(.app(.footnote, weight: .medium))
+                                    .appFont(.footnote, weight: .medium)
                                     .foregroundStyle(Color.accentColor)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
@@ -1088,7 +1088,7 @@ struct CompactAddTransactionView: View {
 
             HStack(spacing: 12) {
                 Image(systemName: "note.text")
-                    .font(.app(.footnote, weight: .semibold))
+                    .appFont(.footnote, weight: .semibold)
                     .foregroundStyle(.secondary)
 
                 TextField(L10n.Transaction.note, text: $viewModel.note)
@@ -1099,7 +1099,7 @@ struct CompactAddTransactionView: View {
                 Button("common.done".localized) {
                     endNoteEditing()
                 }
-                .font(.app(.subheadline, weight: .semibold))
+                .appFont(.subheadline, weight: .semibold)
             }
             .padding(.horizontal, 16)
         }
@@ -1211,11 +1211,11 @@ private struct CompactAmountCard: View {
                 // Amount input in the middle at the right
                 HStack(alignment: .center, spacing: 4) {
                     Text(String.currencySymbol(for: viewModel.selectedCurrencyCode))
-                        .font(.app(size: 28, weight: .semibold))
+                        .appFont(size: 28, weight: .semibold)
                         .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
 
                     Text(amountDisplayText)
-                        .font(.app(size: 44, weight: .bold))
+                        .appFont(size: 44, weight: .bold)
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
                         .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
@@ -1239,7 +1239,7 @@ private struct CompactAmountCard: View {
 
             if let exchangeRateStr = exchangeRateString {
                 Text(exchangeRateStr)
-                    .font(.app(.footnote))
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 6)
             }
@@ -1248,7 +1248,7 @@ private struct CompactAmountCard: View {
                 HStack {
                     Spacer()
                     Text("= \(formatAmount(viewModel.evaluatedAmount))")
-                        .font(.app(.callout))
+                        .appFont(.callout)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 16)
@@ -1271,7 +1271,7 @@ private struct TransferConvertedAmount: View {
     var body: some View {
         let convertedAmount = viewModel.evaluatedAmount * Decimal(viewModel.exchangeRate)
         Text("≈ \(convertedAmount.formattedAmount(for: destinationCurrencyCode))")
-            .font(.app(.caption))
+            .appFont(.caption)
             .foregroundStyle(.blue)
             .lineLimit(1)
     }
@@ -1329,10 +1329,10 @@ struct CategoryChip: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: category.icon)
-                    .font(.app(.caption2))
+                    .appFont(.caption2)
                     .foregroundStyle(isSelected ? .white : categoryColor)
                 Text(category.displayName)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

@@ -38,11 +38,11 @@ struct MoreView: View {
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(displayName.isEmpty ? L10n.Profile.namePlaceholder : displayName)
-                                    .font(.app(.body, weight: .semibold))
+                                    .appFont(.body, weight: .semibold)
                                     .foregroundStyle(displayName.isEmpty ? .secondary : .primary)
 
                                 Text(accountSubtitle)
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }

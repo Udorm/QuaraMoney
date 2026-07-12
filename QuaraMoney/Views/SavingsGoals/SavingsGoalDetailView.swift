@@ -22,17 +22,17 @@ struct SavingsGoalDetailView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(goal.name)
-                                .font(.app(.title2, weight: .bold))
+                                .appFont(.title2, weight: .bold)
 
                             if let targetDate = goal.targetDate {
                                 Text(targetDate.appFormatted(date: .abbreviated, time: .omitted))
-                                    .font(.app(.subheadline))
+                                    .appFont(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
 
                             if let days = goal.daysRemaining, days > 0 {
                                 Text(L10n.Budget.daysLeft(days))
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -40,7 +40,7 @@ struct SavingsGoalDetailView: View {
                         Spacer()
 
                         Image(systemName: goal.iconName)
-                            .font(.app(.title2))
+                            .appFont(.title2)
                             .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
                             .background(goalColor.gradient)
@@ -82,11 +82,11 @@ struct SavingsGoalDetailView: View {
                         // Center Label
                         VStack(spacing: 4) {
                             Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                                .font(.app(.largeTitle, weight: .bold))
+                                .appFont(.largeTitle, weight: .bold)
                                 .foregroundStyle(goal.isCompleted ? goalColor : .primary)
 
                             Text(goal.isCompleted ? L10n.Savings.complete : L10n.Savings.progress)
-                                .font(.app(.subheadline, weight: .medium))
+                                .appFont(.subheadline, weight: .medium)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -102,7 +102,7 @@ struct SavingsGoalDetailView: View {
                     Text(L10n.Savings.totalSaved)
                     Spacer()
                     Text(goal.totalSaved(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                        .font(.app(.body, weight: .medium))
+                        .appFont(.body, weight: .medium)
                         .foregroundStyle(goalColor)
                 }
 
@@ -119,7 +119,7 @@ struct SavingsGoalDetailView: View {
                         Spacer()
                         Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
                             .foregroundStyle(.secondary)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
 
                     HStack {
@@ -127,7 +127,7 @@ struct SavingsGoalDetailView: View {
                         Spacer()
                         Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
                             .foregroundStyle(.secondary)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
 
@@ -145,7 +145,7 @@ struct SavingsGoalDetailView: View {
                     Spacer()
                     Text(goal.statusMessage)
                         .foregroundStyle(goal.isOnTrack(converter: CurrencyManager.shared.convert) ? .green : .orange)
-                        .font(.app(.subheadline, weight: .medium))
+                        .appFont(.subheadline, weight: .medium)
                 }
 
                 if goal.autoContributeEnabled, let amount = goal.autoContributeAmount {
@@ -190,9 +190,9 @@ struct SavingsGoalDetailView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("\(transactions.count) " + "filteredTransactions.transactionsLabel".localized)
-                                    .font(.app(.subheadline, weight: .medium))
+                                    .appFont(.subheadline, weight: .medium)
                                 Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()

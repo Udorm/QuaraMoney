@@ -14,20 +14,20 @@ struct SavingsGoalSummaryCard: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(L10n.Savings.totalSaved)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                         Text(totalSaved.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                            .font(.app(.title2, weight: .bold))
+                            .appFont(.title2, weight: .bold)
                     }
 
                     Spacer()
 
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(L10n.Savings.totalTarget)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                         Text(totalTarget.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                            .font(.app(.title2, weight: .bold))
+                            .appFont(.title2, weight: .bold)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -39,11 +39,11 @@ struct SavingsGoalSummaryCard: View {
 
                     HStack {
                         Text(L10n.Budget.percentUsed(Int(overallProgress * 100)))
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
                         Text("\(activeCount) \(L10n.Budget.Filter.active), \(completedCount) \(L10n.Common.done)")
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

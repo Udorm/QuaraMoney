@@ -182,7 +182,7 @@ struct AccountView: View {
                 if editingName {
                     HStack(spacing: 12) {
                         TextField(L10n.Profile.namePlaceholder, text: $tempName)
-                            .font(.app(.title2, weight: .bold))
+                            .appFont(.title2, weight: .bold)
                             .multilineTextAlignment(.center)
                             .focused($isNameFocused)
                             .submitLabel(.done)
@@ -207,7 +207,7 @@ struct AccountView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(displayName.isEmpty ? L10n.Profile.namePlaceholder : displayName)
-                                .font(.app(.title2, weight: .bold))
+                                .appFont(.title2, weight: .bold)
                                 .foregroundStyle(displayName.isEmpty ? .secondary : .primary)
 
                             Image(systemName: "pencil.circle.fill")
@@ -236,26 +236,26 @@ struct AccountView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
                 Image(systemName: "icloud.fill")
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
-                    .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .background(.cyan.gradient, in: RoundedRectangle(cornerRadius: CornerRadius.icon, style: .continuous))
 
-                Text("Cloud Sync")
-                    .font(.app(.headline, weight: .semibold))
+                Text("account.cloudSync".localized)
+                    .appFont(.headline, weight: .semibold)
 
                 Spacer()
 
                 if viewModel.isConfigured {
-                    Toggle("Cloud Sync", isOn: $syncEnabled)
+                    Toggle("account.cloudSync".localized, isOn: $syncEnabled)
                         .labelsHidden()
                 }
             }
 
             if !viewModel.isConfigured {
-                Label("Cloud sync isn't configured in this build.",
+                Label("account.notConfigured".localized,
                       systemImage: "exclamationmark.triangle")
-                    .font(.app(.subheadline))
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
             } else if syncEnabled {
                 Divider()
@@ -265,8 +265,8 @@ struct AccountView: View {
                     signedOutSection
                 }
             } else {
-                Text("When off, QuaraMoney runs fully offline on this device.")
-                    .font(.app(.caption))
+                Text("account.offlineFooter".localized)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -288,8 +288,8 @@ struct AccountView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Text("This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device.")
-                        .font(.app(.caption))
+                    Text("account.unsyncedWarning".localized)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(10)
@@ -299,11 +299,11 @@ struct AccountView: View {
             }
 
             VStack(spacing: 4) {
-                Text("Back Up Your Data")
-                    .font(.app(.subheadline, weight: .semibold))
+                Text("account.backUp.title".localized)
+                    .appFont(.subheadline, weight: .semibold)
 
-                Text("Sign in so your wallets, transactions, and budgets are safely backed up and follow you to any device.")
-                    .font(.app(.caption))
+                Text("account.backUp.message".localized)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -313,8 +313,8 @@ struct AccountView: View {
                 Button {
                     authSheetMode = .signIn
                 } label: {
-                    Text("Sign In")
-                        .font(.app(.body, weight: .semibold))
+                    Text("account.signIn".localized)
+                        .appFont(.body, weight: .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -323,8 +323,8 @@ struct AccountView: View {
                 Button {
                     authSheetMode = .signUp
                 } label: {
-                    Text("Create Account")
-                        .font(.app(.body, weight: .semibold))
+                    Text("account.createAccount".localized)
+                        .appFont(.body, weight: .semibold)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -340,12 +340,12 @@ struct AccountView: View {
         // Who's signed in
         HStack(spacing: 12) {
             Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 34))
+                .appFont(size: 34)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(auth.currentEmail ?? "")
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
                     .lineLimit(1)
                     .truncationMode(.middle)
 
@@ -353,8 +353,8 @@ struct AccountView: View {
                     Circle()
                         .fill(.green)
                         .frame(width: 6, height: 6)
-                    Text("Signed in")
-                        .font(.app(.caption))
+                    Text("account.signedIn".localized)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -371,10 +371,10 @@ struct AccountView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(syncStatusTitle)
-                    .font(.app(.subheadline, weight: .medium))
+                    .appFont(.subheadline, weight: .medium)
 
                 Text(syncStatusDetail)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(sync.lastError == nil ? Color.secondary : Color.red)
                     .lineLimit(3)
             }
@@ -385,17 +385,17 @@ struct AccountView: View {
                 Task { await sync.syncNow(context: modelContext) }
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
             .disabled(sync.isSyncing)
-            .accessibilityLabel("Sync Now")
+            .accessibilityLabel("account.syncNow".localized)
         }
 
         if sync.isInitialSyncInProgress {
-            Text("Uploading your existing data for the first time. Keep the app open.")
-                .font(.app(.caption))
+            Text("account.initialUpload".localized)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -420,20 +420,20 @@ struct AccountView: View {
     }
 
     private var syncStatusTitle: String {
-        if sync.isInitialSyncInProgress { return "Setting up cloud sync…" }
-        if sync.isSyncing { return "Syncing…" }
-        if sync.lastError != nil { return "Sync issue" }
-        if sync.lastSyncDate != nil { return "Up to date" }
-        return "Waiting for first sync"
+        if sync.isInitialSyncInProgress { return "account.sync.settingUp".localized }
+        if sync.isSyncing { return "account.sync.syncing".localized }
+        if sync.lastError != nil { return "account.sync.issue".localized }
+        if sync.lastSyncDate != nil { return "account.sync.upToDate".localized }
+        return "account.sync.waiting".localized
     }
 
     private var syncStatusDetail: String {
         if let error = sync.lastError { return error }
-        if sync.isSyncing { return "Updating your data" }
+        if sync.isSyncing { return "account.sync.updating".localized }
         if let last = sync.lastSyncDate {
-            return "Last synced \(last.formatted(.relative(presentation: .named).locale(.app)))"
+            return "account.sync.lastSynced".localized(with: last.formatted(.relative(presentation: .named).locale(.app)))
         }
-        return "Tap sync to upload your data"
+        return "account.sync.tapToUpload".localized
     }
 
     // MARK: - Sign out / Delete account
@@ -448,10 +448,10 @@ struct AccountView: View {
                         ProgressView()
                     } else {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.app(.subheadline, weight: .semibold))
+                            .appFont(.subheadline, weight: .semibold)
                     }
-                    Text("Sign Out")
-                        .font(.app(.body, weight: .semibold))
+                    Text("account.signOut".localized)
+                        .appFont(.body, weight: .semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -471,9 +471,9 @@ struct AccountView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "trash.fill")
-                        .font(.app(.subheadline, weight: .semibold))
-                    Text("Delete Account…")
-                        .font(.app(.body, weight: .semibold))
+                        .appFont(.subheadline, weight: .semibold)
+                    Text("account.deleteAccount".localized)
+                        .appFont(.body, weight: .semibold)
                 }
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity)
@@ -488,23 +488,23 @@ struct AccountView: View {
             }
             .disabled(auth.isWorking || sync.isSyncing)
 
-            Text("Permanently deletes your account and all synced data from the cloud and this device.")
-                .font(.app(.caption))
+            Text("account.deleteFooter".localized)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 8)
         }
         .confirmationDialog(
-            "Delete your account?",
+            "account.deleteConfirm.title".localized,
             isPresented: $showDeleteAccountConfirm,
             titleVisibility: .visible
         ) {
-            Button("Delete Account & All Data", role: .destructive) {
+            Button("account.deleteConfirm.action".localized, role: .destructive) {
                 Task { await auth.deleteAccount() }
             }
             Button(L10n.Common.cancel, role: .cancel) {}
         } message: {
-            Text("This permanently deletes your account, all synced data, and receipt images from the cloud, and removes the data from this device. This cannot be undone.")
+            Text("account.deleteConfirm.message".localized)
         }
     }
 
@@ -549,11 +549,11 @@ struct AccountView: View {
                 .foregroundStyle(color)
 
             Text(value)
-                .font(.app(.title, weight: .bold))
+                .appFont(.title, weight: .bold)
                 .foregroundStyle(.primary)
 
             Text(label)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -575,11 +575,11 @@ struct AccountView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.Profile.memberSince)
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
 
                 Text(memberSinceFormatted)
-                    .font(.app(.body, weight: .medium))
+                    .appFont(.body, weight: .medium)
                     .foregroundStyle(.primary)
             }
 

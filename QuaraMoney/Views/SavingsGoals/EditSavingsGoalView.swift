@@ -42,17 +42,17 @@ struct EditSavingsGoalView: View {
                                 .fill(goalColor.opacity(0.12))
                                 .frame(width: 48, height: 48)
                             Image(systemName: selectedIcon)
-                                .font(.app(.title3))
+                                .appFont(.title3)
                                 .foregroundStyle(goalColor)
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(name.isEmpty ? L10n.Savings.goalName : name)
-                                .font(.app(.body, weight: .semibold))
+                                .appFont(.body, weight: .semibold)
                                 .foregroundStyle(name.isEmpty ? .secondary : .primary)
 
                             Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                                .font(.app(.caption))
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                         }
 
@@ -73,7 +73,7 @@ struct EditSavingsGoalView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Text(selectedCurrency)
-                                    .font(.app(.subheadline, weight: .bold))
+                                    .appFont(.subheadline, weight: .bold)
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
                                     .fontWeight(.bold)

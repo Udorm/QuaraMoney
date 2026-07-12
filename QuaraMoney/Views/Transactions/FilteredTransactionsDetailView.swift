@@ -117,7 +117,7 @@ struct FilteredTransactionsDetailView: View {
                         .fill(accentColor.opacity(0.15))
                         .frame(width: 44, height: 44)
                     Image(systemName: iconName)
-                        .font(.system(size: 20, weight: .semibold))
+                        .appFont(size: 20, weight: .semibold)
                         .foregroundStyle(accentColor)
                 }
 
@@ -125,13 +125,13 @@ struct FilteredTransactionsDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if displayCategories.count == 1, let cat = displayCategories.first {
                         Text(cat.name)
-                            .font(.app(.subheadline, weight: .semibold))
+                            .appFont(.subheadline, weight: .semibold)
                     } else if displayCategories.count > 1 {
                         FlowLayout(spacing: 4) {
                             ForEach(displayCategories) { cat in
                                 let c = Color(hex: cat.colorHex) ?? .blue
                                 Text(cat.name)
-                                    .font(.app(.caption2, weight: .medium))
+                                    .appFont(.caption2, weight: .medium)
                                     .foregroundStyle(c)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -143,22 +143,22 @@ struct FilteredTransactionsDetailView: View {
 
                     HStack(spacing: 4) {
                         Image(systemName: "calendar")
-                            .font(.system(size: 10))
+                            .appFont(size: 10)
                         Text(config.formattedDateRange)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                         if let walletName = config.walletName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "wallet.bifold")
-                                .font(.system(size: 10))
+                                .appFont(size: 10)
                             Text(walletName)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         }
                         if let goalName = config.savingsGoalName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "target")
-                                .font(.system(size: 10))
+                                .appFont(size: 10)
                             Text(goalName)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                         }
                     }
                     .foregroundStyle(.secondary)
@@ -172,9 +172,9 @@ struct FilteredTransactionsDetailView: View {
                     let typeColor = isExpense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor
                     HStack(spacing: 3) {
                         Image(systemName: isExpense ? "arrow.down" : "arrow.up")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(type.rawValue.capitalized)
-                            .font(.app(.caption, weight: .semibold))
+                            .appFont(size: 10, weight: .bold)
+                        Text(isExpense ? L10n.Transaction.TransactionType.expense : L10n.Transaction.TransactionType.income)
+                            .appFont(.caption, weight: .semibold)
                     }
                     .foregroundStyle(typeColor)
                     .padding(.horizontal, 8)
@@ -191,13 +191,13 @@ struct FilteredTransactionsDetailView: View {
             // MARK: Stats — total amount | transaction count
             HStack(alignment: .firstTextBaseline) {
                 Text(vm.totalAmount.formattedAmount(for: preferredCurrency))
-                    .font(.app(.title2, weight: .bold))
+                    .appFont(.title2, weight: .bold)
                     .monospacedDigit()
 
                 Spacer()
 
                 Text("filteredTransactions.count".localized(with: vm.transactions.count))
-                    .font(.app(.callout))
+                    .appFont(.callout)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }

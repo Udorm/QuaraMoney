@@ -481,7 +481,7 @@ struct FinancialSummaryCards: View {
                 AxisValueLabel {
                     if let doubleValue = value.as(Double.self) {
                         Text(doubleValue.formattedAmountShort(for: CurrencyManager.shared.preferredCurrencyCode))
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .foregroundStyle(mutedTextColor)
                     }
                 }

@@ -14,6 +14,7 @@
 "common.edit" = "កែ";
 "common.delete" = "លុប";
 "common.ok" = "យល់ព្រម";
+"common.success" = "បានជោគជ័យ";
 "common.back" = "ថយក្រោយ";
 "common.close" = "បិទ";
 "common.hide" = "លាក់";
@@ -36,6 +37,7 @@
 "tab.home" = "ទំព័រដើម";
 "tab.wallets" = "កាបូប";
 "tab.analysis" = "ការវិភាគ";
+"tab.plan" = "ផែនការ";
 "tab.more" = "បន្ថែមទៀត";
 
 // MARK: - Home (ទំព័រដើម)
@@ -608,6 +610,29 @@
 "event.settlement.saving" = "កំពុងរក្សាទុក...";
 "event.settlement.confirm" = "បញ្ជាក់";
 
+/* Settlement — plain-language redesign */
+"event.settlement.whoPaysWhom" = "អ្នកណាបង់ឱ្យអ្នកណា";
+"event.settlement.allSettledUp" = "អ្នករាល់គ្នាបានទូទាត់រួចរាល់។";
+"event.settlement.paysFormat" = "%1$@ បង់ឱ្យ %2$@";
+"event.settlement.yourResult" = "លទ្ធផលរបស់អ្នក";
+"event.settlement.youReceiveFormat" = "អ្នកទទួល %@";
+"event.settlement.youPayFormat" = "អ្នកបង់ %@";
+"event.settlement.receiveFormat" = "ទទួល %@";
+"event.settlement.payFormat" = "បង់ %@";
+"event.settlement.settled" = "បានទូទាត់";
+"event.settlement.unknownMember" = "មិនស្គាល់";
+"event.settlement.settleThroughOne" = "ទូទាត់តាមរយៈមនុស្សម្នាក់";
+"event.settlement.settleThroughOneHint" = "អ្នករាល់គ្នាបង់ ឬ ទទួលប្រាក់តាមរយៈមនុស្សម្នាក់ ជំនួសឱ្យការបង់ឱ្យគ្នាទៅវិញទៅមកដោយផ្ទាល់។";
+"event.settlement.whoSettles" = "អ្នកណាទូទាត់ជំនួសអ្នករាល់គ្នា?";
+"event.settlement.totals" = "សរុប";
+"event.settlement.moneyLeftInWallet" = "ប្រាក់នៅសល់ក្នុងកាបូបព្រឹត្តិការណ៍";
+"event.settlement.memberBreakdown" = "ព័ត៌មានលម្អិតតាមសមាជិក";
+"event.settlement.deposited" = "បានដាក់";
+"event.settlement.paid" = "បានបង់";
+"event.settlement.share" = "ចំណែក";
+"event.settlement.addShareToWallet" = "បន្ថែមចំណែករបស់ខ្ញុំទៅកាបូប";
+"event.settlement.addShareToWalletHint" = "កត់ត្រាចំនួនសុទ្ធរបស់អ្នកសម្រាប់ព្រឹត្តិការណ៍នេះជាប្រតិបត្តិការចំណាយតែមួយ ក្នុងកាបូបដែលអ្នកជ្រើសរើស។ ធាតុនីមួយៗនៃព្រឹត្តិការណ៍នៅដាច់ដោយឡែក។";
+
 "event.transaction.paymentAndSplitting" = "ការទូទាត់ និងការបែងចែក";
 "event.transaction.contributor" = "អ្នកចូលរួមចំណែក";
 "event.transaction.selectPayer" = "ជ្រើសរើសអ្នកបង់ប្រាក់";
@@ -623,6 +648,12 @@
 "event.detail.exporting" = "កំពុងនាំចេញ...";
 "event.detail.export" = "នាំចេញ";
 "event.detail.unknownError" = "មានកំហុសមិនស្គាល់";
+"event.detail.yourShareHint" = "នេះជាចំណែករបស់អ្នកនៃការចំណាយទាំងអស់ក្នុងព្រឹត្តិការណ៍នេះ។";
+"event.detail.alreadyExported" = "បានបញ្ចេញការចំណាយសម្រាប់ព្រឹត្តិការណ៍នេះរួចហើយ។";
+"event.detail.exportHint" = "ប្រតិបត្តិការចំណាយមួយនឹងត្រូវបានបន្ថែមទៅកាបូបដែលបានជ្រើសរើស។";
+"event.detail.noExpensesToExport" = "គ្មានការចំណាយដើម្បីបញ្ចេញ។";
+"event.detail.exportedToFormat" = "បានបញ្ចេញការចំណាយទៅ %@";
+"event.detail.noSpendingToExport" = "គ្មានការចំណាយដើម្បីបញ្ចេញ។";
 
 "event.member.details" = "ព័ត៌មានលម្អិត";
 "event.member.color" = "ពណ៌";
@@ -630,6 +661,11 @@
 "event.member.removeImage" = "លុបរូបភាពចេញ";
 "event.member.addMember" = "បន្ថែមសមាជិក";
 "event.member.editMember" = "កែប្រែសមាជិក";
+"event.member.receives" = "ទទួល";
+"event.member.owes" = "ជំពាក់";
+"event.member.removeTitle" = "លុបសមាជិក?";
+"event.member.removeMessage" = "%@ នឹងត្រូវបានលុបចេញពីព្រឹត្តិការណ៍នេះ។";
+"event.transaction.deleted" = "បានលុបប្រតិបត្តិការ";
 
 "event.appearance" = "រូបរាង";
 "event.dateTime" = "កាលបរិច្ឆេទ & ពេលវេលា";
@@ -936,3 +972,165 @@
 "recurring.needsReview" = "ត្រូវពិនិត្យឡើងវិញ";
 "recurring.thisMonth" = "ខែនេះ";
 "recurring.nextMonth" = "ខែក្រោយ";
+
+// MARK: - UX consistency pass: Settings
+"settings.appearance" = "រូបរាង";
+"settings.appTheme" = "រចនាបថកម្មវិធី";
+"settings.theme.system" = "ប្រព័ន្ធ";
+"settings.theme.light" = "ភ្លឺ";
+"settings.theme.dark" = "ងងឹត";
+"settings.currency" = "រូបិយប័ណ្ណ";
+"settings.exchangeRate" = "អត្រាប្តូរប្រាក់";
+"settings.exchangeRateValue" = "1 USD ≈ %@ %@";
+"settings.fetchingRate" = "កំពុងទាញយក...";
+"settings.notifications" = "ការជូនដំណឹង";
+"settings.dailyReminder" = "ការរំលឹកប្រចាំថ្ងៃ";
+"settings.reminderTime" = "ម៉ោង";
+"settings.security" = "សុវត្ថិភាព";
+"settings.appLock" = "ចាក់សោកម្មវិធី";
+
+/* Smart Receipt Scanning (Gemini) */
+"settings.aiScanning.title" = "ការស្កេនវិក្កយបត្រឆ្លាតវៃ";
+"settings.aiScanning.rowTitle" = "ការស្កេនវិក្កយបត្រ";
+"settings.aiScanning.statusCloud" = "AI លើ Cloud";
+"settings.aiScanning.statusOnDevice" = "លើឧបករណ៍";
+"settings.aiScanning.intro" = "ថតរូបវិក្កយបត្រ ហើយ QuaraMoney នឹងបំពេញចំនួនទឹកប្រាក់ កាលបរិច្ឆេទ និងអ្នកលក់ជូនអ្នក។";
+"settings.aiScanning.onDeviceTitle" = "ការស្កេនលើឧបករណ៍";
+"settings.aiScanning.onDeviceBody" = "បើគ្មានកូនសោ ការស្កេនដំណើរការទាំងស្រុងនៅលើឧបករណ៍របស់អ្នក ដោយប្រើការស្គាល់អក្សរស្តង់ដារ។ គ្មានអ្វីចេញពីទូរស័ព្ទរបស់អ្នកឡើយ។";
+"settings.aiScanning.cloudTitle" = "ការស្កេនលើ Cloud (ស្រេចចិត្ត)";
+"settings.aiScanning.cloudBody" = "បន្ថែមកូនសោ Google Gemini API ដោយឥតគិតថ្លៃ ដើម្បីភាពត្រឹមត្រូវខ្ពស់ជាង។ រូបវិក្កយបត្រ និងឈ្មោះកាបូបរបស់អ្នកនឹងត្រូវផ្ញើទៅ Google ដើម្បីដំណើរការ។";
+"settings.aiScanning.keySection" = "កូនសោ Google Gemini API";
+"settings.aiScanning.apiKeyPrompt" = "បិទភ្ជាប់កូនសោ API របស់អ្នក";
+"settings.aiScanning.getKey" = "ទទួលកូនសោ API ដោយឥតគិតថ្លៃ";
+"settings.aiScanning.getKeyFooter" = "បើក Google AI Studio ដែលអ្នកអាចបង្កើតកូនសោដោយឥតគិតថ្លៃ។";
+"settings.aiScanning.removeKey" = "លុបកូនសោ";
+
+"settings.exportTransactions" = "នាំចេញប្រតិបត្តិការ";
+"settings.selectCurrency" = "ជ្រើសរើសរូបិយប័ណ្ណ";
+"settings.populateError" = "មានកំហុសក្នុងការបញ្ចូលទិន្នន័យគំរូ៖ %@";
+"settings.deleteError" = "មានកំហុសក្នុងការលុបប្រតិបត្តិការ៖ %@";
+
+// MARK: - UX consistency pass: Sync conflict
+"sync.conflict.title" = "ទិន្នន័យប៉ះទង្គិចគ្នា";
+"sync.conflict.message" = "ឧបករណ៍នេះមានទិន្នន័យស្រាប់ ហើយគណនី Cloud របស់អ្នកក៏មានទិន្នន័យដែរ។ សូមជ្រើសរើសទិន្នន័យណាមួយដែលត្រូវរក្សាទុក — ទិន្នន័យមួយទៀតនឹងត្រូវលុបជាអចិន្ត្រៃយ៍។";
+"sync.conflict.useCloud.title" = "ប្រើទិន្នន័យ Cloud";
+"sync.conflict.useCloud.message" = "រក្សាទុកទិន្នន័យពីគណនី Cloud របស់អ្នក។ ទិន្នន័យក្នុងឧបករណ៍នេះនឹងត្រូវលុបជាអចិន្ត្រៃយ៍។";
+"sync.conflict.useCloud.warning" = "ទិន្នន័យក្នុងឧបករណ៍នេះនឹងត្រូវលុប";
+"sync.conflict.keepLocal.title" = "រក្សាទុកទិន្នន័យឧបករណ៍នេះ";
+"sync.conflict.keepLocal.message" = "រក្សាទុកទិន្នន័យក្នុងឧបករណ៍នេះ ហើយផ្ទុកឡើងទៅ Cloud។ ទិន្នន័យ Cloud ដែលមានស្រាប់នឹងត្រូវលុបជាអចិន្ត្រៃយ៍។";
+"sync.conflict.keepLocal.warning" = "ទិន្នន័យ Cloud នឹងត្រូវលុប";
+"sync.conflict.decideLater" = "សម្រេចចិត្តពេលក្រោយ";
+"sync.conflict.decideLater.footer" = "បិទសមកាលកម្ម Cloud ជាបណ្ដោះអាសន្ន — គ្មានអ្វីត្រូវលុបទេ។ អ្នកអាចបើកវាឡើងវិញនៅពេលណាក៏បានក្នុងការកំណត់។";
+"sync.conflict.applying" = "កំពុងអនុវត្ត…";
+
+// MARK: - UX consistency pass: CSV import
+"csv.selectFilePrompt" = "ជ្រើសរើសឯកសារ CSV ដែលមានប្រតិបត្តិការរបស់អ្នកដើម្បីនាំចូល។";
+"csv.supportedColumns" = "ជួរឈរដែលគាំទ្រ";
+"csv.mapPrompt" = "ផ្គូផ្គងជួរឈរ CSV ទៅនឹងវាលប្រតិបត្តិការ។";
+"csv.requiredFields" = "វាលចាំបាច់";
+"csv.optionalFields" = "វាលជាជម្រើស";
+"csv.defaultWalletSection" = "កាបូបលំនាំដើម";
+"csv.totalRows" = "ចំនួនជួរដេកសរុបដែលរកឃើញ";
+"csv.rowsAnalyzed" = "ជួរដេកដែលបានវិភាគ (មើលជាមុន)";
+"csv.validPreviewRows" = "ជួរដេកត្រឹមត្រូវ (មើលជាមុន)";
+"csv.previewBasedOn" = "ការមើលជាមុនផ្អែកលើ %d ជួរដេកដំបូង";
+"csv.skippedRowsPreview" = "ជួរដេកដែលបានរំលង (មើលជាមុន)";
+
+// MARK: - UX consistency pass: Auth
+"auth.password" = "ពាក្យសម្ងាត់";
+"auth.confirmPassword" = "បញ្ជាក់ពាក្យសម្ងាត់";
+"auth.newPassword" = "ពាក្យសម្ងាត់ថ្មី";
+"auth.confirmNewPassword" = "បញ្ជាក់ពាក្យសម្ងាត់ថ្មី";
+"auth.passwordsDontMatch" = "ពាក្យសម្ងាត់មិនដូចគ្នាទេ។";
+"auth.passwordMinLength" = "ប្រើយ៉ាងតិច ៦ តួអក្សរ។";
+"auth.magicLinkInstead" = "ផ្ញើតំណចូលគណនីតាមអ៊ីមែលជំនួសវិញ";
+"auth.forgotPassword" = "ភ្លេចពាក្យសម្ងាត់?";
+"auth.setNewPassword" = "កំណត់ពាក្យសម្ងាត់ថ្មី";
+"auth.updatePassword" = "ធ្វើបច្ចុប្បន្នភាពពាក្យសម្ងាត់";
+
+// MARK: - UX consistency pass: Account
+"account.cloudSync" = "សមកាលកម្ម Cloud";
+"account.notConfigured" = "សមកាលកម្ម Cloud មិនត្រូវបានកំណត់រចនាសម្ព័ន្ធក្នុងកំណែនេះទេ។";
+"account.offlineFooter" = "ពេលបិទ QuaraMoney ដំណើរការក្រៅបណ្ដាញទាំងស្រុងនៅលើឧបករណ៍នេះ។";
+"account.unsyncedWarning" = "ឧបករណ៍នេះនៅមានការផ្លាស់ប្ដូរដែលមិនទាន់ធ្វើសមកាលកម្មពីគណនីមុន។ សូមចូលគណនីនោះវិញដើម្បីរក្សាទុកវា — ការចូលគណនីផ្សេងនឹងលុបវាចេញពីឧបករណ៍នេះ។";
+"account.backUp.title" = "បម្រុងទុកទិន្នន័យរបស់អ្នក";
+"account.backUp.message" = "ចូលគណនីដើម្បីឱ្យកាបូប ប្រតិបត្តិការ និងថវិការបស់អ្នកត្រូវបានបម្រុងទុកដោយសុវត្ថិភាព និងតាមអ្នកទៅគ្រប់ឧបករណ៍។";
+"account.signIn" = "ចូលគណនី";
+"account.createAccount" = "បង្កើតគណនី";
+"account.signedIn" = "បានចូលគណនី";
+"account.syncNow" = "ធ្វើសមកាលកម្មឥឡូវនេះ";
+"account.initialUpload" = "កំពុងផ្ទុកឡើងទិន្នន័យរបស់អ្នកជាលើកដំបូង។ សូមទុកកម្មវិធីឱ្យបើកចោល។";
+"account.signOut" = "ចាកចេញពីគណនី";
+"account.deleteAccount" = "លុបគណនី…";
+"account.deleteFooter" = "លុបគណនីរបស់អ្នក និងទិន្នន័យដែលបានធ្វើសមកាលកម្មទាំងអស់ចេញពី Cloud និងឧបករណ៍នេះជាអចិន្ត្រៃយ៍។";
+"account.deleteConfirm.title" = "លុបគណនីរបស់អ្នក?";
+"account.deleteConfirm.action" = "លុបគណនី និងទិន្នន័យទាំងអស់";
+"account.deleteConfirm.message" = "វានឹងលុបគណនីរបស់អ្នក ទិន្នន័យដែលបានធ្វើសមកាលកម្មទាំងអស់ និងរូបភាពវិក្កយបត្រចេញពី Cloud ជាអចិន្ត្រៃយ៍ ព្រមទាំងលុបទិន្នន័យចេញពីឧបករណ៍នេះ។ វាមិនអាចត្រឡប់វិញបានទេ។";
+"account.sync.settingUp" = "កំពុងរៀបចំសមកាលកម្ម Cloud…";
+"account.sync.syncing" = "កំពុងធ្វើសមកាលកម្ម…";
+"account.sync.issue" = "បញ្ហាសមកាលកម្ម";
+"account.sync.upToDate" = "ទាន់សម័យ";
+"account.sync.waiting" = "កំពុងរង់ចាំសមកាលកម្មដំបូង";
+"account.sync.updating" = "កំពុងធ្វើបច្ចុប្បន្នភាពទិន្នន័យរបស់អ្នក";
+"account.sync.lastSynced" = "បានធ្វើសមកាលកម្មចុងក្រោយ %@";
+"account.sync.tapToUpload" = "ចុចសមកាលកម្មដើម្បីផ្ទុកឡើងទិន្នន័យរបស់អ្នក";
+
+// MARK: - UX consistency pass: Accessibility
+"a11y.sortTransactions" = "តម្រៀបប្រតិបត្តិការ";
+"a11y.addTransactionOn" = "បន្ថែមប្រតិបត្តិការនៅ %@";
+"a11y.scanReceipt" = "ស្កេនវិក្កយបត្រ";
+"a11y.saveTransaction" = "រក្សាទុកប្រតិបត្តិការ";
+"a11y.netWorth" = "ទ្រព្យសម្បត្តិសុទ្ធ %@";
+"a11y.editBudget" = "កែសម្រួលថវិកា";
+"a11y.budgetPercentUsed" = "ថវិកាបានប្រើ %d ភាគរយ";
+"a11y.budgetPercentOver" = "ថវិកាលើសកំណត់ %d ភាគរយ";
+
+// MARK: - UX consistency pass: misc
+"common.type" = "ប្រភេទ";
+"common.section" = "ផ្នែក";
+"savings.behind" = "យឺតជាងផែនការ";
+"budget.insights.overBudgetFrequency" = "លើសថវិកា %@ នៃពេលទាំងអស់";
+"event.poolLabel" = "ថវិការួម៖";
+"event.edit" = "កែសម្រួលព្រឹត្តិការណ៍";
+"event.endDate" = "កាលបរិច្ឆេទបញ្ចប់";
+"event.member.isMe" = "នេះគឺខ្ញុំ";
+"event.member.selectIcon" = "ជ្រើសរើសរូបតំណាង";
+"event.ledger.useEventWallet" = "ប្រើកាបូបព្រឹត្តិការណ៍";
+"event.ledger.splitEqually" = "បែងចែកស្មើគ្នាជាមួយគ្រប់គ្នា";
+"event.ledger.contributionFooter" = "ការបរិច្ចាគបង្កើនសមតុល្យកាបូបព្រឹត្តិការណ៍។";
+"event.ledger.entryType" = "ប្រភេទធាតុ";
+"event.emptyExpenses" = "ចាប់ផ្ដើមតាមដានដោយបន្ថែមចំណាយ។";
+
+// MARK: - UX consistency pass: extras discovered in deep read
+"auth.welcomeBack" = "សូមស្វាគមន៍ការត្រឡប់មកវិញ";
+"auth.createYourAccount" = "បង្កើតគណនីរបស់អ្នក";
+"auth.signInSubtitle" = "ចូលគណនីដើម្បីរក្សាទិន្នន័យរបស់អ្នកឱ្យបានបម្រុងទុក និងធ្វើសមកាលកម្ម។";
+"auth.signUpSubtitle" = "កាបូប ប្រតិបត្តិការ និងថវិការបស់អ្នក — បម្រុងទុកដោយសុវត្ថិភាពក្នុង Cloud។";
+"auth.name" = "ឈ្មោះ";
+"auth.email" = "អ៊ីមែល";
+"auth.showPassword" = "បង្ហាញពាក្យសម្ងាត់";
+"auth.hidePassword" = "លាក់ពាក្យសម្ងាត់";
+"auth.noAccountPrompt" = "មិនទាន់មានគណនី?";
+"auth.haveAccountPrompt" = "មានគណនីរួចហើយ?";
+"auth.signUp" = "ចុះឈ្មោះ";
+"common.none" = "គ្មាន";
+"common.errorOccurred" = "មានកំហុសកើតឡើង។";
+"common.invalid" = "មិនត្រឹមត្រូវ";
+"csv.fallbackWallet" = "កាបូបជំនួស";
+"csv.previewImport" = "មើលការនាំចូលជាមុន";
+"csv.moreRowsNotShown" = "... និង %d ជួរដេកទៀតមិនបានបង្ហាញ";
+"csv.field.date" = "កាលបរិច្ឆេទ";
+"csv.field.amount" = "ចំនួនទឹកប្រាក់";
+"csv.field.type" = "ប្រភេទ";
+"csv.field.category" = "ប្រភេទចំណាយ";
+"csv.field.note" = "កំណត់ចំណាំ";
+"csv.field.wallet" = "កាបូប";
+"auth.resetSubtitleWithEmail" = "អ្នកបានចូលគណនីជា %@។ សូមជ្រើសរើសពាក្យសម្ងាត់ថ្មីដើម្បីបញ្ចប់ការកំណត់ឡើងវិញ។";
+"auth.resetSubtitle" = "អ្នកបានចូលគណនីរួចហើយ។ សូមជ្រើសរើសពាក្យសម្ងាត់ថ្មីដើម្បីបញ្ចប់ការកំណត់ឡើងវិញ។";
+"currency.allCurrencies" = "រូបិយប័ណ្ណទាំងអស់";
+"common.searchResults" = "លទ្ធផលស្វែងរក";
+"budget.insights.periodsCount" = "%d រយៈពេល";
+"common.name" = "ឈ្មោះ";
+"event.locationOptional" = "ទីតាំង (ជាជម្រើស)";
+"event.noExpensesYet" = "មិនទាន់មានចំណាយ";
+"common.unknown" = "មិនស្គាល់";

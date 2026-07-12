@@ -80,7 +80,7 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                         }
                     } header: {
                         Text("filter.period".localized)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
                 
@@ -92,7 +92,7 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                             selection: $pendingStartDate,
                             displayedComponents: .date
                         )
-                        .font(.app(.body))
+                        .appFont(.body)
                         
                         DatePicker(
                             "filter.endDate".localized,
@@ -100,10 +100,10 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                             in: pendingStartDate...,
                             displayedComponents: .date
                         )
-                        .font(.app(.body))
+                        .appFont(.body)
                     } header: {
                         Text(L10n.Wallet.customRange)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -140,11 +140,11 @@ struct FilterSheetView<Period: Hashable & Identifiable & CaseIterable & Localiza
                     } header: {
                         HStack {
                             Text("filter.wallet".localized)
-                                .font(.app(.caption))
+                                .appFont(.caption)
                             Spacer()
                             if !pendingWalletIds.isEmpty {
                                 Text("analysis.pro.filter.nSelected".localized(with: pendingWalletIds.count))
-                                    .font(.app(.caption2))
+                                    .appFont(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -257,7 +257,7 @@ struct FilterSheetButton<Period: Hashable & Identifiable & CaseIterable & Locali
         } label: {
             Image(systemName: "line.3.horizontal.decrease")
                 .symbolVariant(isFilterActive ? .fill : .none)
-                .font(.app(.title3))
+                .appFont(.title3)
                 // Only show blue if filter is active (not default)
                 // User req: "The filter button should not show the blue shine that indicate that not default option are selected when the default option are selected"
                 .foregroundStyle(isFilterActive ? .blue : .primary)

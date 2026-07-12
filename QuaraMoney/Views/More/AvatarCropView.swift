@@ -67,7 +67,7 @@ struct AvatarCropView: View {
             .gesture(doubleTapGesture(in: geo.size, diameter: diameter))
             .overlay(alignment: .top) {
                 Text("profile.moveAndScale".localized)
-                    .font(.app(.headline, weight: .semibold))
+                    .appFont(.headline, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.top, 16)
             }
@@ -116,7 +116,7 @@ struct AvatarCropView: View {
             }
             .buttonStyle(.glassProminent)
         }
-        .font(.app(.body, weight: .semibold))
+        .appFont(.body, weight: .semibold)
         .padding(.horizontal, 24)
         .padding(.bottom, 12)
     }

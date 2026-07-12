@@ -29,7 +29,7 @@ struct EventSummaryCard: View {
                 
                 if remainingPool != 0 {
                     HStack(spacing: 4) {
-                        Text("Pool:")
+                        Text("event.poolLabel".localized)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(formatMinor(remainingPool))

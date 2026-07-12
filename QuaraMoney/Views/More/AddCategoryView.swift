@@ -54,7 +54,7 @@ struct AddCategoryView: View {
                         .disabled(isSystemCategory)
 
                     // Dropdown menu style type picker.
-                    Picker("Type", selection: $selectedType) {
+                    Picker("common.type".localized, selection: $selectedType) {
                         Text("category.expense".localized).tag(TransactionType.expense)
                         Text("category.income".localized).tag(TransactionType.income)
                     }
@@ -75,7 +75,7 @@ struct AddCategoryView: View {
                             Image(systemName: selectedIcon)
                                 .foregroundStyle(categoryColor)
                             Image(systemName: "chevron.right")
-                                .font(.app(.footnote, weight: .semibold))
+                                .appFont(.footnote, weight: .semibold)
                                 .foregroundStyle(.tertiary)
                         }
                         .contentShape(Rectangle())
@@ -162,9 +162,9 @@ struct AddCategoryView: View {
             // Name + type as a tag chip.
             HStack(spacing: 6) {
                 Image(systemName: selectedType == .income ? "arrow.down.left" : "arrow.up.right")
-                    .font(.app(.caption2, weight: .bold))
+                    .appFont(.caption2, weight: .bold)
                 Text(name.isEmpty ? "category.name".localized : name)
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .lineLimit(1)
             }
             .foregroundStyle(categoryColor)
@@ -199,7 +199,7 @@ struct AddCategoryView: View {
                                 .frame(width: 32, height: 32)
                             if isSelected {
                                 Image(systemName: "checkmark")
-                                    .font(.app(.caption, weight: .bold))
+                                    .appFont(.caption, weight: .bold)
                                     .foregroundStyle(.white)
                             }
                         }
@@ -232,5 +232,6 @@ struct AddCategoryView: View {
             let category = Category(name: name, icon: selectedIcon, colorHex: selectedColorHex, type: selectedType)
             modelContext.insert(category)
         }
+        HapticManager.shared.success()
     }
 }

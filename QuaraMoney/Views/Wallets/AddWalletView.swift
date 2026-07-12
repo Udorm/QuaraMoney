@@ -42,7 +42,7 @@ struct AddWalletView: View {
                             Text(viewModel.currencyCode)
                                 .foregroundStyle(.secondary)
                             Image(systemName: "chevron.up.chevron.down")
-                                .font(.app(.footnote, weight: .semibold))
+                                .appFont(.footnote, weight: .semibold)
                                 .foregroundStyle(.tertiary)
                         }
                         .contentShape(Rectangle())
@@ -63,7 +63,7 @@ struct AddWalletView: View {
                             Image(systemName: viewModel.icon)
                                 .foregroundStyle(walletColor)
                             Image(systemName: "chevron.right")
-                                .font(.app(.footnote, weight: .semibold))
+                                .appFont(.footnote, weight: .semibold)
                                 .foregroundStyle(.tertiary)
                         }
                         .contentShape(Rectangle())
@@ -162,11 +162,11 @@ struct AddWalletView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.isEditing ? L10n.Wallet.edit : L10n.Wallet.new)
-                        .font(.app(.caption2, weight: .semibold))
+                        .appFont(.caption2, weight: .semibold)
                         .foregroundStyle(.white.opacity(0.7))
                         .textCase(.uppercase)
                     Text(viewModel.name.isEmpty ? L10n.Wallet.name : viewModel.name)
-                        .font(.app(.title2, weight: .bold))
+                        .appFont(.title2, weight: .bold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -185,7 +185,7 @@ struct AddWalletView: View {
 
             HStack {
                 Text(viewModel.currencyCode)
-                    .font(.app(.caption, weight: .semibold))
+                    .appFont(.caption, weight: .semibold)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
@@ -194,7 +194,7 @@ struct AddWalletView: View {
                 Spacer()
 
                 Text("QuaraMoney")
-                    .font(.app(.caption2, weight: .semibold))
+                    .appFont(.caption2, weight: .semibold)
                     .foregroundStyle(.white.opacity(0.55))
             }
         }
@@ -247,7 +247,7 @@ struct AddWalletView: View {
                                 .frame(width: 32, height: 32)
                             if isSelected {
                                 Image(systemName: "checkmark")
-                                    .font(.app(.caption, weight: .bold))
+                                    .appFont(.caption, weight: .bold)
                                     .foregroundStyle(.white)
                             }
                         }

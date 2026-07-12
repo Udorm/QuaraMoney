@@ -173,7 +173,7 @@ struct EditBudgetView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("\(Int(percentageValue))%")
-                                    .font(.app(.title2, weight: .bold))
+                                    .appFont(.title2, weight: .bold)
                                     .monospacedDigit()
                                 Spacer()
                                 Text(L10n.Budget.ofIncome)
@@ -194,7 +194,7 @@ struct EditBudgetView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Text(selectedCurrency)
-                                        .font(.app(.subheadline, weight: .bold))
+                                        .appFont(.subheadline, weight: .bold)
                                     Image(systemName: "chevron.down")
                                         .font(.caption2)
                                         .fontWeight(.bold)
@@ -267,7 +267,7 @@ struct EditBudgetView: View {
                         Toggle(L10n.Budget.alertAt(100), isOn: $alertAt100)
                     } header: {
                         Label(L10n.Budget.notifications, systemImage: "bell.fill")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     
@@ -289,7 +289,7 @@ struct EditBudgetView: View {
                             Text(L10n.Budget.rolloverAmountLabel)
                             Spacer()
                             Text(budget.rolloverAmount.formattedAmount(for: budget.currencyCode))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(ThemeManager.shared.incomeColor)
                         }
                     }
                 }
@@ -375,7 +375,8 @@ struct EditBudgetView: View {
         
         // Update category type
         budget.budgetCategoryType = budgetCategoryType
-        
+
+        HapticManager.shared.success()
     }
 }
 

@@ -155,7 +155,7 @@ struct BudgetInsightsView: View {
                         title: "budget.budgetsMet".localized,
                         value: "\(Int(budgetPerformanceScore * 100))%",
                         subtitle: "common.last".localized + " \(selectedTimeRange.months) " + "common.months".localized,
-                        color: budgetPerformanceScore >= 0.7 ? .green : (budgetPerformanceScore >= 0.5 ? .orange : .red)
+                        color: budgetPerformanceScore >= 0.7 ? ThemeManager.shared.incomeColor : (budgetPerformanceScore >= 0.5 ? .orange : ThemeManager.shared.expenseColor)
                     )
                     
                     MetricCard(
@@ -259,8 +259,8 @@ enum SpendingTrend {
     
     var color: Color {
         switch self {
-        case .increasing: return .red
-        case .decreasing: return .green
+        case .increasing: return ThemeManager.shared.expenseColor
+        case .decreasing: return ThemeManager.shared.incomeColor
         case .stable: return .accentColor
         }
     }
@@ -306,9 +306,9 @@ struct PerformanceScoreCard: View {
     let activeBudgetsCount: Int
     
     private var scoreColor: Color {
-        if score >= 0.8 { return .green }
+        if score >= 0.8 { return ThemeManager.shared.incomeColor }
         if score >= 0.6 { return .orange }
-        return .red
+        return ThemeManager.shared.expenseColor
     }
     
     private var scoreGrade: String {
@@ -324,13 +324,13 @@ struct PerformanceScoreCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("budget.performance".localized)
-                        .font(.app(.headline))
+                        .appFont(.headline)
                     
                     HStack(spacing: 8) {
                         Image(systemName: trend.icon)
                             .foregroundStyle(trend.color)
                         Text(trend.description)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -348,7 +348,7 @@ struct PerformanceScoreCard: View {
                         .rotationEffect(.degrees(-90))
                     
                     Text(scoreGrade)
-                        .font(.app(.title, weight: .bold))
+                        .appFont(.title, weight: .bold)
                         .foregroundStyle(scoreColor)
                 }
                 .frame(width: 60, height: 60)
@@ -358,9 +358,9 @@ struct PerformanceScoreCard: View {
             HStack(spacing: 20) {
                 VStack(spacing: 4) {
                     Text("\(Int(score * 100))%")
-                        .font(.app(.title3, weight: .bold))
+                        .appFont(.title3, weight: .bold)
                     Text("budget.successRate".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -369,9 +369,9 @@ struct PerformanceScoreCard: View {
                 
                 VStack(spacing: 4) {
                     Text("\(activeBudgetsCount)")
-                        .font(.app(.title3, weight: .bold))
+                        .appFont(.title3, weight: .bold)
                     Text(L10n.Budget.Filter.active)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -388,7 +388,7 @@ struct MonthlyTrendChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("budget.monthlyUtilization".localized)
-                .font(.app(.headline))
+                .appFont(.headline)
             
             Chart {
                 ForEach(data) { stat in
@@ -403,7 +403,7 @@ struct MonthlyTrendChart: View {
                         x: .value("Month", stat.month, unit: .month),
                         y: .value("Spent", stat.spent)
                     )
-                    .foregroundStyle(stat.spent > stat.budgeted ? Color.red.gradient : Color.green.gradient)
+                    .foregroundStyle(stat.spent > stat.budgeted ? ThemeManager.shared.expenseColor.gradient : ThemeManager.shared.incomeColor.gradient)
                     .cornerRadius(4)
                 }
             }
@@ -422,25 +422,25 @@ struct MonthlyTrendChart: View {
                         .fill(Color.accentColor.opacity(0.3))
                         .frame(width: 10, height: 10)
                     Text("budget.budgeted".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.green)
+                        .fill(ThemeManager.shared.incomeColor)
                         .frame(width: 10, height: 10)
                     Text("budget.underBudget".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.red)
+                        .fill(ThemeManager.shared.expenseColor)
                         .frame(width: 10, height: 10)
                     Text("budget.overBudget".localized)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -460,15 +460,15 @@ struct MetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
             
             Text(value)
-                .font(.app(.title, weight: .bold))
+                .appFont(.title, weight: .bold)
                 .foregroundStyle(color)
             
             Text(subtitle)
-                .font(.app(.caption2))
+                .appFont(.caption2)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -487,7 +487,7 @@ struct OverspendingCategoriesCard: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text("budget.attentionCategories".localized)
-                    .font(.app(.headline))
+                    .appFont(.headline)
             }
             
             ForEach(categories.prefix(3)) { item in
@@ -498,16 +498,16 @@ struct OverspendingCategoriesCard: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.category.displayName)
-                            .font(.app(.subheadline))
-                        Text("Over budget \(item.percentage) of the time")
-                            .font(.app(.caption))
+                            .appFont(.subheadline)
+                        Text("budget.insights.overBudgetFrequency".localized(with: item.percentage))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
                     
-                    Text("\(item.totalPeriods) periods")
-                        .font(.app(.caption))
+                    Text("budget.insights.periodsCount".localized(with: item.totalPeriods))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
@@ -530,7 +530,7 @@ struct ActiveBudgetsSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("budget.activeBudgetsStatus".localized)
-                .font(.app(.headline))
+                .appFont(.headline)
             
             ForEach(budgets.prefix(5)) { budget in
                 let spent = calculateSpending(for: budget)
@@ -544,21 +544,21 @@ struct ActiveBudgetsSummary: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(budget.displayName)
-                            .font(.app(.subheadline, weight: .medium))
+                            .appFont(.subheadline, weight: .medium)
                         
                         ProgressView(value: min(progress, 1.0))
-                            .tint(progress > 1 ? .red : (progress > 0.8 ? .orange : .green))
+                            .tint(progress > 1 ? ThemeManager.shared.expenseColor : (progress > 0.8 ? .orange : ThemeManager.shared.incomeColor))
                     }
                     
                     Spacer()
                     
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("\(Int(progress * 100))%")
-                            .font(.app(.caption, weight: .semibold))
-                            .foregroundStyle(progress > 1 ? .red : (progress > 0.8 ? .orange : .green))
+                            .appFont(.caption, weight: .semibold)
+                            .foregroundStyle(progress > 1 ? ThemeManager.shared.expenseColor : (progress > 0.8 ? .orange : ThemeManager.shared.incomeColor))
                         
                         Text("\(budget.daysRemaining)d left")
-                            .font(.app(.caption2))
+                            .appFont(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -619,7 +619,7 @@ struct BudgetTipsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("budget.tips".localized)
-                .font(.app(.headline))
+                .appFont(.headline)
             
             ForEach(tips.prefix(3), id: \.title) { tip in
                 HStack(alignment: .top, spacing: 12) {
@@ -629,9 +629,9 @@ struct BudgetTipsCard: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(tip.title)
-                            .font(.app(.subheadline, weight: .medium))
+                            .appFont(.subheadline, weight: .medium)
                         Text(tip.description)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }

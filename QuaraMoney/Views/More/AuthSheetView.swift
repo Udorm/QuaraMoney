@@ -1,9 +1,6 @@
 import SwiftUI
 
 /// Dedicated sign-in / create-account sheet, presented from `AccountView`.
-///
-/// Cloud-sync/auth copy is intentionally English-only for now, matching the
-/// rest of the beta sync UI in `AccountView`.
 struct AuthSheetView: View {
     enum Mode: String, Identifiable {
         case signIn, signUp
@@ -53,7 +50,7 @@ struct AuthSheetView: View {
                         messageBanner(
                             icon: "exclamationmark.triangle.fill",
                             tint: .orange,
-                            text: "This device still has unsynced changes from a previous account. Sign back in to that account to save them — signing in to a different account will remove them from this device."
+                            text: "account.unsyncedWarning".localized
                         )
                     }
 
@@ -117,20 +114,20 @@ struct AuthSheetView: View {
                     .shadow(color: .blue.opacity(0.3), radius: 12, y: 6)
 
                 Image(systemName: isSignIn ? "icloud.fill" : "person.crop.circle.fill.badge.plus")
-                    .font(.system(size: 32, weight: .medium))
+                    .appFont(size: 32, weight: .medium)
                     .foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
             }
 
             VStack(spacing: 6) {
-                Text(isSignIn ? "Welcome Back" : "Create Your Account")
-                    .font(.app(.title2, weight: .bold))
+                Text(isSignIn ? "auth.welcomeBack".localized : "auth.createYourAccount".localized)
+                    .appFont(.title2, weight: .bold)
                     .contentTransition(.opacity)
 
                 Text(isSignIn
-                     ? "Sign in to keep your data backed up and in sync."
-                     : "Your wallets, transactions, and budgets — securely backed up in the cloud.")
-                    .font(.app(.subheadline))
+                     ? "auth.signInSubtitle".localized
+                     : "auth.signUpSubtitle".localized)
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -146,8 +143,8 @@ struct AuthSheetView: View {
             VStack(spacing: 0) {
                 if !isSignIn {
                     fieldRow(icon: "person") {
-                        TextField("Name", text: $name)
-                            .font(.app(.body))
+                        TextField("auth.name".localized, text: $name)
+                            .appFont(.body)
                             .textContentType(.name)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
@@ -159,8 +156,8 @@ struct AuthSheetView: View {
                 }
 
                 fieldRow(icon: "envelope") {
-                    TextField("Email", text: $email)
-                        .font(.app(.body))
+                    TextField("auth.email".localized, text: $email)
+                        .appFont(.body)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -175,12 +172,12 @@ struct AuthSheetView: View {
                 fieldRow(icon: "lock") {
                     Group {
                         if showPassword {
-                            TextField("Password", text: $password)
+                            TextField("auth.password".localized, text: $password)
                         } else {
-                            SecureField("Password", text: $password)
+                            SecureField("auth.password".localized, text: $password)
                         }
                     }
-                    .font(.app(.body))
+                    .appFont(.body)
                     .textContentType(isSignIn ? .password : .newPassword)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -198,11 +195,11 @@ struct AuthSheetView: View {
                         showPassword.toggle()
                     } label: {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                    .accessibilityLabel(showPassword ? "auth.hidePassword".localized : "auth.showPassword".localized)
                 }
 
                 if !isSignIn {
@@ -211,12 +208,12 @@ struct AuthSheetView: View {
                     fieldRow(icon: "lock.rotation") {
                         Group {
                             if showPassword {
-                                TextField("Confirm password", text: $confirmPassword)
+                                TextField("auth.confirmPassword".localized, text: $confirmPassword)
                             } else {
-                                SecureField("Confirm password", text: $confirmPassword)
+                                SecureField("auth.confirmPassword".localized, text: $confirmPassword)
                             }
                         }
-                        .font(.app(.body))
+                        .appFont(.body)
                         .textContentType(.newPassword)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -233,13 +230,13 @@ struct AuthSheetView: View {
 
             if !isSignIn {
                 if !confirmPassword.isEmpty && !passwordsMatch {
-                    Label("Passwords don't match.", systemImage: "exclamationmark.circle")
-                        .font(.app(.caption))
+                    Label("auth.passwordsDontMatch".localized, systemImage: "exclamationmark.circle")
+                        .appFont(.caption)
                         .foregroundStyle(.red)
                         .padding(.leading, 16)
                 } else {
-                    Text("Use at least 6 characters.")
-                        .font(.app(.caption))
+                    Text("auth.passwordMinLength".localized)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 16)
                 }
@@ -274,14 +271,14 @@ struct AuthSheetView: View {
         } label: {
             ZStack {
                 // Keep the button height stable while the label swaps to a spinner.
-                Text(isSignIn ? "Sign In" : "Create Account").hidden()
+                Text(isSignIn ? "account.signIn".localized : "account.createAccount".localized).hidden()
                 if auth.isWorking {
                     ProgressView()
                 } else {
-                    Text(isSignIn ? "Sign In" : "Create Account")
+                    Text(isSignIn ? "account.signIn".localized : "account.createAccount".localized)
                 }
             }
-            .font(.app(.body, weight: .semibold))
+            .appFont(.body, weight: .semibold)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
@@ -293,8 +290,8 @@ struct AuthSheetView: View {
         Button {
             Task { await auth.sendMagicLink(email: email) }
         } label: {
-            Label("Email me a sign-in link instead", systemImage: "wand.and.sparkles")
-                .font(.app(.footnote, weight: .medium))
+            Label("auth.magicLinkInstead".localized, systemImage: "wand.and.sparkles")
+                .appFont(.footnote, weight: .medium)
         }
         .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
     }
@@ -303,18 +300,18 @@ struct AuthSheetView: View {
         Button {
             Task { await auth.sendPasswordReset(email: email) }
         } label: {
-            Text("Forgot password?")
-                .font(.app(.footnote, weight: .medium))
+            Text("auth.forgotPassword".localized)
+                .appFont(.footnote, weight: .medium)
         }
         .disabled(auth.isWorking || email.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     private var modeSwitchFooter: some View {
         HStack(spacing: 4) {
-            Text(isSignIn ? "Don't have an account?" : "Already have an account?")
+            Text(isSignIn ? "auth.noAccountPrompt".localized : "auth.haveAccountPrompt".localized)
                 .foregroundStyle(.secondary)
 
-            Button(isSignIn ? "Sign Up" : "Sign In") {
+            Button(isSignIn ? "auth.signUp".localized : "account.signIn".localized) {
                 withAnimation(.snappy) {
                     mode = isSignIn ? .signUp : .signIn
                 }
@@ -323,7 +320,7 @@ struct AuthSheetView: View {
             .fontWeight(.semibold)
             .disabled(auth.isWorking)
         }
-        .font(.app(.footnote))
+        .appFont(.footnote)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .background(.bar)
@@ -334,7 +331,7 @@ struct AuthSheetView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.app(.caption))
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

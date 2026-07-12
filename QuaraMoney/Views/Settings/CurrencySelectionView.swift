@@ -51,12 +51,12 @@ struct CurrencySelectionView: View {
                     currencyRow(code)
                 }
             } header: {
-                sectionHeader(searchText.isEmpty ? "All Currencies" : "Search Results")
+                sectionHeader(searchText.isEmpty ? "currency.allCurrencies".localized : "common.searchResults".localized)
             }
         }
         .listStyle(.insetGrouped)
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle("Select Currency")
+        .navigationTitle("settings.selectCurrency".localized)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -74,11 +74,11 @@ struct CurrencySelectionView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.app(.body))
+                .appFont(.body)
                 .foregroundStyle(.secondary)
 
             TextField("Search Currency", text: $searchText)
-                .font(.app(.body))
+                .appFont(.body)
                 .autocorrectionDisabled()
                 .focused($isSearchFocused)
 
@@ -101,7 +101,7 @@ struct CurrencySelectionView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.app(.headline))
+            .appFont(.headline)
             .foregroundStyle(.primary)
             .textCase(nil)
     }
@@ -118,7 +118,7 @@ struct CurrencySelectionView: View {
         } label: {
             HStack(spacing: 12) {
                 Text(currencyDisplaySymbol(for: code))
-                    .font(.app(.subheadline, weight: .semibold))
+                    .appFont(.subheadline, weight: .semibold)
                     .foregroundColor(.white)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
@@ -128,17 +128,17 @@ struct CurrencySelectionView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(code)
-                        .font(.app(.body))
+                        .appFont(.body)
                         .foregroundStyle(.primary)
                     Text(currencyName(for: code))
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
                 Text(Double(100).formattedAmount(for: code))
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
 
                 if isSelected(code) {

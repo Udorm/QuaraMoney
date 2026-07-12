@@ -64,13 +64,13 @@ struct AdjustBalanceView: View {
                     // the same entry, not a detached field at the bottom.
                     HStack(spacing: 10) {
                         Image(systemName: "note.text")
-                            .font(.app(.footnote, weight: .semibold))
+                            .appFont(.footnote, weight: .semibold)
                             .foregroundStyle(.secondary)
                             .frame(width: 24)
                         TextField("transaction.noteOptional".localized, text: $viewModel.note)
                             .focused($isNoteFocused)
                             .submitLabel(.done)
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                     }
                     .listRowSeparator(.hidden)
                 }
@@ -166,7 +166,7 @@ struct AdjustBalanceView: View {
                     .fill(directionColor.opacity(0.15))
                     .frame(width: 34, height: 34)
                 Image(systemName: "arrow.right")
-                    .font(.app(.footnote, weight: .bold))
+                    .appFont(.footnote, weight: .bold)
                     .foregroundStyle(directionColor)
             }
             .accessibilityHidden(true)
@@ -183,13 +183,13 @@ struct AdjustBalanceView: View {
     private func balanceColumn(label: String, value: Decimal, tint: Color) -> some View {
         VStack(spacing: 4) {
             Text(label)
-                .font(.app(.caption2, weight: .semibold))
+                .appFont(.caption2, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(value.formattedAmount(for: viewModel.wallet.currencyCode))
-                .font(.app(.title3, weight: .bold))
+                .appFont(.title3, weight: .bold)
                 .monospacedDigit()
                 .foregroundStyle(tint)
                 .lineLimit(1)

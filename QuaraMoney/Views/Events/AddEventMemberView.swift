@@ -51,7 +51,7 @@ struct AddEventMemberView: View {
                                     showingIconPicker = true
                                 }
                             }
-                            .font(.app(.caption, weight: .medium))
+                            .appFont(.caption, weight: .medium)
                         }
                         Spacer()
                     }
@@ -60,8 +60,8 @@ struct AddEventMemberView: View {
                 }
 
                 Section(L10n.EventMember.details) {
-                    TextField("Name", text: $name)
-                    Toggle("This is me", isOn: $isLocalUser)
+                    TextField("common.name".localized, text: $name)
+                    Toggle("event.member.isMe".localized, isOn: $isLocalUser)
                 }
                 
                 Section(L10n.EventMember.color) {
@@ -91,7 +91,7 @@ struct AddEventMemberView: View {
                     Section {
                         Text(errorMessage)
                             .foregroundStyle(.red)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
             }
@@ -176,7 +176,7 @@ private struct MemberIconPickerView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Select Icon")
+            .navigationTitle("event.member.selectIcon".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

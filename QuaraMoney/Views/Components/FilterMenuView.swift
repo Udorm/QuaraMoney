@@ -65,7 +65,7 @@ struct FilterMenuView<Period: Hashable & Identifiable & CaseIterable & Localizab
             }
         } label: {
             Image(systemName: isFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .font(.app(.title3))
+                .appFont(.title3)
                 .foregroundStyle(isFilterActive ? .blue : .primary)
         }
     }

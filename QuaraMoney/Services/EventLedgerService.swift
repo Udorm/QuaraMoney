@@ -431,6 +431,16 @@ final class EventLedgerService {
         bumpLedgerRevision(for: event)
         try save()
     }
+
+    /// Undoes `deleteTransaction` by clearing the tombstones it set.
+    func restoreTransaction(_ transaction: EventLedgerTransaction) throws {
+        transaction.markRestored()
+        transaction.participants?.forEach { $0.markRestored() }
+        if let event = transaction.event {
+            bumpLedgerRevision(for: event)
+        }
+        try save()
+    }
     
     // MARK: - Settlement
     
@@ -722,11 +732,17 @@ final class EventLedgerService {
     }
     
     private func fetchParticipantLinks(eventId: UUID) throws -> [EventLedgerParticipant] {
+        // NOTE: Do not push `transaction?.event?.id == eventId` into the #Predicate.
+        // Core Data's SQL generator cannot translate a chained double optional-to-one
+        // relationship traversal and throws an ObjC NSException from NSSQLGenerator that
+        // bypasses Swift `try` and crashes the app (see removeOrArchiveMember). Fetch on
+        // the flat `deletedAt` scalar and filter the event hop in memory instead — this
+        // mirrors the @Query pattern the views already use for the same reason.
         let descriptor = FetchDescriptor<EventLedgerParticipant>(
-            predicate: #Predicate { $0.transaction?.event?.id == eventId && $0.deletedAt == nil },
+            predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.orderIndex)]
         )
-        return try modelContext.fetch(descriptor)
+        return try modelContext.fetch(descriptor).filter { $0.transaction?.event?.id == eventId }
     }
     
     private func participantLinksByTransaction(eventId: UUID) throws -> [UUID: [UUID]] {

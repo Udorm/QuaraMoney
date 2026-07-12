@@ -16,7 +16,7 @@ struct IconPickerView: View {
                     if let icons = AppTheme.icons[category] {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(getLocalizedCategory(category))
-                                .font(.app(.headline))
+                                .appFont(.headline)
                                 .foregroundStyle(.secondary)
                                 .padding(.leading, 4)
                             

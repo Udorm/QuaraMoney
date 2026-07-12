@@ -46,12 +46,12 @@ struct EventMapHeaderView: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(event.title)
-                        .font(.app(.title2, weight: .bold))
+                        .appFont(.title2, weight: .bold)
                         .foregroundStyle(.white)
                     
                     if let location = event.location {
                         Text(location)
-                            .font(.app(.subheadline))
+                            .appFont(.subheadline)
                             .foregroundStyle(.white.opacity(0.8))
                     }
                 }

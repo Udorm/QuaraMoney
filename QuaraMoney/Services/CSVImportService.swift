@@ -19,6 +19,19 @@ enum CSVField: String, CaseIterable, Identifiable {
         case .type, .category, .note, .wallet: return false
         }
     }
+
+    /// Localized label for pickers/chips. `rawValue` stays English — it's
+    /// matched against CSV header names, not shown as-is in the UI.
+    var displayName: String {
+        switch self {
+        case .date: return "csv.field.date".localized
+        case .amount: return "csv.field.amount".localized
+        case .type: return "csv.field.type".localized
+        case .category: return "csv.field.category".localized
+        case .note: return "csv.field.note".localized
+        case .wallet: return "csv.field.wallet".localized
+        }
+    }
 }
 
 struct CSVColumnMapping {

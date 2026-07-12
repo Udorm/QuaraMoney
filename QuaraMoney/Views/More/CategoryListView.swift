@@ -106,7 +106,7 @@ struct CategoryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: category.icon)
-                .font(.app(.subheadline))
+                .appFont(.subheadline)
                 .foregroundColor(.white)
                 .frame(width: 32, height: 32)
                 .background(Color(hex: category.colorHex) ?? .gray)
@@ -119,13 +119,13 @@ struct CategoryRow: View {
             // Lock badge signals the category can be viewed but not edited/deleted.
             if category.isSystem {
                 Image(systemName: "lock.fill")
-                    .font(.app(.caption))
+                    .appFont(.caption)
                     .foregroundColor(.secondary)
             }
 
             // Chevron signals the whole row is tappable (opens detail).
             Image(systemName: "chevron.right")
-                .font(.app(.footnote, weight: .semibold))
+                .appFont(.footnote, weight: .semibold)
                 .foregroundStyle(.tertiary)
         }
         .deleteDisabled(category.isSystem)

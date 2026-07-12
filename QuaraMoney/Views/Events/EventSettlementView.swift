@@ -133,42 +133,55 @@ struct EventSettlementView: View {
         
         NavigationStack {
             List {
-                Section(L10n.EventSettlement.summary) {
-                    HStack {
-                        Text(L10n.EventSettlement.totalCost)
-                        Spacer()
-                        Text(formatMinor(currentSettlement.totalCostMinor))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    HStack {
-                        Text(L10n.EventSettlement.totalContribution)
-                        Spacer()
-                        Text(formatMinor(currentSettlement.totalContributionMinor))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    HStack {
-                        Text(L10n.EventSettlement.remainingPool)
-                        Spacer()
-                        Text(formatMinor(currentSettlement.walletRemainingMinor))
-                            .foregroundStyle(currentSettlement.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
-                    }
-                    
-                    if let localMember {
+                // Lead with the answer the user opened this screen for.
+                if let localMember {
+                    Section("event.settlement.yourResult".localized) {
                         HStack {
                             Text(localMember.name)
                             Spacer()
                             Text(localNetLabel(for: localNetMinor))
+                                .appFont(.body, weight: .semibold)
                                 .foregroundStyle(localNetColor(for: localNetMinor))
                         }
                     }
                 }
-                
-                Section(L10n.EventSettlement.mode) {
-                    Toggle("One-counterparty mode (organizer)", isOn: $useSingleCoordinator)
+
+                Section("event.settlement.whoPaysWhom".localized) {
+                    let hasAnyTransfer = !currentSettlement.instructions.isEmpty
+                        || !walletIncomingInstructions.isEmpty
+                        || !walletOutgoingInstructions.isEmpty
+                    if !hasAnyTransfer {
+                        Text("event.settlement.allSettledUp".localized)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(currentSettlement.instructions.sorted(by: { $0.sequence < $1.sequence })) { instruction in
+                            transferRow(
+                                from: memberName(for: instruction.fromMemberId),
+                                to: memberName(for: instruction.toMemberId),
+                                amountMinor: instruction.amountMinor
+                            )
+                        }
+                        ForEach(walletIncomingInstructions) { instruction in
+                            transferRow(
+                                from: L10n.EventSettlement.wallet,
+                                to: memberName(for: instruction.memberId),
+                                amountMinor: instruction.amountMinor
+                            )
+                        }
+                        ForEach(walletOutgoingInstructions) { instruction in
+                            transferRow(
+                                from: memberName(for: instruction.memberId),
+                                to: L10n.EventSettlement.wallet,
+                                amountMinor: instruction.amountMinor
+                            )
+                        }
+                    }
+                }
+
+                Section {
+                    Toggle("event.settlement.settleThroughOne".localized, isOn: $useSingleCoordinator)
                     if useSingleCoordinator {
-                        Picker("Organizer", selection: Binding(
+                        Picker("event.settlement.whoSettles".localized, selection: Binding(
                             get: { effectiveCoordinatorMemberId },
                             set: { selectedCoordinatorMemberId = $0 }
                         )) {
@@ -177,90 +190,15 @@ struct EventSettlementView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        
-                        Text("Each member settles through one organizer.")
-                            .font(.app(.caption))
-                            .foregroundStyle(.secondary)
                     }
+                } footer: {
+                    Text("event.settlement.settleThroughOneHint".localized)
                 }
-                
-                Section(L10n.EventSettlement.fromWallet) {
-                    if walletIncomingInstructions.isEmpty && walletOutgoingInstructions.isEmpty {
-                        Text("No direct wallet settlement transfer.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(walletIncomingInstructions) { instruction in
-                            HStack {
-                                Text(L10n.EventSettlement.walletPays)
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(memberName(for: instruction.memberId))
-                                        .font(.app(.subheadline, weight: .medium))
-                                    Text(formatMinor(instruction.amountMinor))
-                                        .font(.app(.caption))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        ForEach(walletOutgoingInstructions) { instruction in
-                            HStack {
-                                Text("\(memberName(for: instruction.memberId)) pays")
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(L10n.EventSettlement.wallet)
-                                        .font(.app(.subheadline, weight: .medium))
-                                    Text(formatMinor(instruction.amountMinor))
-                                        .font(.app(.caption))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                Section(L10n.EventSettlement.memberTransfers) {
-                    if currentSettlement.instructions.isEmpty {
-                        Text("No member-to-member transfer needed.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(currentSettlement.instructions.sorted(by: { $0.sequence < $1.sequence })) { instruction in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(memberName(for: instruction.fromMemberId)) pays \(memberName(for: instruction.toMemberId))")
-                                    .font(.app(.body, weight: .medium))
-                                Text(formatMinor(instruction.amountMinor))
-                                    .font(.app(.subheadline))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                }
-                
-                Section(L10n.EventSettlement.balances) {
-                    ForEach(currentSettlement.balances) { balance in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(memberName(for: balance.memberId))
-                                Spacer()
-                                Text(memberNetLabel(for: balance.netMinor))
-                                    .foregroundStyle(localNetColor(for: balance.netMinor))
-                            }
-                            HStack(spacing: 12) {
-                                Text("Deposited \(formatMinor(balance.contributionMinor))")
-                                Text("Paid \(formatMinor(balance.personalPaidMinor))")
-                                Text("Share \(formatMinor(balance.shareMinor))")
-                            }
-                            .font(.app(.caption2))
-                            .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-                
-                Section(L10n.EventSettlement.exportToWallet) {
-                    Toggle("Export my net balance as one wallet transaction", isOn: $exportToWallet)
+
+                Section {
+                    Toggle("event.settlement.addShareToWallet".localized, isOn: $exportToWallet)
                     if exportToWallet {
-                        Picker("Wallet", selection: Binding(
+                        Picker(L10n.EventSettlement.wallet, selection: Binding(
                             get: { selectedWallet?.id },
                             set: { newId in
                                 selectedWallet = wallets.first(where: { $0.id == newId })
@@ -271,18 +209,62 @@ struct EventSettlementView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        
-                        Text("Only one transaction is exported. Individual event entries remain isolated.")
-                            .font(.app(.caption))
-                            .foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    if exportToWallet {
+                        Text("event.settlement.addShareToWalletHint".localized)
                     }
                 }
-                
+
+                Section("event.settlement.totals".localized) {
+                    HStack {
+                        Text(L10n.EventSettlement.totalCost)
+                        Spacer()
+                        Text(formatMinor(currentSettlement.totalCostMinor))
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text(L10n.EventSettlement.totalContribution)
+                        Spacer()
+                        Text(formatMinor(currentSettlement.totalContributionMinor))
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("event.settlement.moneyLeftInWallet".localized)
+                        Spacer()
+                        Text(formatMinor(currentSettlement.walletRemainingMinor))
+                            .foregroundStyle(currentSettlement.walletRemainingMinor >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
+                    }
+                }
+
+                Section {
+                    DisclosureGroup("event.settlement.memberBreakdown".localized) {
+                        ForEach(currentSettlement.balances) { balance in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(memberName(for: balance.memberId))
+                                    Spacer()
+                                    Text(memberNetLabel(for: balance.netMinor))
+                                        .foregroundStyle(localNetColor(for: balance.netMinor))
+                                }
+                                HStack(spacing: 12) {
+                                    Text("\("event.settlement.deposited".localized) \(formatMinor(balance.contributionMinor))")
+                                    Text("\("event.settlement.paid".localized) \(formatMinor(balance.personalPaidMinor))")
+                                    Text("\("event.settlement.share".localized) \(formatMinor(balance.shareMinor))")
+                                }
+                                .appFont(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+
                 if let errorMessage {
                     Section {
                         Text(errorMessage)
                             .foregroundStyle(.red)
-                            .font(.app(.caption))
+                            .appFont(.caption)
                     }
                 }
             }
@@ -342,34 +324,48 @@ struct EventSettlementView: View {
                     excludeFromReports: true
                 )
             }
+            HapticManager.shared.success()
             dismiss()
         } catch {
+            HapticManager.shared.error()
             errorMessage = error.localizedDescription
         }
     }
     
-    private func memberName(for memberId: UUID) -> String {
-        memberById[memberId]?.name ?? "Unknown"
+    /// A single "payer → payee : amount" row shared by member and wallet transfers.
+    private func transferRow(from: String, to: String, amountMinor: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("event.settlement.paysFormat".localized(with: from, to))
+                .appFont(.body, weight: .medium)
+            Text(formatMinor(amountMinor))
+                .appFont(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
-    
+
+    private func memberName(for memberId: UUID) -> String {
+        memberById[memberId]?.name ?? "event.settlement.unknownMember".localized
+    }
+
     private func localNetLabel(for value: Int64) -> String {
         if value > 0 {
-            return "You receive \(formatMinor(value))"
+            return "event.settlement.youReceiveFormat".localized(with: formatMinor(value))
         }
         if value < 0 {
-            return "You pay \(formatMinor(abs(value)))"
+            return "event.settlement.youPayFormat".localized(with: formatMinor(abs(value)))
         }
-        return "Settled"
+        return "event.settlement.settled".localized
     }
-    
+
     private func memberNetLabel(for value: Int64) -> String {
         if value > 0 {
-            return "Receive \(formatMinor(value))"
+            return "event.settlement.receiveFormat".localized(with: formatMinor(value))
         }
         if value < 0 {
-            return "Pay \(formatMinor(abs(value)))"
+            return "event.settlement.payFormat".localized(with: formatMinor(abs(value)))
         }
-        return "Settled"
+        return "event.settlement.settled".localized
     }
     
     private func localNetColor(for value: Int64) -> Color {

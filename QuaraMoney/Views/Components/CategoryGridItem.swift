@@ -26,7 +26,7 @@ struct CategoryGridItem: View {
                     }
 
                     Image(systemName: category.icon)
-                        .font(.app(.title3))
+                        .appFont(.title3)
                         .foregroundColor(isSelected ? .white : categoryColor)
                         .frame(width: 40, height: 40)
                         .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
@@ -39,7 +39,7 @@ struct CategoryGridItem: View {
                     // "Suggested" sparkle badge in the top-trailing corner
                     if isHighlighted && !isSelected {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 11, weight: .bold))
+                            .appFont(size: 11, weight: .bold)
                             .foregroundStyle(categoryColor)
                             .padding(3)
                             .background(Color(.secondarySystemGroupedBackground), in: Circle())
@@ -49,7 +49,7 @@ struct CategoryGridItem: View {
                 .frame(width: 46, height: 46)
 
                 Text(category.displayName)
-                    .font(.app(.caption2, weight: isSelected ? .bold : .regular))
+                    .appFont(.caption2, weight: isSelected ? .bold : .regular)
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? categoryColor : .secondary)
             }

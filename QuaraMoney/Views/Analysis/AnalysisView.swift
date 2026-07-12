@@ -52,7 +52,7 @@ struct AnalysisContentView: View {
                 VStack(spacing: 20) {
                     // Filter Description
                     Text(vm.filterDescription)
-                        .font(.app(.subheadline))
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
@@ -97,7 +97,15 @@ struct SpendingTrendChart: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // 1. Segmented Control
+            // 1a. Income/Expense toggle — the most common switch, kept one tap
+            // away in the chart card instead of buried in the filter sheet.
+            Picker("analysis.transactionType".localized, selection: $vm.selectedTransactionType) {
+                Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
+                Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
+            }
+            .pickerStyle(.segmented)
+
+            // 1b. Period Segmented Control
             Picker(L10n.Filter.title, selection: $vm.selectedPeriod) {
                 Text("analysis.period.w".localized).tag(AnalysisPeriod.week)
                 Text("analysis.period.m".localized).tag(AnalysisPeriod.month)
@@ -106,7 +114,7 @@ struct SpendingTrendChart: View {
                 Text("analysis.period.ly".localized).tag(AnalysisPeriod.lastYear)
             }
             .pickerStyle(.segmented)
-            
+
             // 2. Header Stats with Navigation
             HStack {
                 // Back Button
@@ -130,12 +138,12 @@ struct SpendingTrendChart: View {
                 
                 VStack(spacing: 4) {
                     Text(vm.selectedTransactionType == .expense ? "analysis.totalSpending".localized : "analysis.totalIncome".localized)
-                        .font(.app(.caption, weight: .semibold))
+                        .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.secondary)
                     
                     let amount = vm.selectedTransactionType == .expense ? vm.totalExpense : vm.totalIncome
                     Text(amount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
-                        .font(.app(.title, weight: .bold))
+                        .appFont(.title, weight: .bold)
                         .foregroundStyle(Color.primary)
                     
                 }
@@ -307,7 +315,7 @@ struct CategoryBreakdownChart: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(vm.selectedTransactionType == .expense ? "analysis.topSpendingCategories".localized : "analysis.topIncomeCategories".localized)
-                    .font(.app(.headline))
+                    .appFont(.headline)
                 
                 Spacer()
                 
@@ -333,7 +341,7 @@ struct CategoryBreakdownChart: View {
 
                                 VStack(alignment: .leading) {
                                     Text(stat.name)
-                                        .font(.app(.subheadline, weight: .medium))
+                                        .appFont(.subheadline, weight: .medium)
 
                                     let ratio = maxAmount > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: maxAmount as NSNumber) : 0
                                     CategoryShareBar(
@@ -346,17 +354,17 @@ struct CategoryBreakdownChart: View {
 
                                 VStack(alignment: .trailing) {
                                     Text(stat.amount.formattedAmount(for: preferredCurrency))
-                                        .font(.app(.callout))
+                                        .appFont(.callout)
                                         .monospacedDigit()
 
                                     let percent = total > 0 ? Double(truncating: stat.amount as NSNumber) / Double(truncating: total as NSNumber) : 0
                                     Text(percent.formatted(.percent.precision(.fractionLength(0))))
-                                        .font(.app(.caption2))
+                                        .appFont(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
 
                                 Image(systemName: "chevron.right")
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 8)
@@ -414,14 +422,14 @@ private struct CategoryShareBar: View {
     }
 }
 
-// MARK: - Analysis Filter Button (wraps FilterSheetButton with transaction type picker)
+// MARK: - Analysis Filter Button (wallet filtering only)
+//
+// The income/expense toggle used to live here; it now sits in the chart card
+// (SpendingTrendChart) since it's the most-used switch and deserves one tap.
 
 private struct AnalysisFilterButton: View {
     @Bindable var vm: AnalysisViewModel
     var wallets: [Wallet]
-
-    // Pending transaction type (applied on Done via onApply)
-    @State private var pendingTransactionType: TransactionTypeFilter = .expense
 
     var body: some View {
         FilterSheetButton(
@@ -430,24 +438,9 @@ private struct AnalysisFilterButton: View {
             customStartDate: $vm.customStartDate,
             customEndDate: $vm.customEndDate,
             wallets: wallets,
-            showPeriodFilter: false,
-            onApply: {
-                vm.selectedTransactionType = pendingTransactionType
-            }
+            showPeriodFilter: false
         ) {
-            Section("analysis.transactionType".localized) {
-                Picker("analysis.transactionType".localized, selection: $pendingTransactionType) {
-                    Text(L10n.Transaction.TransactionType.expense).tag(TransactionTypeFilter.expense)
-                    Text(L10n.Transaction.TransactionType.income).tag(TransactionTypeFilter.income)
-                }
-                .pickerStyle(.segmented)
-            }
-        }
-        .onAppear {
-            pendingTransactionType = vm.selectedTransactionType
-        }
-        .onChange(of: vm.selectedTransactionType) { _, newValue in
-            pendingTransactionType = newValue
+            EmptyView()
         }
     }
 }

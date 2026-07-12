@@ -36,7 +36,7 @@ struct GlassPeriodSelector: View {
             }
         } label: {
             Text(label)
-                .font(.app(.footnote, weight: isSelected ? .semibold : .regular))
+                .appFont(.footnote, weight: isSelected ? .semibold : .regular)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .foregroundStyle(isSelected ? .white : .primary)

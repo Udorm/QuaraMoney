@@ -53,7 +53,7 @@ struct EventLocationPickerView: View {
                     if let coordinate = selectedCoordinate {
                         VStack(spacing: 12) {
                             Text(locationName.isEmpty ? L10n.EventAdditional.locationSelected : locationName)
-                                .font(.app(.headline))
+                                .appFont(.headline)
                                 .lineLimit(1)
                             
                             Button {
@@ -62,7 +62,7 @@ struct EventLocationPickerView: View {
                                 dismiss()
                             } label: {
                                 Text(L10n.EventAdditional.locationConfirm)
-                                    .font(.app(.body, weight: .bold))
+                                    .appFont(.body, weight: .bold)
                                     .frame(maxWidth: .infinity)
                                     .padding()
                                     .background(Color.blue)

@@ -43,18 +43,18 @@ struct AddSavingsGoalView: View {
                                 .fill(goalColor.opacity(0.12))
                                 .frame(width: 52, height: 52)
                             Image(systemName: selectedIcon)
-                                .font(.app(.title3))
+                                .appFont(.title3)
                                 .foregroundStyle(goalColor)
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(name.isEmpty ? L10n.Savings.goalName : name)
-                                .font(.app(.body, weight: .semibold))
+                                .appFont(.body, weight: .semibold)
                                 .foregroundStyle(name.isEmpty ? .secondary : .primary)
 
                             if let amount = Decimal(string: targetAmountString), amount > 0 {
                                 Text(amount.formattedAmount(for: selectedCurrency))
-                                    .font(.app(.caption))
+                                    .appFont(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -94,7 +94,7 @@ struct AddSavingsGoalView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Text(selectedCurrency)
-                                    .font(.app(.subheadline, weight: .bold))
+                                    .appFont(.subheadline, weight: .bold)
                                 Image(systemName: "chevron.down")
                                     .font(.caption2)
                                     .fontWeight(.bold)
@@ -276,6 +276,7 @@ struct AddSavingsGoalView: View {
         }
 
         modelContext.insert(goal)
+        HapticManager.shared.success()
     }
 }
 
@@ -294,7 +295,7 @@ private struct SavingsTemplateCard: View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: template.icon)
-                    .font(.app(.title2))
+                    .appFont(.title2)
                     .foregroundStyle(isSelected ? .white : templateColor)
                     .frame(width: 56, height: 56)
                     .background(
@@ -303,7 +304,7 @@ private struct SavingsTemplateCard: View {
                     )
 
                 Text(template.displayName)
-                    .font(.app(.caption, weight: isSelected ? .semibold : .regular))
+                    .appFont(.caption, weight: isSelected ? .semibold : .regular)
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .lineLimit(1)
             }

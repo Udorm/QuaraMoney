@@ -184,7 +184,7 @@ struct CalculatorKeyboardView: View {
                         onSave()
                     } label: {
                         Image(systemName: "checkmark")
-                            .font(.app(.headline, weight: .semibold))
+                            .appFont(.headline, weight: .semibold)
                             .frame(maxWidth: .infinity)
                             .frame(height: 34)
                     }
@@ -334,10 +334,10 @@ struct CalcButton: View {
             Group {
                 if let systemImage = systemImage {
                     Image(systemName: systemImage)
-                        .font(.app(.headline, weight: .medium))
+                        .appFont(.headline, weight: .medium)
                 } else if let text = text {
                     Text(text)
-                        .font(.app(.headline, weight: .medium))
+                        .appFont(.headline, weight: .medium)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -358,7 +358,7 @@ struct CalcButton: View {
         var body: some View {
             VStack {
                 Text("Expression: \(expression.isEmpty ? "0" : expression)")
-                    .font(.app(.largeTitle))
+                    .appFont(.largeTitle)
                 Text("Amount: \(amount.formatted())")
                 Spacer()
                 CalculatorKeyboardView(

@@ -22,7 +22,7 @@ struct WalletGridItem: View {
                 ZStack {
                     // Selection ring, sized to sit just outside the card.
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
                             .stroke(walletColor, lineWidth: 2)
                             .frame(width: 46, height: 46)
                     }
@@ -54,7 +54,7 @@ struct WalletGridItem: View {
                 .frame(width: 46, height: 46)
 
                 Text(wallet.name)
-                    .font(.app(.caption2, weight: isSelected ? .bold : .regular))
+                    .appFont(.caption2, weight: isSelected ? .bold : .regular)
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? walletColor : .secondary)
             }

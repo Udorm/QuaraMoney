@@ -64,11 +64,11 @@ struct TransactionWalletPickerSheet: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.app(.body))
+                .appFont(.body)
                 .foregroundStyle(.secondary)
 
             TextField("transaction.searchWallets".localized, text: $searchText)
-                .font(.app(.body))
+                .appFont(.body)
                 .autocorrectionDisabled()
                 .focused($isSearchFocused)
 
@@ -91,7 +91,7 @@ struct TransactionWalletPickerSheet: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.app(.headline))
+            .appFont(.headline)
             .foregroundStyle(.primary)
             .textCase(nil)
     }
@@ -110,7 +110,7 @@ struct WalletColorRow: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: wallet.icon)
-                    .font(.app(.title3))
+                    .appFont(.title3)
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
                     .background(
@@ -124,10 +124,10 @@ struct WalletColorRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(wallet.name)
-                        .font(.app(.body))
+                        .appFont(.body)
                         .foregroundStyle(.primary)
                     Text(wallet.currencyCode)
-                        .font(.app(.caption))
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
 

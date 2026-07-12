@@ -21,6 +21,14 @@ extension SyncTrackable {
     }
 
     var isSoftDeleted: Bool { deletedAt != nil }
+
+    /// Clears a soft-delete tombstone (undo). The restore syncs as an ordinary
+    /// field change, mirroring `markSoftDeleted`.
+    func markRestored(_ date: Date = Date()) {
+        deletedAt = nil
+        updatedAt = date
+        needsSync = true
+    }
 }
 
 extension Wallet: SyncTrackable {}

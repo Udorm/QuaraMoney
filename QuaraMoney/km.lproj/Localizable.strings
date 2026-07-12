@@ -14,6 +14,7 @@
 "common.edit" = "កែ";
 "common.delete" = "លុប";
 "common.ok" = "យល់ព្រម";
+"common.success" = "បានជោគជ័យ";
 "common.back" = "ថយក្រោយ";
 "common.close" = "បិទ";
 "common.hide" = "លាក់";
@@ -630,6 +631,11 @@
 "event.member.removeImage" = "លុបរូបភាពចេញ";
 "event.member.addMember" = "បន្ថែមសមាជិក";
 "event.member.editMember" = "កែប្រែសមាជិក";
+"event.member.receives" = "ទទួល";
+"event.member.owes" = "ជំពាក់";
+"event.member.removeTitle" = "លុបសមាជិក?";
+"event.member.removeMessage" = "%@ នឹងត្រូវបានលុបចេញពីព្រឹត្តិការណ៍នេះ។";
+"event.transaction.deleted" = "បានលុបប្រតិបត្តិការ";
 
 "event.appearance" = "រូបរាង";
 "event.dateTime" = "កាលបរិច្ឆេទ & ពេលវេលា";

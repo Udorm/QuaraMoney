@@ -14,6 +14,7 @@
 "common.edit" = "Edit";
 "common.delete" = "Delete";
 "common.ok" = "OK";
+"common.success" = "Success";
 "common.back" = "Back";
 "common.close" = "Close";
 "common.hide" = "Hide";
@@ -630,6 +631,11 @@
 "event.member.removeImage" = "Remove Image";
 "event.member.addMember" = "Add Member";
 "event.member.editMember" = "Edit Member";
+"event.member.receives" = "Receives";
+"event.member.owes" = "Owes";
+"event.member.removeTitle" = "Remove Member?";
+"event.member.removeMessage" = "%@ will be removed from this event.";
+"event.transaction.deleted" = "Transaction deleted";
 
 "event.appearance" = "Appearance";
 "event.dateTime" = "Date & Time";

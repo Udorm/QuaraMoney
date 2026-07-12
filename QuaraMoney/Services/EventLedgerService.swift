@@ -431,6 +431,16 @@ final class EventLedgerService {
         bumpLedgerRevision(for: event)
         try save()
     }
+
+    /// Undoes `deleteTransaction` by clearing the tombstones it set.
+    func restoreTransaction(_ transaction: EventLedgerTransaction) throws {
+        transaction.markRestored()
+        transaction.participants?.forEach { $0.markRestored() }
+        if let event = transaction.event {
+            bumpLedgerRevision(for: event)
+        }
+        try save()
+    }
     
     // MARK: - Settlement
     

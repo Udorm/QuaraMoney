@@ -30,6 +30,7 @@ struct EventDetailViewV2: View {
     @State private var transactionToEdit: EventLedgerTransaction?
     @State private var errorMessage: String?
     @State private var exportSuccessMessage: String?
+    @State private var recentlyDeletedTransaction: EventLedgerTransaction?
     
     // -- Computed Business Logic --
     private var service: EventLedgerService {
@@ -250,7 +251,7 @@ struct EventDetailViewV2: View {
         } message: {
             Text(errorMessage ?? L10n.EventDetail.unknownError)
         }
-        .alert(L10n.Common.ok, isPresented: Binding(
+        .alert("common.success".localized, isPresented: Binding(
             get: { exportSuccessMessage != nil },
             set: { _ in exportSuccessMessage = nil }
         )) {
@@ -258,6 +259,11 @@ struct EventDetailViewV2: View {
         } message: {
             Text(exportSuccessMessage ?? "")
         }
+        .undoToast($recentlyDeletedTransaction, message: { _ in
+            "event.transaction.deleted".localized
+        }, onUndo: { transaction in
+            restoreTransaction(transaction)
+        })
         .onAppear {
             prepareEventContext()
         }
@@ -283,6 +289,17 @@ struct EventDetailViewV2: View {
     private func deleteTransaction(_ transaction: EventLedgerTransaction) {
         do {
             try service.deleteTransaction(transaction)
+            // Offer a transient Undo — the tombstone makes restore trivial.
+            recentlyDeletedTransaction = transaction
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreTransaction(_ transaction: EventLedgerTransaction) {
+        do {
+            try service.restoreTransaction(transaction)
+            HapticManager.shared.selection()
         } catch {
             errorMessage = error.localizedDescription
         }

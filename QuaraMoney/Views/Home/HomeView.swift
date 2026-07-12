@@ -175,11 +175,11 @@ struct HomeContentView: View {
         List {
             if isFirstRunEmpty {
                 Section {
-                    ContentUnavailableView {
-                        Label("home.empty.title".localized, systemImage: "list.bullet.rectangle.portrait")
-                    } description: {
-                        Text("home.empty.message".localized)
-                    } actions: {
+                    AppEmptyStateView(
+                        "home.empty.title".localized,
+                        systemImage: "list.bullet.rectangle.portrait",
+                        description: "home.empty.message".localized
+                    ) {
                         Button {
                             showingAddTransaction = true
                         } label: {

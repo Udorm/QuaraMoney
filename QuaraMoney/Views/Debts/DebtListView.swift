@@ -287,11 +287,11 @@ struct DebtListView: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("debt.noDebts".localized, systemImage: "person.2.badge.gearshape")
-        } description: {
-            Text("debt.noDebtsDescription".localized)
-        } actions: {
+        AppEmptyStateView(
+            "debt.noDebts".localized,
+            systemImage: "person.2.badge.gearshape",
+            description: "debt.noDebtsDescription".localized
+        ) {
             Button {
                 showAddDebtSheet = true
             } label: {

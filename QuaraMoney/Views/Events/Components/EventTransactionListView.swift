@@ -31,10 +31,10 @@ struct EventTransactionListView: View {
     var body: some View {
         if transactions.isEmpty {
             Section {
-                ContentUnavailableView(
+                AppEmptyStateView(
                     "event.noExpensesYet".localized,
                     systemImage: "creditcard",
-                    description: Text("event.emptyExpenses".localized)
+                    description: "event.emptyExpenses".localized
                 )
                 .listRowBackground(Color.clear)
             }

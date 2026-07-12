@@ -336,35 +336,57 @@ extension UIFont {
 
 /// A custom empty state view that supports the app's font cascade.
 /// Use this instead of ContentUnavailableView for proper Khmer font support.
-struct AppEmptyStateView: View {
+/// The app's single empty-state component. Mirrors the layout of the native
+/// `ContentUnavailableView` but renders through the `.appFont` cascade so Khmer
+/// text uses MiSans instead of the iOS fallback font. Prefer this over
+/// `ContentUnavailableView` for primary empty states; the native
+/// `ContentUnavailableView.search(text:)` idiom is still fine for search results.
+struct AppEmptyStateView<Actions: View>: View {
     let title: String
     let systemImage: String
     let description: String?
-    
-    init(_ title: String, systemImage: String, description: String? = nil) {
+    private let actions: Actions
+
+    init(
+        _ title: String,
+        systemImage: String,
+        description: String? = nil,
+        @ViewBuilder actions: () -> Actions
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.description = description
+        self.actions = actions()
     }
-    
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: systemImage)
-                .appFont(size: 56) // Use new explicit API
+                .appFont(size: 56)
                 .foregroundStyle(.secondary)
-            
+
             Text(title)
-                .appFont(.title2, weight: .semibold) // Use new explicit API
+                .appFont(.title2, weight: .semibold)
                 .multilineTextAlignment(.center)
-            
+
             if let description = description {
                 Text(description)
-                    .appFont(.subheadline) // Use new explicit API
+                    .appFont(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
+
+            actions
+                .padding(.top, 4)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+extension AppEmptyStateView where Actions == EmptyView {
+    /// Convenience for the common case with no action buttons.
+    init(_ title: String, systemImage: String, description: String? = nil) {
+        self.init(title, systemImage: systemImage, description: description) { EmptyView() }
     }
 }

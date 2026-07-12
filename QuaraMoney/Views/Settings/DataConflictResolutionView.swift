@@ -16,7 +16,7 @@ struct DataConflictResolutionView: View {
                     // Header
                     VStack(spacing: 12) {
                         Image(systemName: "externaldrive.badge.questionmark")
-                            .font(.system(size: 52, weight: .light))
+                            .appFont(size: 52, weight: .light)
                             .foregroundStyle(.orange)
 
                         Text("sync.conflict.title".localized)
@@ -120,7 +120,7 @@ private struct ConflictOptionCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .appFont(size: 20, weight: .semibold)
                         .foregroundStyle(iconColor)
                         .frame(width: 28)
 
@@ -131,7 +131,7 @@ private struct ConflictOptionCard: View {
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .appFont(size: 13, weight: .semibold)
                         .foregroundStyle(.tertiary)
                 }
 
@@ -142,7 +142,7 @@ private struct ConflictOptionCard: View {
 
                 HStack(spacing: 4) {
                     Image(systemName: "trash")
-                        .font(.system(size: 11))
+                        .appFont(size: 11)
                     Text(isDestructiveAction)
                         .appFont(size: 12)
                 }

@@ -228,7 +228,7 @@ struct CurrencySegmentedPicker: View {
                 }
                 if let icon = systemImageName {
                     Image(systemName: icon)
-                        .font(.system(size: 10, weight: .semibold))
+                        .appFont(size: 10, weight: .semibold)
                 }
             }
             .foregroundStyle(isSelected ? Color.primary : Color.secondary)

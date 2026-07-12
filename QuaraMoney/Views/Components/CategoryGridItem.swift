@@ -39,7 +39,7 @@ struct CategoryGridItem: View {
                     // "Suggested" sparkle badge in the top-trailing corner
                     if isHighlighted && !isSelected {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 11, weight: .bold))
+                            .appFont(size: 11, weight: .bold)
                             .foregroundStyle(categoryColor)
                             .padding(3)
                             .background(Color(.secondarySystemGroupedBackground), in: Circle())

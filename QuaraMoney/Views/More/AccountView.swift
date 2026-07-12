@@ -340,7 +340,7 @@ struct AccountView: View {
         // Who's signed in
         HStack(spacing: 12) {
             Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 34))
+                .appFont(size: 34)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {

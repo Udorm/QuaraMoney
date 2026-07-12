@@ -57,7 +57,7 @@ struct ProfileAvatarView: View {
                     .frame(width: size, height: size)
                 
                 Text(initials)
-                    .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
+                    .appFont(size: size * 0.38, weight: .semibold)
                     .foregroundStyle(.white)
             }
             
@@ -85,7 +85,7 @@ struct ProfileAvatarView: View {
                                 .frame(width: size * 0.3, height: size * 0.3)
                             
                             Image(systemName: "camera.fill")
-                                .font(.system(size: size * 0.12))
+                                .appFont(size: size * 0.12)
                                 .foregroundStyle(.primary)
                         }
                     }

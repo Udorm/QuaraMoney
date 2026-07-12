@@ -81,7 +81,7 @@ struct ResetPasswordSheetView: View {
                     .shadow(color: .blue.opacity(0.3), radius: 12, y: 6)
 
                 Image(systemName: "key.fill")
-                    .font(.system(size: 32, weight: .medium))
+                    .appFont(size: 32, weight: .medium)
                     .foregroundStyle(.white)
             }
 

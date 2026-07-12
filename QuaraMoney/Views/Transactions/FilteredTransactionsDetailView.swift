@@ -117,7 +117,7 @@ struct FilteredTransactionsDetailView: View {
                         .fill(accentColor.opacity(0.15))
                         .frame(width: 44, height: 44)
                     Image(systemName: iconName)
-                        .font(.system(size: 20, weight: .semibold))
+                        .appFont(size: 20, weight: .semibold)
                         .foregroundStyle(accentColor)
                 }
 
@@ -143,20 +143,20 @@ struct FilteredTransactionsDetailView: View {
 
                     HStack(spacing: 4) {
                         Image(systemName: "calendar")
-                            .font(.system(size: 10))
+                            .appFont(size: 10)
                         Text(config.formattedDateRange)
                             .font(.app(.caption))
                         if let walletName = config.walletName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "wallet.bifold")
-                                .font(.system(size: 10))
+                                .appFont(size: 10)
                             Text(walletName)
                                 .font(.app(.caption))
                         }
                         if let goalName = config.savingsGoalName {
                             Text("·").foregroundStyle(.tertiary)
                             Image(systemName: "target")
-                                .font(.system(size: 10))
+                                .appFont(size: 10)
                             Text(goalName)
                                 .font(.app(.caption))
                         }
@@ -172,8 +172,8 @@ struct FilteredTransactionsDetailView: View {
                     let typeColor = isExpense ? ThemeManager.shared.expenseColor : ThemeManager.shared.incomeColor
                     HStack(spacing: 3) {
                         Image(systemName: isExpense ? "arrow.down" : "arrow.up")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(type.rawValue.capitalized)
+                            .appFont(size: 10, weight: .bold)
+                        Text(isExpense ? L10n.Transaction.TransactionType.expense : L10n.Transaction.TransactionType.income)
                             .font(.app(.caption, weight: .semibold))
                     }
                     .foregroundStyle(typeColor)

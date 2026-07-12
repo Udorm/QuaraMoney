@@ -114,7 +114,7 @@ struct AuthSheetView: View {
                     .shadow(color: .blue.opacity(0.3), radius: 12, y: 6)
 
                 Image(systemName: isSignIn ? "icloud.fill" : "person.crop.circle.fill.badge.plus")
-                    .font(.system(size: 32, weight: .medium))
+                    .appFont(size: 32, weight: .medium)
                     .foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
             }

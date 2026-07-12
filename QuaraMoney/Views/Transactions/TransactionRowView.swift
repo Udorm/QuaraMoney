@@ -208,7 +208,7 @@ struct TransactionRowView: View {
     private func debtBadge(_ debt: Debt) -> some View {
         HStack(spacing: 3) {
             Image(systemName: debt.type.directionIcon)
-                .font(.system(size: 9, weight: .bold))
+                .appFont(size: 9, weight: .bold)
             Text(debt.personName)
                 .font(.app(.caption2, weight: .medium))
                 .lineLimit(1)

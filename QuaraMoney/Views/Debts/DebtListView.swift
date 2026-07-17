@@ -17,102 +17,125 @@ struct DebtListView: View {
     private var overdueDebts: [Debt] { viewModel.overdueDebts(allDebts) }
     private var activeDebts: [Debt] { viewModel.activeDebts(allDebts) }
     private var completedDebts: [Debt] { viewModel.completedDebts(allDebts) }
-    private var hasAnyDebts: Bool { !allDebts.isEmpty }
+    private var hasAnyDebts: Bool {
+        allDebts.contains { $0.type == viewModel.selectedType }
+    }
+    private var hasCompletedDebts: Bool {
+        allDebts.contains { $0.type == viewModel.selectedType && $0.isCompleted }
+    }
 
     /// True when a search is active but matches nothing.
     private var hasNoSearchResults: Bool {
-        viewModel.isSearching && overdueDebts.isEmpty && activeDebts.isEmpty && completedDebts.isEmpty
+        viewModel.isSearching
+            && overdueDebts.isEmpty
+            && activeDebts.isEmpty
+            && (!viewModel.showCompleted || completedDebts.isEmpty)
     }
 
     var body: some View {
-        Group {
+        List {
             if !hasAnyDebts {
-                emptyState
+                Section {
+                    emptyState
+                        .padding(.vertical, 32)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
-                List {
+                Section {
+                    heroContent
+                }
+
+                if !overdueDebts.isEmpty {
                     Section {
-                        heroContent
-                    }
-
-                    Section {
-                        typeFilter
-                    }
-
-                    if !overdueDebts.isEmpty {
-                        Section {
-                            ForEach(overdueDebts) { debt in
-                                debtLink(debt)
-                            }
-                        } header: {
-                            Label("debt.overdueSection".localized, systemImage: "exclamationmark.circle.fill")
-                                .foregroundStyle(.red)
+                        ForEach(overdueDebts) { debt in
+                            debtLink(debt)
                         }
-                    }
-
-                    if overdueDebts.isEmpty && activeDebts.isEmpty {
-                        if !viewModel.isSearching {
-                            Section {
-                                allSettledRow
-                                    .listRowBackground(Color.clear)
-                                    .listRowSeparator(.hidden)
-                            }
-                        }
-                    } else if !activeDebts.isEmpty {
-                        Section {
-                            ForEach(activeDebts) { debt in
-                                debtLink(debt)
-                            }
-                        } header: {
-                            Text("debt.activeSection".localized)
-                        }
-                    }
-
-                    if viewModel.showCompleted && !completedDebts.isEmpty {
-                        Section {
-                            ForEach(completedDebts) { debt in
-                                debtLink(debt)
-                            }
-                        } header: {
-                            Text("debt.completedSection".localized)
-                        }
+                    } header: {
+                        Label("debt.overdueSection".localized, systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
                     }
                 }
-                .listStyle(.insetGrouped)
-                .listSectionSpacing(.compact)
-                .searchable(text: $viewModel.searchText, prompt: "debt.searchPrompt".localized)
-                .overlay {
-                    if hasNoSearchResults {
-                        ContentUnavailableView.search(text: viewModel.searchText)
+
+                if overdueDebts.isEmpty && activeDebts.isEmpty {
+                    if !viewModel.isSearching {
+                        Section {
+                            allSettledRow
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
+                    }
+                } else if !activeDebts.isEmpty {
+                    Section {
+                        ForEach(activeDebts) { debt in
+                            debtLink(debt)
+                        }
+                    } header: {
+                        Text("debt.activeSection".localized)
+                    }
+                }
+
+                if viewModel.showCompleted && !completedDebts.isEmpty {
+                    Section {
+                        ForEach(completedDebts) { debt in
+                            debtLink(debt)
+                        }
+                    } header: {
+                        Text("debt.completedSection".localized)
                     }
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .navigationTitle(L10n.Debt.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if hasNoSearchResults {
+                ContentUnavailableView.search(text: viewModel.searchText)
+            }
+        }
+        .searchable(
+            text: $viewModel.searchText,
+            prompt: "debt.searchPrompt".localized
+        )
+        .searchToolbarBehavior(.minimize)
         .syncPullToRefresh(modelContext)
+        .safeAreaInset(edge: .bottom, alignment: .trailing) {
+            Button {
+                HapticManager.shared.impact(style: .light)
+                showAddDebtSheet = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .modifier(CircularFABStyle())
+            .controlSize(.large)
+            .accessibilityLabel(L10n.Debt.add)
+            .padding(.trailing)
+            .padding(.bottom, 8)
+        }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    HapticManager.shared.impact(style: .light)
-                    showAddDebtSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel(L10n.Debt.add)
+            ToolbarItem(placement: .principal) {
+                typeFilter
             }
 
-            if !completedDebts.isEmpty {
+            if hasCompletedDebts {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Toggle(isOn: $viewModel.showCompleted) {
-                            Label("debt.completedSection".localized, systemImage: "checkmark.circle")
+                    Button {
+                        HapticManager.shared.selection()
+                        withAnimation(.smooth(duration: 0.2)) {
+                            viewModel.showCompleted.toggle()
                         }
                     } label: {
-                        Image(systemName: viewModel.showCompleted ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .foregroundStyle(viewModel.showCompleted ? Color.accentColor : .primary)
                     }
                     .accessibilityLabel("debt.completedSection".localized)
+                    .accessibilityAddTraits(viewModel.showCompleted ? .isSelected : [])
                 }
             }
         }
+        .animation(.smooth(duration: 0.25), value: viewModel.selectedType)
         .sheet(isPresented: $showAddDebtSheet) {
             AddDebtView()
         }
@@ -236,11 +259,11 @@ struct DebtListView: View {
 
     private var typeFilter: some View {
         Picker(L10n.Filter.title, selection: $viewModel.selectedType) {
-            Text("debt.filterAll".localized).tag(Optional<DebtType>.none)
-            Text(L10n.Debt.owedToMe).tag(Optional(DebtType.owedToMe))
-            Text(L10n.Debt.iOwe).tag(Optional(DebtType.iOwe))
+            Text(L10n.Debt.SystemCategory.debt).tag(DebtType.iOwe)
+            Text(L10n.Debt.SystemCategory.loan).tag(DebtType.owedToMe)
         }
         .pickerStyle(.segmented)
+        .frame(width: 180)
     }
 
     // MARK: - Rows
@@ -291,14 +314,7 @@ struct DebtListView: View {
             "debt.noDebts".localized,
             systemImage: "person.2.badge.gearshape",
             description: "debt.noDebtsDescription".localized
-        ) {
-            Button {
-                showAddDebtSheet = true
-            } label: {
-                Text(L10n.Debt.add)
-            }
-            .buttonStyle(.borderedProminent)
-        }
+        )
     }
 
     // MARK: - Completion normalization

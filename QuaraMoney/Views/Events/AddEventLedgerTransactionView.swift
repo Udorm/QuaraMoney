@@ -73,7 +73,7 @@ struct AddEventLedgerTransactionView: View {
                                         showAllCategories = true
                                     } label: {
                                         VStack(spacing: 4) {
-                                            Image(systemName: "ellipsis.circle.fill")
+                                            Image(systemName: "ellipsis")
                                                 .appFont(.title3)
                                                 .foregroundColor(.secondary)
                                                 .frame(width: 40, height: 40)

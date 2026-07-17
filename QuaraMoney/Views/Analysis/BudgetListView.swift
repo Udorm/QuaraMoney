@@ -7,10 +7,15 @@ struct BudgetListView: View {
     // Budgets only ever consider non-event transactions; scope the query so we
     // don't materialize the entire event ledger alongside personal transactions.
     @Query(filter: #Predicate<Transaction> { $0.event == nil && $0.deletedAt == nil }) private var transactions: [Transaction]
-    @State private var showAddBudget = false
+    @Binding private var searchText: String
+    @Binding private var isFilterPresented: Bool
     @State private var filterPeriod: BudgetFilterPeriod = .active
     @State private var showRecurringOnly = false
-    @State private var searchText = ""
+
+    init(searchText: Binding<String>, isFilterPresented: Binding<Bool>) {
+        _searchText = searchText
+        _isFilterPresented = isFilterPresented
+    }
     
     private var preferredCurrency: String {
         CurrencyManager.shared.preferredCurrencyCode
@@ -55,13 +60,18 @@ struct BudgetListView: View {
     }
     
     var body: some View {
-        Group {
+        List {
             if budgets.isEmpty {
-                AppEmptyStateView(
-                    L10n.Budget.emptyState,
-                    systemImage: "chart.bar",
-                    description: L10n.Budget.emptyDescription
-                )
+                Section {
+                    AppEmptyStateView(
+                        L10n.Budget.emptyState,
+                        systemImage: "chart.bar",
+                        description: L10n.Budget.emptyDescription
+                    )
+                    .padding(.vertical, 32)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
                 // Single-pass spending for every shown budget, computed once per
                 // render instead of re-filtering all transactions per budget.
@@ -72,62 +82,74 @@ struct BudgetListView: View {
                     targetCurrency: preferredCurrency
                 )
 
-                List {
-                    if filterPeriod == .active || filterPeriod == .all {
-                        Section {
-                            BudgetSummarySection(
-                                budgets: shownBudgets.filter { $0.isActive },
-                                transactions: transactions,
-                                spending: spending
+                if filterPeriod == .active || filterPeriod == .all {
+                    Section {
+                        BudgetSummarySection(
+                            budgets: shownBudgets.filter { $0.isActive },
+                            transactions: transactions,
+                            spending: spending
+                        )
+                    } header: {
+                        filterDescription
+                    }
+                }
+
+                Section {
+                    ForEach(shownBudgets) { budget in
+                        NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
+                            BudgetRowView(
+                                budget: budget,
+                                spent: spending[budget.id] ?? 0,
+                                budgetLimitConverted: convertBudgetLimit(for: budget)
                             )
                         }
                     }
+                    .onDelete(perform: deleteBudgets)
+                } header: {
+                    if filterPeriod != .active && filterPeriod != .all {
+                        filterDescription
+                    }
+                }
 
-                    Section(header: Text(headerTitle).appFont(.subheadline).textCase(nil)) {
-                        ForEach(shownBudgets) { budget in
-                            NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
-                                BudgetRowView(
-                                    budget: budget,
-                                    spent: spending[budget.id] ?? 0,
-                                    budgetLimitConverted: convertBudgetLimit(for: budget)
-                                )
-                            }
-                        }
-                        .onDelete(perform: deleteBudgets)
-                    }
-                }
-            }
-        }
-        .navigationTitle(L10n.Budget.title)
-        .syncPullToRefresh(modelContext)
-        .searchable(text: $searchText)
-        .searchToolbarBehavior(.minimize)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    showAddBudget = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                
-                FilterSheetButton(
-                    selectedPeriod: $filterPeriod,
-                    selectedWalletIds: .constant([]),
-                    customStartDate: .constant(Date()),
-                    customEndDate: .constant(Date()),
-                    wallets: [],
-                    defaultPeriod: .active,
-                    showWalletFilter: false
-                ) {
+                if shownBudgets.isEmpty {
                     Section {
-                        Toggle(L10n.Budget.recurringOnly, isOn: $showRecurringOnly)
+                        AppEmptyStateView(
+                            L10n.Budget.emptyState,
+                            systemImage: "line.3.horizontal.decrease.circle",
+                            description: headerTitle
+                        )
+                        .padding(.vertical, 24)
                     }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
             }
         }
-        .sheet(isPresented: $showAddBudget) {
-            AddBudgetView()
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
+        .sheet(isPresented: $isFilterPresented) {
+            FilterSheetView(
+                selectedPeriod: $filterPeriod,
+                selectedWalletIds: .constant([]),
+                customStartDate: .constant(Date()),
+                customEndDate: .constant(Date()),
+                isPresented: $isFilterPresented,
+                wallets: [],
+                showWalletFilter: false
+            ) {
+                Section {
+                    Toggle(L10n.Budget.recurringOnly, isOn: $showRecurringOnly)
+                }
+            }
         }
+        .syncPullToRefresh(modelContext)
+    }
+
+    private var filterDescription: some View {
+        Label(headerTitle, systemImage: filterPeriod.icon)
+            .appFont(.caption, weight: .medium)
+            .foregroundStyle(.secondary)
+            .textCase(nil)
     }
     
     private var headerTitle: String {
@@ -419,7 +441,10 @@ struct BudgetRowView: View {
 
 #Preview {
     NavigationStack {
-        BudgetListView()
+        BudgetListView(
+            searchText: .constant(""),
+            isFilterPresented: .constant(false)
+        )
             .modelContainer(for: [Budget.self, Transaction.self, TransactionLocation.self, Category.self], inMemory: true)
     }
 }

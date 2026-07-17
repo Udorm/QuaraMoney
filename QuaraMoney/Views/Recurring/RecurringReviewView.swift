@@ -89,7 +89,7 @@ struct RecurringReviewView: View {
                             confirmSkipAll = true
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis")
                     }
                 }
             }

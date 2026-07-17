@@ -193,7 +193,7 @@ struct EventDetailViewV2: View {
                         Label(L10n.EventSettlement.exportToWallet, systemImage: "square.and.arrow.up")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis")
                 }
             }
         }

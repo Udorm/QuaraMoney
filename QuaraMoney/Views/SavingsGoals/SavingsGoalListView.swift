@@ -4,21 +4,22 @@ import SwiftData
 struct SavingsGoalListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var goals: [SavingsGoal]
+    @Binding private var searchText: String
 
-    init() {
+    init(searchText: Binding<String>) {
         let notDeleted = #Predicate<SavingsGoal> { $0.deletedAt == nil }
         _goals = Query(filter: notDeleted, sort: [SortDescriptor(\SavingsGoal.priority), SortDescriptor(\SavingsGoal.createdDate)])
+        _searchText = searchText
     }
 
     @State private var viewModel = SavingsGoalListViewModel()
-    @State private var showAddGoal = false
 
     private var activeGoals: [SavingsGoal] {
-        viewModel.activeGoals(from: goals)
+        viewModel.activeGoals(from: goals, matching: searchText)
     }
 
     private var completedGoals: [SavingsGoal] {
-        viewModel.completedGoals(from: goals)
+        viewModel.completedGoals(from: goals, matching: searchText)
     }
 
     private var dominantColor: Color {
@@ -29,29 +30,50 @@ struct SavingsGoalListView: View {
     }
 
     var body: some View {
-        Group {
+        List {
             if goals.isEmpty {
-                AppEmptyStateView(
-                    L10n.Savings.noGoals,
-                    systemImage: "target",
-                    description: L10n.Savings.noGoalsDescription
-                )
-            } else {
-                List {
-                    // MARK: Summary Section
-                    SavingsGoalSummaryCard(
-                        totalSaved: viewModel.totalSaved(from: goals),
-                        totalTarget: viewModel.totalTarget(from: goals),
-                        overallProgress: viewModel.overallProgress(from: goals),
-                        activeCount: activeGoals.count,
-                        completedCount: completedGoals.count,
-                        dominantColor: dominantColor
+                Section {
+                    AppEmptyStateView(
+                        L10n.Savings.noGoals,
+                        systemImage: "target",
+                        description: L10n.Savings.noGoalsDescription
                     )
+                    .padding(.vertical, 32)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else {
+                // MARK: Summary Section
+                SavingsGoalSummaryCard(
+                    totalSaved: viewModel.totalSaved(from: goals),
+                    totalTarget: viewModel.totalTarget(from: goals),
+                    overallProgress: viewModel.overallProgress(from: goals),
+                    activeCount: activeGoals.count,
+                    completedCount: completedGoals.count,
+                    dominantColor: dominantColor
+                )
 
-                    // MARK: Active Goals
-                    if !activeGoals.isEmpty {
-                        Section(L10n.Savings.activeGoals) {
-                            ForEach(activeGoals) { goal in
+                // MARK: Active Goals
+                if !activeGoals.isEmpty {
+                    Section(L10n.Savings.activeGoals) {
+                        ForEach(activeGoals) { goal in
+                            NavigationLink {
+                                SavingsGoalDetailView(goal: goal)
+                            } label: {
+                                SavingsGoalRowView(goal: goal)
+                            }
+                        }
+                        .onDelete { indexSet in
+                            deleteGoals(at: indexSet, from: activeGoals)
+                        }
+                    }
+                }
+
+                // MARK: Completed Goals
+                if !completedGoals.isEmpty {
+                    Section {
+                        DisclosureGroup("\(L10n.Savings.completedGoals) (\(completedGoals.count))", isExpanded: $viewModel.showCompletedGoals) {
+                            ForEach(completedGoals) { goal in
                                 NavigationLink {
                                     SavingsGoalDetailView(goal: goal)
                                 } label: {
@@ -59,47 +81,16 @@ struct SavingsGoalListView: View {
                                 }
                             }
                             .onDelete { indexSet in
-                                deleteGoals(at: indexSet, from: activeGoals)
-                            }
-                        }
-                    }
-
-                    // MARK: Completed Goals
-                    if !completedGoals.isEmpty {
-                        Section {
-                            DisclosureGroup("\(L10n.Savings.completedGoals) (\(completedGoals.count))", isExpanded: $viewModel.showCompletedGoals) {
-                                ForEach(completedGoals) { goal in
-                                    NavigationLink {
-                                        SavingsGoalDetailView(goal: goal)
-                                    } label: {
-                                        SavingsGoalRowView(goal: goal)
-                                    }
-                                }
-                                .onDelete { indexSet in
-                                    deleteGoals(at: indexSet, from: completedGoals)
-                                }
+                                deleteGoals(at: indexSet, from: completedGoals)
                             }
                         }
                     }
                 }
             }
         }
-        .navigationTitle(L10n.Savings.title)
+        .listStyle(.insetGrouped)
+        .listSectionSpacing(.compact)
         .syncPullToRefresh(modelContext)
-        .searchable(text: $viewModel.searchText)
-        .searchToolbarBehavior(.minimize)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showAddGoal = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showAddGoal) {
-            AddSavingsGoalView()
-        }
     }
 
     private func deleteGoals(at offsets: IndexSet, from source: [SavingsGoal]) {
@@ -115,7 +106,7 @@ struct SavingsGoalListView: View {
 
 #Preview {
     NavigationStack {
-        SavingsGoalListView()
+        SavingsGoalListView(searchText: .constant(""))
     }
     .modelContainer(for: [SavingsGoal.self, Wallet.self], inMemory: true)
 }

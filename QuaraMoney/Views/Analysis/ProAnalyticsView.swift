@@ -93,7 +93,7 @@ struct ProAnalyticsView: View {
                             Label("analysis.pro.customize".localized, systemImage: "slider.horizontal.3")
                         }
                     } label: {
-                        Image(systemName: vm.filter.hasActiveConstraints ? "ellipsis.circle.fill" : "ellipsis.circle")
+                        Image(systemName: "ellipsis")
                             .appFont(.title3)
                             .foregroundStyle(vm.filter.hasActiveConstraints ? Color.accentColor : .primary)
                     }

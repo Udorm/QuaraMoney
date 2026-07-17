@@ -477,7 +477,7 @@ struct CompactAddTransactionView: View {
                     .tag(true)
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
         }
         .accessibilityLabel("transaction.layout.menu".localized)
     }

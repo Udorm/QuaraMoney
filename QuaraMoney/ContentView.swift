@@ -52,7 +52,7 @@ struct ContentView: View {
                         LazyView(MoreView())
                     } label: {
                         VStack {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "ellipsis")
                             Text(L10n.Tab.more)
                                 .appFont(.caption2)
                         }
@@ -73,7 +73,7 @@ struct ContentView: View {
                         LazyView(BudgetTabView())
                     }
 
-                    Tab(L10n.Tab.more, systemImage: "ellipsis.circle", value: 3) {
+                    Tab(L10n.Tab.more, systemImage: "ellipsis", value: 3) {
                         LazyView(MoreView())
                     }
                 }

@@ -4,15 +4,12 @@ import SwiftData
 @Observable
 @MainActor
 final class DebtListViewModel {
-    var selectedType: DebtType? = nil
+    var selectedType: DebtType = .iOwe
     var showCompleted = false
     var searchText: String = ""
 
     func filteredDebts(_ allDebts: [Debt]) -> [Debt] {
-        var debts = allDebts
-        if let type = selectedType {
-            debts = debts.filter { $0.type == type }
-        }
+        var debts = allDebts.filter { $0.type == selectedType }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             debts = debts.filter { $0.personName.localizedCaseInsensitiveContains(query) }

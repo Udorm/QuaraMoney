@@ -60,7 +60,7 @@ struct NotificationCenterView: View {
                                 Label(L10n.Notifications.clearAll, systemImage: "trash")
                             }
                         } label: {
-                            Image(systemName: "ellipsis.circle")
+                            Image(systemName: "ellipsis")
                         }
                     }
                 }

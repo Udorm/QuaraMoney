@@ -3,16 +3,15 @@ import Foundation
 @Observable
 @MainActor
 class SavingsGoalListViewModel {
-    var searchText = ""
     var showCompletedGoals = false
 
-    func activeGoals(from goals: [SavingsGoal]) -> [SavingsGoal] {
+    func activeGoals(from goals: [SavingsGoal], matching searchText: String) -> [SavingsGoal] {
         let filtered = goals.filter { !$0.isCompleted }
         if searchText.isEmpty { return filtered }
         return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
-    func completedGoals(from goals: [SavingsGoal]) -> [SavingsGoal] {
+    func completedGoals(from goals: [SavingsGoal], matching searchText: String) -> [SavingsGoal] {
         let filtered = goals.filter { $0.isCompleted }
         if searchText.isEmpty { return filtered }
         return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }

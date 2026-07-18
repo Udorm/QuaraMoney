@@ -36,6 +36,7 @@ struct WalletDetailView: View {
         List {
             Section {
                 heroCard
+                    .redacted(reason: viewModel.hasLoadedOnce ? [] : .placeholder)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -84,7 +85,13 @@ struct WalletDetailView: View {
             .listRowSeparator(.hidden)
 
             // Transactions
-            if viewModel.transactions.isEmpty {
+            if !viewModel.hasLoadedOnce {
+                Section {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                }
+            } else if viewModel.transactions.isEmpty {
                 Section {
                     AppEmptyStateView(
                         "home.emptyPeriod.title".localized,
@@ -158,20 +165,9 @@ struct WalletDetailView: View {
         }
         .debtDeletionBlockedAlert($viewModel.blockedDeletionMessage)
         .onAppear {
-            viewModel.fetchTransactions()
+            viewModel.setVisible(true)
         }
-        .onChange(of: showingAddExpense) { _, newValue in
-            if !newValue { viewModel.fetchTransactions() }
-        }
-        .onChange(of: showingAddIncome) { _, newValue in
-            if !newValue { viewModel.fetchTransactions() }
-        }
-        .onChange(of: showingAdjustBalance) { _, newValue in
-            if !newValue { viewModel.fetchTransactions() }
-        }
-        .onChange(of: transactionToEdit) { _, newValue in
-            if newValue == nil { viewModel.fetchTransactions() }
-        }
+        .onDisappear { viewModel.setVisible(false) }
     }
 
     // MARK: - Hero

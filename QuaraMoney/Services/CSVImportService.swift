@@ -85,6 +85,30 @@ struct CSVImportResult {
     let skippedReasons: [String]
 }
 
+struct CSVImportCategorySnapshot: Sendable {
+    let persistentID: PersistentIdentifier
+    let name: String
+    let type: TransactionType
+
+    init(_ category: Category) {
+        persistentID = category.persistentModelID
+        name = category.name
+        type = category.type
+    }
+}
+
+struct CSVImportWalletSnapshot: Sendable {
+    let persistentID: PersistentIdentifier
+    let name: String
+    let currencyCode: String
+
+    init(_ wallet: Wallet) {
+        persistentID = wallet.persistentModelID
+        name = wallet.name
+        currencyCode = wallet.currencyCode
+    }
+}
+
 // MARK: - CSV Import Service
 @MainActor
 final class CSVImportService {
@@ -95,20 +119,21 @@ final class CSVImportService {
     private static let maxCategoryNameLength = 100
     private static let maxWalletNameLength = 100
     
-    // Supported date formats (ordered by priority)
-    private let dateFormats = [
-        "yyyy-MM-dd",
-        "yyyy/MM/dd",
-        "MM/dd/yyyy",
-        "dd/MM/yyyy",
-        "MM-dd-yyyy",
-        "dd-MM-yyyy",
-        "yyyy-MM-dd HH:mm:ss",
-        "MM/dd/yyyy HH:mm:ss"
-    ]
+    // One formatter per supported import format, reused for every CSV row.
+    private let dateFormatters: [DateFormatter]
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        dateFormatters = [
+            "yyyy-MM-dd", "yyyy/MM/dd", "MM/dd/yyyy", "dd/MM/yyyy",
+            "MM-dd-yyyy", "dd-MM-yyyy", "yyyy-MM-dd HH:mm:ss",
+            "MM/dd/yyyy HH:mm:ss"
+        ].map { format in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = format
+            return formatter
+        }
     }
     
     // MARK: - String Sanitization
@@ -268,11 +293,7 @@ final class CSVImportService {
     // MARK: - Date Parsing
     private func parseDate(_ string: String) -> Date? {
         let trimmed = string.trimmingCharacters(in: .whitespaces)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        
-        for format in dateFormats {
-            formatter.dateFormat = format
+        for formatter in dateFormatters {
             if let date = formatter.date(from: trimmed) {
                 return date
             }
@@ -345,13 +366,13 @@ final class CSVImportService {
     func importTransactions(
         from url: URL,
         mapping: CSVColumnMapping,
-        categories: [Category],
-        wallets: [Wallet],
-        defaultWallet: Wallet?,
+        categories: [CSVImportCategorySnapshot],
+        wallets: [CSVImportWalletSnapshot],
+        defaultWallet: CSVImportWalletSnapshot?,
         defaultCurrency: String,
 
-        categoryMappings: [String: Category] = [:],
-        walletMappings: [String: Wallet] = [:]
+        categoryMappings: [String: CSVImportCategorySnapshot] = [:],
+        walletMappings: [String: CSVImportWalletSnapshot] = [:]
     ) async throws -> CSVImportResult {
         guard url.startAccessingSecurityScopedResource() else {
             throw CSVImportError.accessDenied
@@ -367,11 +388,11 @@ final class CSVImportService {
         // We use the provided mappings (Value -> Entity) to apply manual overrides to all matching rows
         
         // Optimization: Cache matched categories/wallets by name to avoid O(N) lookup every row
-        var categoryCache: [String: Category] = [:]
-        var walletCache: [String: Wallet] = [:]
+        var categoryCache: [String: CSVImportCategorySnapshot] = [:]
+        var walletCache: [String: CSVImportWalletSnapshot] = [:]
         
         let batchSize = 100
-        var batchBuffer: [Transaction] = []
+        var pendingBatchCount = 0
         
         for try await line in url.lines {
             if rowIndex == 0 {
@@ -381,18 +402,20 @@ final class CSVImportService {
             
             let values = parseCSVLine(line)
             
-            // Parse fields
-            var date: Date?
-            if let col = mapping.dateColumn, col < values.count {
-                date = parseDate(values[col])
-            }
-            
-            var amount: Decimal?
-            if let col = mapping.amountColumn, col < values.count {
-                amount = parseAmount(values[col])
-            }
-            
-            guard let validDate = date, let validAmount = amount else {
+            let imported = importRow(
+                values,
+                mapping: mapping,
+                categories: categories,
+                wallets: wallets,
+                defaultWallet: defaultWallet,
+                defaultCurrency: defaultCurrency,
+                categoryMappings: categoryMappings,
+                walletMappings: walletMappings,
+                categoryCache: &categoryCache,
+                walletCache: &walletCache
+            )
+
+            guard imported else {
                 skippedCount += 1
                 if skippedReasons.count < 20 { // Limit errors
                     skippedReasons.append("Row \(rowIndex + 1): Invalid date or amount")
@@ -401,79 +424,18 @@ final class CSVImportService {
                 continue
             }
             
-            var type: TransactionType?
-            if let col = mapping.typeColumn, col < values.count {
-                type = parseType(values[col])
-            } else {
-                type = validAmount < 0 ? .expense : .income
-            }
-            let finalType = type ?? (validAmount < 0 ? .expense : .income)
-            
-            // Resolve Category
-            var category: Category?
-            if let col = mapping.categoryColumn, col < values.count {
-                let name = values[col]
-                // 1. Check explicit matching (manual override)
-                if let explicit = categoryMappings[name] {
-                    category = explicit
-                } else if let cached = categoryCache[name + finalType.rawValue] {
-                    category = cached
-                } else {
-                    category = matchCategory(name: name, type: finalType, from: categories)
-                    if let found = category {
-                        categoryCache[name + finalType.rawValue] = found
-                    }
-                }
-            }
-            
-            // Resolve Wallet
-            var wallet: Wallet?
-            if let col = mapping.walletColumn, col < values.count {
-                let name = values[col]
-                // 1. Check explicit matching (manual override)
-                if let explicit = walletMappings[name] {
-                    wallet = explicit
-                } else if let cached = walletCache[name] {
-                    wallet = cached
-                } else {
-                    wallet = matchWallet(name: name, from: wallets)
-                    if let found = wallet {
-                        walletCache[name] = found
-                    }
-                }
-            }
-            
-            // Note (sanitized)
-            var note: String?
-            if let col = mapping.noteColumn, col < values.count {
-                note = sanitizeNote(values[col])
-            }
-            
-            // Create Transaction
-            let transaction = Transaction(
-                amount: abs(validAmount),
-                currencyCode: wallet?.currencyCode ?? defaultWallet?.currencyCode ?? defaultCurrency,
-                date: validDate,
-                type: finalType
-            )
-            transaction.category = category
-            transaction.sourceWallet = wallet ?? defaultWallet
-            transaction.note = note
-            transaction.tags = TransactionTagParser.tags(in: note)
-
-            modelContext.insert(transaction)
-            batchBuffer.append(transaction)
             successCount += 1
+            pendingBatchCount += 1
             
-            if batchBuffer.count >= batchSize {
+            if pendingBatchCount >= batchSize {
                 try modelContext.save()
-                batchBuffer.removeAll()
+                pendingBatchCount = 0
             }
             
             rowIndex += 1
         }
         
-        if !batchBuffer.isEmpty {
+        if pendingBatchCount > 0 {
             try modelContext.save()
         }
         
@@ -485,6 +447,95 @@ final class CSVImportService {
             skippedCount: skippedCount,
             skippedReasons: skippedReasons
         )
+    }
+
+    /// Handles one already-read row synchronously. Any SwiftData objects
+    /// resolved from persistent IDs are consumed before the stream suspends for
+    /// its next line.
+    private func importRow(
+        _ values: [String],
+        mapping: CSVColumnMapping,
+        categories: [CSVImportCategorySnapshot],
+        wallets: [CSVImportWalletSnapshot],
+        defaultWallet: CSVImportWalletSnapshot?,
+        defaultCurrency: String,
+        categoryMappings: [String: CSVImportCategorySnapshot],
+        walletMappings: [String: CSVImportWalletSnapshot],
+        categoryCache: inout [String: CSVImportCategorySnapshot],
+        walletCache: inout [String: CSVImportWalletSnapshot]
+    ) -> Bool {
+        let date = mapping.dateColumn.flatMap { $0 < values.count ? parseDate(values[$0]) : nil }
+        let amount = mapping.amountColumn.flatMap { $0 < values.count ? parseAmount(values[$0]) : nil }
+        guard let date, let amount else { return false }
+
+        let parsedType = mapping.typeColumn.flatMap { $0 < values.count ? parseType(values[$0]) : nil }
+        let type = parsedType ?? (amount < 0 ? .expense : .income)
+
+        var categorySnapshot: CSVImportCategorySnapshot?
+        if let column = mapping.categoryColumn, column < values.count {
+            let name = values[column]
+            let cacheKey = name + type.rawValue
+            categorySnapshot = categoryMappings[name] ?? categoryCache[cacheKey]
+            if categorySnapshot == nil {
+                categorySnapshot = matchCategory(name: name, type: type, from: categories)
+                categoryCache[cacheKey] = categorySnapshot
+            }
+        }
+
+        var walletSnapshot: CSVImportWalletSnapshot?
+        if let column = mapping.walletColumn, column < values.count {
+            let name = values[column]
+            walletSnapshot = walletMappings[name] ?? walletCache[name]
+            if walletSnapshot == nil {
+                walletSnapshot = matchWallet(name: name, from: wallets)
+                walletCache[name] = walletSnapshot
+            }
+        }
+
+        let resolvedWalletSnapshot = walletSnapshot ?? defaultWallet
+        let note = mapping.noteColumn.flatMap { $0 < values.count ? sanitizeNote(values[$0]) : nil }
+        let transaction = Transaction(
+            amount: abs(amount),
+            currencyCode: resolvedWalletSnapshot?.currencyCode ?? defaultCurrency,
+            date: date,
+            type: type
+        )
+        if let categorySnapshot {
+            transaction.category = modelContext.model(for: categorySnapshot.persistentID) as? Category
+        }
+        if let resolvedWalletSnapshot {
+            transaction.sourceWallet = modelContext.model(for: resolvedWalletSnapshot.persistentID) as? Wallet
+        }
+        transaction.note = note
+        transaction.tags = TransactionTagParser.tags(in: note)
+        modelContext.insert(transaction)
+        return true
+    }
+
+    private func matchCategory(
+        name: String,
+        type: TransactionType,
+        from categories: [CSVImportCategorySnapshot]
+    ) -> CSVImportCategorySnapshot? {
+        let normalized = name.lowercased().trimmingCharacters(in: .whitespaces)
+        let typed = categories.filter { $0.type == type }
+        return typed.first { $0.name.lowercased() == normalized }
+            ?? typed.first {
+                let categoryName = $0.name.lowercased()
+                return categoryName.contains(normalized) || normalized.contains(categoryName)
+            }
+    }
+
+    private func matchWallet(
+        name: String,
+        from wallets: [CSVImportWalletSnapshot]
+    ) -> CSVImportWalletSnapshot? {
+        let normalized = name.lowercased().trimmingCharacters(in: .whitespaces)
+        return wallets.first { $0.name.lowercased() == normalized }
+            ?? wallets.first {
+                let walletName = $0.name.lowercased()
+                return walletName.contains(normalized) || normalized.contains(walletName)
+            }
     }
     
     // MARK: - Fetch Helpers

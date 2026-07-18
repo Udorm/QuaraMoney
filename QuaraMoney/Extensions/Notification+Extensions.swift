@@ -14,4 +14,8 @@ extension Notification.Name {
     /// Posted by CurrencyManager when the preferred display currency changes,
     /// so derived caches (e.g. WalletBalanceStore's net-worth series) recompute.
     static let preferredCurrencyDidChange = Notification.Name("preferredCurrencyDidChange")
+    /// Posted after a network exchange-rate refresh successfully updates the
+    /// live table. Snapshot-based consumers recompute through their visibility
+    /// gates; render-time readers are refreshed by Observation automatically.
+    static let currencyRatesDidChange = Notification.Name("currencyRatesDidChange")
 }

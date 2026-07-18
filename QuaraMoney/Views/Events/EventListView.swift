@@ -155,26 +155,15 @@ struct EventRowView: View {
         }
     }
     
-    // Computed (not cached) so they follow a runtime language switch.
-    private static var shortDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateFormat = "d MMM"
-        return formatter
-    }
-
-    private static var yearDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateFormat = "d MMM yyyy"
-        return formatter
-    }
-    
     private func formatDateRange(start: Date, end: Date?) -> String {
         let currentYear = Calendar.current.component(.year, from: Date())
         let startYear = Calendar.current.component(.year, from: start)
+        let locale = LanguageManager.shared.selectedLanguage.locale
         
-        let startFormatter = startYear == currentYear ? Self.shortDateFormatter : Self.yearDateFormatter
+        let startFormatter = AppDateFormatterCache.formatter(
+            dateFormat: startYear == currentYear ? "d MMM" : "d MMM yyyy",
+            locale: locale
+        )
         let startStr = startFormatter.string(from: start)
         
         if let end = end {
@@ -182,7 +171,10 @@ struct EventRowView: View {
                 return startStr
             } else {
                 let endYear = Calendar.current.component(.year, from: end)
-                let endFormatter = endYear == currentYear ? Self.shortDateFormatter : Self.yearDateFormatter
+                let endFormatter = AppDateFormatterCache.formatter(
+                    dateFormat: endYear == currentYear ? "d MMM" : "d MMM yyyy",
+                    locale: locale
+                )
                 let endStr = endFormatter.string(from: end)
                 
                 return "\(startStr) – \(endStr)"

@@ -9,7 +9,7 @@ import Foundation
 /// (`string(from:)` is thread-safe on iOS 7+ as long as the formatter isn't
 /// mutated), which makes the cache safe for the nonisolated call sites.
 enum CurrencyFormatterCache {
-    private static let lock = NSLock()
+    nonisolated private static let lock = NSLock()
     nonisolated(unsafe) private static var formatters: [String: NumberFormatter] = [:]
     nonisolated(unsafe) private static var symbols: [String: String] = [:]
 
@@ -33,7 +33,7 @@ enum CurrencyFormatterCache {
     /// Plain decimal formatter for the calculator keypad's amount display
     /// (0–2 fraction digits, "," grouping — deliberately locale-fixed to match
     /// the keypad's Western-digit input).
-    nonisolated(unsafe) static let keypadAmount: NumberFormatter = {
+    nonisolated static let keypadAmount: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 0
@@ -71,7 +71,7 @@ enum CurrencyFormatterCache {
 /// (dateFormat, locale) pair. Callers pass the locale explicitly so the in-app
 /// language (incl. Khmer digits) is honored; see `Locale.app`.
 enum AppDateFormatterCache {
-    private static let lock = NSLock()
+    nonisolated private static let lock = NSLock()
     nonisolated(unsafe) private static var formatters: [String: DateFormatter] = [:]
 
     nonisolated static func invalidate() {
@@ -87,6 +87,24 @@ enum AppDateFormatterCache {
         let formatter = DateFormatter()
         formatter.locale = locale
         formatter.dateFormat = dateFormat
+        formatters[key] = formatter
+        return formatter
+    }
+
+    nonisolated static func formatter(
+        dateStyle: DateFormatter.Style,
+        timeStyle: DateFormatter.Style,
+        doesRelativeDateFormatting: Bool,
+        locale: Locale
+    ) -> DateFormatter {
+        let key = "style|\(dateStyle.rawValue)|\(timeStyle.rawValue)|\(doesRelativeDateFormatting)|\(locale.identifier)"
+        lock.lock(); defer { lock.unlock() }
+        if let cached = formatters[key] { return cached }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = dateStyle
+        formatter.timeStyle = timeStyle
+        formatter.doesRelativeDateFormatting = doesRelativeDateFormatting
         formatters[key] = formatter
         return formatter
     }

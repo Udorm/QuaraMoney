@@ -25,27 +25,33 @@ struct ProAnalyticsView: View {
                         showFilterSheet = true
                     }
 
-                    // Regular width (iPad / large iPhone landscape): two-column masonry.
-                    if horizontalSizeClass == .regular {
-                        HStack(alignment: .top, spacing: 16) {
-                            VStack(spacing: 16) {
-                                ForEach(columnSections(0)) { sectionView($0) }
-                            }
-                            VStack(spacing: 16) {
-                                ForEach(columnSections(1)) { sectionView($0) }
-                            }
-                        }
-                        .padding(.horizontal)
+                    if !vm.hasLoadedOnce {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 48)
                     } else {
-                        VStack(spacing: 16) {
-                            ForEach(vm.layout.visibleSections) { sectionView($0) }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    if vm.layout.visibleSections.isEmpty {
-                        ProAllHiddenPlaceholder { showCustomizeSheet = true }
+                        // Regular width (iPad / large iPhone landscape): two-column masonry.
+                        if horizontalSizeClass == .regular {
+                            HStack(alignment: .top, spacing: 16) {
+                                VStack(spacing: 16) {
+                                    ForEach(columnSections(0)) { sectionView($0) }
+                                }
+                                VStack(spacing: 16) {
+                                    ForEach(columnSections(1)) { sectionView($0) }
+                                }
+                            }
                             .padding(.horizontal)
+                        } else {
+                            VStack(spacing: 16) {
+                                ForEach(vm.layout.visibleSections) { sectionView($0) }
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        if vm.layout.visibleSections.isEmpty {
+                            ProAllHiddenPlaceholder { showCustomizeSheet = true }
+                                .padding(.horizontal)
+                        }
                     }
                 }
                 .padding(.vertical)

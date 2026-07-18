@@ -59,8 +59,9 @@ struct AnalysisContentView: View {
 
                     // Charts (Now includes the Period Picker)
                     SpendingTrendChart(vm: vm)
+                        .redacted(reason: vm.hasLoadedOnce ? [] : .placeholder)
 
-                    if !vm.categoryStats.isEmpty {
+                    if vm.hasLoadedOnce && !vm.categoryStats.isEmpty {
                         CategoryBreakdownChart(vm: vm)
                     }
                 }

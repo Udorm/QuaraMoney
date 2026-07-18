@@ -10,6 +10,7 @@ struct MoreView: View {
     @ObservedObject private var auth = SupabaseAuthManager.shared
     @State private var avatarImage: UIImage?
     @State private var isVisible = false
+    @State private var needsAvatarRefresh = true
     private var router = AppRouter.shared
 
     // Simple predicate only (a compound `isActive && deletedAt == nil` #Predicate
@@ -125,11 +126,17 @@ struct MoreView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .profileDidChange)) { _ in
                 // A sync replaced/removed the avatar file — reload the banner image.
-                loadAvatar()
+                if isVisible {
+                    loadAvatar()
+                } else {
+                    needsAvatarRefresh = true
+                }
             }
             .onAppear {
                 isVisible = true
-                loadAvatar()
+                if needsAvatarRefresh {
+                    loadAvatar()
+                }
                 // Consume a deep-link that arrived before this view existed
                 // (LazyView delays creation until the More tab is selected).
                 consumePendingRecurringReview()
@@ -156,6 +163,7 @@ struct MoreView: View {
     }
 
     private func loadAvatar() {
+        needsAvatarRefresh = false
         guard !avatarPath.isEmpty else {
             avatarImage = nil
             return

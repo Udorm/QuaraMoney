@@ -49,6 +49,7 @@ final class FilteredTransactionsViewModelTests: XCTestCase {
 
         let vm = FilteredTransactionsViewModel(config: config)
         vm.configure(modelContext: context)
+        vm.setVisible(true)
 
         // Wait for task to finish loading
         for _ in 0..<100 {
@@ -89,6 +90,7 @@ final class FilteredTransactionsViewModelTests: XCTestCase {
 
         let vm = FilteredTransactionsViewModel(config: config)
         vm.configure(modelContext: context)
+        vm.setVisible(true)
 
         // Wait for load
         for _ in 0..<100 {
@@ -136,4 +138,3 @@ final class FilteredTransactionsViewModelTests: XCTestCase {
         XCTAssertTrue(queuedDeletions.contains { $0.table == "transactions" && $0.id == txn.id })
     }
 }
-

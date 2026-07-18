@@ -125,20 +125,23 @@ final class CurrencyManager {
         Self.convert(amount: amount, from: sourceCurrency, to: targetCurrency, rates: rates)
     }
     
-    func fetchRates() async {
+    @discardableResult
+    func fetchRates() async -> Bool {
         // We only really need to fetch if it's been a while, or if we are forced.
         // For now, let's respect a simple cache duration of 24 hours to avoid spamming the API
         // even if the user switches currencies back and forth.
         let now = Date().timeIntervalSince1970
         if rates.count > 1 && now - lastRatesFetchDate < 86400 {
-            return
+            return true
         }
 
         // Free API: open.er-api.com
-        guard let url = URL(string: "https://open.er-api.com/v6/latest/USD") else { return }
+        guard let url = URL(string: "https://open.er-api.com/v6/latest/USD") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await URLSession.shared.data(for: request)
             let response = try JSONDecoder().decode(ExchangeRateResponse.self, from: data)
             
             // Merge response rates into our rates
@@ -153,16 +156,18 @@ final class CurrencyManager {
             saveRatesToCache()
             
             self.lastRatesFetchDate = Date().timeIntervalSince1970
+            NotificationCenter.default.post(name: .currencyRatesDidChange, object: self)
             #if DEBUG
             print("Rates fetched successfully. USD -> KHR: \(self.rates["KHR"] ?? 0)")
             #endif
-            
+            return true
         } catch {
             #if DEBUG
             print("Failed to fetch rates: \(error)")
             #endif
             // Fallback defaults if empty
             if rates["KHR"] == nil { rates["KHR"] = 4000.0 }
+            return false
         }
     }
     
@@ -232,5 +237,4 @@ struct ExchangeRateResponse: Codable {
     let result: String
     let rates: [String: Double]
 }
-
 

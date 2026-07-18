@@ -4,7 +4,9 @@ import SwiftUI
 /// scanning. Replaces the cramped inline "Gemini API Key" field that assumed
 /// the user already knew what an API key was.
 struct ReceiptScanningSettingsView: View {
-    @StateObject private var securityManager = SecurityManager.shared
+    private var securityManager = SecurityManager.shared
+
+    init() {}
 
     /// Local mirror of the stored key so the field and status stay in sync
     /// without re-reading the keychain on every keystroke.

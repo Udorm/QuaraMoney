@@ -10,6 +10,7 @@ class FilteredTransactionsViewModel {
     var transactions: [Transaction] = []
     var totalAmount: Decimal = 0
     var isLoading = false
+    var hasLoadedOnce = false
     var searchText: String = "" {
         didSet {
             searchSubject.send(searchText)
@@ -17,7 +18,7 @@ class FilteredTransactionsViewModel {
     }
     var sortOption: TransactionSortOption {
         didSet {
-            fetchTransactions()
+            requestRefresh()
         }
     }
 
@@ -29,6 +30,8 @@ class FilteredTransactionsViewModel {
     /// changes can't apply stale results out of order.
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var refreshGeneration = 0
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
 
     init(config: TransactionFilterConfig) {
         self.config = config
@@ -37,21 +40,48 @@ class FilteredTransactionsViewModel {
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.fetchTransactions()
+                self?.requestRefresh()
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.requestRefresh()
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .preferredCurrencyDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.requestRefresh()
             }
             .store(in: &cancellables)
 
         searchSubject
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.fetchTransactions()
+                self?.requestRefresh()
             }
             .store(in: &cancellables)
     }
 
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
-        fetchTransactions()
+    }
+
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            fetchTransactions()
+        }
+    }
+
+    private func requestRefresh() {
+        if isVisible {
+            fetchTransactions()
+        } else {
+            needsRefresh = true
+        }
     }
 
     func fetchTransactions() {
@@ -164,6 +194,7 @@ class FilteredTransactionsViewModel {
                     }
                     self.totalAmount = total
                     self.isLoading = false
+                    self.hasLoadedOnce = true
                 }
             } catch {
                 await MainActor.run {

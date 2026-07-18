@@ -73,34 +73,49 @@ class CSVExportService {
     }
     
     @MainActor
-    func exportData(modelContext: ModelContext, wallets: Set<Wallet> = [], startDate: Date? = nil, endDate: Date? = nil) -> URL? {
+    func exportData(modelContext: ModelContext, walletIDs: Set<UUID> = [], startDate: Date? = nil, endDate: Date? = nil) -> URL? {
         do {
-            // Predicate construction in SwiftData can be tricky with optionals and sets.
-            // For simplicity and reliability in this complex filtering, we will fetch all and filter in memory depending on data size.
-            // If data is huge, we should optimize predicates.
-            // Let's try to use Predicate if possible, or mixed.
-            
-            let descriptor = FetchDescriptor<Transaction>(predicate: #Predicate<Transaction> { $0.deletedAt == nil }, sortBy: [SortDescriptor(\Transaction.date, order: .reverse)])
-            let allTransactions = try modelContext.fetch(descriptor)
-            
-            var filtered = allTransactions.filter { $0.event == nil }
+            let descriptor: FetchDescriptor<Transaction>
+            switch (startDate, endDate) {
+            case let (start?, end?):
+                descriptor = FetchDescriptor(
+                    predicate: #Predicate<Transaction> {
+                        $0.deletedAt == nil && $0.event == nil &&
+                        $0.date >= start && $0.date <= end
+                    },
+                    sortBy: [SortDescriptor(\Transaction.date, order: .reverse)]
+                )
+            case let (start?, nil):
+                descriptor = FetchDescriptor(
+                    predicate: #Predicate<Transaction> {
+                        $0.deletedAt == nil && $0.event == nil && $0.date >= start
+                    },
+                    sortBy: [SortDescriptor(\Transaction.date, order: .reverse)]
+                )
+            case let (nil, end?):
+                descriptor = FetchDescriptor(
+                    predicate: #Predicate<Transaction> {
+                        $0.deletedAt == nil && $0.event == nil && $0.date <= end
+                    },
+                    sortBy: [SortDescriptor(\Transaction.date, order: .reverse)]
+                )
+            case (nil, nil):
+                descriptor = FetchDescriptor(
+                    predicate: #Predicate<Transaction> {
+                        $0.deletedAt == nil && $0.event == nil
+                    },
+                    sortBy: [SortDescriptor(\Transaction.date, order: .reverse)]
+                )
+            }
+
+            var filtered = try modelContext.fetch(descriptor)
             
             // Filter by Wallet
-            if !wallets.isEmpty {
+            if !walletIDs.isEmpty {
                 filtered = filtered.filter { txn in
                     guard let wallet = txn.sourceWallet else { return false }
-                    return wallets.contains(wallet)
+                    return walletIDs.contains(wallet.id)
                 }
-            }
-            
-            // Filter by Date
-            if let start = startDate {
-                filtered = filtered.filter { $0.date >= start }
-            }
-            
-            if let end = endDate {
-                // Inclusive of end date (end of day usually)
-                filtered = filtered.filter { $0.date <= end }
             }
             
             return generateCSV(transactions: filtered)

@@ -6,11 +6,9 @@ import SwiftUI
 ///
 /// Exists so the tricky sync-toggle side effects live in exactly one place,
 /// regardless of which view hosts the toggle:
-///  • Re-enabling sync must re-run the first-sign-in conflict check. The
-///    app-level check is keyed on an auth-state change, which does NOT fire on a
-///    pure re-enable (e.g. after "Decide Later", which turns sync off but keeps
-///    the session). Without the re-check, re-enabling could auto-push local data
-///    and re-duplicate it.
+    ///  • Re-enabling sync restarts auth. QuaraMoneyApp observes the same
+    ///    AppStorage flag and owns the reconcile/conflict/sync pipeline so it can
+    ///    invalidate account maintenance in the same auth generation model.
 ///  • Disabling sync must stop the Realtime channel — previously it kept the
 ///    socket subscribed and idle-triggering no-op syncs.
 @MainActor
@@ -19,23 +17,12 @@ final class AccountViewModel {
     var isConfigured: Bool { SupabaseConfig.isConfigured }
 
     /// Side effects of the master Cloud Sync toggle.
-    func syncEnabledChanged(_ enabled: Bool, context: ModelContext) {
+    func syncEnabledChanged(_ enabled: Bool) {
         guard enabled else {
             SyncRealtime.shared.stop()
             return
         }
         SupabaseAuthManager.shared.start()
-        if SupabaseAuthManager.shared.isSignedIn {
-            Task {
-                switch await SyncEngine.shared.checkFirstSignInConflict(context: context) {
-                case .noConflict:
-                    await SyncEngine.shared.syncIfOperational(context: context)
-                    SyncRealtime.shared.start(context: context)
-                case .conflict, .checkFailed:
-                    break
-                }
-            }
-        }
     }
 
     /// True when the device is signed out but its local store still belongs to

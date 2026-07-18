@@ -1,19 +1,30 @@
 import SwiftUI
 import LocalAuthentication
-import Combine
+import Observation
 
 @MainActor
-class SecurityManager: ObservableObject {
+@Observable
+final class SecurityManager {
     static let shared = SecurityManager()
     
-    @Published var isAppLocked = false
-    @Published var isAuthenticating = false
+    var isAppLocked: Bool
+    var isAuthenticating = false
     /// Set when authentication cannot run at all (e.g. the device passcode was
     /// removed). Shown on the lock screen; the app stays locked (fail closed).
-    @Published var lockErrorMessage: String?
-    @AppStorage("isAppLockEnabled") var isAppLockEnabled = false
+    var lockErrorMessage: String?
+    var isAppLockEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isAppLockEnabled, forKey: "isAppLockEnabled")
+        }
+    }
     
-    private init() {}
+    private init() {
+        let isEnabled = UserDefaults.standard.bool(forKey: "isAppLockEnabled")
+        isAppLockEnabled = isEnabled
+        // The cold-launch decision is made while the singleton is constructed,
+        // before SwiftUI builds the first scene frame.
+        isAppLocked = isEnabled
+    }
     
     func authenticate() {
         // Avoid stacking multiple biometric prompts when several triggers

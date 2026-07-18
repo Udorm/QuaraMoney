@@ -47,6 +47,10 @@ final class WalletBalanceStore {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.handleDataDidUpdate() }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleDataDidUpdate() }
+            .store(in: &cancellables)
     }
 
     func configure(container: ModelContainer) {
@@ -75,6 +79,7 @@ final class WalletBalanceStore {
         guard let container else { return }
         let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
         let rates = CurrencyManager.shared.rates
+        let historyDays = Self.historyDays
 
         refreshGeneration += 1
         let generation = refreshGeneration
@@ -83,7 +88,7 @@ final class WalletBalanceStore {
             let context = ModelContext(container)
             let result = Self.compute(
                 context: context,
-                days: Self.historyDays,
+                days: historyDays,
                 netWorthCurrency: preferredCurrency,
                 rates: rates
             )

@@ -7,27 +7,56 @@
 
 import SwiftUI
 import SwiftData
+import Combine
+import Supabase
+
+nonisolated private struct MaintenanceDatabaseResult: Sendable {
+    let commit: StartupMaintenanceGuard.CommitResult
+    let rolloverNotificationPayloads: [BudgetRolloverNotificationPayload]
+}
+
+nonisolated private enum MaintenanceDatabaseOutcome: Sendable {
+    case saved(MaintenanceDatabaseResult)
+    case invalidated
+    case failed
+}
 
 @main
 struct QuaraMoneyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var languageManager = LanguageManager.shared
     @StateObject private var errorService = ErrorService.shared
-    @StateObject private var securityManager = SecurityManager.shared
+    @State private var securityManager: SecurityManager
     @StateObject private var authManager = SupabaseAuthManager.shared
+    @AppStorage("isSupabaseSyncEnabled") private var isSyncEnabled = false
     // NOTE: deliberately NOT observing SyncEngine here — its isSyncing/lastSyncDate
     // churn would invalidate the whole scene on every auto-sync. The conflict
     // sheet observes it from a leaf modifier instead (SyncConflictPresenter).
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var showPrivacyOverlay = false
-    @State private var showSplash = !_hasShownSplash
+    @State private var showSplash: Bool
+    @State private var authGeneration = 0
+    @State private var accountPipelineState: AccountPipelineState = .sessionRestoring
+    @State private var accountMaintenanceCompleted = false
+    @State private var maintenanceTask: Task<Void, Never>?
+    @State private var pipelineTask: Task<Void, Never>?
+    @State private var reminderRebuildInFlight = false
     /// Main-actor-only (read in the App's init and written from the splash
     /// completion, both on the main actor).
     @MainActor private static var _hasShownSplash = false
     
     init() {
-        // All heavy work deferred to .task{} modifiers
+        let container = Self.sharedContainer
+        let securityManager = SecurityManager.shared
+        _securityManager = State(initialValue: securityManager)
+        _showSplash = State(initialValue: !Self._hasShownSplash)
+
+        // Critical phase: install save tracking and appearance before any scene
+        // content can mount beneath the short splash.
+        SyncMutationTracker.start(mainContext: container.mainContext)
+        SyncEngine.shared.enableAutoSync(context: container.mainContext)
+        UIFont.setupAppAppearance()
     }
     
     // MARK: - ModelContainer (lazily created on first access)
@@ -131,8 +160,10 @@ struct QuaraMoneyApp: App {
                 Group {
                     if isOnboardingCompleted {
                         ContentView()
-                            .task {
-                                setupServices()
+                            .task(id: showSplash) {
+                                setupGlobalServicesIfNeeded()
+                                guard !showSplash else { return }
+                                startAccountMaintenanceIfNeeded()
                             }
                     } else {
                         OnboardingView()
@@ -142,14 +173,7 @@ struct QuaraMoneyApp: App {
 
                 if showSplash {
                     SplashScreenView {
-                        Self._hasShownSplash = true
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showSplash = false
-                        }
-                        // Cold-launch quick action: hand the staged shortcut to
-                        // the router now that the splash is gone — HomeView
-                        // presents the sheet as soon as it's visible.
-                        Self.transferPendingShortcutToRouter()
+                        finishSplash()
                     }
                     .transition(.opacity)
                 }
@@ -182,42 +206,34 @@ struct QuaraMoneyApp: App {
                     .environmentObject(authManager)
             }
             .task {
-                // Track local edits so the sync engine can detect changes.
-                // Harmless when sync is off (just stamps local metadata).
-                SyncMutationTracker.start(mainContext: sharedModelContainer.mainContext)
-                // Auto-sync after local edits (debounced); no-op when sync is off.
-                SyncEngine.shared.enableAutoSync(context: sharedModelContainer.mainContext)
                 // Restore an existing session on launch when sync is enabled.
                 if SupabaseFeatureFlags.isSyncEnabled {
                     authManager.start()
+                } else {
+                    accountPipelineState = .notApplicable
+                    startAccountMaintenanceIfNeeded()
+                }
+                // Rare path: a shortcut arrived on a scene (re)connect in a
+                // process where the splash won't show — hand it over directly.
+                if !showSplash {
+                    Self.transferPendingShortcutToRouter()
                 }
             }
             .onChange(of: authManager.state) { _, _ in
-                if authManager.isSignedIn {
-                    // A password-recovery link signs the user in, but they came
-                    // to set a new password — deferring the pipeline keeps the
-                    // data-conflict sheet from landing on top of the reset
-                    // sheet. Re-run below when the reset finishes.
-                    guard !authManager.passwordRecoveryPending else { return }
-                    runPostSignInPipeline()
-                } else {
-                    SyncRealtime.shared.stop()
-                }
+                handleAuthTransition()
+            }
+            .onChange(of: isSyncEnabled) { _, _ in
+                handleAuthTransition()
             }
             .onChange(of: authManager.passwordRecoveryPending) { _, pending in
                 // Password reset finished (saved or dismissed): run the pipeline
                 // that was deferred when the recovery link signed the user in.
                 if !pending && authManager.isSignedIn {
-                    runPostSignInPipeline()
+                    guard let userID = currentAuthUserID else { return }
+                    runPostSignInPipeline(userID: userID, generation: authGeneration)
                 }
             }
             .preferredColorScheme(selectedTheme.colorScheme)
-            .task {
-                // Deferred from init() — runs after first frame renders
-                UIFont.setupAppAppearance()
-                // Pre-warm common font sizes on background thread for smoother scrolling
-                UIFont.prewarmFontCache()
-            }
             .alert(
                 item: $errorService.currentError
             ) { appError in
@@ -266,25 +282,31 @@ struct QuaraMoneyApp: App {
                         securityManager.authenticate()
                     }
                     // Pull any changes from other devices, then resume live updates.
-                    Task { await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext) }
+                    let generation = authGeneration
+                    let userID = currentAuthUserID
+                    Task { @MainActor in
+                        await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext)
+                        guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+                            authUserID: userID,
+                            generation: generation,
+                            currentAuthUserID: currentAuthUserID,
+                            currentGeneration: authGeneration
+                        ) else { return }
+                        await refreshRecurringRemindersIfSafe()
+                    }
                     SyncRealtime.shared.start(context: sharedModelContainer.mainContext)
-                    // Re-arm reminders and refresh the due badge for any rules that
-                    // came due while we were away.
-                    Task { await RecurringNotificationService.rescheduleAll(in: sharedModelContainer.mainContext) }
                 @unknown default:
                     break
                 }
             }
-            .task {
-                // Lock on cold launch if the user enabled app-lock.
-                if securityManager.isAppLockEnabled {
-                    securityManager.isAppLocked = true
-                }
-                // Rare path: a shortcut arrived on a scene (re)connect in a
-                // process where the splash won't show — hand it over directly.
-                if !showSplash {
-                    Self.transferPendingShortcutToRouter()
-                }
+            .onReceive(SyncEngine.shared.$conflictState.removeDuplicates()) { _ in
+                handleSyncSettlementChange()
+            }
+            .onReceive(SyncEngine.shared.$isSyncing.removeDuplicates()) { _ in
+                handleSyncSettlementChange()
+            }
+            .onReceive(SyncEngine.shared.$hasCompletedInitialSync.removeDuplicates()) { _ in
+                handleSyncSettlementChange()
             }
         }
         .modelContainer(sharedModelContainer)
@@ -325,123 +347,457 @@ struct QuaraMoneyApp: App {
         }
     }
     
-    /// Post-sign-in sync pipeline: account reconcile + first-sign-in conflict
-    /// check, then sync + Realtime. Runs on auth-state change — or, when the
-    /// sign-in came from a password-recovery link, after the reset sheet closes.
-    private func runPostSignInPipeline() {
-        let context = sharedModelContainer.mainContext
-        // If a different account previously owned this device's local
-        // data, clear it before adopting the new account (prevents
-        // cross-account data mixing).
-        SyncEngine.shared.reconcileAccountIfNeeded(context: context)
-        Task {
-            // On first-ever sign-in: check whether both the device and
-            // cloud have existing data. `.conflict` pauses sync and
-            // shows the resolution sheet; `.checkFailed` (network)
-            // blocks sync entirely — proceeding could push duplicate
-            // data into an unverified cloud state. Realtime is also
-            // deferred in both cases.
-            switch await SyncEngine.shared.checkFirstSignInConflict(context: context) {
-            case .noConflict:
-                await SyncEngine.shared.syncIfOperational(context: context)
-                SyncRealtime.shared.start(context: context)
-            case .conflict, .checkFailed:
-                break
+    private enum AccountPipelineState: Equatable {
+        case notApplicable
+        case sessionRestoring
+        case checkingConflict
+        case conflictPending
+        case checkFailed
+        case initialSyncInFlight
+        case settled
+    }
+
+    private enum MaintenanceOutcome {
+        case completed
+        case invalidated
+        case failed
+    }
+
+    /// The 2-second BudgetNotificationService timing is intentionally preserved.
+    /// Account-scoped database maintenance has a separate completion lifecycle.
+    @MainActor private static var didRunGlobalSetup = false
+
+    private var currentAuthUserID: UUID? {
+        SupabaseManager.shared.client?.auth.currentUser?.id
+    }
+
+    private var currentMaintenanceIdentity: StartupMaintenanceIdentity {
+        StartupMaintenanceIdentity(
+            authUserID: currentAuthUserID,
+            localOwnerID: SyncEngine.localOwnerUUID,
+            authGeneration: authGeneration
+        )
+    }
+
+    private func finishSplash() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showSplash = false
+        } completion: {
+            Self._hasShownSplash = true
+            Self.transferPendingShortcutToRouter()
+            Task { @MainActor in
+                await Task.yield()
+                UIFont.prewarmFontCache()
             }
         }
     }
 
-    /// Once per launch: the `.task` that calls this is attached to ContentView,
-    /// whose identity resets on language change (`.id(fontRefreshID)`) — without
-    /// the guard, every language switch re-ran budget rollovers, category
-    /// stamping, and the notification setup.
-    @MainActor private static var didRunSetupServices = false
+    private func handleAuthTransition() {
+        authGeneration &+= 1
+        let generation = authGeneration
+        pipelineTask?.cancel()
+        maintenanceTask?.cancel()
+        pipelineTask = nil
+        accountMaintenanceCompleted = false
 
-    private func setupServices() {
-        guard !Self.didRunSetupServices else { return }
-        Self.didRunSetupServices = true
-
-        let container = sharedModelContainer
-
-        // Capture MainActor data to pass to background tasks
-        let rates = CurrencyManager.shared.rates
-        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
-        
-        // Perform heavy database operations in background (utility priority to avoid competing with UI)
-        Task.detached(priority: .utility) {
-            let context = ModelContext(container)
-
-            // Recurring rules are confirm-before-post: they are NOT auto-generated
-            // on launch. Due occurrences surface in the Recurring review inbox.
-            // Refresh due-date reminders to match the current rules (the helper is
-            // @MainActor, so its ModelContext is created and used on the main actor).
-            await Self.rescheduleRecurringReminders(container)
-
-            // Check budget rollovers
-            BudgetRolloverService.checkAndProcessBudgetRollovers(
-                modelContext: context,
-                rates: rates,
-                preferredCurrency: preferredCurrency
-            )
-
-            // Snapshot ownership before touching categories: if a first-sign-in
-            // conflict resolution claims the device while this task is running,
-            // its wipe/pull races our background context — roll back instead of
-            // saving stale inserts on top of the freshly adopted cloud data.
-            let ownedAtStart = SyncEngine.isLocalStoreAccountOwned
-            do {
-                // Stamp canonical keys onto pre-key categories and merge duplicates
-                // (idempotent; runs for owned devices too so legacy cloud rows gain
-                // keys and cross-language/dual-device duplicates self-heal).
-                try CategoryCatalog.stampAndDedupe(in: context, owner: SyncEngine.localOwnerUUID)
-
-                // Seed/ensure default categories ONLY on a device that has never
-                // been claimed by a cloud account. Once the device is account-owned,
-                // categories are authoritative in the cloud and arrive via sync;
-                // auto-seeding here would re-create them after any sync wipe (e.g.
-                // "Use Cloud Data") and push duplicates back up.
-                if !ownedAtStart {
-                    try CategoryCatalog.seedDefaultsIfEmpty(in: context)
-                    for def in CategoryCatalog.all where def.ensureOnLaunch {
-                        _ = try CategoryCatalog.fetchOrCreate(key: def.key, in: context)
-                    }
-                }
-
-                if SyncEngine.isLocalStoreAccountOwned != ownedAtStart {
-                    context.rollback()
-                } else {
-                    try context.save()
-                }
-            } catch {
-                #if DEBUG
-                print("[Setup] Failed to save default data: \(error)")
-                #endif
+        if reminderRebuildInFlight {
+            Task { @MainActor in
+                await RecurringNotificationService.clearAllPendingRequests()
             }
         }
-        // Defer notification setup to avoid blocking the main thread at launch
+
+        guard SupabaseFeatureFlags.isSyncEnabled else {
+            accountPipelineState = .notApplicable
+            SyncRealtime.shared.stop()
+            startAccountMaintenanceIfNeeded()
+            return
+        }
+
+        switch authManager.state {
+        case .unknown:
+            accountPipelineState = .sessionRestoring
+        case .signedOut:
+            accountPipelineState = .notApplicable
+            SyncRealtime.shared.stop()
+            startAccountMaintenanceIfNeeded()
+        case .signedIn:
+            guard !authManager.passwordRecoveryPending,
+                  let userID = currentAuthUserID else {
+                accountPipelineState = .sessionRestoring
+                return
+            }
+            runPostSignInPipeline(userID: userID, generation: generation)
+        }
+    }
+
+    /// Post-sign-in reconcile → conflict check → initial sync pipeline. Every
+    /// completion is rejected if its auth user or generation is stale.
+    private func runPostSignInPipeline(userID: UUID, generation: Int) {
+        guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+            authUserID: userID,
+            generation: generation,
+            currentAuthUserID: currentAuthUserID,
+            currentGeneration: authGeneration
+        ) else { return }
+
+        let context = sharedModelContainer.mainContext
+        SyncEngine.shared.reconcileAccountIfNeeded(context: context)
+        accountPipelineState = .checkingConflict
+
+        pipelineTask?.cancel()
+        pipelineTask = Task { @MainActor in
+            let result = await SyncEngine.shared.checkFirstSignInConflict(context: context)
+            guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+                authUserID: userID,
+                generation: generation,
+                currentAuthUserID: currentAuthUserID,
+                currentGeneration: authGeneration
+            ) else { return }
+
+            switch result {
+            case .noConflict:
+                accountPipelineState = .initialSyncInFlight
+                await SyncEngine.shared.syncIfOperational(context: context)
+                guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+                    authUserID: userID,
+                    generation: generation,
+                    currentAuthUserID: currentAuthUserID,
+                    currentGeneration: authGeneration
+                ) else { return }
+                if SyncEngine.shared.hasCompletedInitialSync && !SyncEngine.shared.isSyncing {
+                    accountPipelineState = .settled
+                    SyncRealtime.shared.start(context: context)
+                }
+            case .conflict:
+                accountPipelineState = .conflictPending
+            case .checkFailed:
+                accountPipelineState = .checkFailed
+            }
+            startAccountMaintenanceIfNeeded()
+        }
+    }
+
+    private func handleSyncSettlementChange() {
+        let canAdvanceToSettled = accountPipelineState == .initialSyncInFlight ||
+            accountPipelineState == .conflictPending ||
+            accountPipelineState == .settled
+        if canAdvanceToSettled,
+           authManager.isSignedIn,
+           SyncEngine.shared.conflictState == .none,
+           SyncEngine.shared.hasCompletedInitialSync,
+           !SyncEngine.shared.isSyncing {
+            accountPipelineState = .settled
+        }
+        startAccountMaintenanceIfNeeded()
+    }
+
+    private func setupGlobalServicesIfNeeded() {
+        guard isOnboardingCompleted, !Self.didRunGlobalSetup else { return }
+        Self.didRunGlobalSetup = true
         Task { @MainActor in
-            // Let the UI settle before loading notifications
             try? await Task.sleep(for: .seconds(2))
             let mainContext = sharedModelContainer.mainContext
             BudgetNotificationService.shared.configure(modelContext: mainContext)
             BudgetNotificationService.shared.loadNotifications()
             BudgetNotificationService.shared.setupNotificationCategories()
-
-            // Opportunistically refresh FX rates so display-time conversions
-            // (reports, net worth, budgets in the preferred currency) are current.
-            // fetchRates() self-throttles to once per 24h, so this is cheap and
-            // runs for all users — including USD-base users, who previously never
-            // refreshed. Historical wallet balances are unaffected: they derive
-            // from each transaction's stored rate, not these live rates.
-            await CurrencyManager.shared.fetchRates()
         }
     }
 
-    /// Rebuilds recurring due-date reminders on launch. `@MainActor` so the
-    /// `ModelContext` is created and consumed entirely on the main actor.
-    @MainActor
-    private static func rescheduleRecurringReminders(_ container: ModelContainer) async {
-        await RecurringNotificationService.rescheduleAll(in: ModelContext(container))
+    private func maintenancePolicyInput(
+        settlementWait: StartupMaintenancePolicy.SettlementWait
+    ) -> StartupMaintenancePolicy.Input {
+        let syncEnabled = SupabaseFeatureFlags.isSyncEnabled
+        let authState: StartupMaintenancePolicy.AuthState
+        switch authManager.state {
+        case .unknown:
+            authState = .sessionRestoring
+        case .signedOut:
+            authState = .signedOut
+        case .signedIn:
+            authState = .signedIn
+        }
+
+        let conflictState: StartupMaintenancePolicy.ConflictState
+        if !syncEnabled || authState == .signedOut {
+            conflictState = .notApplicable
+        } else if SyncEngine.shared.conflictState != .none || accountPipelineState == .conflictPending {
+            conflictState = .pending
+        } else {
+            switch accountPipelineState {
+            case .checkingConflict, .sessionRestoring:
+                conflictState = .checking
+            case .checkFailed:
+                conflictState = .checkFailed
+            case .settled:
+                conflictState = .resolved
+            default:
+                conflictState = .checking
+            }
+        }
+
+        let initialSyncState: StartupMaintenancePolicy.InitialSyncState
+        if !syncEnabled || authState == .signedOut {
+            initialSyncState = .notApplicable
+        } else if SyncEngine.shared.isSyncing || accountPipelineState == .initialSyncInFlight {
+            initialSyncState = .inFlight
+        } else if SyncEngine.shared.hasCompletedInitialSync {
+            initialSyncState = .idleCompleted
+        } else {
+            initialSyncState = .idleIncomplete
+        }
+
+        return StartupMaintenancePolicy.Input(
+            isSyncEnabled: syncEnabled,
+            authState: authState,
+            conflictState: conflictState,
+            initialSyncState: initialSyncState,
+            settlementWait: settlementWait
+        )
+    }
+
+    private func waitForAccountSettlement(
+        authUserID: UUID?,
+        generation: Int,
+        timeout: Duration = .seconds(5)
+    ) async -> StartupMaintenancePolicy.SettlementWait {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+
+        while clock.now < deadline {
+            guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+                authUserID: authUserID,
+                generation: generation,
+                currentAuthUserID: currentAuthUserID,
+                currentGeneration: authGeneration
+            ), !Task.isCancelled else { return .timedOut }
+            let input = maintenancePolicyInput(settlementWait: .settled)
+            if StartupMaintenancePolicy.decision(for: input) == .run {
+                return .settled
+            }
+            if input.conflictState == .pending || input.conflictState == .checkFailed {
+                return .settled
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return .timedOut
+    }
+
+    private func startAccountMaintenanceIfNeeded() {
+        guard !showSplash,
+              isOnboardingCompleted,
+              !accountMaintenanceCompleted,
+              maintenanceTask == nil else { return }
+
+        let generation = authGeneration
+        let authUserID = currentAuthUserID
+        maintenanceTask = Task { @MainActor in
+            var shouldRearm = false
+            defer {
+                maintenanceTask = nil
+                if shouldRearm,
+                   StartupMaintenancePolicy.shouldRearm(
+                       after: .skipAndRearm,
+                       with: maintenancePolicyInput(settlementWait: .settled)
+                   ) {
+                    startAccountMaintenanceIfNeeded()
+                }
+            }
+
+            let wait = await waitForAccountSettlement(
+                authUserID: authUserID,
+                generation: generation
+            )
+            guard StartupMaintenanceGuard.acceptsSettlementCompletion(
+                authUserID: authUserID,
+                generation: generation,
+                currentAuthUserID: currentAuthUserID,
+                currentGeneration: authGeneration
+            ), !Task.isCancelled else {
+                shouldRearm = true
+                return
+            }
+            let input = maintenancePolicyInput(settlementWait: wait)
+            guard StartupMaintenancePolicy.decision(for: input) == .run else {
+                shouldRearm = true
+                return
+            }
+            let expectedIdentity = currentMaintenanceIdentity
+            switch await performAccountMaintenance(expectedIdentity: expectedIdentity) {
+            case .completed, .failed:
+                break
+            case .invalidated:
+                accountMaintenanceCompleted = false
+                shouldRearm = true
+            }
+        }
+    }
+
+    private func performAccountMaintenance(
+        expectedIdentity: StartupMaintenanceIdentity
+    ) async -> MaintenanceOutcome {
+        guard StartupMaintenanceGuard.isCurrent(
+            expectedIdentity,
+            current: currentMaintenanceIdentity
+        ) else { return .invalidated }
+
+        // The rate request self-throttles to 24 hours and has a bounded timeout.
+        // Failure leaves the cached/fallback table intact for rollover conversion.
+        _ = await CurrencyManager.shared.fetchRates()
+        guard !Task.isCancelled,
+              StartupMaintenanceGuard.isCurrent(
+                expectedIdentity,
+                current: currentMaintenanceIdentity
+              ) else { return .invalidated }
+
+        let container = sharedModelContainer
+        let rates = CurrencyManager.shared.rates
+        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
+        let databaseTask = Task.detached(priority: .utility) {
+            guard !Task.isCancelled else {
+                return MaintenanceDatabaseOutcome.invalidated
+            }
+            let identityBeforeWork = await MainActor.run {
+                currentMaintenanceIdentity
+            }
+            guard StartupMaintenanceGuard.isCurrent(
+                expectedIdentity,
+                current: identityBeforeWork
+            ), !Task.isCancelled else {
+                return MaintenanceDatabaseOutcome.invalidated
+            }
+
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            let rollover = BudgetRolloverService.prepareBudgetRollovers(
+                modelContext: context,
+                rates: rates,
+                preferredCurrency: preferredCurrency
+            )
+
+            do {
+                try CategoryCatalog.stampAndDedupe(
+                    in: context,
+                    owner: expectedIdentity.localOwnerID
+                )
+                if expectedIdentity.localOwnerID == nil {
+                    try CategoryCatalog.seedDefaultsIfEmpty(in: context)
+                    for definition in CategoryCatalog.all where definition.ensureOnLaunch {
+                        _ = try CategoryCatalog.fetchOrCreate(key: definition.key, in: context)
+                    }
+                }
+
+                guard !Task.isCancelled else {
+                    context.rollback()
+                    return MaintenanceDatabaseOutcome.invalidated
+                }
+                let identityBeforeSave = await MainActor.run {
+                    currentMaintenanceIdentity
+                }
+                guard !Task.isCancelled else {
+                    context.rollback()
+                    return MaintenanceDatabaseOutcome.invalidated
+                }
+                guard let commit = try StartupMaintenanceGuard.commit(
+                    context: context,
+                    expected: expectedIdentity,
+                    currentIdentity: { identityBeforeSave }
+                ) else {
+                    return MaintenanceDatabaseOutcome.invalidated
+                }
+                return MaintenanceDatabaseOutcome.saved(
+                    MaintenanceDatabaseResult(
+                        commit: commit,
+                        rolloverNotificationPayloads: rollover.notificationPayloads
+                    )
+                )
+            } catch {
+                context.rollback()
+                #if DEBUG
+                print("[Setup] Account maintenance failed: \(error)")
+                #endif
+                return MaintenanceDatabaseOutcome.failed
+            }
+        }
+
+        let databaseOutcome = await withTaskCancellationHandler {
+            await databaseTask.value
+        } onCancel: {
+            databaseTask.cancel()
+        }
+
+        switch databaseOutcome {
+        case .invalidated:
+            return .invalidated
+        case .failed:
+            return .failed
+        case .saved(let result):
+            guard !Task.isCancelled,
+                  StartupMaintenanceGuard.isCurrent(
+                    expectedIdentity,
+                    current: currentMaintenanceIdentity
+                  ) else { return .invalidated }
+
+            // Completion belongs to this exact generation and is set only after
+            // the guarded caller-owned save succeeds.
+            accountMaintenanceCompleted = true
+
+            if result.commit.hadChanges {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            }
+
+            for payload in result.rolloverNotificationPayloads {
+                guard StartupMaintenanceGuard.isCurrent(
+                    expectedIdentity,
+                    current: currentMaintenanceIdentity
+                ) else {
+                    BudgetRolloverService.cancelNotifications(result.rolloverNotificationPayloads)
+                    await RecurringNotificationService.clearAllPendingRequests()
+                    return .invalidated
+                }
+                await BudgetRolloverService.scheduleNotification(payload)
+            }
+
+            guard StartupMaintenanceGuard.isCurrent(
+                expectedIdentity,
+                current: currentMaintenanceIdentity
+            ) else {
+                BudgetRolloverService.cancelNotifications(result.rolloverNotificationPayloads)
+                await RecurringNotificationService.clearAllPendingRequests()
+                return .invalidated
+            }
+
+            reminderRebuildInFlight = true
+            defer { reminderRebuildInFlight = false }
+            let reminderContext = ModelContext(container)
+            let rebuilt = await RecurringNotificationService.rescheduleAll(in: reminderContext) {
+                StartupMaintenanceGuard.isCurrent(
+                    expectedIdentity,
+                    current: currentMaintenanceIdentity
+                )
+            }
+            return rebuilt ? .completed : .invalidated
+        }
+    }
+
+    private func refreshRecurringRemindersIfSafe() async {
+        guard accountMaintenanceCompleted else {
+            startAccountMaintenanceIfNeeded()
+            return
+        }
+        guard maintenanceTask == nil, !reminderRebuildInFlight else { return }
+        let input = maintenancePolicyInput(settlementWait: .settled)
+        guard StartupMaintenancePolicy.decision(for: input) == .run else { return }
+        let expectedIdentity = currentMaintenanceIdentity
+        reminderRebuildInFlight = true
+        defer { reminderRebuildInFlight = false }
+        _ = await RecurringNotificationService.rescheduleAll(
+            in: sharedModelContainer.mainContext
+        ) {
+            StartupMaintenanceGuard.isCurrent(
+                expectedIdentity,
+                current: currentMaintenanceIdentity
+            )
+        }
     }
 
     /// Moves a cold-launch quick-action shortcut onto the router, where the

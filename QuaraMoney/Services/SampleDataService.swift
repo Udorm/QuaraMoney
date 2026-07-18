@@ -13,8 +13,12 @@ final class SampleDataService {
     }
     
     func populate() async throws {
+        // Produce the large value-only payload before any SwiftData model is
+        // created, so no model survives across this suspension point.
+        let transactionData = await generateTransactionData()
+
         // Clear existing data
-        try await clearAllData()
+        try clearAllData()
         
         // Create Wallets
         let cashWallet = Wallet(name: "Cash", currencyCode: "USD", icon: "banknote", colorHex: "#4CAF50")
@@ -46,9 +50,6 @@ final class SampleDataService {
         let expenseCategories = [foodCategory, transportCategory, shoppingCategory, entertainmentCategory, billsCategory]
         let expenseWallets = [cashWallet, creditCardWallet]
         let categoryNotes = expenseCategories.map { "Sample \($0.name)" }
-        
-        // Generate transactions in background then insert
-        let transactionData = await generateTransactionData()
         
         // Batch insert transactions
         let batchSize = 100
@@ -148,7 +149,7 @@ final class SampleDataService {
         return data
     }
     
-    private func clearAllData() async throws {
+    private func clearAllData() throws {
         // Fetch and delete - safer than bulk delete for SwiftData
         let transactions = try modelContext.fetch(FetchDescriptor<Transaction>())
         for transaction in transactions { modelContext.delete(transaction) }

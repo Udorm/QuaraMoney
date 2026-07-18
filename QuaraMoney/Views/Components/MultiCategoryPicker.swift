@@ -5,6 +5,7 @@ import SwiftData
 struct MultiCategoryPicker: View {
     @Environment(\.dismiss) private var dismiss
     
+    // Category enum comparisons are unsupported in this store's SwiftData predicates.
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var allCategories: [Category]
     @Binding var selectedCategories: Set<UUID>
     
@@ -13,7 +14,7 @@ struct MultiCategoryPicker: View {
     
     var filteredCategories: [Category] {
         let expenseCategories = allCategories.filter { $0.type == .expense }
-        
+
         if searchText.isEmpty {
             return expenseCategories
         }
@@ -80,8 +81,7 @@ struct MultiCategoryPicker: View {
     }
     
     private func selectAll() {
-        let expenseIds = allCategories.filter { $0.type == .expense }.map { $0.id }
-        selectedCategories = Set(expenseIds)
+        selectedCategories = Set(allCategories.filter { $0.type == .expense }.map(\.id))
     }
     
     private func deselectAll() {

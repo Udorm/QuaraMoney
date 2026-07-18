@@ -732,17 +732,18 @@ final class EventLedgerService {
     }
     
     private func fetchParticipantLinks(eventId: UUID) throws -> [EventLedgerParticipant] {
-        // NOTE: Do not push `transaction?.event?.id == eventId` into the #Predicate.
-        // Core Data's SQL generator cannot translate a chained double optional-to-one
-        // relationship traversal and throws an ObjC NSException from NSSQLGenerator that
-        // bypasses Swift `try` and crashes the app (see removeOrArchiveMember). Fetch on
-        // the flat `deletedAt` scalar and filter the event hop in memory instead — this
-        // mirrors the @Query pattern the views already use for the same reason.
-        let descriptor = FetchDescriptor<EventLedgerParticipant>(
-            predicate: #Predicate { $0.deletedAt == nil },
-            sortBy: [SortDescriptor(\.orderIndex)]
-        )
-        return try modelContext.fetch(descriptor).filter { $0.transaction?.event?.id == eventId }
+        // A chained transaction?.event predicate crashes Core Data's SQL
+        // generator. Fetch the already event-scoped parent rows, then traverse
+        // their inverse relationship instead of materializing the global link table.
+        return try fetchLedgerTransactions(eventId: eventId)
+            .flatMap { $0.participants ?? [] }
+            .filter { $0.deletedAt == nil }
+            .sorted {
+                if $0.orderIndex == $1.orderIndex {
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                return $0.orderIndex < $1.orderIndex
+            }
     }
     
     private func participantLinksByTransaction(eventId: UUID) throws -> [UUID: [UUID]] {

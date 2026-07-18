@@ -142,6 +142,18 @@ class HomeViewModel {
                 self?.handleDataDidUpdate()
             }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleDataDidUpdate()
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .preferredCurrencyDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleDataDidUpdate()
+            }
+            .store(in: &cancellables)
 
         // Setup search debounce
         searchSubject

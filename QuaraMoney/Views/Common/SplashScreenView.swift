@@ -25,14 +25,14 @@ struct SplashScreenView: View {
             }
             .scaleEffect(isAnimating ? 1.0 : 0.92)
         }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.6)) {
+        .task {
+            withAnimation(.easeOut(duration: 0.3)) {
                 isAnimating = true
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                onFinished()
-            }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            onFinished()
         }
     }
 }

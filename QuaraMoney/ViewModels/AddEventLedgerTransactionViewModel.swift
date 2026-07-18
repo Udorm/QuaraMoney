@@ -146,9 +146,12 @@ class AddEventLedgerTransactionViewModel {
     
     func fetchCategories() {
         guard let modelContext = modelContext else { return }
-        let descriptor = FetchDescriptor<Category>(predicate: #Predicate { $0.deletedAt == nil })
-        let allCategories = (try? modelContext.fetch(descriptor)) ?? []
-        self.expenseCategories = allCategories.filter { $0.type == .expense }
+        // Category enum comparisons are unsupported in this store's SwiftData predicates.
+        let descriptor = FetchDescriptor<Category>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        )
+        let categories = (try? modelContext.fetch(descriptor)) ?? []
+        self.expenseCategories = categories.filter { $0.type == .expense }
     }
     
     func save() -> Bool {

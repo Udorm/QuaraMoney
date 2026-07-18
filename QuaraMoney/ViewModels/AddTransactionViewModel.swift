@@ -2,6 +2,16 @@ import Foundation
 import SwiftUI
 import SwiftData
 
+struct ReceiptWalletSnapshot: Sendable {
+    let persistentID: PersistentIdentifier
+    let name: String
+
+    init(_ wallet: Wallet) {
+        persistentID = wallet.persistentModelID
+        name = wallet.name
+    }
+}
+
 @Observable
 @MainActor
 class AddTransactionViewModel: BaseViewModel {
@@ -271,10 +281,16 @@ class AddTransactionViewModel: BaseViewModel {
         }
     }
     // MARK: - OCR / Receipt Scanning
-    func scanReceipt(image: UIImage, availableWallets: [Wallet] = []) async {
+    func scanReceipt(
+        image: UIImage,
+        availableWallets: [ReceiptWalletSnapshot] = [],
+        modelContext: ModelContext
+    ) async {
         do {
-            let walletNames = availableWallets.map { $0.name }
-            let parsedData = try await OCRService.shared.scanReceipt(from: image, availableWallets: walletNames)
+            let parsedData = try await OCRService.shared.scanReceipt(
+                from: image,
+                availableWallets: availableWallets.map(\.name)
+            )
             
             if let amount = parsedData.amount {
                 self.evaluatedAmount = amount
@@ -301,7 +317,8 @@ class AddTransactionViewModel: BaseViewModel {
             
             // Handle Wallet Suggestion
             if let suggestedName = parsedData.suggestedWalletName {
-                if let match = availableWallets.first(where: { $0.name.localizedCaseInsensitiveContains(suggestedName) }) {
+                if let snapshot = availableWallets.first(where: { $0.name.localizedCaseInsensitiveContains(suggestedName) }),
+                   let match = modelContext.model(for: snapshot.persistentID) as? Wallet {
                     self.selectedWallet = match
                     
                     // If no currency was detected, sync to the suggested wallet's currency

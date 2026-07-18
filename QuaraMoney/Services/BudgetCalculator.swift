@@ -140,4 +140,52 @@ enum BudgetCalculator {
             to: targetCurrency
         )
     }
+
+    /// Converted limits for many budgets with one income scan. Fixed budgets
+    /// are resolved immediately; percent-of-income budgets share the same pass
+    /// over transactions instead of each filtering the full array in row body.
+    static func limitsByBudget(
+        for budgets: [Budget],
+        transactions: [Transaction],
+        targetCurrency: String
+    ) -> [UUID: Decimal] {
+        let rates = CurrencyManager.shared.rates
+        let percentBudgets = budgets.filter {
+            if case .percentOfIncome = $0.amountType { return true }
+            return false
+        }
+        var incomeByBudgetID = Dictionary(
+            uniqueKeysWithValues: percentBudgets.map { ($0.id, Decimal.zero) }
+        )
+
+        for transaction in transactions where transaction.event == nil &&
+            transaction.type == .income && !transaction.excludeFromReports {
+            for budget in percentBudgets {
+                let range = budget.periodDateRange
+                guard transaction.date >= range.start && transaction.date < range.end else { continue }
+                incomeByBudgetID[budget.id, default: 0] += CurrencyManager.convert(
+                    amount: transaction.amount,
+                    from: transaction.currencyCode,
+                    to: budget.currencyCode,
+                    rates: rates
+                )
+            }
+        }
+
+        return Dictionary(uniqueKeysWithValues: budgets.map { budget in
+            let rawLimit: Decimal
+            if case .percentOfIncome = budget.amountType {
+                rawLimit = budget.calculateEffectiveLimit(income: incomeByBudgetID[budget.id] ?? 0)
+            } else {
+                rawLimit = budget.effectiveLimit
+            }
+            let converted = CurrencyManager.convert(
+                amount: rawLimit,
+                from: budget.currencyCode,
+                to: targetCurrency,
+                rates: rates
+            )
+            return (budget.id, converted)
+        })
+    }
 }

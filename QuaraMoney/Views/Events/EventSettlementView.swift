@@ -7,15 +7,21 @@ struct EventSettlementView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     
-    @Query private var allMembers: [EventMember]
-    @Query(filter: #Predicate<EventLedgerTransaction> { $0.deletedAt == nil }, sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
-    @Query(filter: #Predicate<EventLedgerParticipant> { $0.deletedAt == nil }, sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
+    @Query private var members: [EventMember]
+    @Query private var ledgerTransactions: [EventLedgerTransaction]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     init(event: Event) {
         self.event = event
-        let notDeleted = #Predicate<EventMember> { $0.deletedAt == nil }
-        _allMembers = Query(filter: notDeleted, sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)])
+        let eventID = event.id
+        _members = Query(
+            filter: EventScopedQuery.members(eventID: eventID),
+            sort: [SortDescriptor(\EventMember.sortOrder), SortDescriptor(\EventMember.name)]
+        )
+        _ledgerTransactions = Query(
+            filter: EventScopedQuery.transactions(eventID: eventID),
+            sort: [SortDescriptor(\EventLedgerTransaction.date, order: .reverse), SortDescriptor(\EventLedgerTransaction.id)]
+        )
     }
     
     @State private var exportToWallet = false
@@ -27,10 +33,6 @@ struct EventSettlementView: View {
     
     private var service: EventLedgerService {
         EventLedgerService(modelContext: modelContext)
-    }
-    
-    private var members: [EventMember] {
-        allMembers.filter { $0.event?.id == event.id }
     }
     
     private var budgetPoolMemberIds: Set<UUID> {
@@ -45,12 +47,16 @@ struct EventSettlementView: View {
         settlementMembers.filter { !$0.isArchived || $0.isLocalUser }
     }
     
-    private var ledgerTransactions: [EventLedgerTransaction] {
-        allLedgerTransactions.filter { $0.event?.id == event.id }
-    }
-    
     private var participantLinks: [EventLedgerParticipant] {
-        allParticipantLinks.filter { $0.transaction?.event?.id == event.id }
+        ledgerTransactions
+            .flatMap { $0.participants ?? [] }
+            .filter { $0.deletedAt == nil }
+            .sorted {
+                if $0.orderIndex == $1.orderIndex {
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                return $0.orderIndex < $1.orderIndex
+            }
     }
     
     private var activeTransactions: [EventLedgerTransaction] {

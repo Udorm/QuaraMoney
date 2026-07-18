@@ -7,15 +7,21 @@ struct EventDetailViewV2: View {
     @Environment(\.modelContext) private var modelContext
     
     // -- Query Data --
-    @Query private var allMembers: [EventMember]
-    @Query(filter: #Predicate<EventLedgerTransaction> { $0.deletedAt == nil }, sort: \EventLedgerTransaction.date, order: .reverse) private var allLedgerTransactions: [EventLedgerTransaction]
-    @Query(filter: #Predicate<EventLedgerParticipant> { $0.deletedAt == nil }, sort: \EventLedgerParticipant.orderIndex) private var allParticipantLinks: [EventLedgerParticipant]
+    @Query private var members: [EventMember]
+    @Query private var ledgerTransactions: [EventLedgerTransaction]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
     init(event: Event) {
         self.event = event
-        let notDeleted = #Predicate<EventMember> { $0.deletedAt == nil }
-        _allMembers = Query(filter: notDeleted, sort: [SortDescriptor(\EventMember.name), SortDescriptor(\EventMember.sortOrder)])
+        let eventID = event.id
+        _members = Query(
+            filter: EventScopedQuery.members(eventID: eventID),
+            sort: [SortDescriptor(\EventMember.name), SortDescriptor(\EventMember.sortOrder)]
+        )
+        _ledgerTransactions = Query(
+            filter: EventScopedQuery.transactions(eventID: eventID),
+            sort: [SortDescriptor(\EventLedgerTransaction.date, order: .reverse), SortDescriptor(\EventLedgerTransaction.id)]
+        )
     }
     
     // -- UI State --
@@ -37,32 +43,32 @@ struct EventDetailViewV2: View {
         EventLedgerService(modelContext: modelContext)
     }
     
-    private var members: [EventMember] {
-        allMembers.filter { $0.event?.id == event.id }
+    private struct DerivedState {
+        let settlementMembers: [EventMember]
+        let activeTransactions: [EventLedgerTransaction]
+        let linksByTransactionID: [UUID: [UUID]]
+        let settlement: EventSettlementResult
+        let balancesByMemberID: [UUID: EventMemberLedgerBalance]
+        let membersByID: [UUID: EventMember]
+        let localMember: EventMember?
+        let localNetMinor: Int64
+        let status: EventSettlementStatus
     }
-    
-    // Members specifically for settlement (excluding virtual budget pool users)
-    private var settlementMembers: [EventMember] {
-        members.filter { !$0.isBudgetPool }
-    }
-    
-    private var budgetPoolMemberIds: Set<UUID> {
-        Set(members.filter(\.isBudgetPool).map(\.id))
-    }
-    
-    private var ledgerTransactions: [EventLedgerTransaction] {
-        allLedgerTransactions.filter { $0.event?.id == event.id }
-    }
-    
-    private var activeTransactions: [EventLedgerTransaction] {
-        ledgerTransactions.filter { !$0.isDeleted }
-    }
-    
-    private var participantLinks: [EventLedgerParticipant] {
-        allParticipantLinks.filter { $0.transaction?.event?.id == event.id }
-    }
-    
-    private var linksByTransactionId: [UUID: [UUID]] {
+
+    /// One settlement pass per body evaluation. Previously four sibling
+    /// computed properties each invoked the engine independently.
+    private var derivedState: DerivedState {
+        let settlementMembers = members.filter { !$0.isBudgetPool }
+        let activeTransactions = ledgerTransactions.filter { !$0.isDeleted }
+        let participantLinks = ledgerTransactions
+            .flatMap { $0.participants ?? [] }
+            .filter { $0.deletedAt == nil }
+            .sorted {
+                if $0.orderIndex == $1.orderIndex {
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                return $0.orderIndex < $1.orderIndex
+            }
         var map: [UUID: [UUID]] = [:]
         for link in participantLinks {
             guard let transactionId = link.transaction?.id else { continue }
@@ -73,64 +79,57 @@ struct EventDetailViewV2: View {
         for transaction in activeTransactions where transaction.isSplitAll {
             map[transaction.id] = activeMemberIds
         }
-        return map
-    }
-    
-    private var settlementResult: EventSettlementResult {
-        EventSettlementEngine.compute(
+        let budgetPoolMemberIDs = Set(members.filter(\.isBudgetPool).map(\.id))
+        let settlement = EventSettlementEngine.compute(
             memberIds: settlementMembers.map(\.id),
             transactions: activeTransactions,
-            participantLinks: linksByTransactionId,
-            budgetPoolMemberIds: budgetPoolMemberIds
+            participantLinks: map,
+            budgetPoolMemberIds: budgetPoolMemberIDs
         )
-    }
-    
-    private var balanceByMemberId: [UUID: EventMemberLedgerBalance] {
-        Dictionary(uniqueKeysWithValues: settlementResult.balances.map { ($0.memberId, $0) })
-    }
-    
-    private var memberById: [UUID: EventMember] {
-        var map: [UUID: EventMember] = [:]
+        let balances = Dictionary(uniqueKeysWithValues: settlement.balances.map { ($0.memberId, $0) })
+        var membersByID: [UUID: EventMember] = [:]
         for member in members {
-            map[member.id] = member
+            membersByID[member.id] = member
         }
-        return map
-    }
-    
-    private var localMember: EventMember? {
-        settlementMembers.first(where: { $0.isLocalUser })
-    }
-    
-    private var localNetMinor: Int64 {
-        guard let localMember else { return 0 }
-        return balanceByMemberId[localMember.id]?.netMinor ?? 0
+        let localMember = settlementMembers.first(where: { $0.isLocalUser })
+        let localNet = localMember.flatMap { balances[$0.id]?.netMinor } ?? 0
+        let status: EventSettlementStatus
+        if settlement.totalCostMinor <= 0 {
+            status = .active
+        } else if event.confirmedSettlementRevision == event.ledgerRevision {
+            status = .settled
+        } else {
+            status = .readyToSettle
+        }
+        return DerivedState(
+            settlementMembers: settlementMembers,
+            activeTransactions: activeTransactions,
+            linksByTransactionID: map,
+            settlement: settlement,
+            balancesByMemberID: balances,
+            membersByID: membersByID,
+            localMember: localMember,
+            localNetMinor: localNet,
+            status: status
+        )
     }
     
     private var eventColor: Color {
         Color(hex: event.colorHex) ?? .blue
     }
     
-    private var settlementStatus: EventSettlementStatus {
-        guard settlementResult.totalCostMinor > 0 else { return .active }
-        if event.confirmedSettlementRevision == event.ledgerRevision { return .settled }
-        return .readyToSettle
-    }
-    
     var body: some View {
-        let currentSettlement = settlementResult
-        let balances = balanceByMemberId
-        let status = settlementStatus
-        let localNet = localNetMinor
+        let state = derivedState
         
         List {
             // 1. Summary Section
             Section {
                 EventSummaryCard(
                     event: event,
-                    totalCost: currentSettlement.totalCostMinor,
-                    userNetBalance: localNet,
-                    remainingPool: currentSettlement.walletRemainingMinor,
-                    settlementStatus: status,
+                    totalCost: state.settlement.totalCostMinor,
+                    userNetBalance: state.localNetMinor,
+                    remainingPool: state.settlement.walletRemainingMinor,
+                    settlementStatus: state.status,
                     onAddExpense: { showingAddTransaction = true },
                     onSettle: { showingSettlement = true }
                 )
@@ -138,8 +137,8 @@ struct EventDetailViewV2: View {
             
             Section {
                 EventMemberSnapshotRow(
-                    members: settlementMembers,
-                    balances: balances,
+                    members: state.settlementMembers,
+                    balances: state.balancesByMemberID,
                     event: event,
                     onAddMember: { showingAddMember = true },
                     onSelectMember: { member in memberToEdit = member }
@@ -163,9 +162,9 @@ struct EventDetailViewV2: View {
             
             // 3. Transactions List Sections
             EventTransactionListView(
-                transactions: activeTransactions,
-                linksByTransactionId: linksByTransactionId,
-                memberById: memberById,
+                transactions: state.activeTransactions,
+                linksByTransactionId: state.linksByTransactionID,
+                memberById: state.membersByID,
                 event: event,
                 onSelect: { transaction in
                      transactionToEdit = transaction
@@ -220,7 +219,7 @@ struct EventDetailViewV2: View {
             ExportSpendingSheet(
                 event: event,
                 wallets: wallets,
-                localMember: localMember,
+                localMember: state.localMember,
                 service: service,
                 onSuccess: { message in
                     exportSuccessMessage = message
@@ -233,8 +232,8 @@ struct EventDetailViewV2: View {
         .navigationDestination(isPresented: $showingAllMembers) {
             EventMemberListView(
                 event: event,
-                members: settlementMembers,
-                balances: balanceByMemberId, // use proper balances mapping
+                members: state.settlementMembers,
+                balances: state.balancesByMemberID,
                 onAddMember: { showingAddMember = true },
                 onSelectMember: { member in memberToEdit = member },
                 onDeleteMember: { member in

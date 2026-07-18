@@ -28,7 +28,11 @@ struct RecurringProgressHeaderView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if hasProgress {
+            if !viewModel.hasLoadedOnce {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            } else if hasProgress {
                 VStack(spacing: 18) {
                     if viewModel.expectedExpenses > 0 {
                         progressRow(
@@ -71,6 +75,8 @@ struct RecurringProgressHeaderView: View {
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+        .onAppear { viewModel.setVisible(true) }
+        .onDisappear { viewModel.setVisible(false) }
     }
 
     @ViewBuilder

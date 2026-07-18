@@ -131,7 +131,7 @@ enum RecurringNotificationService {
     }
 
     @MainActor
-    private static func reschedule(snapshot: ReminderSnapshot) async {
+    static func reschedule(snapshot: ReminderSnapshot) async {
         cancel(for: snapshot.id)
         guard snapshot.wantsReminder else { return }
         guard await isAuthorized() else { return }
@@ -141,14 +141,32 @@ enum RecurringNotificationService {
     /// Rebuild every recurring reminder from scratch (call on launch). Clears
     /// only our own pending requests so the daily/budget reminders are untouched.
     @MainActor
-    static func rescheduleAll(in context: ModelContext) async {
+    @discardableResult
+    static func rescheduleAll(
+        in context: ModelContext,
+        isCurrent: @escaping @MainActor () -> Bool = { true }
+    ) async -> Bool {
+        guard !Task.isCancelled, isCurrent() else {
+            await clearAllPendingRequests()
+            return false
+        }
+
         let center = UNUserNotificationCenter.current()
         let ours = await center.pendingNotificationRequests()
             .map(\.identifier)
             .filter { $0.hasPrefix(identifierPrefix) }
         center.removePendingNotificationRequests(withIdentifiers: ours)
 
-        guard await isAuthorized() else { return }
+        guard !Task.isCancelled, isCurrent() else {
+            await clearAllPendingRequests()
+            return false
+        }
+        let authorized = await isAuthorized()
+        guard !Task.isCancelled, isCurrent() else {
+            await clearAllPendingRequests()
+            return false
+        }
+        guard authorized else { return true }
         let descriptor = FetchDescriptor<RecurringRule>(
             predicate: #Predicate { $0.isActive && $0.deletedAt == nil }
         )
@@ -159,10 +177,35 @@ enum RecurringNotificationService {
         let dueCount = rules.filter { RecurringRuleService.isDue($0) }.count
 
         for snapshot in snapshots {
+            guard !Task.isCancelled, isCurrent() else {
+                await clearAllPendingRequests()
+                return false
+            }
             await scheduleRequest(for: snapshot)
+        }
+        guard !Task.isCancelled, isCurrent() else {
+            await clearAllPendingRequests()
+            return false
         }
         // Keep the app-icon badge in step with what's actually due.
         try? await UNUserNotificationCenter.current().setBadgeCount(dueCount)
+        guard !Task.isCancelled, isCurrent() else {
+            await clearAllPendingRequests()
+            return false
+        }
+        return true
+    }
+
+    /// Clears only recurring-rule requests. Used when an auth generation is
+    /// invalidated during a rebuild so no request from the prior account can
+    /// survive cancellation.
+    @MainActor
+    static func clearAllPendingRequests() async {
+        let center = UNUserNotificationCenter.current()
+        let identifiers = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(identifierPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
     // MARK: - Helpers

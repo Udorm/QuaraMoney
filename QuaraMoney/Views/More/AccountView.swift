@@ -33,6 +33,9 @@ struct AccountView: View {
     @State private var tempName: String = ""
     @State private var authSheetMode: AuthSheetView.Mode?
     @State private var showDeleteAccountConfirm = false
+    @State private var isVisible = false
+    @State private var needsCountRefresh = true
+    @State private var needsAvatarRefresh = true
     @FocusState private var isNameFocused: Bool
 
     /// Identifiable wrapper so a freshly captured/picked photo can drive
@@ -46,10 +49,12 @@ struct AccountView: View {
         let date = installDateTimestamp > 0
             ? Date(timeIntervalSince1970: installDateTimestamp)
             : Date()
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
+        let formatter = AppDateFormatterCache.formatter(
+            dateStyle: .medium,
+            timeStyle: .none,
+            doesRelativeDateFormatting: false,
+            locale: LanguageManager.shared.selectedLanguage.locale
+        )
         return formatter.string(from: date)
     }
 
@@ -73,25 +78,41 @@ struct AccountView: View {
         .navigationTitle(L10n.Profile.title)
         .navigationBarTitleDisplayMode(.large)
         .onAppear {
-            loadAvatar()
+            isVisible = true
+            if needsAvatarRefresh {
+                needsAvatarRefresh = false
+                loadAvatar()
+            }
             tempName = displayName
             // Record install date if not set (kept out of body: writing
             // AppStorage during view evaluation re-triggers layout).
             if installDateTimestamp == 0 {
                 installDateTimestamp = Date().timeIntervalSince1970
             }
-            refreshTransactionCount()
+            if needsCountRefresh {
+                needsCountRefresh = false
+                refreshTransactionCount()
+            }
             if syncEnabled { auth.start() }
         }
+        .onDisappear { isVisible = false }
         .onReceive(NotificationCenter.default.publisher(for: .dataDidUpdate)) { _ in
-            refreshTransactionCount()
+            if isVisible {
+                refreshTransactionCount()
+            } else {
+                needsCountRefresh = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .profileDidChange)) { _ in
             // A sync replaced/removed the avatar file — reload the decoded image.
-            loadAvatar()
+            if isVisible {
+                loadAvatar()
+            } else {
+                needsAvatarRefresh = true
+            }
         }
         .onChange(of: syncEnabled) { _, enabled in
-            viewModel.syncEnabledChanged(enabled, context: modelContext)
+            viewModel.syncEnabledChanged(enabled)
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {

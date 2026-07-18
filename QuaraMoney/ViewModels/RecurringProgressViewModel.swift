@@ -17,6 +17,7 @@ final class RecurringProgressViewModel: BaseViewModel {
     var receivedIncome: Decimal = 0
     var expectedIncome: Decimal = 0
     var preferredCurrencyCode: String = CurrencyManager.shared.preferredCurrencyCode
+    var hasLoadedOnce = false
 
     @ObservationIgnored private let modelContext: ModelContext
     // Held in a plain (non-actor-isolated) box so its own deinit can remove the
@@ -25,6 +26,8 @@ final class RecurringProgressViewModel: BaseViewModel {
     // Coalesces bursts of `.dataDidUpdate` (e.g. Post-All firing many writes)
     // into a single recompute.
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
 
     init(dataService: DataService, context: ModelContext) {
         self.modelContext = context
@@ -32,14 +35,36 @@ final class RecurringProgressViewModel: BaseViewModel {
 
         observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .dataDidUpdate, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            Task { @MainActor in self.refresh() }
+            Task { @MainActor in self.requestRefresh() }
         })
         observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .languageDidChange, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in self.refreshCurrency() }
         })
+        observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .currencyRatesDidChange, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.requestRefresh() }
+        })
+        observerBag.tokens.append(NotificationCenter.default.addObserver(forName: .preferredCurrencyDidChange, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.refreshCurrency() }
+        })
+    }
 
-        Task { await calculateProgress() }
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            refresh()
+        }
+    }
+
+    private func requestRefresh() {
+        if isVisible {
+            refresh()
+        } else {
+            needsRefresh = true
+        }
     }
 
     private func refresh() {
@@ -53,7 +78,7 @@ final class RecurringProgressViewModel: BaseViewModel {
 
     private func refreshCurrency() {
         preferredCurrencyCode = CurrencyManager.shared.preferredCurrencyCode
-        refresh()
+        requestRefresh()
     }
 
     private func calculateProgress() async {
@@ -72,6 +97,7 @@ final class RecurringProgressViewModel: BaseViewModel {
         self.expectedExpenses = result.paidExpenses + result.pendingExpenses
         self.receivedIncome = result.receivedIncome
         self.expectedIncome = result.receivedIncome + result.pendingIncome
+        self.hasLoadedOnce = true
     }
 
     private struct ProgressResult: Sendable {

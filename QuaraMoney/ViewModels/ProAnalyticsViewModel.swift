@@ -100,6 +100,7 @@ final class ProAnalyticsViewModel {
 
     var isLoading: Bool = false
     var result: ProAnalyticsProcessor.Result = .empty
+    var hasLoadedOnce = false
 
     var preferredCurrency: String { CurrencyManager.shared.preferredCurrencyCode }
 
@@ -134,6 +135,14 @@ final class ProAnalyticsViewModel {
         loadFilter()
         updateDateRange()
         NotificationCenter.default.publisher(for: .dataDidUpdate)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleDataDidUpdate() }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleDataDidUpdate() }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .preferredCurrencyDidChange)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.handleDataDidUpdate() }
             .store(in: &cancellables)
@@ -291,5 +300,6 @@ final class ProAnalyticsViewModel {
         guard generation == refreshGeneration else { return }
         self.result = result
         self.isLoading = false
+        self.hasLoadedOnce = true
     }
 }

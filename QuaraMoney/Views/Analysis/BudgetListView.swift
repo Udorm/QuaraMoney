@@ -81,13 +81,18 @@ struct BudgetListView: View {
                     transactions: transactions,
                     targetCurrency: preferredCurrency
                 )
+                let limits = BudgetCalculator.limitsByBudget(
+                    for: shownBudgets,
+                    transactions: transactions,
+                    targetCurrency: preferredCurrency
+                )
 
                 if filterPeriod == .active || filterPeriod == .all {
                     Section {
                         BudgetSummarySection(
                             budgets: shownBudgets.filter { $0.isActive },
-                            transactions: transactions,
-                            spending: spending
+                            spending: spending,
+                            limits: limits
                         )
                     } header: {
                         filterDescription
@@ -100,7 +105,7 @@ struct BudgetListView: View {
                             BudgetRowView(
                                 budget: budget,
                                 spent: spending[budget.id] ?? 0,
-                                budgetLimitConverted: convertBudgetLimit(for: budget)
+                                budgetLimitConverted: limits[budget.id] ?? 0
                             )
                         }
                     }
@@ -159,10 +164,6 @@ struct BudgetListView: View {
         return filterPeriod.displayName
     }
     
-    private func convertBudgetLimit(for budget: Budget) -> Decimal {
-        BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
-    }
-    
     private func deleteBudgets(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
@@ -210,9 +211,9 @@ enum BudgetFilterPeriod: String, CaseIterable, Identifiable, LocalizableDisplayN
 
 struct BudgetSummarySection: View {
     let budgets: [Budget]
-    let transactions: [Transaction]
     /// Precomputed spent-per-budget (keyed by `budget.id`) from a single pass.
     let spending: [UUID: Decimal]
+    let limits: [UUID: Decimal]
 
     private var preferredCurrency: String {
         CurrencyManager.shared.preferredCurrencyCode
@@ -224,7 +225,7 @@ struct BudgetSummarySection: View {
 
     private var totalBudgeted: Decimal {
         budgets.reduce(Decimal.zero) { total, budget in
-            total + BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
+            total + (limits[budget.id] ?? 0)
         }
     }
 
@@ -237,7 +238,7 @@ struct BudgetSummarySection: View {
     private var onTrackCount: Int {
         budgets.filter { budget in
             let spentAmount = spent(for: budget)
-            let limitConverted = BudgetCalculator.convertBudgetLimit(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
+            let limitConverted = limits[budget.id] ?? 0
             let progress = limitConverted > 0 ? Double(truncating: spentAmount as NSNumber) / Double(truncating: limitConverted as NSNumber) : 0
             return progress <= 1.0
         }.count

@@ -60,8 +60,7 @@ struct ExportOptionsView: View {
                         }
                     }
                 }
-                .id(selectedWallets.hashValue) // Force refresh if needed
-                
+
                 // Date Selection
                 Picker(L10n.Filter.title, selection: $dateRange) {
                     ForEach(ExportDateRange.allCases) { range in
@@ -110,6 +109,7 @@ struct ExportOptionsView: View {
     
     private func performExport() {
         isExporting = true
+        let selectedWalletIDs = Set(selectedWallets.map(\.id))
         
         Task {
             // Calculate Dates
@@ -117,7 +117,7 @@ struct ExportOptionsView: View {
             
             if let url = CSVExportService.shared.exportData(
                 modelContext: modelContext,
-                wallets: selectedWallets,
+                walletIDs: selectedWalletIDs,
                 startDate: start,
                 endDate: end
             ) {

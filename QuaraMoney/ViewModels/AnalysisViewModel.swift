@@ -92,6 +92,8 @@ class AnalysisViewModel {
     var totalIncome: Decimal = 0
     var totalExpense: Decimal = 0
     var savingsRate: Double = 0
+    var isLoading = false
+    var hasLoadedOnce = false
     
     // For Charts
     var dailyStats: [DailyStat] = []
@@ -123,6 +125,18 @@ class AnalysisViewModel {
         
         // Listen for data updates (e.g., wallet archive/unarchive)
         NotificationCenter.default.publisher(for: .dataDidUpdate)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleDataDidUpdate()
+            }
+            .store(in: &self.cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleDataDidUpdate()
+            }
+            .store(in: &self.cancellables)
+        NotificationCenter.default.publisher(for: .preferredCurrencyDidChange)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.handleDataDidUpdate()
@@ -169,6 +183,7 @@ class AnalysisViewModel {
 
         guard let container = container else { return }
 
+        isLoading = true
         refreshGeneration += 1
         let generation = refreshGeneration
         refreshTask?.cancel()
@@ -201,6 +216,8 @@ class AnalysisViewModel {
         self.totalIncome = result.totalIncome
         self.totalExpense = result.totalExpense
         self.savingsRate = result.savingsRate
+        self.isLoading = false
+        self.hasLoadedOnce = true
         
         // Map to UI models
         self.dailyStats = result.dailyStats.map { data in

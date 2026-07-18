@@ -10,7 +10,7 @@ struct SettingsView: View {
     @AppStorage("appTheme") private var selectedTheme: QuaraMoneyApp.AppTheme = .system
     @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
     @StateObject private var notificationManager = NotificationManager.shared
-    @StateObject private var securityManager = SecurityManager.shared
+    @State private var securityManager = SecurityManager.shared
     @State private var showPopulateConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isPopulating = false
@@ -19,6 +19,8 @@ struct SettingsView: View {
     @State private var errorMessage = ""
 
     var body: some View {
+        @Bindable var securityManager = securityManager
+
         Form {
             Section(L10n.Settings.general) {
                 Picker(selection: Binding(

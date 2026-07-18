@@ -214,6 +214,16 @@ final class CSVImportViewModel {
         
         currentStep = .importing
         isLoading = true
+
+        let mapping = mapping
+        let categorySnapshots = categories.map(CSVImportCategorySnapshot.init)
+        let walletSnapshots = wallets.map(CSVImportWalletSnapshot.init)
+        let categoriesByID = Dictionary(uniqueKeysWithValues: categorySnapshots.map { ($0.persistentID, $0) })
+        let walletsByID = Dictionary(uniqueKeysWithValues: walletSnapshots.map { ($0.persistentID, $0) })
+        let defaultWallet = selectedDefaultWallet.flatMap { walletsByID[$0.persistentModelID] }
+        let categoryMappings = categoryMappings.compactMapValues { categoriesByID[$0.persistentModelID] }
+        let walletMappings = walletMappings.compactMapValues { walletsByID[$0.persistentModelID] }
+        let defaultCurrency = CurrencyManager.shared.preferredCurrencyCode
         
         Task {
             do {
@@ -223,10 +233,10 @@ final class CSVImportViewModel {
                 let result = try await importService.importTransactions(
                     from: url,
                     mapping: mapping,
-                    categories: categories,
-                    wallets: wallets,
-                    defaultWallet: selectedDefaultWallet,
-                    defaultCurrency: CurrencyManager.shared.preferredCurrencyCode,
+                    categories: categorySnapshots,
+                    wallets: walletSnapshots,
+                    defaultWallet: defaultWallet,
+                    defaultCurrency: defaultCurrency,
                     categoryMappings: categoryMappings,
                     walletMappings: walletMappings
                 )

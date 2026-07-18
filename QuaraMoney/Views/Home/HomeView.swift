@@ -208,6 +208,7 @@ struct HomeContentView: View {
                                 NotificationCenter.default.post(name: .openProAnalytics, object: nil)
                             }
                         )
+                        .redacted(reason: viewModel.hasLoadedOnce ? [] : .placeholder)
                         .padding(18)
                         .background(Color.accentColor)
                         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))

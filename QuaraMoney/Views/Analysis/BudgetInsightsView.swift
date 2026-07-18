@@ -15,115 +15,115 @@ struct BudgetInsightsView: View {
         CurrencyManager.shared.preferredCurrencyCode
     }
     
-    // MARK: - Computed Metrics
-    
-    private var activeBudgets: [Budget] {
-        budgets.filter { $0.isActive }
+    private struct InsightsSnapshot {
+        let activeBudgets: [Budget]
+        let performanceScore: Double
+        let spendingTrend: SpendingTrend
+        let overspendingCategories: [CategoryOverspend]
+        let monthlyBudgetData: [MonthlyBudgetStat]
+        let recurringCount: Int
+        let spendingByBudgetID: [UUID: Decimal]
     }
-    
-    private var completedBudgets: [Budget] {
-        budgets.filter { $0.isPeriodEnded }
-    }
-    
-    private var budgetPerformanceScore: Double {
-        let recentBudgets = getRecentCompletedBudgets(months: selectedTimeRange.months)
-        guard !recentBudgets.isEmpty else { return 0 }
-        
-        let successfulBudgets = recentBudgets.filter { budget in
-            let spent = calculateSpending(for: budget)
-            return spent <= budget.effectiveLimit
+
+    /// Computes every insight from one shared spending pass. The previous body
+    /// re-scanned the complete transaction array for each metric and row.
+    private func makeInsightsSnapshot() -> InsightsSnapshot {
+        let calendar = Calendar.current
+        let now = Date()
+        let activeBudgets = budgets.filter(\.isActive)
+        let completedBudgets = budgets.filter(\.isPeriodEnded)
+        let spending = BudgetCalculator.spendingByBudget(
+            for: budgets,
+            transactions: transactions,
+            targetCurrency: preferredCurrency
+        )
+
+        func recentCompleted(months: Int) -> [Budget] {
+            let cutoff = calendar.date(byAdding: .month, value: -months, to: now) ?? now
+            return completedBudgets.filter { $0.startDate >= cutoff }
         }
-        
-        return Double(successfulBudgets.count) / Double(recentBudgets.count)
-    }
-    
-    private var overallSpendingTrend: SpendingTrend {
-        let recentBudgets = getRecentCompletedBudgets(months: 3)
-        guard recentBudgets.count >= 2 else { return .stable }
-        
-        // Compare recent spending to older spending
-        let midPoint = recentBudgets.count / 2
-        let recentHalf = Array(recentBudgets.prefix(midPoint))
-        let olderHalf = Array(recentBudgets.suffix(from: midPoint))
-        
-        let recentAvg = averageSpendingRatio(for: recentHalf)
-        let olderAvg = averageSpendingRatio(for: olderHalf)
-        
-        let change = recentAvg - olderAvg
-        if change > 0.1 {
-            return .increasing
-        } else if change < -0.1 {
-            return .decreasing
+
+        func averageRatio(_ source: [Budget]) -> Double {
+            let ratios = source.compactMap { budget -> Double? in
+                guard budget.effectiveLimit > 0 else { return nil }
+                return Double(truncating: (spending[budget.id] ?? 0) as NSNumber)
+                    / Double(truncating: budget.effectiveLimit as NSNumber)
+            }
+            return ratios.isEmpty ? 0 : ratios.reduce(0, +) / Double(ratios.count)
         }
-        return .stable
-    }
-    
-    private var overspendingCategories: [CategoryOverspend] {
+
+        let performanceBudgets = recentCompleted(months: selectedTimeRange.months)
+        let performanceScore: Double
+        if performanceBudgets.isEmpty {
+            performanceScore = 0
+        } else {
+            let successful = performanceBudgets.filter {
+                (spending[$0.id] ?? 0) <= $0.effectiveLimit
+            }
+            performanceScore = Double(successful.count) / Double(performanceBudgets.count)
+        }
+
+        let trendBudgets = recentCompleted(months: 3)
+        let spendingTrend: SpendingTrend
+        if trendBudgets.count < 2 {
+            spendingTrend = .stable
+        } else {
+            let midpoint = trendBudgets.count / 2
+            let change = averageRatio(Array(trendBudgets.prefix(midpoint)))
+                - averageRatio(Array(trendBudgets.suffix(from: midpoint)))
+            spendingTrend = change > 0.1 ? .increasing : (change < -0.1 ? .decreasing : .stable)
+        }
+
         var categoryStats: [UUID: (overspend: Int, total: Int)] = [:]
-        
         for budget in completedBudgets {
-            guard let categoryId = budget.category?.id else { continue }
-            
-            var stats = categoryStats[categoryId] ?? (0, 0)
+            guard let categoryID = budget.category?.id else { continue }
+            var stats = categoryStats[categoryID] ?? (0, 0)
             stats.total += 1
-            
-            let spent = calculateSpending(for: budget)
-            if spent > budget.effectiveLimit {
+            if (spending[budget.id] ?? 0) > budget.effectiveLimit {
                 stats.overspend += 1
             }
-            
-            categoryStats[categoryId] = stats
+            categoryStats[categoryID] = stats
         }
-        
-        return categoryStats.compactMap { (categoryId, stats) in
+        let overspending: [CategoryOverspend] = categoryStats.compactMap { entry in
+            let (categoryID, stats) = entry
             guard stats.total >= 2,
-                  let category = budgets.first(where: { $0.category?.id == categoryId })?.category else {
+                  let category = budgets.first(where: { $0.category?.id == categoryID })?.category else {
                 return nil
             }
-            
             let rate = Double(stats.overspend) / Double(stats.total)
-            guard rate > 0.3 else { return nil } // 30% threshold
-            
-            return CategoryOverspend(
-                category: category,
-                overspendRate: rate,
-                totalPeriods: stats.total
-            )
+            guard rate > 0.3 else { return nil }
+            return CategoryOverspend(category: category, overspendRate: rate, totalPeriods: stats.total)
         }.sorted { $0.overspendRate > $1.overspendRate }
-    }
-    
-    private var monthlyBudgetData: [MonthlyBudgetStat] {
-        let calendar = Calendar.current
+
+        let cutoff = calendar.date(byAdding: .month, value: -selectedTimeRange.months, to: now) ?? now
         var monthlyStats: [Date: MonthlyBudgetStat] = [:]
-        
-        let cutoffDate = calendar.date(byAdding: .month, value: -selectedTimeRange.months, to: Date()) ?? Date()
-        
-        for budget in budgets {
-            guard budget.startDate >= cutoffDate else { continue }
-            
-            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: budget.startDate)) ?? budget.startDate
-            
-            var stat = monthlyStats[monthStart] ?? MonthlyBudgetStat(month: monthStart, budgeted: 0, spent: 0, budgetCount: 0)
-            
-            let limitConverted = CurrencyManager.shared.convert(
+        for budget in budgets where budget.startDate >= cutoff {
+            let month = calendar.date(from: calendar.dateComponents([.year, .month], from: budget.startDate)) ?? budget.startDate
+            var stat = monthlyStats[month] ?? MonthlyBudgetStat(month: month, budgeted: 0, spent: 0, budgetCount: 0)
+            stat.budgeted += CurrencyManager.shared.convert(
                 amount: budget.effectiveLimit,
                 from: budget.currencyCode,
                 to: preferredCurrency
             )
-            
-            let spentConverted = calculateSpending(for: budget)
-            
-            stat.budgeted += limitConverted
-            stat.spent += spentConverted
+            stat.spent += spending[budget.id] ?? 0
             stat.budgetCount += 1
-            
-            monthlyStats[monthStart] = stat
+            monthlyStats[month] = stat
         }
-        
-        return monthlyStats.values.sorted { $0.month < $1.month }
+
+        return InsightsSnapshot(
+            activeBudgets: activeBudgets,
+            performanceScore: performanceScore,
+            spendingTrend: spendingTrend,
+            overspendingCategories: overspending,
+            monthlyBudgetData: monthlyStats.values.sorted { $0.month < $1.month },
+            recurringCount: budgets.filter(\.isRecurring).count,
+            spendingByBudgetID: spending
+        )
     }
     
     var body: some View {
+        let snapshot = makeInsightsSnapshot()
+
         ScrollView {
             VStack(spacing: 20) {
                 // Time Range Picker
@@ -137,15 +137,15 @@ struct BudgetInsightsView: View {
                 
                 // Performance Score Card
                 PerformanceScoreCard(
-                    score: budgetPerformanceScore,
-                    trend: overallSpendingTrend,
-                    activeBudgetsCount: activeBudgets.count
+                    score: snapshot.performanceScore,
+                    trend: snapshot.spendingTrend,
+                    activeBudgetsCount: snapshot.activeBudgets.count
                 )
                 .padding(.horizontal)
                 
                 // Monthly Trend Chart
-                if !monthlyBudgetData.isEmpty {
-                    MonthlyTrendChart(data: monthlyBudgetData)
+                if !snapshot.monthlyBudgetData.isEmpty {
+                    MonthlyTrendChart(data: snapshot.monthlyBudgetData)
                         .padding(.horizontal)
                 }
                 
@@ -153,36 +153,39 @@ struct BudgetInsightsView: View {
                 HStack(spacing: 12) {
                     MetricCard(
                         title: "budget.budgetsMet".localized,
-                        value: "\(Int(budgetPerformanceScore * 100))%",
+                        value: "\(Int(snapshot.performanceScore * 100))%",
                         subtitle: "common.last".localized + " \(selectedTimeRange.months) " + "common.months".localized,
-                        color: budgetPerformanceScore >= 0.7 ? ThemeManager.shared.incomeColor : (budgetPerformanceScore >= 0.5 ? .orange : ThemeManager.shared.expenseColor)
+                        color: snapshot.performanceScore >= 0.7 ? ThemeManager.shared.incomeColor : (snapshot.performanceScore >= 0.5 ? .orange : ThemeManager.shared.expenseColor)
                     )
                     
                     MetricCard(
                         title: "budget.activeBudgets".localized,
-                        value: "\(activeBudgets.count)",
-                        subtitle: budgets.filter { $0.isRecurring }.count > 0 ? "\(budgets.filter { $0.isRecurring }.count) \(L10n.Budget.recurring.lowercased())" : "common.none".localized,
+                        value: "\(snapshot.activeBudgets.count)",
+                        subtitle: snapshot.recurringCount > 0 ? "\(snapshot.recurringCount) \(L10n.Budget.recurring.lowercased())" : "common.none".localized,
                         color: .accentColor
                     )
                 }
                 .padding(.horizontal)
                 
                 // Overspending Categories
-                if !overspendingCategories.isEmpty {
-                    OverspendingCategoriesCard(categories: overspendingCategories)
+                if !snapshot.overspendingCategories.isEmpty {
+                    OverspendingCategoriesCard(categories: snapshot.overspendingCategories)
                         .padding(.horizontal)
                 }
                 
                 // Active Budgets Summary
-                if !activeBudgets.isEmpty {
-                    ActiveBudgetsSummary(budgets: activeBudgets, transactions: transactions)
+                if !snapshot.activeBudgets.isEmpty {
+                    ActiveBudgetsSummary(
+                        budgets: snapshot.activeBudgets,
+                        spendingByBudgetID: snapshot.spendingByBudgetID
+                    )
                         .padding(.horizontal)
                 }
                 
                 // Tips & Recommendations
                 BudgetTipsCard(
-                    performanceScore: budgetPerformanceScore,
-                    overspendingCategories: overspendingCategories
+                    performanceScore: snapshot.performanceScore,
+                    overspendingCategories: snapshot.overspendingCategories
                 )
                 .padding(.horizontal)
             }
@@ -192,32 +195,6 @@ struct BudgetInsightsView: View {
         .background(Color(.systemGroupedBackground))
     }
     
-    // MARK: - Helper Methods
-    
-    private func getRecentCompletedBudgets(months: Int) -> [Budget] {
-        let calendar = Calendar.current
-        let cutoffDate = calendar.date(byAdding: .month, value: -months, to: Date()) ?? Date()
-        
-        return completedBudgets.filter { $0.startDate >= cutoffDate }
-    }
-    
-    private func calculateSpending(for budget: Budget) -> Decimal {
-        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
-    }
-    
-    private func averageSpendingRatio(for budgets: [Budget]) -> Double {
-        guard !budgets.isEmpty else { return 0 }
-        
-        let ratios = budgets.compactMap { budget -> Double? in
-            let limit = budget.effectiveLimit
-            guard limit > 0 else { return nil }
-            let spent = calculateSpending(for: budget)
-            return Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber)
-        }
-        
-        guard !ratios.isEmpty else { return 0 }
-        return ratios.reduce(0, +) / Double(ratios.count)
-    }
 }
 
 // MARK: - Supporting Types
@@ -521,7 +498,7 @@ struct OverspendingCategoriesCard: View {
 
 struct ActiveBudgetsSummary: View {
     let budgets: [Budget]
-    let transactions: [Transaction]
+    let spendingByBudgetID: [UUID: Decimal]
     
     private var preferredCurrency: String {
         CurrencyManager.shared.preferredCurrencyCode
@@ -533,7 +510,7 @@ struct ActiveBudgetsSummary: View {
                 .appFont(.headline)
             
             ForEach(budgets.prefix(5)) { budget in
-                let spent = calculateSpending(for: budget)
+                let spent = spendingByBudgetID[budget.id] ?? 0
                 let limit = CurrencyManager.shared.convert(
                     amount: budget.effectiveLimit,
                     from: budget.currencyCode,
@@ -570,9 +547,6 @@ struct ActiveBudgetsSummary: View {
         .cornerRadius(16)
     }
     
-    private func calculateSpending(for budget: Budget) -> Decimal {
-        BudgetCalculator.calculateSpending(for: budget, transactions: transactions, targetCurrency: preferredCurrency)
-    }
 }
 
 struct BudgetTipsCard: View {

@@ -330,8 +330,9 @@ struct BudgetNotification: Identifiable, Codable {
     }
     
     var timeAgo: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: timestamp, relativeTo: Date())
+        timestamp.formatted(
+            .relative(presentation: .numeric, unitsStyle: .abbreviated)
+                .locale(.app)
+        )
     }
 }

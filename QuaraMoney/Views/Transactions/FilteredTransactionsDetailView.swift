@@ -81,7 +81,9 @@ struct FilteredTransactionsDetailView: View {
         }
         .onAppear {
             vm.configure(modelContext: modelContext)
+            vm.setVisible(true)
         }
+        .onDisappear { vm.setVisible(false) }
         .sheet(item: $transactionToEdit) { txn in
             AddTransactionContainer(transaction: txn, isNewTransaction: false)
         }
@@ -203,6 +205,7 @@ struct FilteredTransactionsDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
+            .redacted(reason: vm.hasLoadedOnce ? [] : .placeholder)
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -212,4 +215,3 @@ struct FilteredTransactionsDetailView: View {
         )
     }
 }
-

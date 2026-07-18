@@ -12,18 +12,18 @@ class WalletDetailViewModel {
     var selectedTab: TabPeriodSelection = .month(Date()) {
         didSet {
             updateDateRange()
-            fetchTransactions()
+            requestRefresh()
         }
     }
 
     var customStartDate: Date = Date() {
         didSet {
-            if selectedTab == .custom { updateDateRange(); fetchTransactions() }
+            if selectedTab == .custom { updateDateRange(); requestRefresh() }
         }
     }
     var customEndDate: Date = Date() {
         didSet {
-            if selectedTab == .custom { updateDateRange(); fetchTransactions() }
+            if selectedTab == .custom { updateDateRange(); requestRefresh() }
         }
     }
 
@@ -35,10 +35,11 @@ class WalletDetailViewModel {
     }
 
     var sortOption: TransactionSortOption = .newestFirst {
-        didSet { fetchTransactions() }
+        didSet { requestRefresh() }
     }
 
     var transactions: [Transaction] = []
+    var hasLoadedOnce = false
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private let searchSubject = PassthroughSubject<String, Never>()
@@ -47,6 +48,8 @@ class WalletDetailViewModel {
     /// changes can't apply stale results out of order.
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var refreshGeneration = 0
+    @ObservationIgnored private var isVisible = false
+    @ObservationIgnored private var needsRefresh = true
 
     @ObservationIgnored private var startDate: Date = Date()
     @ObservationIgnored private var endDate: Date = Date()
@@ -94,7 +97,7 @@ class WalletDetailViewModel {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.fetchTransactions()
+                self?.requestRefresh()
             }
             .store(in: &cancellables)
 
@@ -102,11 +105,37 @@ class WalletDetailViewModel {
         NotificationCenter.default.publisher(for: .dataDidUpdate)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.fetchTransactions()
+                self?.requestRefresh()
             }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .currencyRatesDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.requestRefresh()
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .preferredCurrencyDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.requestRefresh()
+            }
+            .store(in: &cancellables)
+    }
 
-        fetchTransactions()
+    func setVisible(_ visible: Bool) {
+        isVisible = visible
+        if visible && needsRefresh {
+            needsRefresh = false
+            fetchTransactions()
+        }
+    }
+
+    private func requestRefresh() {
+        if isVisible {
+            fetchTransactions()
+        } else {
+            needsRefresh = true
+        }
     }
 
     private func updateDateRange() {
@@ -170,6 +199,7 @@ class WalletDetailViewModel {
         }
 
         self.transactions = resolvedTransactions
+        self.hasLoadedOnce = true
     }
 
     /// Set when a debt-anchor deletion is blocked; drives a redirect alert.
@@ -189,7 +219,6 @@ class WalletDetailViewModel {
         do {
             try modelContext.save()
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-            fetchTransactions()
         } catch {
             #if DEBUG
             print("Error deleting transaction: \(error)")

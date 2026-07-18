@@ -314,8 +314,13 @@ struct CompactAddTransactionView: View {
                     switch result {
                     case .success(let images):
                         if let firstImage = images.first {
+                            let walletSnapshots = wallets.map(ReceiptWalletSnapshot.init)
                             Task {
-                                await viewModel.scanReceipt(image: firstImage, availableWallets: wallets)
+                                await viewModel.scanReceipt(
+                                    image: firstImage,
+                                    availableWallets: walletSnapshots,
+                                    modelContext: modelContext
+                                )
                             }
                         }
                     case .failure(let error):
@@ -745,11 +750,12 @@ struct CompactAddTransactionView: View {
 
     private func dateLabel(forOffset offset: Int) -> String {
         guard let targetDate = Calendar.current.date(byAdding: .day, value: offset, to: referenceDate) else { return "" }
-        let formatter = DateFormatter()
-        formatter.locale = LanguageManager.shared.selectedLanguage.locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        formatter.doesRelativeDateFormatting = true
+        let formatter = AppDateFormatterCache.formatter(
+            dateStyle: .medium,
+            timeStyle: .none,
+            doesRelativeDateFormatting: true,
+            locale: LanguageManager.shared.selectedLanguage.locale
+        )
         return formatter.string(from: targetDate)
     }
 

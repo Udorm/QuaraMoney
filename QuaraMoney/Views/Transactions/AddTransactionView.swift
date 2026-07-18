@@ -527,8 +527,13 @@ struct AddTransactionView: View {
                     switch result {
                     case .success(let images):
                         if let firstImage = images.first {
+                            let walletSnapshots = wallets.map(ReceiptWalletSnapshot.init)
                             Task {
-                                await viewModel.scanReceipt(image: firstImage, availableWallets: wallets)
+                                await viewModel.scanReceipt(
+                                    image: firstImage,
+                                    availableWallets: walletSnapshots,
+                                    modelContext: modelContext
+                                )
                             }
                         }
                     case .failure(let error):

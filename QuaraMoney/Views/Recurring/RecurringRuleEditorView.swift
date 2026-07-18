@@ -272,9 +272,10 @@ struct RecurringRuleEditorView: View {
         // Keep the due-date reminder in sync with the saved state.
         let ruleID = target.id
         if remindersEnabled && isActive {
+            let reminderSnapshot = RecurringNotificationService.ReminderSnapshot(target)
             Task {
                 _ = await RecurringNotificationService.requestAuthorization()
-                await RecurringNotificationService.reschedule(for: target)
+                await RecurringNotificationService.reschedule(snapshot: reminderSnapshot)
             }
         } else {
             RecurringNotificationService.cancel(for: ruleID)

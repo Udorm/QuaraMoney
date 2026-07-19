@@ -899,6 +899,7 @@ final class SyncEngine: ObservableObject {
             for c in foreignRows(Category.self) {
                 let referenced = !(c.transactions ?? []).isEmpty
                     || !(c.budgets ?? []).isEmpty
+                    || !(c.multiCategoryBudgets ?? []).isEmpty
                     || !(c.recurringRules ?? []).isEmpty
                 if referenced { adopt(c) } else { context.delete(c); dropped += 1 }
             }
@@ -1844,13 +1845,18 @@ final class SyncEngine: ObservableObject {
                 b.alertOnProjectedOverspend = row.alert_on_projected_overspend
                 b.lastAlertTriggeredDate = row.last_alert_triggered_date
                 b.lastAlertThreshold = row.last_alert_threshold
-                b.targetKindRaw = row.target_kind
                 b.alertModeRaw = row.alert_mode
                 b.lastAlertPeriodKey = row.last_alert_period_key
                 b.weekStartDay = row.week_start_day
                 b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
-                b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
-                b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
+                let legacyCategory = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
+                let joinedCategories = try (joinMap[row.id] ?? []).compactMap {
+                    try fetchByID(Category.self, id: $0, in: context)
+                }
+                let syncedCategories = joinedCategories.isEmpty ? legacyCategory.map { [$0] } ?? [] : joinedCategories
+                let syncedTargetKind = row.target_kind.flatMap { BudgetTargetKind(rawValue: $0) }
+                    ?? (syncedCategories.isEmpty ? .total : .categories)
+                b.setTrackedCategories(syncedCategories, targetKind: syncedTargetKind)
                 if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
                    let amountType = BudgetAmountType.decode(from: data) {
                     b.amountType = amountType

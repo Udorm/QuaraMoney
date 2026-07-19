@@ -320,7 +320,8 @@ nonisolated enum CategoryCatalog {
             stampLocalEdit(r)
         }
         // Budgets: single-category link plus the multi-category join set.
-        // (loser.budgets holds cascade-owned budgets via `category`.)
+        // These are separate SwiftData inverses; sharing a category between
+        // multiple budgets must never reassign another budget's join set.
         for b in loser.budgets ?? [] {
             b.category = winner
             stampLocalEdit(b)

@@ -33,12 +33,31 @@ struct PlanOverviewView: View {
                     }
                     .buttonStyle(.plain)
 
-                    quickActions
                 }
                 .padding()
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("tab.plan".localized)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            showBudgetForm = true
+                        } label: {
+                            Label("plan.new_budget".localized, systemImage: "chart.bar.fill")
+                        }
+
+                        Button {
+                            showGoalForm = true
+                        } label: {
+                            Label("plan.new_saving_goal".localized, systemImage: "target")
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("plan.quick_actions".localized)
+                }
+            }
             .syncPullToRefresh(modelContext)
             .onAppear {
                 store.configure(modelContext: modelContext)
@@ -71,7 +90,7 @@ struct PlanOverviewView: View {
 
     @ViewBuilder
     private var budgetCard: some View {
-        PlanCard(tint: .accentColor) {
+        PlanCard(tint: .accentColor, usesGlass: true) {
             HStack(alignment: .top, spacing: 14) {
                 PlanIconTile(systemImage: "chart.bar.fill", color: .accentColor, size: 48)
                 VStack(alignment: .leading, spacing: 3) {
@@ -105,14 +124,8 @@ struct PlanOverviewView: View {
                         .monospacedDigit()
                     }
                     if let progress = metrics.progress, metrics.isDeterminate {
-                        PlanProgressBar(progress: progress, color: .accentColor)
-                        HStack {
-                            Text(PlanDisplayFormatting.percent(progress))
-                                .appFont(.caption, weight: .semibold)
-                                .monospacedDigit()
-                            Spacer()
-                            budgetClassification(metrics)
-                        }
+                        PlanProgressLine(progress: progress, color: .accentColor)
+                        budgetClassification(metrics)
                     } else {
                         PlanPartialDataLabel()
                         budgetClassification(metrics)
@@ -159,7 +172,7 @@ struct PlanOverviewView: View {
 
     @ViewBuilder
     private var savingsCard: some View {
-        PlanCard(tint: .green) {
+        PlanCard(tint: .green, usesGlass: true) {
             HStack(alignment: .top, spacing: 14) {
                 PlanIconTile(systemImage: "target", color: .green, size: 48)
                 VStack(alignment: .leading, spacing: 3) {
@@ -199,14 +212,11 @@ struct PlanOverviewView: View {
                         .monospacedDigit()
                     }
                     if let progress = metrics.progress {
-                        PlanProgressBar(
+                        PlanProgressLine(
                             progress: progress,
                             color: .green,
                             isDeterminate: metrics.isDeterminate
                         )
-                        Text(PlanDisplayFormatting.percent(progress))
-                            .appFont(.caption, weight: .semibold)
-                            .monospacedDigit()
                     }
                     Text("plan.goal_counts".localized(
                         with: metrics.activeCount,
@@ -231,34 +241,6 @@ struct PlanOverviewView: View {
             : "plan.savings_card_subtitle".localized
     }
 
-    private var quickActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("plan.quick_actions".localized)
-                .appFont(.headline, weight: .bold)
-
-            HStack(spacing: 12) {
-                Button {
-                    showBudgetForm = true
-                } label: {
-                    Label("plan.new_budget".localized, systemImage: "chart.bar.fill")
-                        .appFont(.subheadline, weight: .semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-
-                Button {
-                    showGoalForm = true
-                } label: {
-                    Label("plan.new_saving_goal".localized, systemImage: "target")
-                        .appFont(.subheadline, weight: .semibold)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-        }
-    }
 }
 
 #Preview {

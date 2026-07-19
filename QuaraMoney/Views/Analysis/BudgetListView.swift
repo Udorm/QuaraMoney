@@ -36,7 +36,7 @@ struct BudgetListView: View {
                     Text("plan.ended".localized).tag(PlanBudgetSegment.ended)
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
             .listRowBackground(Color.clear)
 
@@ -83,7 +83,8 @@ struct BudgetListView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("plan.budgets".localized)
-        .searchable(text: $searchText, prompt: "common.search".localized)
+        .searchable(text: $searchText, placement: .toolbar, prompt: "common.search".localized)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -174,33 +175,23 @@ private struct PlanBudgetListRow: View {
             PlanIconTile(systemImage: icon, color: color)
 
             VStack(alignment: .leading, spacing: 7) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(budget.displayName)
-                        .appFont(.body, weight: .semibold)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if state.projection.isDeterminate {
-                        Text(PlanDisplayFormatting.percent(state.projection.progress))
-                            .appFont(.caption, weight: .semibold)
-                            .foregroundStyle(color)
-                            .monospacedDigit()
-                    }
-                }
+                Text(budget.displayName)
+                    .appFont(.body, weight: .semibold)
+                    .lineLimit(1)
 
                 Text(statusLine)
                     .appFont(.caption)
                     .foregroundStyle(state.isUpcoming ? .blue : .secondary)
 
                 if state.projection.isDeterminate {
-                    Text("plan.spent_of".localized(
-                        with: state.projection.spent.formattedAmount(for: budget.currencyCode),
-                        state.projection.limit.formattedAmount(for: budget.currencyCode)
-                    ))
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                    (Text(state.projection.spent.formattedAmount(for: budget.currencyCode))
+                        .foregroundStyle(.primary)
+                     + Text(" / \(state.projection.limit.formattedAmount(for: budget.currencyCode))")
+                        .foregroundStyle(.secondary))
+                        .appFont(.caption, weight: .medium)
+                        .monospacedDigit()
 
-                    PlanProgressBar(progress: state.projection.progress, color: color)
+                    PlanProgressLine(progress: state.projection.progress, color: color)
                 } else {
                     Text(state.projection.spent.formattedAmount(for: budget.currencyCode))
                         .appFont(.caption, weight: .medium)

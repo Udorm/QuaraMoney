@@ -72,6 +72,10 @@ struct BudgetFormView: View {
         categories.filter { $0.type == .expense }
     }
 
+    private var selectedExpenseCategories: [Category] {
+        expenseCategories.filter { selectedCategoryIDs.contains($0.id) }
+    }
+
     private var parsedAmount: Decimal? { Decimal(string: amount) }
 
     private var isDuplicateTotal: Bool {
@@ -114,7 +118,7 @@ struct BudgetFormView: View {
                                 Spacer()
                                 Text(selectedCategoryIDs.isEmpty
                                      ? "common.select".localized
-                                     : "plan.selected_categories".localized(with: selectedCategoryIDs.count))
+                                     : "\(selectedCategoryIDs.count)")
                                     .foregroundStyle(.secondary)
                                 Image(systemName: "chevron.right")
                                     .appFont(.caption)
@@ -124,9 +128,20 @@ struct BudgetFormView: View {
                         }
                         .buttonStyle(.plain)
 
-                        ForEach(expenseCategories.filter { selectedCategoryIDs.contains($0.id) }) { category in
-                            Label(category.displayName, systemImage: category.icon)
-                                .foregroundStyle(Color(hex: category.colorHex) ?? .secondary)
+                        if !selectedExpenseCategories.isEmpty {
+                            FlowLayout(spacing: 8) {
+                                ForEach(selectedExpenseCategories) { category in
+                                    CategoryChip(
+                                        category: category,
+                                        isSelected: true,
+                                        isHighlighted: false
+                                    ) {
+                                        selectedCategoryIDs.remove(category.id)
+                                    }
+                                    .fixedSize(horizontal: true, vertical: false)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
                     } else {
                         Label("budget.allExpenses".localized, systemImage: "sum")
@@ -293,7 +308,7 @@ struct BudgetFormView: View {
             }
         } else if let suggestion, let suggestedAmount = suggestion.suggestedAmount {
             Button {
-                amount = NSDecimalNumber(decimal: suggestedAmount).stringValue
+                amount = roundedAmountString(suggestedAmount)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -303,6 +318,10 @@ struct BudgetFormView: View {
                         Spacer()
                         Text("plan.use_suggestion".localized)
                             .appFont(.subheadline, weight: .semibold)
+                            .foregroundStyle(.tint)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
                     }
                     Text(confidenceCopy(suggestion.confidence))
                         .appFont(.caption)
@@ -312,6 +331,13 @@ struct BudgetFormView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func roundedAmountString(_ value: Decimal) -> String {
+        var source = value
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &source, 2, .plain)
+        return NSDecimalNumber(decimal: rounded).stringValue
     }
 
     private var periodUnit: String {
@@ -404,7 +430,7 @@ struct BudgetFormView: View {
 
     private func save() {
         guard let parsedAmount, canSave else { return }
-        let selectedCategories = expenseCategories.filter { selectedCategoryIDs.contains($0.id) }
+        let selectedCategories = selectedExpenseCategories
         let now = Date()
 
         do {
@@ -432,8 +458,7 @@ struct BudgetFormView: View {
                             currencyCode: currencyCode,
                             periodType: periodType,
                             startDate: periodType == .custom ? customStart : now,
-                            customEndDate: periodType == .custom ? customEnd : nil,
-                            categories: targetKind == .categories ? selectedCategories : nil
+                            customEndDate: periodType == .custom ? customEnd : nil
                         )
                         modelContext.insert(budget)
                         inserted = budget
@@ -467,9 +492,7 @@ struct BudgetFormView: View {
         budget.amountType = .fixed(amount)
         budget.amountLimit = amount
         budget.currencyCode = currencyCode
-        budget.targetKind = targetKind
-        budget.category = nil
-        budget.categories = targetKind == .categories ? selectedCategories : nil
+        budget.setTrackedCategories(selectedCategories, targetKind: targetKind)
         budget.periodType = periodType
         if periodType == .custom {
             budget.startDate = customStart

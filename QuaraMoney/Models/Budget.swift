@@ -359,6 +359,27 @@ final class Budget {
     }
 
     // MARK: - Methods
+
+    /// Persists one selected category through the dedicated to-one relationship.
+    /// The to-many join is reserved for genuinely multi-category budgets so an
+    /// existing one-item join cannot be reassigned when another budget selects
+    /// the same category.
+    func setTrackedCategories(_ selectedCategories: [Category], targetKind: BudgetTargetKind) {
+        self.targetKind = targetKind
+        guard targetKind == .categories else {
+            category = nil
+            categories = nil
+            return
+        }
+
+        if selectedCategories.count == 1 {
+            category = selectedCategories[0]
+            categories = nil
+        } else {
+            category = nil
+            categories = selectedCategories
+        }
+    }
     
     /// Calculate the effective limit for percentage-based budgets
     func calculateEffectiveLimit(income: Decimal) -> Decimal {

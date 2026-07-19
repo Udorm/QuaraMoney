@@ -1,203 +1,267 @@
 import SwiftUI
 import SwiftData
 
-/// Compatibility entry point retained for ContentView; the segmented shell is gone.
+/// Compatibility entry point retained for ContentView.
 struct BudgetTabView: View {
     var body: some View { PlanOverviewView() }
 }
 
 struct PlanOverviewView: View {
-    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.createdAt)
-    private var budgets: [Budget]
-    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil }, sort: \SavingsGoal.priority)
-    private var goals: [SavingsGoal]
-    @Query(filter: #Predicate<Transaction> { $0.deletedAt == nil }, sort: \Transaction.date, order: .reverse)
-    private var transactions: [Transaction]
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
-    @State private var showAddBudget = false
-    @State private var showAddGoal = false
-    @State private var budgetSearch = ""
-    @State private var savingsSearch = ""
-    @State private var showBudgetFilter = false
-
-    private var standingBudgets: [Budget] { budgets.filter { $0.periodType != .custom } }
-    private var monthlyTotal: Budget? {
-        standingBudgets.filter { $0.periodType == .monthly && $0.targetKind == .total }
-            .min { $0.createdAt < $1.createdAt }
-    }
+    @State private var store = PlanOverviewStore()
+    @State private var refreshPolicy = PlanRefreshPolicy()
+    @State private var showBudgetForm = false
+    @State private var showGoalForm = false
 
     var body: some View {
-        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
-        let ownCurrencySpending = BudgetCalculator.spendingByBudgetCurrency(for: standingBudgets, transactions: transactions)
-        let preferredSpending = BudgetCalculator.spendingByBudget(for: standingBudgets, transactions: transactions,
-                                                                   targetCurrency: preferredCurrency)
-        let preferredLimits = BudgetCalculator.limitsByBudget(for: standingBudgets, transactions: transactions,
-                                                               targetCurrency: preferredCurrency)
-        let onTrack = standingBudgets.filter {
-            let limit = preferredLimits[$0.id] ?? 0
-            return limit > 0 && (preferredSpending[$0.id] ?? 0) <= limit
-        }.count
-        let riskBudget = standingBudgets.filter { (preferredLimits[$0.id] ?? 0) > 0 }.max {
-            riskRatio($0, spending: preferredSpending, limits: preferredLimits) <
-            riskRatio($1, spending: preferredSpending, limits: preferredLimits)
-        }
-        let month = monthInsights(preferredCurrency: preferredCurrency)
         NavigationStack {
             ScrollView {
-                LazyVStack(spacing: 20) {
-                    hero(ownCurrencySpending: ownCurrencySpending, onTrack: onTrack,
-                         highestRisk: riskBudget, preferredSpending: preferredSpending,
-                         preferredLimits: preferredLimits, monthSpending: month.total,
-                         preferredCurrency: preferredCurrency)
-                    overviewSection(
-                        title: "plan.budgets".localized,
-                        destination: BudgetListView(searchText: $budgetSearch, isFilterPresented: $showBudgetFilter)
-                    ) {
-                        ForEach(standingBudgets.prefix(3)) { budget in
-                            PlanBudgetSummaryRow(budget: budget, spent: ownCurrencySpending[budget.id] ?? 0, transactions: transactions)
-                        }
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    NavigationLink {
+                        LazyView(BudgetListView())
+                    } label: {
+                        budgetCard
                     }
-                    overviewSection(
-                        title: "plan.savings".localized,
-                        destination: SavingsGoalListView(searchText: $savingsSearch)
-                    ) {
-                        ForEach(goals.prefix(3)) { goal in
-                            SavingsGoalRowView(goal: goal)
-                        }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        LazyView(SavingsGoalListView())
+                    } label: {
+                        savingsCard
                     }
-                    insightsCard(month: month)
+                    .buttonStyle(.plain)
+
+                    quickActions
                 }
                 .padding()
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("tab.plan".localized)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("plan.new_budget".localized, systemImage: "chart.pie.fill") { showAddBudget = true }
-                        Button("plan.new_goal".localized, systemImage: "target") { showAddGoal = true }
-                    } label: { Image(systemName: "plus") }
-                    .accessibilityLabel("plan.add".localized)
-                }
+            .syncPullToRefresh(modelContext)
+            .onAppear {
+                store.configure(modelContext: modelContext)
+                refreshPolicy.configure { store.refresh() }
+                refreshPolicy.setVisible(true)
             }
-            .sheet(isPresented: $showAddBudget) { AddBudgetView() }
-            .sheet(isPresented: $showAddGoal) { AddSavingsGoalView() }
-        }
-    }
-
-    private func hero(ownCurrencySpending: [UUID: Decimal], onTrack: Int, highestRisk: Budget?,
-                      preferredSpending: [UUID: Decimal], preferredLimits: [UUID: Decimal],
-                      monthSpending: Decimal, preferredCurrency: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("plan.overview".localized).appFont(size: 15, weight: .semibold).foregroundStyle(.secondary)
-            if let budget = monthlyTotal {
-                let spent = ownCurrencySpending[budget.id] ?? 0
-                Text(max(0, budget.amountLimit - spent).formattedAmount(for: budget.currencyCode))
-                    .appFont(size: 32, weight: .bold).monospacedDigit()
-                Text("plan.left_this_month".localized).appFont(size: 14, weight: .regular).foregroundStyle(.secondary)
+            .onDisappear { refreshPolicy.setVisible(false) }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active { refreshPolicy.sceneBecameActive() }
             }
-            Text("plan.month_spending".localized(with: monthSpending.formattedAmount(for: preferredCurrency)))
-                .appFont(size: 14, weight: .regular).foregroundStyle(.secondary)
-            Text("plan.on_track_count".localized(with: onTrack, standingBudgets.count))
-                .appFont(size: 17, weight: .semibold)
-            if let highestRisk {
-                Text("plan.highest_risk".localized(with: highestRisk.displayName,
-                    Int(riskRatio(highestRisk, spending: preferredSpending, limits: preferredLimits) * 100)))
-                    .appFont(size: 14, weight: .regular).foregroundStyle(.secondary)
+            .sheet(isPresented: $showBudgetForm) {
+                BudgetFormView()
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .glassEffect(.regular, in: .rect(cornerRadius: CornerRadius.large))
-    }
-
-    private func overviewSection<Destination: View, Content: View>(
-        title: String, destination: Destination, @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            NavigationLink(destination: destination) {
-                HStack { Text(title).appFont(size: 20, weight: .bold); Spacer(); Image(systemName: "chevron.right") }
-                    .contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            content()
-            if (title == "plan.budgets".localized && standingBudgets.isEmpty) ||
-                (title == "plan.savings".localized && goals.isEmpty) {
-                AppEmptyStateView("plan.empty_title".localized, systemImage: "target",
-                                  description: "plan.empty_message".localized)
+            .sheet(isPresented: $showGoalForm) {
+                SavingsGoalFormView()
+            }
+            .alert(
+                "common.error".localized,
+                isPresented: Binding(
+                    get: { store.errorMessage != nil },
+                    set: { _ in }
+                )
+            ) {
+                Button("common.ok".localized) {}
+            } message: {
+                Text(store.errorMessage ?? "")
             }
         }
     }
 
-    private func insightsCard(month: MonthInsights) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("plan.insights".localized, systemImage: "sparkles")
-                .appFont(size: 20, weight: .bold)
-            Text(month.paceKey.localized).appFont(size: 15, weight: .regular).foregroundStyle(.secondary)
-            if let topCategory = month.topCategory {
-                Text("plan.top_category".localized(with: topCategory))
-                    .appFont(size: 15, weight: .medium)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).padding(20)
-        .glassEffect(.regular, in: .rect(cornerRadius: CornerRadius.large))
-    }
-
-    private func riskRatio(_ budget: Budget, spending: [UUID: Decimal], limits: [UUID: Decimal]) -> Double {
-        let limit = limits[budget.id] ?? 0
-        guard limit > 0 else { return 0 }
-        return NSDecimalNumber(decimal: (spending[budget.id] ?? 0) / limit).doubleValue
-    }
-
-    private func monthInsights(preferredCurrency: String) -> MonthInsights {
-        let calendar = Calendar.current
-        let range = BudgetPeriodType.monthly.currentPeriodRange(containing: Date(), calendar: calendar)
-        let relevant = transactions.filter { $0.deletedAt == nil && $0.event == nil && !$0.excludeFromReports &&
-            $0.type == .expense && $0.date >= range.start && $0.date < range.end }
-        let total = TransactionProcessor.calculateTotal(relevant, rates: CurrencyManager.shared.rates,
-                                                         targetCurrency: preferredCurrency, typeFilter: .expense)
-        var byCategory: [String: Decimal] = [:]
-        for transaction in relevant {
-            let name = transaction.category?.displayName ?? "category.uncategorized".localized
-            byCategory[name, default: 0] += CurrencyManager.shared.convert(amount: transaction.amount,
-                from: transaction.currencyCode, to: preferredCurrency)
-        }
-        let top = byCategory.max { $0.value < $1.value }?.key
-        let elapsed = max(1, (calendar.dateComponents([.day], from: range.start, to: Date()).day ?? 0) + 1)
-        let totalDays = max(1, calendar.dateComponents([.day], from: range.start, to: range.end).day ?? 1)
-        let elapsedFraction = Double(elapsed) / Double(totalDays)
-        let budgetProgress: Double
-        if let monthlyTotal, monthlyTotal.amountLimit > 0 {
-            let spent = BudgetCalculator.calculateSpending(for: monthlyTotal, transactions: transactions,
-                                                            targetCurrency: monthlyTotal.currencyCode)
-            budgetProgress = NSDecimalNumber(decimal: spent / monthlyTotal.amountLimit).doubleValue
-        } else { budgetProgress = elapsedFraction }
-        return MonthInsights(total: total, topCategory: top,
-                             paceKey: budgetProgress > elapsedFraction ? "plan.over_pace" : "plan.under_pace")
-    }
-}
-
-private struct MonthInsights { let total: Decimal; let topCategory: String?; let paceKey: String }
-
-private struct PlanBudgetSummaryRow: View {
-    let budget: Budget
-    let spent: Decimal
-    let transactions: [Transaction]
-    var body: some View {
-        NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(budget.displayName).appFont(size: 17, weight: .semibold)
-                    Text(budget.periodType.displayName).appFont(size: 13, weight: .regular).foregroundStyle(.secondary)
+    @ViewBuilder
+    private var budgetCard: some View {
+        PlanCard(tint: .accentColor) {
+            HStack(alignment: .top, spacing: 14) {
+                PlanIconTile(systemImage: "chart.bar.fill", color: .accentColor, size: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("plan.budgets".localized)
+                        .appFont(.headline, weight: .bold)
+                    Text(budgetSubtitle)
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(spent.formattedAmount(for: budget.currencyCode)).appFont(size: 15, weight: .semibold).monospacedDigit()
-                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-            }.contentShape(Rectangle())
-        }.buttonStyle(.plain)
+                Image(systemName: "chevron.right")
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let metrics = store.metrics?.budgets {
+                switch metrics.mode {
+                case .empty:
+                    EmptyView()
+                case .attention:
+                    Label("plan.budget_setup_needed".localized, systemImage: "exclamationmark.triangle.fill")
+                        .appFont(.subheadline, weight: .semibold)
+                        .foregroundStyle(.orange)
+                case .aggregateWithLimit:
+                    if let limit = metrics.limit {
+                        Text("plan.spent_of".localized(
+                            with: metrics.spent.formattedAmount(for: metrics.currencyCode),
+                            limit.formattedAmount(for: metrics.currencyCode)
+                        ))
+                        .appFont(.title2, weight: .bold)
+                        .monospacedDigit()
+                    }
+                    if let progress = metrics.progress, metrics.isDeterminate {
+                        PlanProgressBar(progress: progress, color: .accentColor)
+                        HStack {
+                            Text(PlanDisplayFormatting.percent(progress))
+                                .appFont(.caption, weight: .semibold)
+                                .monospacedDigit()
+                            Spacer()
+                            budgetClassification(metrics)
+                        }
+                    } else {
+                        PlanPartialDataLabel()
+                        budgetClassification(metrics)
+                    }
+                case .spendingOnly:
+                    Text(metrics.spent.formattedAmount(for: metrics.currencyCode))
+                        .appFont(.title2, weight: .bold)
+                        .monospacedDigit()
+                    Text("plan.spent_this_month".localized)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                    if !metrics.isDeterminate { PlanPartialDataLabel() }
+                    budgetClassification(metrics)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var budgetSubtitle: String {
+        guard let metrics = store.metrics?.budgets else { return "plan.budget_card_subtitle".localized }
+        return metrics.mode == .empty
+            ? "plan.create_first_budget".localized
+            : "plan.budget_card_subtitle".localized
+    }
+
+    private func budgetClassification(_ metrics: PlanBudgetOverviewMetrics) -> some View {
+        let text: String
+        if metrics.unknownCount > 0 {
+            text = "plan.on_track_with_unknown".localized(
+                with: metrics.onTrackCount,
+                metrics.classifiedCount,
+                metrics.unknownCount
+            )
+        } else {
+            text = "plan.on_track_count".localized(with: metrics.onTrackCount, metrics.classifiedCount)
+        }
+        return Text(text)
+            .appFont(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private var savingsCard: some View {
+        PlanCard(tint: .green) {
+            HStack(alignment: .top, spacing: 14) {
+                PlanIconTile(systemImage: "target", color: .green, size: 48)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("plan.savings".localized)
+                        .appFont(.headline, weight: .bold)
+                    Text(savingsSubtitle)
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let metrics = store.metrics?.savings {
+                switch metrics.mode {
+                case .empty:
+                    EmptyView()
+                case .allCompleted:
+                    Text("plan.all_goals_completed".localized)
+                        .appFont(.title3, weight: .bold)
+                        .foregroundStyle(.green)
+                    Text("plan.lifetime_saved".localized(
+                        with: metrics.saved.formattedAmount(for: metrics.currencyCode)
+                    ))
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+                    if !metrics.isDeterminate { PlanPartialDataLabel() }
+                case .active:
+                    if let target = metrics.target {
+                        Text("plan.saved_of".localized(
+                            with: metrics.saved.formattedAmount(for: metrics.currencyCode),
+                            target.formattedAmount(for: metrics.currencyCode)
+                        ))
+                        .appFont(.title2, weight: .bold)
+                        .monospacedDigit()
+                    }
+                    if let progress = metrics.progress {
+                        PlanProgressBar(
+                            progress: progress,
+                            color: .green,
+                            isDeterminate: metrics.isDeterminate
+                        )
+                        Text(PlanDisplayFormatting.percent(progress))
+                            .appFont(.caption, weight: .semibold)
+                            .monospacedDigit()
+                    }
+                    Text("plan.goal_counts".localized(
+                        with: metrics.activeCount,
+                        metrics.completedCount,
+                        metrics.unknownCount
+                    ))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    if !metrics.isDeterminate { PlanPartialDataLabel() }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var savingsSubtitle: String {
+        guard let metrics = store.metrics?.savings else { return "plan.savings_card_subtitle".localized }
+        return metrics.mode == .empty
+            ? "plan.create_first_goal".localized
+            : "plan.savings_card_subtitle".localized
+    }
+
+    private var quickActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("plan.quick_actions".localized)
+                .appFont(.headline, weight: .bold)
+
+            HStack(spacing: 12) {
+                Button {
+                    showBudgetForm = true
+                } label: {
+                    Label("plan.new_budget".localized, systemImage: "chart.bar.fill")
+                        .appFont(.subheadline, weight: .semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button {
+                    showGoalForm = true
+                } label: {
+                    Label("plan.new_saving_goal".localized, systemImage: "target")
+                        .appFont(.subheadline, weight: .semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+        }
     }
 }
 
 #Preview {
-    BudgetTabView().modelContainer(for: [Budget.self, SavingsGoal.self, Transaction.self,
-        TransactionLocation.self, Category.self, Wallet.self], inMemory: true)
+    PlanOverviewView()
+        .modelContainer(for: [Budget.self, SavingsGoal.self, Transaction.self, Category.self, Wallet.self], inMemory: true)
 }

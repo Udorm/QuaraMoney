@@ -6,6 +6,7 @@ struct AddTransactionView: View {
     @Environment(\.dismiss) private var dismiss
     @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
+    let locksSavingsGoal: Bool
 
     /// Shared with `AddTransactionContainer`; flipping it swaps this screen for
     /// the compact layout live (the container keeps the same view model).
@@ -53,9 +54,14 @@ struct AddTransactionView: View {
     private let maxQuickCategories = 3 // Show 3 categories + "More" to keep strictly to one row (4 items)
     private let maxQuickWallets = 4
     
-    init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
+    init(
+        viewModel: AddTransactionViewModel,
+        isNewTransaction: Bool = true,
+        locksSavingsGoal: Bool = false
+    ) {
         self._viewModel = State(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
+        self.locksSavingsGoal = locksSavingsGoal
     }
     
     /// True when editing a transaction that belongs to a debt/loan. Such entries
@@ -412,27 +418,47 @@ struct AddTransactionView: View {
                             }
 
                             // Savings Goal Picker for transfers
-                            Section {
-                                savingsGoalPicker
-                                if viewModel.selectedSavingsGoal != nil {
-                                    Picker("savings.direction".localized, selection: $viewModel.savingsIsWithdrawal) {
-                                        Text("savings.contribution".localized).tag(false)
-                                        Text("savings.withdrawal".localized).tag(true)
+                            if locksSavingsGoal, let goal = viewModel.selectedSavingsGoal {
+                                Section {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: goal.iconName)
+                                            .foregroundStyle(Color(hex: goal.colorHex) ?? .green)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("plan.saving_goal_locked".localized)
+                                                .appFont(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            Text(goal.name)
+                                                .appFont(.subheadline, weight: .semibold)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "lock.fill")
+                                            .appFont(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
-                                    .pickerStyle(.segmented)
                                 }
-                            }
-                            .onChange(of: viewModel.destinationWallet) { _, newDest in
-                                guard let dest = newDest else {
-                                    viewModel.selectedSavingsGoal = nil
-                                    return
+                            } else {
+                                Section {
+                                    savingsGoalPicker
+                                    if viewModel.selectedSavingsGoal != nil {
+                                        Picker("savings.direction".localized, selection: $viewModel.savingsIsWithdrawal) {
+                                            Text("savings.contribution".localized).tag(false)
+                                            Text("savings.withdrawal".localized).tag(true)
+                                        }
+                                        .pickerStyle(.segmented)
+                                    }
                                 }
-                                // Auto-select if exactly one active goal is linked to this wallet
-                                let matchingGoals = savingsGoals.filter { goal in
-                                    !goal.isCompleted && goal.linkedWallet?.id == dest.id
-                                }
-                                if matchingGoals.count == 1 {
-                                    viewModel.selectedSavingsGoal = matchingGoals.first
+                                .onChange(of: viewModel.destinationWallet) { _, newDest in
+                                    guard let dest = newDest else {
+                                        viewModel.selectedSavingsGoal = nil
+                                        return
+                                    }
+                                    // Auto-select if exactly one active goal is linked to this wallet
+                                    let matchingGoals = savingsGoals.filter { goal in
+                                        !goal.isCompleted && goal.linkedWallet?.id == dest.id
+                                    }
+                                    if matchingGoals.count == 1 {
+                                        viewModel.selectedSavingsGoal = matchingGoals.first
+                                    }
                                 }
                             }
                         } else if viewModel.type != .adjustment && !isDebtLinked {
@@ -615,7 +641,21 @@ struct AddTransactionView: View {
     // MARK: - Transaction Type Selector
     private var transactionTypeSelector: some View {
         Group {
-            if viewModel.type == .adjustment {
+            if locksSavingsGoal {
+                HStack {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .foregroundStyle(.blue)
+                    Text("transaction.type.transfer".localized)
+                        .appFont(.headline)
+                    Spacer()
+                    Image(systemName: "lock.fill")
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(CornerRadius.small)
+            } else if viewModel.type == .adjustment {
                 HStack {
                     Image(systemName: "slider.horizontal.3")
                         .foregroundStyle(.orange)

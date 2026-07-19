@@ -3,63 +3,82 @@ import SwiftData
 
 struct BudgetListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.createdAt) private var budgets: [Budget]
-    @Query(filter: #Predicate<Transaction> { $0.event == nil && $0.deletedAt == nil }) private var transactions: [Transaction]
-    @Binding private var searchText: String
-    @Binding private var isFilterPresented: Bool
-    @State private var filter: PlanBudgetFilter = .all
+    @Environment(\.scenePhase) private var scenePhase
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }, sort: \Budget.createdAt)
+    private var budgets: [Budget]
 
-    init(searchText: Binding<String>, isFilterPresented: Binding<Bool>) {
-        _searchText = searchText; _isFilterPresented = isFilterPresented
-    }
+    @State private var store = PlanBudgetListStore()
+    @State private var refreshPolicy = PlanRefreshPolicy()
+    @State private var segment: PlanBudgetSegment = .active
+    @State private var searchText = ""
+    @State private var showForm = false
+    @State private var budgetToDelete: Budget?
+    @State private var errorMessage: String?
 
-    private var matching: [Budget] {
-        budgets.filter { budget in
-            let matchesFilter = switch filter {
-            case .all: true
-            case .standing, .recurring: budget.periodType != .custom
-            case .oneOffs: budget.periodType == .custom
-            }
-            guard matchesFilter else { return false }
-            guard !searchText.isEmpty else { return true }
+    private let mutationExecutor = PlanMutationExecutor()
+
+    private var matchingItems: [PlanBudgetListItemState] {
+        guard !searchText.isEmpty else { return store.items }
+        return store.items.filter { item in
+            guard let budget = budget(for: item.budgetID) else { return false }
             return budget.displayName.localizedCaseInsensitiveContains(searchText) ||
-                budget.trackedCategoryInfos.contains { $0.name.localizedCaseInsensitiveContains(searchText) }
+                budget.trackedCategoryInfos.contains {
+                    $0.name.localizedCaseInsensitiveContains(searchText)
+                }
         }
     }
-
-    private var attentionIDs: Set<UUID> {
-        var result = Set(budgets.filter(\.needsAttention).map(\.id))
-        let groups = Dictionary(grouping: budgets.filter { $0.periodType != .custom && $0.targetKind == .total },
-                                by: \Budget.periodType)
-        for duplicates in groups.values where duplicates.count > 1 {
-            let canonical = duplicates.min { $0.createdAt < $1.createdAt }?.id
-            result.formUnion(duplicates.compactMap { $0.id == canonical ? nil : $0.id })
-        }
-        return result
-    }
-
-    private var attention: [Budget] { matching.filter { attentionIDs.contains($0.id) } }
-    private var standing: [Budget] { matching.filter { $0.periodType != .custom && !attentionIDs.contains($0.id) } }
-    private var oneOffs: [Budget] { matching.filter { $0.periodType == .custom && !attentionIDs.contains($0.id) } }
-    private var upcoming: [Budget] { oneOffs.filter { Date() < $0.periodDateRange.start } }
-    private var active: [Budget] { oneOffs.filter(\.isActive) }
-    private var ended: [Budget] { oneOffs.filter(\.isPeriodEnded) }
 
     var body: some View {
-        let spending = BudgetCalculator.spendingByBudgetCurrency(for: matching, transactions: transactions)
-        let onTrack = matching.filter { $0.amountLimit > 0 && (spending[$0.id] ?? 0) <= $0.amountLimit }.count
         List {
-            if matching.isEmpty {
-                AppEmptyStateView(L10n.Budget.emptyState, systemImage: "chart.bar",
-                                  description: L10n.Budget.emptyDescription)
-                    .listRowBackground(Color.clear)
+            Section {
+                Picker("plan.budget_segment".localized, selection: $segment) {
+                    Text("plan.active".localized).tag(PlanBudgetSegment.active)
+                    Text("plan.ended".localized).tag(PlanBudgetSegment.ended)
+                }
+                .pickerStyle(.segmented)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+            .listRowBackground(Color.clear)
+
+            if store.isLoading && !store.hasLoaded {
+                Section {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 32)
+                }
+                .listRowBackground(Color.clear)
+            } else if matchingItems.isEmpty {
+                Section {
+                    AppEmptyStateView(
+                        searchText.isEmpty
+                            ? (segment == .active ? "plan.no_active_budgets".localized : "plan.no_ended_budgets".localized)
+                            : "common.noResults".localized,
+                        systemImage: searchText.isEmpty ? "chart.bar" : "magnifyingglass",
+                        description: searchText.isEmpty
+                            ? "plan.no_budgets_segment_description".localized
+                            : "plan.search_no_results".localized
+                    )
+                    .padding(.vertical, 28)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
-                Section { Text("plan.list_on_track".localized(with: onTrack, matching.count)).appFont(size: 15, weight: .semibold) }
-                budgetSection("plan.needs_attention".localized, budgets: attention, spending: spending, attention: true)
-                budgetSection("plan.your_budgets".localized, budgets: standing, spending: spending)
-                budgetSection("plan.upcoming_one_offs".localized, budgets: upcoming, spending: spending)
-                budgetSection("plan.active_one_offs".localized, budgets: active, spending: spending)
-                budgetSection("plan.ended_one_offs".localized, budgets: ended, spending: spending)
+                Section {
+                    ForEach(matchingItems) { item in
+                        if let budget = budget(for: item.budgetID) {
+                            NavigationLink {
+                                LazyView(BudgetDetailView(budget: budget))
+                            } label: {
+                                PlanBudgetListRow(budget: budget, state: item)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button("common.delete".localized, role: .destructive) {
+                                    budgetToDelete = budget
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -67,70 +86,167 @@ struct BudgetListView: View {
         .searchable(text: $searchText, prompt: "common.search".localized)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("filter.title".localized, selection: $filter) {
-                        ForEach(PlanBudgetFilter.allCases) { Text($0.title).tag($0) }
-                    }
-                } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
-                .accessibilityLabel("filter.title".localized)
+                Button {
+                    showForm = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("plan.new_budget".localized)
             }
         }
         .syncPullToRefresh(modelContext)
-    }
-
-    @ViewBuilder
-    private func budgetSection(_ title: String, budgets: [Budget], spending: [UUID: Decimal], attention: Bool = false) -> some View {
-        if !budgets.isEmpty {
-            Section(title) {
-                ForEach(budgets) { budget in
-                    NavigationLink(destination: BudgetDetailView(budget: budget, transactions: transactions)) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text(budget.displayName).appFont(size: 17, weight: .semibold)
-                                Spacer()
-                                Text((spending[budget.id] ?? 0).formattedAmount(for: budget.currencyCode))
-                                    .appFont(size: 15, weight: .semibold).monospacedDigit()
-                            }
-                            Text(attention ? attentionReason(budget) : budget.periodDisplayString)
-                                .appFont(size: 13, weight: .regular)
-                                .foregroundStyle(attention ? .orange : .secondary)
-                        }.contentShape(Rectangle())
-                    }
-                    .swipeActions {
-                        Button("common.delete".localized, role: .destructive) { delete(budget) }
-                    }
-                }
-            }
+        .onAppear {
+            store.configure(modelContext: modelContext)
+            refreshPolicy.configure { store.refresh(segment: segment) }
+            refreshPolicy.setVisible(true)
+        }
+        .onDisappear { refreshPolicy.setVisible(false) }
+        .onChange(of: segment) { _, newSegment in
+            store.refresh(segment: newSegment)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { refreshPolicy.sceneBecameActive() }
+        }
+        .sheet(isPresented: $showForm) {
+            BudgetFormView()
+        }
+        .confirmationDialog(
+            "plan.delete_budget_title".localized,
+            isPresented: Binding(
+                get: { budgetToDelete != nil },
+                set: { if !$0 { budgetToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("common.delete".localized, role: .destructive) { deleteSelectedBudget() }
+            Button("common.cancel".localized, role: .cancel) { budgetToDelete = nil }
+        } message: {
+            Text("plan.delete_budget_message".localized)
+        }
+        .alert(
+            "common.error".localized,
+            isPresented: Binding(
+                get: { errorMessage != nil || store.errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("common.ok".localized) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? store.errorMessage ?? "")
         }
     }
 
-    private func attentionReason(_ budget: Budget) -> String {
-        if budget.targetKind == .categories && budget.trackedCategoryIds.isEmpty { return "plan.attention_categories".localized }
-        if budget.amountLimit <= 0 { return "plan.attention_limit".localized }
-        return "plan.attention_duplicate".localized
+    private func budget(for id: UUID) -> Budget? {
+        budgets.first { $0.id == id }
     }
 
-    private func delete(_ budget: Budget) {
-        SoftDeleteService.delete(budget)
-        try? modelContext.save()
-        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    private func deleteSelectedBudget() {
+        guard let budget = budgetToDelete else { return }
+        do {
+            try mutationExecutor.softDelete(budget, in: modelContext)
+            HapticManager.shared.success()
+            budgetToDelete = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            HapticManager.shared.error()
+        }
     }
 }
 
-private enum PlanBudgetFilter: String, CaseIterable, Identifiable {
-    case all, standing, oneOffs, recurring
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .all: return "filter.all".localized
-        case .standing: return "plan.filter_standing".localized
-        case .oneOffs: return "plan.filter_one_offs".localized
-        case .recurring: return "budget.recurring_only".localized
+private struct PlanBudgetListRow: View {
+    let budget: Budget
+    let state: PlanBudgetListItemState
+
+    private var color: Color {
+        if state.projection.isOnTrack == false { return .red }
+        if let category = budget.trackedCategoryInfos.first {
+            return Color(hex: category.colorHex) ?? .accentColor
         }
+        return .accentColor
+    }
+
+    private var icon: String {
+        budget.trackedCategoryInfos.first?.icon ?? "sum"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            PlanIconTile(systemImage: icon, color: color)
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(budget.displayName)
+                        .appFont(.body, weight: .semibold)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if state.projection.isDeterminate {
+                        Text(PlanDisplayFormatting.percent(state.projection.progress))
+                            .appFont(.caption, weight: .semibold)
+                            .foregroundStyle(color)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text(statusLine)
+                    .appFont(.caption)
+                    .foregroundStyle(state.isUpcoming ? .blue : .secondary)
+
+                if state.projection.isDeterminate {
+                    Text("plan.spent_of".localized(
+                        with: state.projection.spent.formattedAmount(for: budget.currencyCode),
+                        state.projection.limit.formattedAmount(for: budget.currencyCode)
+                    ))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                    PlanProgressBar(progress: state.projection.progress, color: color)
+                } else {
+                    Text(state.projection.spent.formattedAmount(for: budget.currencyCode))
+                        .appFont(.caption, weight: .medium)
+                        .monospacedDigit()
+                    PlanPartialDataLabel()
+                }
+
+                if state.needsAttention || state.isDuplicateTotal {
+                    Label(attentionText, systemImage: "exclamationmark.triangle.fill")
+                        .appFont(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusLine: String {
+        if state.isUpcoming {
+            return "plan.starts_date".localized(
+                with: state.range.start.appFormatted(date: .abbreviated, time: .omitted)
+            )
+        }
+        if state.isEnded, state.projection.isDeterminate {
+            if state.projection.overage > 0 {
+                return "plan.over_by".localized(
+                    with: state.projection.overage.formattedAmount(for: budget.currencyCode)
+                )
+            }
+            return "plan.under_by".localized(
+                with: state.projection.remaining.formattedAmount(for: budget.currencyCode)
+            )
+        }
+        return budget.periodType.displayName
+    }
+
+    private var attentionText: String {
+        if state.isDuplicateTotal { return "plan.attention_duplicate".localized }
+        if budget.targetKind == .categories && budget.trackedCategoryIds.isEmpty {
+            return "plan.attention_categories".localized
+        }
+        return "plan.attention_limit".localized
     }
 }
 
 #Preview {
-    NavigationStack { BudgetListView(searchText: .constant(""), isFilterPresented: .constant(false)) }
-        .modelContainer(for: [Budget.self, Transaction.self, Category.self], inMemory: true)
+    NavigationStack { BudgetListView() }
+        .modelContainer(for: [Budget.self, Transaction.self, Category.self, Wallet.self], inMemory: true)
 }

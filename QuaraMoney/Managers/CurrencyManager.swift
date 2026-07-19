@@ -224,7 +224,8 @@ extension CurrencyManager {
         let sourceRate = rates[source] ?? fallbackRates[source]
         let targetRate = rates[target] ?? fallbackRates[target]
 
-        guard let sourceRate, let targetRate, sourceRate > 0 else {
+        guard let sourceRate, sourceRate.isFinite, sourceRate > 0,
+              let targetRate, targetRate.isFinite, targetRate > 0 else {
             return nil
         }
 
@@ -237,4 +238,3 @@ struct ExchangeRateResponse: Codable {
     let result: String
     let rates: [String: Double]
 }
-

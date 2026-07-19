@@ -8,19 +8,22 @@ struct TransactionRowView: View {
     }
     
     private let source: Source
+    private let showsUnconvertedHint: Bool
     
     // Cache theme colors for performance
     private let incomeColor: Color
     private let expenseColor: Color
     
-    init(transaction: Transaction, contextWallet: Wallet? = nil) {
+    init(transaction: Transaction, contextWallet: Wallet? = nil, showsUnconvertedHint: Bool = false) {
         self.source = .wallet(transaction, contextWallet)
+        self.showsUnconvertedHint = showsUnconvertedHint
         self.incomeColor = ThemeManager.shared.incomeColor
         self.expenseColor = ThemeManager.shared.expenseColor
     }
     
     init(eventTransaction: EventLedgerTransaction, paidByName: String, participantCount: Int, currencyCode: String) {
         self.source = .event(eventTransaction, paidByName: paidByName, participantCount: participantCount, currencyCode: currencyCode)
+        self.showsUnconvertedHint = false
         self.incomeColor = ThemeManager.shared.incomeColor
         self.expenseColor = ThemeManager.shared.expenseColor
     }
@@ -194,6 +197,13 @@ struct TransactionRowView: View {
                     .appFont(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                if showsUnconvertedHint {
+                    Text("plan.unconverted_amount".localized)
+                        .appFont(.caption2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                }
             }
             .layoutPriority(1)
         }

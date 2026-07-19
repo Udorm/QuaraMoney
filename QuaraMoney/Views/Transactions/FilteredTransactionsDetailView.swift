@@ -14,7 +14,7 @@ struct FilteredTransactionsDetailView: View {
     }
 
     private var preferredCurrency: String {
-        CurrencyManager.shared.preferredCurrencyCode
+        config.summaryCurrencyCode ?? CurrencyManager.shared.preferredCurrencyCode
     }
 
     /// All categories to display — from categoryInfos or single category fallback
@@ -54,6 +54,7 @@ struct FilteredTransactionsDetailView: View {
                 TransactionListView(
                     transactions: vm.transactions,
                     sortOption: vm.sortOption,
+                    unconvertedTransactionIDs: vm.unconvertedTransactionIDs,
                     onEdit: { txn in
                         transactionToEdit = txn
                     },
@@ -206,6 +207,14 @@ struct FilteredTransactionsDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .redacted(reason: vm.hasLoadedOnce ? [] : .placeholder)
+
+            if !vm.totalIsDeterminate {
+                Label("plan.partial_data_conversion".localized, systemImage: "exclamationmark.triangle.fill")
+                    .appFont(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+            }
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

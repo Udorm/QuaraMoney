@@ -2,114 +2,88 @@ import SwiftUI
 
 struct SavingsGoalRowView: View {
     let goal: SavingsGoal
+    let metrics: SavingsGoalMetrics
 
-    private var goalColor: Color {
-        Color(hex: goal.colorHex) ?? .blue
-    }
+    private var color: Color { Color(hex: goal.colorHex) ?? .green }
 
     var body: some View {
-        HStack(spacing: 14) {
-            // MARK: Icon
-            ZStack {
-                Circle()
-                    .fill(goalColor.opacity(0.12))
-                    .frame(width: 48, height: 48)
+        HStack(alignment: .top, spacing: 12) {
+            PlanIconTile(systemImage: goal.iconName, color: color)
 
-                Image(systemName: goal.iconName)
-                    .appFont(.title3)
-                    .foregroundStyle(goalColor)
-            }
-
-            // MARK: Content
-            VStack(alignment: .leading, spacing: 6) {
-                // Title + status badge
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(goal.name)
                         .appFont(.body, weight: .semibold)
                         .lineLimit(1)
 
-                    if goal.isCompleted {
+                    if metrics.isCompleted == true {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
                             .appFont(.caption)
-                    } else if !goal.isOnTrack(converter: CurrencyManager.shared.convert) {
+                            .foregroundStyle(.green)
+                    } else if metrics.isBehind == true {
                         Text("savings.behind".localized)
-                            .appFont(.caption2, weight: .medium)
+                            .appFont(.caption2, weight: .semibold)
                             .foregroundStyle(.orange)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.orange.opacity(0.12), in: Capsule())
                     }
 
-                    Spacer(minLength: 0)
-                }
-
-                // Progress Bar with gradient fill
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color(.systemGray5))
-                            .frame(height: 6)
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [goalColor, goalColor.opacity(0.7)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(
-                                width: geometry.size.width * CGFloat(min(goal.progress(converter: CurrencyManager.shared.convert), 1.0)),
-                                height: 6
-                            )
-                            .animation(.spring(duration: 0.6), value: goal.progress(converter: CurrencyManager.shared.convert))
-                    }
-                }
-                .frame(height: 6)
-
-                // Footer row
-                HStack(spacing: 0) {
-                    Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text(" \u{2022} ")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text(goal.totalSaved(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                        .appFont(.caption, weight: .medium)
-                        .foregroundStyle(goalColor)
-
-                    Text(L10n.Budget.leftOf(goal.targetAmount.formattedAmount(for: goal.currencyCode)))
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-
                     Spacer(minLength: 4)
-
-                    // Days remaining pill or Complete tag
-                    if goal.isCompleted {
-                        Text(L10n.Savings.complete)
-                            .appFont(.caption2, weight: .medium)
-                            .foregroundStyle(.green)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.green.opacity(0.12), in: Capsule())
-                    } else if let days = goal.daysRemaining {
-                        Text(days > 0 ? "\(days)d" : L10n.Savings.Status.pastDate)
-                            .appFont(.caption2, weight: .medium)
-                            .foregroundStyle(days < 30 ? .orange : .secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                (days < 30 ? Color.orange : Color(.systemGray4)).opacity(0.12),
-                                in: Capsule()
-                            )
+                    if metrics.isDeterminate {
+                        Text(PlanDisplayFormatting.percent(metrics.progress))
+                            .appFont(.caption, weight: .semibold)
+                            .foregroundStyle(color)
+                            .monospacedDigit()
                     }
+                }
+
+                if let targetDate = goal.targetDate {
+                    Text("plan.target_date_value".localized(
+                        with: targetDate.appFormatted(date: .abbreviated, time: .omitted)
+                    ))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text("savings.status.noDate".localized)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if metrics.isDeterminate {
+                    Text("plan.saved_of".localized(
+                        with: metrics.saved.formattedAmount(for: goal.currencyCode),
+                        goal.targetAmount.formattedAmount(for: goal.currencyCode)
+                    ))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    PlanProgressBar(progress: metrics.progress, color: color)
+                } else {
+                    Text(metrics.saved.formattedAmount(for: goal.currencyCode))
+                        .appFont(.caption, weight: .medium)
+                        .monospacedDigit()
+                    PlanPartialDataLabel()
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
     }
+}
+
+#Preview {
+    let goal = SavingsGoal(name: "Emergency Fund", targetAmount: 10_000, currencyCode: "USD")
+    SavingsGoalRowView(
+        goal: goal,
+        metrics: SavingsGoalMetrics(
+            saved: 4_250,
+            remaining: 5_750,
+            progress: Decimal(string: "0.425")!,
+            monthlyTarget: 575,
+            isCompleted: false,
+            isBehind: true,
+            isDeterminate: true
+        )
+    )
+    .padding()
 }

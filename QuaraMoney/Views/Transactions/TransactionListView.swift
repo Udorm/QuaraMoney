@@ -7,6 +7,7 @@ struct TransactionListView: View {
     let transactions: [Transaction]
     var sortOption: TransactionSortOption = .newestFirst
     var listHeader: String? = nil // Optional top-level header
+    var unconvertedTransactionIDs: Set<UUID> = []
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
     
@@ -36,7 +37,7 @@ struct TransactionListView: View {
                         Button {
                             onEdit(txn)
                         } label: {
-                            TransactionRowView(transaction: txn)
+                            TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
                         }
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -76,7 +77,7 @@ struct TransactionListView: View {
                     Button {
                         onEdit(txn)
                     } label: {
-                        TransactionRowView(transaction: txn)
+                        TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -128,7 +129,7 @@ struct TransactionListView: View {
                         Button {
                             onEdit(txn)
                         } label: {
-                            TransactionRowView(transaction: txn)
+                            TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
                         }
                         .buttonStyle(.plain)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {

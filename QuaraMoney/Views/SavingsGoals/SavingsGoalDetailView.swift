@@ -4,268 +4,390 @@ import Charts
 
 struct SavingsGoalDetailView: View {
     @Environment(\.modelContext) private var modelContext
-    @Bindable var goal: SavingsGoal
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
-    @State private var showAddContribution = false
+    let goal: SavingsGoal
+
+    @State private var store = PlanSavingsDetailStore()
+    @State private var refreshPolicy = PlanRefreshPolicy()
+    @State private var showContribution = false
     @State private var showWithdrawal = false
-    @State private var showEditGoal = false
+    @State private var showEditForm = false
 
-    private var goalColor: Color {
-        Color(hex: goal.colorHex) ?? .blue
-    }
+    private var color: Color { Color(hex: goal.colorHex) ?? .green }
 
     var body: some View {
-        List {
-            // MARK: - Header Section with Donut Chart
-            Section {
-                VStack(spacing: 24) {
-                    // Header Info
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(goal.name)
-                                .appFont(.title2, weight: .bold)
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                heroCard
 
-                            if let targetDate = goal.targetDate {
-                                Text(targetDate.appFormatted(date: .abbreviated, time: .omitted))
-                                    .appFont(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if let days = goal.daysRemaining, days > 0 {
-                                Text(L10n.Budget.daysLeft(days))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: goal.iconName)
-                            .appFont(.title2)
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(goalColor.gradient)
-                            .clipShape(Circle())
-                            .shadow(color: goalColor.opacity(0.3), radius: 4, x: 0, y: 2)
-                    }
-                    .padding(.horizontal, 4)
-
-                    // Donut Chart
-                    ZStack {
-                        Chart {
-                            if SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount {
-                                SectorMark(
-                                    angle: .value("Saved", 100),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(goalColor.gradient)
-                            } else {
-                                SectorMark(
-                                    angle: .value("Saved", Double(truncating: goal.totalSaved(converter: CurrencyManager.shared.convert) as NSNumber)),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(goalColor.gradient)
-                                .cornerRadius(4)
-
-                                SectorMark(
-                                    angle: .value("Remaining", max(0, Double(truncating: goal.remainingAmount(converter: CurrencyManager.shared.convert) as NSNumber))),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(Color(.systemGray5))
-                                .cornerRadius(4)
-                            }
-                        }
-                        .frame(height: 220)
-
-                        // Center Label
-                        VStack(spacing: 4) {
-                            Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
-                                .appFont(.largeTitle, weight: .bold)
-                                .foregroundStyle(SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount ? goalColor : .primary)
-
-                            Text(SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount ? L10n.Savings.complete : L10n.Savings.progress)
-                                .appFont(.subheadline, weight: .medium)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
-            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
-
-            // MARK: - Goal Progress Section
-            Section(L10n.Budget.summary) {
-                HStack {
-                    Text(L10n.Savings.totalSaved)
-                    Spacer()
-                    Text(goal.totalSaved(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                        .appFont(.body, weight: .medium)
-                        .foregroundStyle(goalColor)
-                }
-
-                HStack {
-                    Text(L10n.Savings.targetAmount)
-                    Spacer()
-                    Text(goal.targetAmount.formattedAmount(for: goal.currencyCode))
-                        .foregroundStyle(.secondary)
-                }
-
-                if goal.currentAmount > 0 || goal.transactionContributedAmount(converter: CurrencyManager.shared.convert) > 0 {
-                    HStack {
-                        Text("savings.starting_balance".localized)
-                        Spacer()
-                        Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
-                            .foregroundStyle(.secondary)
-                            .appFont(.caption)
-                    }
-
-                    HStack {
-                        Text(L10n.Savings.transferContributions)
-                        Spacer()
-                        Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                            .foregroundStyle(.secondary)
-                            .appFont(.caption)
-                    }
-                }
-
-                if let suggested = goal.suggestedMonthlyContribution(converter: CurrencyManager.shared.convert) {
-                    HStack {
-                        Text(L10n.Savings.monthlyNeeded)
-                        Spacer()
-                        Text(suggested.formattedAmount(for: goal.currencyCode))
-                            .foregroundStyle(.blue)
-                    }
-                }
-
-                HStack {
-                    Text(L10n.Savings.status)
-                    Spacer()
-                    Text(goal.statusMessage)
-                        .foregroundStyle(goal.isOnTrack(converter: CurrencyManager.shared.convert) ? .green : .orange)
-                        .appFont(.subheadline, weight: .medium)
-                }
-
-                if let wallet = goal.linkedWallet {
-                    HStack {
-                        Text(L10n.Savings.wallet)
-                        Spacer()
-                        Label(wallet.name, systemImage: wallet.icon)
-                            .foregroundStyle(.secondary)
-                    }
+                if let state = store.state {
+                    statCard(state)
+                    progressCard(state)
+                    recentContributionsCard(state)
+                    actionButtons
+                } else if store.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
                 }
             }
-
-            // MARK: - Contribution History
-            Section(L10n.Savings.contributionHistory) {
-                let transactions = goal.linkedTransactions ?? []
-                if transactions.isEmpty {
-                    Text(L10n.Savings.noLinkedTransactions)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
-                } else {
-                    let config = TransactionFilterConfig(
-                        title: goal.name,
-                        startDate: .distantPast,
-                        endDate: .distantFuture,
-                        dateRangeDescription: L10n.Filter.allTime,
-                        savingsGoalId: goal.id,
-                        savingsGoalName: goal.name
-                    )
-                    NavigationLink {
-                        FilteredTransactionsDetailView(config: config)
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(transactions.count) " + "filteredTransactions.transactionsLabel".localized)
-                                    .appFont(.subheadline, weight: .medium)
-                                Text(goal.transactionContributedAmount(converter: CurrencyManager.shared.convert).formattedAmount(for: goal.currencyCode))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                    }
-                    ForEach(transactions.filter { SavingsLedger.isEligible($0, for: goal) }.prefix(5)) { transaction in
-                        HStack {
-                            Label(transaction.savingsIsWithdrawal ? "savings.withdrawal".localized : "savings.contribution".localized,
-                                  systemImage: transaction.savingsIsWithdrawal ? "arrow.up.right" : "arrow.down.left")
-                            Spacer()
-                            if let side = TransferSideAmountResolver.ledgerAmount(for: transaction) {
-                                Text((transaction.savingsIsWithdrawal ? -side.amount : side.amount)
-                                    .formattedAmount(for: side.currencyCode))
-                                    .appFont(size: 15, weight: .semibold).monospacedDigit()
-                            }
-                        }
-                    }
-                }
-            }
+            .padding()
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle(goal.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu {
-                    Button("savings.contribution".localized, systemImage: "arrow.down.left") { showAddContribution = true }
-                    Button("savings.withdrawal".localized, systemImage: "arrow.up.right") { showWithdrawal = true }
-                } label: { Image(systemName: "plus") }
-                .accessibilityLabel(L10n.Savings.recordContribution)
-
-                Button {
-                    showEditGoal = true
-                } label: {
-                    Image(systemName: "pencil")
-                }
-                .accessibilityLabel(L10n.Savings.edit)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("common.edit".localized) { showEditForm = true }
             }
         }
-        .sheet(isPresented: $showAddContribution) {
+        .syncPullToRefresh(modelContext)
+        .onAppear {
+            store.configure(modelContext: modelContext)
+            refreshPolicy.configure { store.refresh(goalID: goal.id) }
+            refreshPolicy.setVisible(true)
+        }
+        .onDisappear { refreshPolicy.setVisible(false) }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { refreshPolicy.sceneBecameActive() }
+        }
+        .sheet(isPresented: $showContribution) {
             SavingsContributionSheet(goal: goal, isWithdrawal: false)
         }
         .sheet(isPresented: $showWithdrawal) {
             SavingsContributionSheet(goal: goal, isWithdrawal: true)
         }
-        .sheet(isPresented: $showEditGoal) {
-            EditSavingsGoalView(goal: goal)
+        .sheet(isPresented: $showEditForm) {
+            SavingsGoalFormView(existing: goal) {
+                dismiss()
+            }
+        }
+        .alert(
+            "common.error".localized,
+            isPresented: Binding(get: { store.errorMessage != nil }, set: { _ in })
+        ) {
+            Button("common.ok".localized) {}
+        } message: {
+            Text(store.errorMessage ?? "")
         }
     }
 
-    private var daysColor: Color {
-        guard let days = goal.daysRemaining else { return .secondary }
-        if days < 14 { return .red }
-        if days < 30 { return .orange }
-        return .green
+    private var heroCard: some View {
+        PlanCard(tint: color) {
+            HStack(spacing: 18) {
+                Image(systemName: goal.iconName)
+                    .appFont(size: 32, weight: .semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: 78, height: 78)
+                    .background(
+                        LinearGradient(
+                            colors: [color, color.opacity(0.68)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(goal.name)
+                        .appFont(.title2, weight: .bold)
+                    if let targetDate = goal.targetDate {
+                        Text("plan.target_date_value".localized(
+                            with: targetDate.appFormatted(date: .abbreviated, time: .omitted)
+                        ))
+                        .appFont(.subheadline)
+                        .foregroundStyle(.secondary)
+                    } else {
+                        Text("savings.status.noDate".localized)
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if store.state?.metrics.isCompleted == true {
+                        Label("plan.completed".localized, systemImage: "checkmark.circle.fill")
+                            .appFont(.caption, weight: .semibold)
+                            .foregroundStyle(.green)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.green.opacity(0.12), in: Capsule())
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private func statCard(_ state: PlanSavingsDetailState) -> some View {
+        PlanCard {
+            Text("plan.savings_progress".localized)
+                .appFont(.headline, weight: .bold)
+
+            if state.metrics.isDeterminate {
+                Text("plan.saved_of".localized(
+                    with: state.metrics.saved.formattedAmount(for: goal.currencyCode),
+                    goal.targetAmount.formattedAmount(for: goal.currencyCode)
+                ))
+                .appFont(.title2, weight: .bold)
+                .monospacedDigit()
+
+                PlanProgressBar(progress: state.metrics.progress, color: color)
+                Text(PlanDisplayFormatting.percent(state.metrics.progress))
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(color)
+                    .monospacedDigit()
+
+                HStack(spacing: 0) {
+                    statColumn(
+                        title: "plan.to_go".localized,
+                        value: state.metrics.remaining.formattedAmount(for: goal.currencyCode)
+                    )
+                    if let monthlyTarget = state.metrics.monthlyTarget {
+                        Divider().frame(height: 44)
+                        statColumn(
+                            title: "plan.monthly_target".localized,
+                            value: monthlyTarget.formattedAmount(for: goal.currencyCode)
+                        )
+                    }
+                }
+            } else {
+                Text(state.metrics.saved.formattedAmount(for: goal.currencyCode))
+                    .appFont(.title2, weight: .bold)
+                    .monospacedDigit()
+                PlanProgressBar(progress: state.metrics.progress, color: .orange, isDeterminate: false)
+                PlanPartialDataLabel()
+            }
+        }
+    }
+
+    private func statColumn(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .appFont(.subheadline, weight: .semibold)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func progressCard(_ state: PlanSavingsDetailState) -> some View {
+        PlanCard {
+            Text("plan.progress_over_time".localized)
+                .appFont(.headline, weight: .bold)
+
+            Chart(state.progressSeries.points) { point in
+                BarMark(
+                    x: .value("plan.month".localized, point.date, unit: .month),
+                    y: .value(
+                        "plan.saved".localized,
+                        MoneyMinorUnitConverter.toMinorUnits(point.saved, currencyCode: goal.currencyCode)
+                    )
+                )
+                .foregroundStyle(point.isUpcoming ? Color.orange.gradient : color.gradient)
+                .cornerRadius(4)
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { value in
+                    AxisValueLabel {
+                        if let date = value.as(Date.self) {
+                            let isUpcoming = state.progressSeries.points.contains {
+                                $0.isUpcoming && Calendar.current.isDate($0.date, equalTo: date, toGranularity: .month)
+                            }
+                            Text(isUpcoming
+                                 ? "plan.upcoming".localized
+                                 : AppDateFormatterCache.formatter(dateFormat: "MMM", locale: .app).string(from: date))
+                                .appFont(.caption2)
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let minor = value.as(Int64.self) {
+                            Text(MoneyMinorUnitConverter.fromMinorUnits(minor, currencyCode: goal.currencyCode)
+                                .formattedAmountShort(for: goal.currencyCode))
+                                .appFont(.caption2)
+                        }
+                    }
+                }
+            }
+            .frame(height: 220)
+
+            if !state.progressSeries.isDeterminate { PlanPartialDataLabel() }
+        }
+    }
+
+    private func recentContributionsCard(_ state: PlanSavingsDetailState) -> some View {
+        PlanCard(spacing: 10) {
+            HStack {
+                Text("plan.recent_contributions".localized)
+                    .appFont(.headline, weight: .bold)
+                Spacer()
+                if !state.ledgerRows.isEmpty {
+                    NavigationLink {
+                        SavingsLedgerListView(goal: goal, rows: state.ledgerRows)
+                    } label: {
+                        Text("common.seeAll".localized)
+                            .appFont(.subheadline, weight: .semibold)
+                    }
+                }
+            }
+
+            if state.ledgerRows.isEmpty {
+                Text("plan.no_contributions".localized)
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                ForEach(Array(state.ledgerRows.prefix(5))) { row in
+                    SavingsLedgerRowView(row: row, color: color)
+                    if row.id != state.ledgerRows.prefix(5).last?.id {
+                        Divider().padding(.leading, 42)
+                    }
+                }
+            }
+        }
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                showContribution = true
+            } label: {
+                Label("plan.add_money".localized, systemImage: "plus.circle.fill")
+                    .appFont(.headline, weight: .semibold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(color)
+            .controlSize(.large)
+
+            Button {
+                showWithdrawal = true
+            } label: {
+                Text("plan.withdraw".localized)
+                    .appFont(.subheadline, weight: .semibold)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 8)
+        }
     }
 }
 
-// MARK: - Savings Contribution Sheet (wraps AddTransactionView)
+private struct SavingsLedgerListView: View {
+    let goal: SavingsGoal
+    let rows: [PlanSavingsLedgerDisplayRow]
 
-private struct SavingsContributionSheet: View {
+    private var color: Color { Color(hex: goal.colorHex) ?? .green }
+
+    var body: some View {
+        List(rows) { row in
+            SavingsLedgerRowView(row: row, color: color)
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("plan.contributions".localized)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SavingsLedgerRowView: View {
+    let row: PlanSavingsLedgerDisplayRow
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: row.isWithdrawal ? "arrow.up.right" : "arrow.down.left")
+                .appFont(.subheadline, weight: .semibold)
+                .foregroundStyle(row.isWithdrawal ? .orange : color)
+                .frame(width: 34, height: 34)
+                .background(
+                    (row.isWithdrawal ? Color.orange : color).opacity(0.12),
+                    in: Circle()
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.isWithdrawal ? "plan.withdrawal".localized : "plan.contribution".localized)
+                    .appFont(.subheadline, weight: .medium)
+                Text(row.date.appFormatted(date: .abbreviated, time: .shortened))
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                if let convertedAmount = row.convertedAmount {
+                    Text(signed(convertedAmount).formattedAmount(for: row.goalCurrencyCode))
+                        .appFont(.subheadline, weight: .semibold)
+                        .foregroundStyle(row.isWithdrawal ? .orange : color)
+                        .monospacedDigit()
+                } else {
+                    Text(signed(row.originalAmount).formattedAmount(for: row.originalCurrencyCode))
+                        .appFont(.subheadline, weight: .semibold)
+                        .monospacedDigit()
+                    Text("plan.unconverted_amount".localized)
+                        .appFont(.caption2)
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func signed(_ amount: Decimal) -> Decimal {
+        row.isWithdrawal ? -amount : amount
+    }
+}
+
+/// Wraps the existing transaction form in locked-goal mode. The preselected
+/// goal stays fixed even when it is already complete.
+struct SavingsContributionSheet: View {
     @Environment(\.modelContext) private var modelContext
     let goal: SavingsGoal
     let isWithdrawal: Bool
 
-    var body: some View {
-        let vm = AddTransactionViewModel(
-            dataService: SwiftDataService(modelContext: modelContext),
-            initialWallet: nil
-        )
-        let _ = configureSavingsTransfer(vm)
-        AddTransactionView(viewModel: vm, isNewTransaction: true)
-    }
+    @State private var viewModel: AddTransactionViewModel?
 
-    private func configureSavingsTransfer(_ vm: AddTransactionViewModel) {
-        vm.type = .transfer
-        vm.note = goal.name
-        vm.selectedSavingsGoal = goal
-        vm.savingsIsWithdrawal = isWithdrawal
-        if let wallet = goal.linkedWallet {
-            if isWithdrawal { vm.selectedWallet = wallet }
-            else { vm.destinationWallet = wallet }
+    var body: some View {
+        Group {
+            if let viewModel {
+                AddTransactionView(
+                    viewModel: viewModel,
+                    isNewTransaction: true,
+                    locksSavingsGoal: true
+                )
+            } else {
+                ProgressView()
+            }
+        }
+        .onAppear {
+            guard viewModel == nil else { return }
+            let model = AddTransactionViewModel(
+                dataService: SwiftDataService(modelContext: modelContext),
+                initialWallet: nil
+            )
+            model.type = .transfer
+            model.note = goal.name
+            model.selectedSavingsGoal = goal
+            model.savingsIsWithdrawal = isWithdrawal
+            if let wallet = goal.linkedWallet {
+                if isWithdrawal { model.selectedWallet = wallet }
+                else { model.destinationWallet = wallet }
+            }
+            viewModel = model
         }
     }
+}
+
+#Preview {
+    let goal = SavingsGoal(name: "Emergency Fund", targetAmount: 10_000, currencyCode: "USD")
+    NavigationStack { SavingsGoalDetailView(goal: goal) }
+        .modelContainer(for: [SavingsGoal.self, Transaction.self, Wallet.self], inMemory: true)
 }

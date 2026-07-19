@@ -13,25 +13,28 @@ enum SavingsGoalReconciler {
     }
 
     static func total(for goal: SavingsGoal, rates: [String: Double]) -> Result {
-        var raw = Decimal.zero
-        var missing = false
-
-        if goal.currentAmount > 0 {
-            let code = goal.startingBalanceCurrencyCode ?? goal.currencyCode
-            if let converted = convert(goal.currentAmount, from: code, to: goal.currencyCode, rates: rates) {
-                raw += converted
-            } else { missing = true }
-        }
-
-        for transaction in goal.linkedTransactions ?? [] where SavingsLedger.isEligible(transaction, for: goal) {
-            guard let side = TransferSideAmountResolver.ledgerAmount(for: transaction),
-                  let amount = convert(side.amount, from: side.currencyCode, to: goal.currencyCode, rates: rates) else {
-                missing = true
-                continue
+        let rows = (goal.linkedTransactions ?? []).compactMap { transaction -> SavingsLedgerEntrySnapshot? in
+            guard SavingsLedger.isEligible(transaction, for: goal),
+                  let side = TransferSideAmountResolver.ledgerAmount(for: transaction) else {
+                return nil
             }
-            raw += transaction.savingsIsWithdrawal ? -amount : amount
+            return SavingsLedgerEntrySnapshot(
+                id: transaction.id,
+                goalID: goal.id,
+                date: transaction.date,
+                amount: side.amount,
+                currencyCode: side.currencyCode,
+                isWithdrawal: transaction.savingsIsWithdrawal
+            )
         }
-        return Result(total: max(0, raw), hasUnconvertedRows: missing)
+        let result = SavingsLedgerCalculator.calculate(
+            startingBalance: goal.currentAmount,
+            startingCurrencyCode: goal.startingBalanceCurrencyCode ?? goal.currencyCode,
+            goalCurrencyCode: goal.currencyCode,
+            rows: rows,
+            rates: rates
+        )
+        return Result(total: result.total, hasUnconvertedRows: result.hasUnconvertedRows)
     }
 
     @discardableResult
@@ -52,11 +55,5 @@ enum SavingsGoalReconciler {
         for goal in goals { changed = reconcile(goal, markNeedsSync: markNeedsSync) || changed }
         if changed { try context.save() }
         return changed
-    }
-
-    private static func convert(_ amount: Decimal, from: String, to: String, rates: [String: Double]) -> Decimal? {
-        guard from != to else { return amount }
-        guard let source = rates[from], let target = rates[to], source > 0, target > 0 else { return nil }
-        return amount / Decimal(source) * Decimal(target)
     }
 }

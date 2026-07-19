@@ -4,358 +4,319 @@ import Charts
 
 struct BudgetDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+
     let budget: Budget
-    let transactions: [Transaction]
-    
-    @State private var showEditBudget = false
+
+    @State private var store = PlanBudgetDetailStore()
+    @State private var refreshPolicy = PlanRefreshPolicy()
+    @State private var showEditForm = false
     @State private var transactionToEdit: Transaction?
-    @State private var periodOffset = 0
-    
-    // MARK: - ViewModel (owns all budget calculations)
-    
-    private var vm: BudgetDetailViewModel {
-        BudgetDetailViewModel(budget: budget, transactions: transactions, periodOffset: periodOffset)
-    }
-    
-    // MARK: - View-only helpers
-    
-    private var preferredCurrency: String { vm.preferredCurrency }
-    private var relevantTransactions: [Transaction] { vm.relevantTransactions }
-    private var totalSpent: Decimal { vm.totalSpent }
-    private var budgetLimitConverted: Decimal { vm.budgetLimitConverted }
-    private var remaining: Decimal { vm.remaining }
-    private var progress: Double { vm.progress }
-    private var isOverBudget: Bool { vm.isOverBudget }
-    private var dailyAverage: Decimal { vm.dailyAverage }
-    private var projectedSpending: Decimal { vm.projectedSpending }
-    private var dailyBudget: Decimal { vm.dailyBudget }
-    private var budgetIcon: String { vm.budgetIcon }
-    
-    private var progressColor: Color {
-        if isOverBudget {
-            return ThemeManager.shared.expenseColor
-        } else if progress > 0.8 {
-            return .orange
-        } else {
-            return ThemeManager.shared.incomeColor
+
+    private var accentColor: Color {
+        if let category = budget.trackedCategoryInfos.first {
+            return Color(hex: category.colorHex) ?? .accentColor
         }
+        return .accentColor
     }
-    
+
+    private var iconName: String {
+        budget.trackedCategoryInfos.first?.icon ?? "sum"
+    }
+
     var body: some View {
-        List {
-            if vm.showsPeriodNavigator {
-                Section {
-                    HStack {
-                        Button { periodOffset -= 1 } label: { Image(systemName: "chevron.left") }
-                            .accessibilityLabel("plan.previous_period".localized)
-                        Spacer()
-                        VStack(spacing: 2) {
-                            Text(budget.periodType.formatPeriod(startDate: vm.displayedPeriodRange.start))
-                                .appFont(size: 17, weight: .semibold)
-                            if periodOffset != 0 {
-                                Text("plan.historical_rule_note".localized)
-                                    .appFont(size: 12, weight: .regular).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Button { if periodOffset < 0 { periodOffset += 1 } } label: { Image(systemName: "chevron.right") }
-                            .disabled(periodOffset == 0)
-                            .accessibilityLabel("plan.next_period".localized)
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                heroCard
+
+                if let state = store.state {
+                    statCard(state)
+                    if !state.projection.relevantTransactionIDs.isEmpty,
+                       !state.trend.isDegenerate {
+                        trendCard(state)
                     }
+                    recentTransactionsCard(state)
+                } else if store.isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
                 }
             }
-            // MARK: - Header Section with Donut Chart
-            Section {
-                VStack(spacing: 24) {
-                    // Header Info
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(budget.displayName)
-                                    .appFont(.title2, weight: .bold)
-                                
-                                // Badges
-                                if budget.isRecurring {
-                                    Image(systemName: "repeat.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                            }
-                            
-                            Text(budget.periodDisplayString)
-                                .appFont(.subheadline)
-                                .foregroundStyle(.secondary)
-                            
-                            if budget.isActive {
-                                Text(L10n.Budget.daysLeft(budget.daysRemaining))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: budgetIcon)
-                            .appFont(.title2)
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(progressColor.gradient)
-                            .clipShape(Circle())
-                            .shadow(color: progressColor.opacity(0.3), radius: 4, x: 0, y: 2)
-                    }
-                    .padding(.horizontal, 4)
-                    
-                    // Donut Chart
-                    ZStack {
-                        Chart {
-                            if isOverBudget {
-                                SectorMark(
-                                    angle: .value("Spent", 100),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(ThemeManager.shared.expenseColor.gradient)
-                            } else {
-                                SectorMark(
-                                    angle: .value("Spent", totalSpent),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(progressColor.gradient)
-                                .cornerRadius(4)
-                                
-                                SectorMark(
-                                    angle: .value("Remaining", max(0, remaining)),
-                                    innerRadius: .ratio(0.65),
-                                    angularInset: 2
-                                )
-                                .foregroundStyle(Color(.systemGray5))
-                                .cornerRadius(4)
-                            }
-                        }
-                        .frame(height: 220)
-                        
-                        // Center Label
-                        VStack(spacing: 4) {
-                            Text("\(Int(progress * 100))%")
-                                .appFont(.largeTitle, weight: .bold)
-                                .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
-                            
-                            Text(isOverBudget ? L10n.Budget.overBudgetLabel : L10n.Budget.used)
-                                .appFont(.subheadline, weight: .medium)
-                                .foregroundStyle(.secondary)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(isOverBudget
-                            ? "a11y.budgetPercentOver".localized(with: Int(progress * 100))
-                            : "a11y.budgetPercentUsed".localized(with: Int(progress * 100)))
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
-            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
-            
-            // MARK: - Summary Section
-            Section(L10n.Budget.summary) {
-                HStack {
-                    Text(L10n.Budget.limit)
-                    Spacer()
-                    Text(budgetLimitConverted.formattedAmount(for: preferredCurrency))
-                        .foregroundStyle(.secondary)
-                }
-                
-                HStack {
-                    Text(L10n.Budget.totalSpent)
-                    Spacer()
-                    Text(totalSpent.formattedAmount(for: preferredCurrency))
-                        .foregroundStyle(isOverBudget ? ThemeManager.shared.expenseColor : .primary)
-                }
-                
-                HStack {
-                    Text(L10n.Budget.remaining)
-                    Spacer()
-                    Text(remaining.formattedAmount(for: preferredCurrency))
-                        .appFont(.body, weight: .medium)
-                        .foregroundStyle(remaining >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
-                }
-                
-                if budget.currencyCode != preferredCurrency {
-                    HStack {
-                        Text(L10n.Budget.original)
-                        Spacer()
-                        Text(budget.amountLimit.formattedAmount(for: budget.currencyCode))
-                            .foregroundStyle(.secondary)
-                            .appFont(.caption)
-                    }
-                }
-            }
-            
-            // MARK: - Insights Section
-            if budget.isActive {
-                Section(L10n.Budget.insights) {
-                    // Daily Average
-                    HStack {
-                        Label(L10n.Budget.dailyAverage, systemImage: "chart.bar.fill")
-                        Spacer()
-                        Text(dailyAverage.formattedAmount(for: preferredCurrency))
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    // Daily Budget to Stay on Track
-                    HStack {
-                        Label(L10n.Budget.dailyBudget, systemImage: "target")
-                        Spacer()
-                        Text(dailyBudget.formattedAmount(for: preferredCurrency))
-                            .foregroundStyle(dailyBudget > 0 ? ThemeManager.shared.incomeColor : .secondary)
-                    }
-                    
-                    // Projected Spending
-                    HStack {
-                        Label(L10n.Budget.projectedTotal, systemImage: "chart.line.uptrend.xyaxis")
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(projectedSpending.formattedAmount(for: preferredCurrency))
-                                .foregroundStyle(projectedSpending > budgetLimitConverted ? ThemeManager.shared.expenseColor : .secondary)
-                            if projectedSpending > budgetLimitConverted {
-                                Text(L10n.Budget.overBy((projectedSpending - budgetLimitConverted).formattedAmount(for: preferredCurrency)))
-                                    .appFont(.caption2)
-                                    .foregroundStyle(ThemeManager.shared.expenseColor)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // MARK: - Alert Settings
-            Section {
-                HStack {
-                    Text(L10n.Budget.alerts)
-                    Spacer()
-                    HStack(spacing: 8) {
-                        if budget.alertAt50 {
-                            Text("50%")
-                                .appFont(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.2))
-                                .foregroundStyle(Color.accentColor)
-                                .cornerRadius(4)
-                        }
-                        if budget.alertAt80 {
-                            Text("80%")
-                                .appFont(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundStyle(.orange)
-                                .cornerRadius(4)
-                        }
-                        if budget.alertAt100 {
-                            Text("100%")
-                                .appFont(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red.opacity(0.2))
-                                .foregroundStyle(.red)
-                                .cornerRadius(4)
-                        }
-                        if !budget.alertAt50 && !budget.alertAt80 && !budget.alertAt100 {
-                            Text("budget.threshold.none".localized)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                
-                if budget.isRecurring {
-                    HStack {
-                        Text(L10n.Budget.recurring)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Image(systemName: "repeat")
-                                .foregroundStyle(Color.accentColor)
-                            Text(budget.periodType.displayName)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                }
-            } header: {
-                Text(L10n.Settings.title)
-            }
-            
-            // MARK: - Transactions Section
-            Section(L10n.Budget.transactions(relevantTransactions.count)) {
-                if relevantTransactions.isEmpty {
-                    Text(L10n.Budget.noTransactions)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
-                } else {
-                    let periodRange = budget.periodDateRange
-                    let budgetCategoryIds = budget.trackedCategoryIds
-                    let catInfos = budget.trackedCategoryInfos
-                    NavigationLink {
-                        FilteredTransactionsDetailView(
-                            config: TransactionFilterConfig(
-                                title: budget.displayName,
-                                startDate: periodRange.start,
-                                endDate: periodRange.end,
-                                transactionType: .expense,
-                                dateRangeDescription: budget.periodDisplayString,
-                                categoryIds: budgetCategoryIds.isEmpty ? nil : budgetCategoryIds,
-                                categoryInfos: catInfos.isEmpty ? nil : catInfos
-                            )
-                        )
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(relevantTransactions.count) " + "filteredTransactions.transactionsLabel".localized)
-                                    .appFont(.subheadline, weight: .medium)
-                                Text(totalSpent.formattedAmount(for: preferredCurrency))
-                                    .appFont(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                    }
-                }
-            }
+            .padding()
         }
-        .navigationTitle(L10n.Budget.details)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(budget.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    showEditBudget = true
-                } label: {
-                    Image(systemName: "pencil")
-                }
-                .accessibilityLabel("a11y.editBudget".localized)
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("common.edit".localized) { showEditForm = true }
             }
         }
-        .sheet(isPresented: $showEditBudget) {
-            EditBudgetView(budget: budget)
+        .syncPullToRefresh(modelContext)
+        .onAppear {
+            store.configure(modelContext: modelContext)
+            refreshPolicy.configure { store.refresh(budgetID: budget.id) }
+            refreshPolicy.setVisible(true)
         }
-        .sheet(item: $transactionToEdit) { txn in
-            AddTransactionContainer(transaction: txn, isNewTransaction: false)
+        .onDisappear { refreshPolicy.setVisible(false) }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { refreshPolicy.sceneBecameActive() }
+        }
+        .sheet(isPresented: $showEditForm) {
+            BudgetFormView(existing: budget) {
+                dismiss()
+            }
+        }
+        .sheet(item: $transactionToEdit) { transaction in
+            AddTransactionContainer(transaction: transaction, isNewTransaction: false)
+        }
+        .alert(
+            "common.error".localized,
+            isPresented: Binding(get: { store.errorMessage != nil }, set: { _ in })
+        ) {
+            Button("common.ok".localized) {}
+        } message: {
+            Text(store.errorMessage ?? "")
         }
     }
-    
-    private func deleteTransaction(_ transaction: Transaction) {
-        withAnimation {
-            SoftDeleteService.deleteTransaction(transaction)
+
+    private var heroCard: some View {
+        PlanCard(tint: accentColor) {
+            HStack(spacing: 16) {
+                PlanIconTile(systemImage: iconName, color: accentColor, size: 64)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(budget.displayName)
+                        .appFont(.title2, weight: .bold)
+                    if let state = store.state {
+                        Text(PlanDisplayFormatting.range(state.range))
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(budget.periodType.displayName)
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
         }
-        try? modelContext.save()
-        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    }
+
+    private func statCard(_ state: PlanBudgetDetailState) -> some View {
+        PlanCard {
+            Text("plan.budget_progress".localized)
+                .appFont(.headline, weight: .bold)
+
+            if state.isUpcoming {
+                Text("plan.starts_in_days".localized(with: state.daysUntilStart))
+                    .appFont(.title3, weight: .bold)
+                    .foregroundStyle(.blue)
+                Text(PlanDisplayFormatting.range(state.range))
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if state.projection.isDeterminate {
+                Text("plan.spent_of".localized(
+                    with: state.projection.spent.formattedAmount(for: budget.currencyCode),
+                    state.projection.limit.formattedAmount(for: budget.currencyCode)
+                ))
+                .appFont(.title2, weight: .bold)
+                .monospacedDigit()
+
+                PlanProgressBar(
+                    progress: state.projection.progress,
+                    color: state.projection.isOnTrack == false ? .red : accentColor
+                )
+
+                Text(PlanDisplayFormatting.percent(state.projection.progress))
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(state.projection.isOnTrack == false ? .red : accentColor)
+                    .monospacedDigit()
+
+                if state.isEnded {
+                    Text(finalResult(state))
+                        .appFont(.headline, weight: .semibold)
+                        .foregroundStyle(state.projection.overage > 0 ? .red : .green)
+                } else {
+                    HStack(spacing: 0) {
+                        statColumn(
+                            title: "plan.remaining".localized,
+                            value: state.projection.remaining.formattedAmount(for: budget.currencyCode)
+                        )
+                        Divider().frame(height: 44)
+                        statColumn(
+                            title: "plan.left_per_day".localized,
+                            value: leftPerDay(state).formattedAmount(for: budget.currencyCode)
+                        )
+                    }
+                }
+            } else {
+                Text(state.projection.spent.formattedAmount(for: budget.currencyCode))
+                    .appFont(.title2, weight: .bold)
+                    .monospacedDigit()
+                PlanProgressBar(
+                    progress: state.projection.progress,
+                    color: .orange,
+                    isDeterminate: false
+                )
+                PlanPartialDataLabel()
+            }
+        }
+    }
+
+    private func statColumn(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .appFont(.subheadline, weight: .semibold)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func leftPerDay(_ state: PlanBudgetDetailState) -> Decimal {
+        guard state.daysLeftIncludingToday > 0 else { return 0 }
+        return state.projection.remaining / Decimal(state.daysLeftIncludingToday)
+    }
+
+    private func finalResult(_ state: PlanBudgetDetailState) -> String {
+        if state.projection.overage > 0 {
+            return "plan.over_by".localized(
+                with: state.projection.overage.formattedAmount(for: budget.currencyCode)
+            )
+        }
+        return "plan.under_by".localized(
+            with: state.projection.remaining.formattedAmount(for: budget.currencyCode)
+        )
+    }
+
+    private func trendCard(_ state: PlanBudgetDetailState) -> some View {
+        PlanCard {
+            Text("plan.spending_trend".localized)
+                .appFont(.headline, weight: .bold)
+
+            Chart {
+                ForEach(state.trend.points) { point in
+                    let value = MoneyMinorUnitConverter.toMinorUnits(
+                        point.cumulativeSpent,
+                        currencyCode: budget.currencyCode
+                    )
+                    AreaMark(
+                        x: .value("plan.date".localized, point.date),
+                        y: .value("plan.spent".localized, value)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [accentColor.opacity(0.28), accentColor.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.monotone)
+
+                    LineMark(
+                        x: .value("plan.date".localized, point.date),
+                        y: .value("plan.spent".localized, value)
+                    )
+                    .foregroundStyle(accentColor)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .interpolationMethod(.monotone)
+                }
+
+                RuleMark(y: .value(
+                    "plan.limit".localized,
+                    MoneyMinorUnitConverter.toMinorUnits(state.projection.limit, currencyCode: budget.currencyCode)
+                ))
+                .foregroundStyle(.secondary)
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                .annotation(position: .top, alignment: .trailing) {
+                    Text("plan.limit".localized)
+                        .appFont(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let minor = value.as(Int64.self) {
+                            Text(MoneyMinorUnitConverter.fromMinorUnits(minor, currencyCode: budget.currencyCode)
+                                .formattedAmountShort(for: budget.currencyCode))
+                                .appFont(.caption2)
+                        }
+                    }
+                }
+            }
+            .frame(height: 220)
+
+            if !state.trend.isDeterminate { PlanPartialDataLabel() }
+        }
+    }
+
+    private func recentTransactionsCard(_ state: PlanBudgetDetailState) -> some View {
+        PlanCard(spacing: 10) {
+            HStack {
+                Text("plan.recent_transactions".localized)
+                    .appFont(.headline, weight: .bold)
+                Spacer()
+                if !store.recentTransactions.isEmpty {
+                    NavigationLink {
+                        FilteredTransactionsDetailView(config: seeAllConfig(state))
+                    } label: {
+                        Text("common.seeAll".localized)
+                            .appFont(.subheadline, weight: .semibold)
+                    }
+                }
+            }
+
+            if store.recentTransactions.isEmpty {
+                Text("plan.no_budget_transactions".localized)
+                    .appFont(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 16)
+            } else {
+                ForEach(store.recentTransactions) { transaction in
+                    Button {
+                        transactionToEdit = transaction
+                    } label: {
+                        TransactionRowView(transaction: transaction)
+                    }
+                    .buttonStyle(.plain)
+                    if transaction.id != store.recentTransactions.last?.id {
+                        Divider().padding(.leading, 46)
+                    }
+                }
+            }
+        }
+    }
+
+    private func seeAllConfig(_ state: PlanBudgetDetailState) -> TransactionFilterConfig {
+        TransactionFilterConfig(
+            title: budget.displayName,
+            startDate: state.range.start,
+            endDate: state.range.end,
+            categoryId: budget.trackedCategoryIds.count == 1 ? budget.trackedCategoryIds.first : nil,
+            categoryName: budget.trackedCategoryInfos.count == 1 ? budget.trackedCategoryInfos.first?.name : nil,
+            categoryIcon: budget.trackedCategoryInfos.count == 1 ? budget.trackedCategoryInfos.first?.icon : nil,
+            categoryColorHex: budget.trackedCategoryInfos.count == 1 ? budget.trackedCategoryInfos.first?.colorHex : nil,
+            transactionType: .expense,
+            dateRangeDescription: PlanDisplayFormatting.range(state.range),
+            categoryIds: budget.targetKind == .categories ? budget.trackedCategoryIds : nil,
+            categoryInfos: budget.targetKind == .categories ? budget.trackedCategoryInfos : nil,
+            reportExclusionPolicy: .exclude,
+            archivedWalletPolicy: .include,
+            summaryCurrencyCode: budget.currencyCode,
+            conversionPolicy: .rateChecked,
+            budgetRelevancePolicy: .sharedPredicate
+        )
     }
 }
 
 #Preview {
-    @Previewable @State var budget = Budget(amountLimit: 500, currencyCode: "USD", category: nil, month: 2, year: 2026)
-    
-    NavigationStack {
-        BudgetDetailView(budget: budget, transactions: [])
-    }
-    .modelContainer(for: [Budget.self, Transaction.self, TransactionLocation.self, Category.self], inMemory: true)
+    let budget = Budget(name: "Food", amountLimit: 500, currencyCode: "USD", periodType: .monthly)
+    NavigationStack { BudgetDetailView(budget: budget) }
+        .modelContainer(for: [Budget.self, Transaction.self, Category.self, Wallet.self], inMemory: true)
 }

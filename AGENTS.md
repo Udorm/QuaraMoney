@@ -86,9 +86,10 @@ View (SwiftUI @Query / @State)
 ### Localization
 - Two languages: English (`en.lproj/`) and Khmer (`km.lproj/`)
 - Keys use dot-namespaced format: `"common.cancel"`, `"transaction.add_income"`
-- Access via `L10n.Group.key` (e.g., `L10n.Common.cancel`)
-- **`String+Localization.swift` is auto-generated** — do NOT hand-edit. Regenerate from `.strings` files.
-- Adding a string: add to both `.strings` files, then regenerate `String+Localization.swift`
+- Access using either the generated `L10n.Group.key` constants or the live `"key".localized` convention used by Plan and Pro Analytics
+- **`String+Localization.swift` is auto-generated** — never hand-edit it
+- Adding an `L10n` constant: add the key to both `.strings` files, then regenerate `String+Localization.swift` using the established generator
+- Adding a `.localized` key: add it to both `.strings` files and run `python3 Scripts/check_missing_keys.py`; no generated constant is required
 - Runtime language switch via `LanguageManager.shared`; posts `.languageDidChange` notification
 
 ### Font System

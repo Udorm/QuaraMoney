@@ -223,3 +223,25 @@ All 3 accepted and incorporated:
 
 ### Resolution
 MAX_ROUNDS=5 reached without a formal APPROVED. This is not a positional deadlock: every finding in all 5 rounds (18+10+8+6+3 = 45) was accepted (some reshaped, each with logged reasoning); the final 3 are incorporated in Rev 6 and no counter-positions remain open. The cap simply expired before a re-review could confirm. Handed to the user for sign-off per the skill's no-fake-convergence rule.
+
+## Act 3 — Build
+Builder: Codex (gpt-5.6-sol, xhigh) via codex-build. SPEC_FILE=PLAN.md (Rev 6), MAX_FIX_ROUNDS=2.
+Branch: feat/plan-ui-redesign (plan docs committed; tree clean at launch).
+Build session thread_id: 019f7964-9a34-7d82-adec-1cd9cd48fe0b
+Proof: Scripts/check_missing_keys.py (exit 0) + xcodebuild test on iPhone 17 Pro (iOS 26.4.1, device EAB1B859-77F8-466B-8D8F-9AF5C2739610).
+
+### Round 1 — Codex build
+Codex implemented PLAN.md Rev 6 in ~54 min: 25 files modified, 5 deleted, 10 new (metrics layer: PlanMetrics/PlanMetricsLoaders/PlanMutationTransaction/PlanRefreshPolicy/SavingsLedgerCalculator; views: BudgetFormView/SavingsGoalFormView/PlanComponents; tests: 16 pure + 6 integration). 77 EN + 77 KM keys. Reported zero spec deviations; one verification-only limitation (manual smoke matrix not exhaustively exercised via simulator automation).
+
+### Claude's verdict
+Full diff read. Spec-faithful on every Rev 6 requirement checked: loader/compute split with value snapshots; strict-rate SavingsLedgerCalculator with reconciler delegation (parity test present); canonical-total validity+ordering; overlap degradation; gap-preserving range merge; excludeArchivedWallets:false on all Plan fetches; transactional save/rollback on forms AND swipe deletes; locked-goal contribution mode; TransactionFilterConfig defaults legacy-preserving; PlanRefreshPolicy full invalidation set (all names verified to exist and be posted); real Khmer translations; deleted-view reference sweep clean. One cosmetic defect found and fixed by Claude: Notification.Name("dataDidUpdate") literal → .dataDidUpdate (PlanMutationTransaction.swift).
+Proof re-run by Claude: check_missing_keys.py exit 0 (1137/1137); xcodebuild test on iOS 26.4.1 device — first attempt hit a simulator bundle-install infra failure (0 tests ran), retry with -parallel-testing-enabled NO: ** TEST SUCCEEDED **, 216 tests, 0 failures. Post-fix incremental build: BUILD SUCCEEDED.
+Fix rounds used: 0 of 2. Awaiting human diff sign-off before any commit.
+
+### Round 2 — user-reported defect + Claude diagnosis
+User (human gate): tapping a budget/saving list item to push its detail freezes the app. Claude diagnosis before delegating: hosting probe added (PlanDetailHostingProbeTests — budget, savings, and yearly-KHR stress cases) renders both details standalone without hang; user dataset trivial (4 monthly USD budgets, 1 goal, 8 txns) so scale is not the trigger; live `sample` of the user's session showed UpdateCycle at 60Hz, an ever-animating spinner, and Chart body re-evaluating each frame; no SwiftUI loop warnings in os_log. Hypothesis: real-navigation context defect (push-transition store/refresh lifecycle, refresh-cancellation live-lock, or spinner↔chart invalidation churn). Matches Codex's own smoke failure ("lost accessibility state during pushed detail navigation"). Fix round 1 of 2 delegated to the same Codex session with reproduction instructions on the 26.4.1 test device.
+
+### Round 2 — Codex fix + Claude's verdict
+Codex reproduced with live simulator automation and identified the root cause: eager NavigationLink destination construction — during the push, the source List stayed mounted while the destination's indeterminate ProgressView drove continuous update frames; every frame rebuilt the heavy detail destination (stores, PlanRefreshPolicy + its 7 observers, SwiftData-derived properties), saturating the main actor so the completed loader result could never apply — eternal spinner, perceived freeze at the list. Explains why Claude's standalone and programmatic-push probes passed (no source list rebuilding destinations per frame) and matches Claude's live sample (UpdateCycle at 60Hz + animating spinner + per-frame body re-evaluation).
+Fix: wrap both detail destinations in the pre-existing LazyView (autoclosure deferral). Two-line change; no model/policy/test churn; instrumentation removed. Codex proof: 2× budget + 2× savings list→detail automation passes (1.7–2.3 s to fully loaded content), all 5 probe tests green, parity clean, full suite TEST SUCCEEDED.
+Claude verdict: diff read and verified minimal; LazyView impl confirmed sound; no leftover debug code. Hardening applied by Claude (same pattern, reviewer's discretion): overview's two card NavigationLinks (→ BudgetListView / SavingsGoalListView) also LazyView-wrapped — same store/policy/spinner ingredients, closes the bug class. Claude re-running the full suite + build as independent proof. Fix rounds used: 1 of 2.

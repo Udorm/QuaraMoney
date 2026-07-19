@@ -178,30 +178,6 @@ struct AddSavingsGoalView: View {
                     }
                 }
 
-                // Auto-Contribute
-                Section {
-                    Toggle(L10n.Savings.autoContribute, isOn: $autoContributeEnabled)
-
-                    if autoContributeEnabled {
-                        HStack {
-                            TextField(L10n.Transaction.amount, text: $autoContributeAmountString)
-                                .keyboardType(.decimalPad)
-
-                            Picker("", selection: $autoContributePeriod) {
-                                ForEach([BudgetPeriodType.weekly, .biweekly, .monthly], id: \.self) { period in
-                                    Text(period.displayName).tag(period)
-                                }
-                            }
-                            .labelsHidden()
-                        }
-                    }
-                } header: {
-                    Text(L10n.Savings.automation)
-                } footer: {
-                    if autoContributeEnabled {
-                        Text(L10n.Savings.autoContributeDescription)
-                    }
-                }
             }
             .navigationTitle(L10n.Savings.new)
             .navigationBarTitleDisplayMode(.inline)
@@ -268,13 +244,6 @@ struct AddSavingsGoalView: View {
         )
 
         goal.linkedWallet = linkedWallet
-        goal.autoContributeEnabled = autoContributeEnabled
-
-        if autoContributeEnabled, let amount = Decimal(string: autoContributeAmountString) {
-            goal.autoContributeAmount = amount
-            goal.autoContributePeriod = autoContributePeriod
-        }
-
         modelContext.insert(goal)
         HapticManager.shared.success()
     }

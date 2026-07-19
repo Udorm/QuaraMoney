@@ -414,6 +414,13 @@ struct AddTransactionView: View {
                             // Savings Goal Picker for transfers
                             Section {
                                 savingsGoalPicker
+                                if viewModel.selectedSavingsGoal != nil {
+                                    Picker("savings.direction".localized, selection: $viewModel.savingsIsWithdrawal) {
+                                        Text("savings.contribution".localized).tag(false)
+                                        Text("savings.withdrawal".localized).tag(true)
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
                             }
                             .onChange(of: viewModel.destinationWallet) { _, newDest in
                                 guard let dest = newDest else {

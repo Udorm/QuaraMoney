@@ -389,3 +389,14 @@ create table if not exists public.profiles (
 drop trigger if exists set_updated_at on public.profiles;
 create trigger set_updated_at before insert or update on public.profiles
   for each row execute function public.set_updated_at();
+
+-- Plan tab budget/savings rework (mirrors 2026-07-18 migration).
+alter table public.budgets
+  add column if not exists target_kind text,
+  add column if not exists alert_mode text,
+  add column if not exists last_alert_period_key text,
+  add column if not exists week_start_day integer;
+alter table public.savings_goals
+  add column if not exists starting_balance_currency_code text;
+alter table public.transactions
+  add column if not exists savings_is_withdrawal boolean not null default false;

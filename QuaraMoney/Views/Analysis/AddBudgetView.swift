@@ -2,354 +2,202 @@ import SwiftUI
 import SwiftData
 
 struct AddBudgetView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    
-    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
-    
-    // MARK: - Form State
-    
-    @State private var budgetName: String = ""
-    @State private var amountString: String = ""
-    @State private var selectedCurrency: String = CurrencyManager.shared.preferredCurrencyCode
-    
-    // Target selection
-    @State private var targetType: BudgetTargetType = .specificCategories
-    @State private var selectedCategories: Set<UUID> = []
-    @State private var showCategoryPicker = false
-    
-    // Period configuration
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<Category> { $0.deletedAt == nil }) private var categories: [Category]
+    @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var budgets: [Budget]
+
+    @State private var targetKind: BudgetTargetKind = .categories
+    @State private var selectedCategories = Set<UUID>()
+    @State private var amount = ""
+    @State private var name = ""
+    @State private var currencyCode = CurrencyManager.shared.preferredCurrencyCode
     @State private var periodType: BudgetPeriodType = .monthly
-    @State private var startDate: Date = Date()
-    @State private var customEndDate: Date = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
-    
-    // Recurring options
-    @State private var isRecurring: Bool = true
-    @State private var rolloverExcess: Bool = false
-    
-    // Amount type
-    @State private var usePercentage: Bool = false
-    @State private var percentageValue: Double = 30
-    
-    // Alert settings
-    @State private var alertAt50: Bool = false
-    @State private var alertAt80: Bool = true
-    @State private var alertAt100: Bool = true
-    
-    // Budget category type (for templates)
-    @State private var budgetCategoryType: BudgetCategoryType?
-    
-    // UI State
-    @State private var showAdvancedOptions: Bool = false
+    @State private var alertMode: BudgetAlertMode = .nearingOver
+    @State private var customStart = Date()
+    @State private var customEnd = Date()
+    @State private var showOptions = false
+    @State private var errorMessage: String?
+    @State private var suggestion: BudgetSuggestion?
+    @State private var isLoadingSuggestion = false
     @State private var showCurrencyPicker = false
-    
-    private var isFormValid: Bool {
-        let hasTarget = targetType == .total || !selectedCategories.isEmpty
-        let hasAmount = !amountString.isEmpty || usePercentage
-        return hasTarget && hasAmount
+
+    private var expenseCategories: [Category] { categories.filter { $0.type == .expense } }
+    private var parsedAmount: Decimal? { Decimal(string: amount) }
+    private var isDuplicateTotal: Bool {
+        targetKind == .total && periodType != .custom && budgets.contains {
+            $0.targetKind == .total && $0.periodType == periodType
+        }
     }
-    
+    private var canSave: Bool {
+        (parsedAmount ?? 0) > 0 && (targetKind == .total || !selectedCategories.isEmpty) && !isDuplicateTotal
+    }
+    private var suggestionRequest: SuggestionRequest {
+        SuggestionRequest(targetKind: targetKind, categoryIDs: selectedCategories.sorted { $0.uuidString < $1.uuidString },
+                          periodType: periodType, currencyCode: currencyCode)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                // MARK: - Budget Name
-                Section {
-                    TextField(L10n.Budget.nameOptional, text: $budgetName)
-                } header: {
-                    Text(L10n.Budget.name)
-                } footer: {
-                    Text(L10n.Budget.nameHint)
-                }
-                
-                // MARK: - Target Selection
-                Section(L10n.Budget.whatToBudget) {
-                    Picker(L10n.Budget.Target.type, selection: $targetType) {
-                        ForEach(BudgetTargetType.allCases) { type in
-                            Label(type.displayName, systemImage: type.icon)
-                                .tag(type)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    
-                    switch targetType {
-                    case .specificCategories:
-                        Button {
-                            showCategoryPicker = true
-                        } label: {
+                Section("plan.target".localized) {
+                    Picker("plan.target".localized, selection: $targetKind) {
+                        Text("plan.total".localized).tag(BudgetTargetKind.total)
+                        Text("plan.categories".localized).tag(BudgetTargetKind.categories)
+                    }.pickerStyle(.segmented)
+                    if targetKind == .categories {
+                        ScrollView(.horizontal) {
                             HStack {
-                                Text(L10n.Budget.Target.specificCategories)
-                                Spacer()
-                                if selectedCategories.isEmpty {
-                                    Text(L10n.Common.select)
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    Text("\(selectedCategories.count)")
-                                        .foregroundStyle(.secondary)
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        
-                        if !selectedCategories.isEmpty {
-                            ForEach(categories.filter { selectedCategories.contains($0.id) }) { category in
-                                HStack {
-                                    Image(systemName: category.icon)
-                                        .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
-                                        .frame(width: 24)
-                                    Text(category.displayName)
-                                    Spacer()
-                                }
-                            }
-                            .onDelete { indexSet in
-                                let categoriesToDelete = categories.filter { selectedCategories.contains($0.id) }
-                                indexSet.forEach { index in
-                                    selectedCategories.remove(categoriesToDelete[index].id)
-                                }
-                            }
-                        }
-                        
-                    case .total:
-                        HStack {
-                            Image(systemName: "sum")
-                            .foregroundStyle(.blue)
-                            Text(L10n.Budget.allExpenses)
-                            .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                
-                // MARK: - Budget Amount
-                Section(L10n.Budget.limit) {
-                    Toggle(L10n.Budget.usePercentage, isOn: $usePercentage)
-                    
-                    if usePercentage {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("\(Int(percentageValue))%")
-                                    .appFont(.title2, weight: .bold)
-                                    .monospacedDigit()
-                                Spacer()
-                                Text(L10n.Budget.ofIncome)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Slider(value: $percentageValue, in: 5...100, step: 5)
-                                .tint(.blue)
-                            
-                            // Quick presets
-                            HStack(spacing: 8) {
-                                ForEach([10, 20, 30, 50], id: \.self) { percent in
-                                    Button("\(percent)%") {
-                                        percentageValue = Double(percent)
+                                ForEach(expenseCategories) { category in
+                                    Button {
+                                        if selectedCategories.contains(category.id) { selectedCategories.remove(category.id) }
+                                        else { selectedCategories.insert(category.id) }
+                                    } label: {
+                                        Label(category.displayName, systemImage: category.icon)
+                                            .appFont(size: 14, weight: .medium).padding(.horizontal, 12).padding(.vertical, 8)
                                     }
                                     .buttonStyle(.bordered)
-                                    .tint(percentageValue == Double(percent) ? .blue : .gray)
+                                    .tint(selectedCategories.contains(category.id) ? .accentColor : .secondary)
                                 }
                             }
-                        }
-                        .padding(.vertical, 4)
-                    } else {
-                        HStack {
-                            TextField(L10n.Transaction.amount, text: $amountString)
-                                .keyboardType(.decimalPad)
-
-                            Button {
-                                showCurrencyPicker = true
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(selectedCurrency)
-                                        .appFont(.subheadline, weight: .bold)
-                                    Image(systemName: "chevron.down")
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color(.secondarySystemBackground))
-                                .foregroundColor(.primary)
-                                .clipShape(Capsule())
-                            }
-                        }
+                        }.scrollIndicators(.hidden)
                     }
                 }
-                
-                // MARK: - Period Configuration
-                Section(L10n.Budget.periodType) { // Reusing Period Type as section header or just "Budget Period"? Strings file has budget.periodType="Period Type".
-                    Picker(L10n.Budget.periodType, selection: $periodType) {
-                        ForEach(BudgetPeriodType.allCases) { period in
-                            Label(period.displayName, systemImage: period.icon)
-                                .tag(period)
+
+                Section("transaction.amount".localized) {
+                    HStack {
+                        Text(currencyCode).foregroundStyle(.secondary)
+                        TextField("0", text: $amount).keyboardType(.decimalPad)
+                            .appFont(size: 28, weight: .bold).multilineTextAlignment(.trailing)
+                    }
+                    if isLoadingSuggestion { ProgressView().controlSize(.small) }
+                    if let suggestion, let suggestedAmount = suggestion.suggestedAmount {
+                        Button {
+                            amount = NSDecimalNumber(decimal: suggestedAmount).stringValue
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("plan.you_averaged".localized(with:
+                                        suggestion.averageSpending.formattedAmount(for: currencyCode), periodUnit))
+                                        .appFont(size: 14, weight: .medium)
+                                    Text(confidenceCopy(suggestion.confidence))
+                                        .appFont(size: 12, weight: .regular).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text("plan.use_suggestion".localized).appFont(size: 14, weight: .semibold)
+                            }.contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                    }
+                }
+
+                DisclosureGroup("plan.options".localized, isExpanded: $showOptions) {
+                    TextField("plan.name_optional".localized, text: $name)
+                    Picker("period.title".localized, selection: $periodType) {
+                        ForEach([BudgetPeriodType.weekly, .monthly, .quarterly, .yearly, .custom]) {
+                            Text($0.displayName).tag($0)
                         }
                     }
-                    
-                    DatePicker(
-                        L10n.Budget.startDate,
-                        selection: $startDate,
-                        displayedComponents: .date
-                    )
-                    
                     if periodType == .custom {
-                        DatePicker(
-                            L10n.Budget.endDate,
-                            selection: $customEndDate,
-                            in: startDate...,
-                            displayedComponents: .date
-                        )
-                    } else {
-                        HStack {
-                            Text(L10n.Budget.endDate)
-                            Spacer()
-                            Text(periodType.dateRange(from: startDate).end.appFormatted(date: .abbreviated, time: .omitted))
-                                .foregroundStyle(.secondary)
-                        }
+                        DatePicker("plan.starts".localized, selection: $customStart, displayedComponents: .date)
+                        DatePicker("plan.ends_inclusive".localized, selection: $customEnd,
+                                   in: customStart..., displayedComponents: .date)
                     }
-                }
-                
-                // MARK: - Recurring Options
-                Section {
-                    Toggle(L10n.Budget.recurring, isOn: $isRecurring)
-                    
-                    if isRecurring {
-                        Toggle(L10n.Budget.rollover, isOn: $rolloverExcess)
-                    }
-                } header: {
-                    Text(L10n.Budget.recurring) // Reusing same key if appropriate. Or "Recurring" vs "Recurring Budget". Existing key is "Recurring Budget". Section header might want just "Recurring". I'll use L10n.Budget.recurring for now.
-                } footer: {
-                    if isRecurring {
-                        Text(rolloverExcess 
-                             ? L10n.Budget.rolloverDescription
-                             : L10n.Budget.resetDescription)
-                    }
-                }
-                
-                // MARK: - Advanced Options
-                DisclosureGroup(L10n.Common.advancedOptions, isExpanded: $showAdvancedOptions) { // Assuming common.advancedOptions exists or fallback. I didn't add it. I'll use "Advanced Options" string literal or add it. I'll check common keys later. For now let's use a literal "Advanced Options" and maybe update later if I find it. Or define it now. I'll check L10n.Common first. I don't recall adding it. I'll stick to literal for now to avoid error, or add it to L10n.Common manually via replace if I can. Let's just use "Advanced Options" for safe side in this big chunk.
-                    // Alert Settings
-                    Section {
-                        Toggle(L10n.Budget.alertAt(50), isOn: $alertAt50) // Need L10n.Budget.alertAt(...)
-                        Toggle(L10n.Budget.alertAt(80), isOn: $alertAt80)
-                        Toggle(L10n.Budget.alertAt(100), isOn: $alertAt100)
-                    } header: {
-                        Label(L10n.Budget.notifications, systemImage: "bell.fill")
-                            .appFont(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    
-                    // Budget Category Type
-                    Picker(L10n.Budget.category, selection: $budgetCategoryType) { 
-                        Text("budget.threshold.none".localized).tag(nil as BudgetCategoryType?)
-                        ForEach(BudgetCategoryType.allCases, id: \.self) { type in
-                            Label(type.displayName, systemImage: type.icon)
-                                .tag(type as BudgetCategoryType?)
-                        }
-                    }
-                    
-                }
-            }
-            .navigationTitle(L10n.Budget.new)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
                     Button {
-                        dismiss()
+                        showCurrencyPicker = true
                     } label: {
-                        Image(systemName: "xmark")
+                        HStack { Text("currency.title".localized); Spacer(); Text(currencyCode); Image(systemName: "chevron.right") }
+                            .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                    Picker("plan.alerts".localized, selection: $alertMode) {
+                        Text("plan.alert_off".localized).tag(BudgetAlertMode.off)
+                        Text("plan.alert_nearing".localized).tag(BudgetAlertMode.nearing)
+                        Text("plan.alert_over".localized).tag(BudgetAlertMode.overOnly)
+                        Text("plan.alert_nearing_over".localized).tag(BudgetAlertMode.nearingOver)
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        saveBudget()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "checkmark")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isFormValid)
-                }
-            }
-        }
 
-        .sheet(isPresented: $showCategoryPicker) {
-            MultiCategoryPicker(selectedCategories: $selectedCategories)
-        }
-        .sheet(isPresented: $showCurrencyPicker) {
-            NavigationStack {
-                CurrencySelectionView(selection: $selectedCurrency)
+                if isDuplicateTotal {
+                    Section { Label("plan.duplicate_total".localized, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+                }
             }
-            .presentationDetents([.medium, .large])
+            .navigationTitle("plan.new_budget".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("common.cancel".localized) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("common.save".localized) { save() }.disabled(!canSave) }
+            }
+            .alert("common.error".localized, isPresented: .constant(errorMessage != nil)) {
+                Button("common.ok".localized) { errorMessage = nil }
+            } message: { Text(errorMessage ?? "") }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack { CurrencySelectionView(selection: $currencyCode) }
+                    .presentationDetents([.medium, .large])
+            }
+            .task(id: suggestionRequest) { await loadSuggestion() }
         }
     }
-    
-    // MARK: - Save Budget
-    
-    private func saveBudget() {
-        // Determine the amount
-        let amount: Decimal
-        if usePercentage {
-            // For percentage, store a placeholder; actual limit calculated dynamically
-            amount = 0
-        } else {
-            guard let parsedAmount = Decimal(string: amountString) else { return }
-            amount = parsedAmount
+
+    private var periodUnit: String {
+        switch periodType {
+        case .weekly: return "plan.per_week".localized
+        case .monthly: return "plan.per_month".localized
+        case .quarterly: return "plan.per_quarter".localized
+        case .yearly: return "plan.per_year".localized
+        case .biweekly: return "plan.per_two_weeks".localized
+        case .custom: return ""
         }
-        
-        // Create the budget
-        let budget = Budget(
-            name: budgetName.isEmpty ? nil : budgetName,
-            amountLimit: usePercentage ? 0 : amount,
-            currencyCode: selectedCurrency,
-            periodType: periodType,
-            startDate: startDate,
-            customEndDate: periodType == .custom ? customEndDate : nil,
-            category: nil,
-            isRecurring: isRecurring,
-            rolloverExcess: rolloverExcess,
-            alertAt50: alertAt50,
-            alertAt80: alertAt80,
-            alertAt100: alertAt100,
-            budgetCategoryType: budgetCategoryType,
-            categories: targetType == .specificCategories 
-                ? categories.filter { selectedCategories.contains($0.id) } 
-                : nil
-        )
-        
-        // Set amount type
-        if usePercentage {
-            budget.amountType = .percentOfIncome(percentageValue / 100.0)
-        } else {
-            budget.amountType = .fixed(amount)
+    }
+
+    private func confidenceCopy(_ confidence: SuggestionConfidence) -> String {
+        switch confidence {
+        case .high: return "plan.confidence_high".localized
+        case .medium: return "plan.confidence_medium".localized
+        case .low: return "plan.confidence_low".localized
+        case .noData: return ""
         }
-        
+    }
+
+    private func loadSuggestion() async {
+        guard periodType != .custom, targetKind == .total || !selectedCategories.isEmpty else {
+            suggestion = nil; isLoadingSuggestion = false; return
+        }
+        isLoadingSuggestion = true
+        let engine = BudgetSuggestionEngine(modelContext: modelContext)
+        suggestion = await engine.suggestion(targetKind: targetKind, categoryIDs: selectedCategories,
+            periodType: periodType, currencyCode: currencyCode, rates: CurrencyManager.shared.rates)
+        isLoadingSuggestion = false
+    }
+
+    private func save() {
+        guard let parsedAmount else { return }
+        let chosen = expenseCategories.filter { selectedCategories.contains($0.id) }
+        let budget = Budget(name: name.isEmpty ? nil : name, amountLimit: parsedAmount,
+                            currencyCode: currencyCode, periodType: periodType,
+                            startDate: periodType == .custom ? customStart : Date(),
+                            customEndDate: periodType == .custom ? customEnd : nil,
+                            category: nil, isRecurring: periodType != .custom,
+                            alertAt80: alertMode.thresholds.contains(80),
+                            alertAt100: alertMode.thresholds.contains(100),
+                            categories: targetKind == .categories ? chosen : nil)
+        budget.targetKind = targetKind
+        budget.alertMode = alertMode
         modelContext.insert(budget)
+        do {
+            try modelContext.save()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            HapticManager.shared.success()
+            dismiss()
+        } catch { errorMessage = error.localizedDescription }
     }
 }
 
-
-// MARK: - Budget Target Type
-
-enum BudgetTargetType: String, CaseIterable, Identifiable {
-    case specificCategories
-    case total
-    
-    var id: String { rawValue }
-    
-    var displayName: String {
-        switch self {
-        case .specificCategories: return L10n.Budget.Target.specificCategories // "Specific Categories"
-        case .total: return L10n.Budget.Target.total
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .specificCategories: return "list.bullet"
-        case .total: return "sum"
-        }
-    }
+private struct SuggestionRequest: Hashable {
+    let targetKind: BudgetTargetKind
+    let categoryIDs: [UUID]
+    let periodType: BudgetPeriodType
+    let currencyCode: String
 }
 
 #Preview {
-    AddBudgetView()
-        .modelContainer(for: [Budget.self, Category.self], inMemory: true)
+    AddBudgetView().modelContainer(for: [Budget.self, Category.self], inMemory: true)
 }

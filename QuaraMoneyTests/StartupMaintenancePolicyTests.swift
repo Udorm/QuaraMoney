@@ -90,7 +90,7 @@ final class StartupMaintenancePolicyTests: XCTestCase {
         XCTAssertFalse(StartupMaintenanceGuard.isCurrent(expected, current: ownerChanged))
     }
 
-    func testOwnedToOwnedAccountSwitchBeforeSaveRollsBackRollover() throws {
+    func testOwnedToOwnedAccountSwitchBeforeSaveRollsBackPlanNormalization() throws {
         let container = TestModelContainer.create()
         let context = ModelContext(container)
         context.autosaveEnabled = false
@@ -99,20 +99,16 @@ final class StartupMaintenancePolicyTests: XCTestCase {
             name: "Travel",
             amountLimit: 100,
             currencyCode: "USD",
-            periodType: .monthly,
+            periodType: .biweekly,
             startDate: startDate,
             isRecurring: true,
-            rolloverExcess: true
+            rolloverExcess: false
         )
         context.insert(budget)
         try context.save()
 
-        let preparation = BudgetRolloverService.prepareBudgetRollovers(
-            modelContext: context,
-            rates: ["USD": 1],
-            preferredCurrency: "USD"
-        )
-        XCTAssertTrue(preparation.hasChanges)
+        let preparation = try PlanDataMaintenance.run(in: context, ownerID: UUID(), rates: ["USD": 1], commitsMarker: false)
+        XCTAssertTrue(preparation.changed)
         XCTAssertTrue(context.hasChanges)
 
         let accountA = UUID()
@@ -141,7 +137,7 @@ final class StartupMaintenancePolicyTests: XCTestCase {
         let verifyContext = ModelContext(container)
         let persisted = try XCTUnwrap(try verifyContext.fetch(FetchDescriptor<Budget>()).first)
         XCTAssertEqual(persisted.startDate, startDate)
-        XCTAssertEqual(persisted.rolloverAmount, 0)
+        XCTAssertEqual(persisted.periodType, .biweekly)
     }
 
     func testAccountSwitchBeforePostSaveEffectsSuppressesEffects() {

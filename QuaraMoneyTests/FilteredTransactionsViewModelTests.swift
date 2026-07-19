@@ -104,9 +104,11 @@ final class FilteredTransactionsViewModelTests: XCTestCase {
         // Delete it
         vm.deleteTransaction(txnToDelete)
 
-        // Verify deleted from db
+        // Sync-safe deletion retains a tombstone for cloud propagation.
         let fetched = try context.fetch(FetchDescriptor<Transaction>())
-        XCTAssertTrue(fetched.isEmpty)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertNotNil(fetched.first?.deletedAt)
+        XCTAssertTrue(fetched.first?.needsSync == true)
     }
 
     func testDeleteTransactionWithSyncTracker() async throws {

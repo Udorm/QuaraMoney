@@ -703,6 +703,13 @@ final class SyncEngine: ObservableObject {
         // changes — an idle no-op sync shouldn't churn the UI. Tagged with
         // `object: self` so auto-sync ignores it (see `enableAutoSync`).
         if didApplyRemoteChanges {
+            // Old-client budget writes converge immediately after pull. Derived
+            // completion reconciliation stays local-only under the synchronous guard.
+            let maintenanceRates = CurrencyManager.shared.rates
+            _ = try? PlanDataMaintenance.run(in: context, ownerID: uid, rates: maintenanceRates)
+            withSyncWriteGuard {
+                _ = try? SavingsGoalReconciler.reconcileAll(in: context, markNeedsSync: false)
+            }
             NotificationCenter.default.post(name: .dataDidUpdate, object: self)
         }
     }
@@ -964,6 +971,7 @@ final class SyncEngine: ObservableObject {
                 recurring_rule_id: t.recurringRule?.id,
                 debt_id: t.debt?.id,
                 savings_goal_id: t.savingsGoal?.id,
+                savings_is_withdrawal: t.savingsIsWithdrawal,
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "transactions", client)
@@ -1021,6 +1029,7 @@ final class SyncEngine: ObservableObject {
         let rows = pending.map { g in
             SyncSavingsGoalRow(id: g.id, user_id: uid, name: g.name, goal_description: g.goalDescription,
                                target_amount: g.targetAmount, current_amount: g.currentAmount,
+                               starting_balance_currency_code: g.startingBalanceCurrencyCode,
                                currency_code: g.currencyCode, target_date: g.targetDate, created_date: g.createdDate,
                                updated_at: g.updatedAt, icon_name: g.iconName, color_hex: g.colorHex,
                                is_completed: g.isCompleted, completed_date: g.completedDate,
@@ -1169,7 +1178,9 @@ final class SyncEngine: ObservableObject {
                           last_alert_triggered_date: b.lastAlertTriggeredDate,
                           last_alert_threshold: b.lastAlertThreshold,
                           budget_category_type_raw: b.budgetCategoryType?.rawValue,
-                          category_id: b.category?.id, deleted_at: b.deletedAt)
+                          category_id: b.category?.id, target_kind: b.targetKindRaw,
+                          alert_mode: b.alertModeRaw, last_alert_period_key: b.lastAlertPeriodKey,
+                          week_start_day: b.weekStartDay, deleted_at: b.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "budgets", client)
         // Rebuild each budget's category join rows (delete then insert current set).
@@ -1415,6 +1426,7 @@ final class SyncEngine: ObservableObject {
                 t.recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
                 t.debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
                 t.savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
+                t.savingsIsWithdrawal = row.savings_is_withdrawal
                 t.createdAt = row.created_at; t.updatedAt = row.updated_at
                 t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
             }
@@ -1525,6 +1537,7 @@ final class SyncEngine: ObservableObject {
                 if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return }
                 g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
                 g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
+                g.startingBalanceCurrencyCode = row.starting_balance_currency_code
                 g.createdDate = row.created_date; g.updatedAt = row.updated_at; g.iconName = row.icon_name
                 g.colorHex = row.color_hex; g.isCompleted = row.is_completed; g.completedDate = row.completed_date
                 g.autoContributeEnabled = row.auto_contribute_enabled
@@ -1831,6 +1844,10 @@ final class SyncEngine: ObservableObject {
                 b.alertOnProjectedOverspend = row.alert_on_projected_overspend
                 b.lastAlertTriggeredDate = row.last_alert_triggered_date
                 b.lastAlertThreshold = row.last_alert_threshold
+                b.targetKindRaw = row.target_kind
+                b.alertModeRaw = row.alert_mode
+                b.lastAlertPeriodKey = row.last_alert_period_key
+                b.weekStartDay = row.week_start_day
                 b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
                 b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
                 b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }

@@ -15,6 +15,7 @@ final class SavingsGoal {
     var goalDescription: String?
     var targetAmount: Decimal
     var currentAmount: Decimal
+    var startingBalanceCurrencyCode: String?
     var currencyCode: String
     var targetDate: Date?
     var createdDate: Date
@@ -78,17 +79,22 @@ final class SavingsGoal {
     func transactionContributedAmount(converter: (Decimal, String, String) -> Decimal) -> Decimal {
         guard let transactions = linkedTransactions, !transactions.isEmpty else { return 0 }
         return transactions.reduce(Decimal.zero) { total, txn in
-            if txn.currencyCode == currencyCode {
-                return total + txn.amount
-            } else {
-                return total + converter(txn.amount, txn.currencyCode, currencyCode)
-            }
+            guard SavingsLedger.isEligible(txn, for: self),
+                  let side = TransferSideAmountResolver.ledgerAmount(for: txn) else { return total }
+            let converted = side.currencyCode == currencyCode
+                ? side.amount
+                : converter(side.amount, side.currencyCode, currencyCode)
+            return total + (txn.savingsIsWithdrawal ? -converted : converted)
         }
     }
 
     /// Total saved: manual contributions + linked transaction contributions
     func totalSaved(converter: (Decimal, String, String) -> Decimal) -> Decimal {
-        currentAmount + transactionContributedAmount(converter: converter)
+        let startingCurrency = startingBalanceCurrencyCode ?? currencyCode
+        let starting = startingCurrency == currencyCode
+            ? currentAmount
+            : converter(currentAmount, startingCurrency, currencyCode)
+        return max(0, starting + transactionContributedAmount(converter: converter))
     }
 
     /// Progress towards goal (0.0 - 1.0+)

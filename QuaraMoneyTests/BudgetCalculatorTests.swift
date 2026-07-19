@@ -39,7 +39,7 @@ final class BudgetCalculatorTests: XCTestCase {
         return txn
     }
 
-    private func makeBudget(limit: Decimal, currency: String = "USD", category: AppCategory? = nil, startDate: Date = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 1))!) -> Budget {
+    private func makeBudget(limit: Decimal, currency: String = "USD", category: AppCategory? = nil, startDate: Date = Date()) -> Budget {
         let budget = Budget(amountLimit: limit, currencyCode: currency, periodType: .monthly, startDate: startDate, category: category)
         context.insert(budget)
         return budget
@@ -56,7 +56,7 @@ final class BudgetCalculatorTests: XCTestCase {
         let cat = makeCategory(name: "Food")
         let budget = makeBudget(limit: 500, category: cat)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        let marchDate = Date()
         _ = makeTransaction(amount: 20, type: .expense, category: cat, date: marchDate)
         _ = makeTransaction(amount: 100, type: .income, category: cat, date: marchDate) // should be ignored
 
@@ -69,7 +69,7 @@ final class BudgetCalculatorTests: XCTestCase {
         let transport = makeCategory(name: "Transport")
         let budget = makeBudget(limit: 500, category: food)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        let marchDate = Date()
         _ = makeTransaction(amount: 30, type: .expense, category: food, date: marchDate)
         _ = makeTransaction(amount: 50, type: .expense, category: transport, date: marchDate) // wrong category
 
@@ -80,8 +80,8 @@ final class BudgetCalculatorTests: XCTestCase {
     func testCalculateIncomeWithinPeriod() {
         let budget = makeBudget(limit: 500)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15))!
-        let febDate = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 15))!
+        let marchDate = Date()
+        let febDate = Calendar.current.date(byAdding: .month, value: -2, to: marchDate)!
         _ = makeTransaction(amount: 1000, type: .income, date: marchDate)
         _ = makeTransaction(amount: 500, type: .income, date: febDate) // outside period
 
@@ -99,7 +99,7 @@ final class BudgetCalculatorTests: XCTestCase {
     func testTotalBudgetIncludesAllExpenses() {
         let budget = makeBudget(limit: 1000)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        let marchDate = Date()
         let food = makeCategory(name: "Food")
         let transport = makeCategory(name: "Transport")
         _ = makeTransaction(amount: 30, type: .expense, category: food, date: marchDate)
@@ -113,7 +113,7 @@ final class BudgetCalculatorTests: XCTestCase {
         let cat = makeCategory(name: "Food")
         let budget = makeBudget(limit: 500, category: cat)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
+        let marchDate = Date()
         _ = makeTransaction(amount: 20, type: .expense, category: cat, date: marchDate)
         _ = makeTransaction(amount: 50, type: .expense, category: cat, date: marchDate, excludeFromReports: true) // excluded from report
 
@@ -124,7 +124,7 @@ final class BudgetCalculatorTests: XCTestCase {
     func testCalculateIncomeExcludesReports() {
         let budget = makeBudget(limit: 500)
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15))!
+        let marchDate = Date()
         _ = makeTransaction(amount: 1000, type: .income, date: marchDate)
         _ = makeTransaction(amount: 500, type: .income, date: marchDate, excludeFromReports: true) // excluded from report
 
@@ -142,8 +142,8 @@ final class BudgetCalculatorTests: XCTestCase {
         let transportBudget = makeBudget(limit: 300, category: transport)
         let totalBudget = makeBudget(limit: 1000) // no category → all expenses
 
-        let marchDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10))!
-        let febDate = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 10))!
+        let marchDate = Date()
+        let febDate = Calendar.current.date(byAdding: .month, value: -2, to: marchDate)!
         _ = makeTransaction(amount: 30, type: .expense, category: food, date: marchDate)
         _ = makeTransaction(amount: 50, type: .expense, category: transport, date: marchDate)
         _ = makeTransaction(amount: 999, type: .expense, category: food, date: febDate) // outside period

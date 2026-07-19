@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Centralises spending, income, and limit calculations that were
 /// previously duplicated across `BudgetDetailView`, `BudgetListView`,
-/// `BudgetSummarySection`, `BudgetInsightsView`, and `ActiveBudgetsSummary`.
+/// budget detail, list, overview, and active-budget summaries.
 enum BudgetCalculator {
 
     // MARK: - Spending
@@ -16,20 +16,23 @@ enum BudgetCalculator {
     static func calculateSpending(
         for budget: Budget,
         transactions: [Transaction],
-        targetCurrency: String
+        targetCurrency: String,
+        periodRange overrideRange: (start: Date, end: Date)? = nil
     ) -> Decimal {
-        let periodRange = budget.periodDateRange
+        let periodRange = overrideRange ?? budget.periodDateRange
         let categoryIds = budget.trackedCategoryIds          // empty → total budget
 
         let relevant = transactions.filter { txn in
             guard txn.event == nil,
+                  txn.deletedAt == nil,
                   txn.type == .expense,
+                  !txn.excludeFromReports,
                   txn.date >= periodRange.start && txn.date < periodRange.end else {
                 return false
             }
 
-            // Total budget → all expenses; otherwise match categories
-            if categoryIds.isEmpty { return true }
+            if budget.targetKind == .total { return true }
+            guard !categoryIds.isEmpty else { return false }
             guard let txnCatId = txn.category?.id else { return false }
             return categoryIds.contains(txnCatId)
         }
@@ -58,24 +61,27 @@ enum BudgetCalculator {
         // Precompute each budget's period window and tracked-category set once.
         struct BudgetContext {
             let range: (start: Date, end: Date)
-            let categoryIds: Set<UUID>   // empty → total budget (all categories)
+            let categoryIds: Set<UUID>
+            let isTotal: Bool
         }
         var contexts: [(id: UUID, ctx: BudgetContext)] = []
         var totals: [UUID: Decimal] = [:]
         for budget in budgets {
             contexts.append((budget.id, BudgetContext(range: budget.periodDateRange,
-                                                      categoryIds: Set(budget.trackedCategoryIds))))
+                                                      categoryIds: Set(budget.trackedCategoryIds),
+                                                      isTotal: budget.targetKind == .total)))
             totals[budget.id] = 0
         }
 
         for txn in transactions {
-            guard txn.event == nil, txn.type == .expense, !txn.excludeFromReports else { continue }
+            guard txn.deletedAt == nil, txn.event == nil, txn.type == .expense, !txn.excludeFromReports else { continue }
             let txnCategoryId = txn.category?.id
 
             for entry in contexts {
                 let ctx = entry.ctx
                 guard txn.date >= ctx.range.start && txn.date < ctx.range.end else { continue }
-                if !ctx.categoryIds.isEmpty {
+                if !ctx.isTotal {
+                    guard !ctx.categoryIds.isEmpty else { continue }
                     guard let txnCategoryId, ctx.categoryIds.contains(txnCategoryId) else { continue }
                 }
                 let amount = CurrencyManager.convert(amount: txn.amount,
@@ -86,6 +92,44 @@ enum BudgetCalculator {
             }
         }
 
+        return totals
+    }
+
+    /// Single-pass spending where every budget is accumulated in its own currency.
+    static func spendingByBudgetCurrency(
+        for budgets: [Budget],
+        transactions: [Transaction],
+        rates: [String: Double]? = nil
+    ) -> [UUID: Decimal] {
+        let conversionRates = rates ?? CurrencyManager.shared.rates
+        struct Context {
+            let id: UUID
+            let range: (start: Date, end: Date)
+            let categoryIDs: Set<UUID>
+            let isTotal: Bool
+            let currencyCode: String
+        }
+        let contexts = budgets.map {
+            Context(id: $0.id, range: $0.periodDateRange,
+                    categoryIDs: Set($0.trackedCategoryIds),
+                    isTotal: $0.targetKind == .total, currencyCode: $0.currencyCode)
+        }
+        var totals = Dictionary(uniqueKeysWithValues: budgets.map { ($0.id, Decimal.zero) })
+        for transaction in transactions {
+            guard transaction.deletedAt == nil, transaction.event == nil,
+                  transaction.type == .expense, !transaction.excludeFromReports else { continue }
+            for context in contexts {
+                guard transaction.date >= context.range.start, transaction.date < context.range.end else { continue }
+                if !context.isTotal {
+                    guard !context.categoryIDs.isEmpty, let categoryID = transaction.category?.id,
+                          context.categoryIDs.contains(categoryID) else { continue }
+                }
+                totals[context.id, default: 0] += CurrencyManager.convert(
+                    amount: transaction.amount, from: transaction.currencyCode,
+                    to: context.currencyCode, rates: conversionRates
+                )
+            }
+        }
         return totals
     }
 

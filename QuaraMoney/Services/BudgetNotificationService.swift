@@ -12,6 +12,7 @@ class BudgetNotificationService: ObservableObject {
     @Published var unreadCount: Int = 0
     
     private var modelContext: ModelContext?
+    private var cancellables = Set<AnyCancellable>()
     
     private init() {}
     
@@ -19,6 +20,24 @@ class BudgetNotificationService: ObservableObject {
     
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        cancellables.removeAll()
+        NotificationCenter.default.publisher(for: .dataDidUpdate)
+            .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.evaluateStore() }
+            .store(in: &cancellables)
+    }
+
+    func evaluateStore() {
+        guard let modelContext else { return }
+        do {
+            let budgets = try modelContext.fetch(FetchDescriptor<Budget>()).filter { $0.deletedAt == nil }
+            let transactions = try modelContext.fetch(FetchDescriptor<Transaction>()).filter { $0.deletedAt == nil }
+            let spending = BudgetCalculator.spendingByBudgetCurrency(for: budgets, transactions: transactions)
+            checkBudgetsAndTriggerAlerts(budgets: budgets, spending: spending)
+            if modelContext.hasChanges { try modelContext.save() }
+        } catch {
+            ErrorService.shared.handlePersistenceError(error, context: "BudgetNotificationService.evaluateStore")
+        }
     }
     
     // MARK: - Permission Request
@@ -55,41 +74,31 @@ class BudgetNotificationService: ObservableObject {
             
             let progress = Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber)
             
-            if let alertType = budget.shouldTriggerAlert(progress: progress) {
-                triggerAlert(for: budget, type: alertType, progress: progress)
-                budget.recordAlertTriggered(threshold: alertType.threshold)
+            let periodKey = budget.periodKey()
+            if budget.lastAlertPeriodKey != periodKey { budget.lastAlertThreshold = 0 }
+            let progressPercent = Int(progress * 100)
+            let threshold = budget.alertMode.thresholds.sorted(by: >).first {
+                progressPercent >= $0 && budget.lastAlertThreshold < $0
+            }
+            if let threshold {
+                let alertType: BudgetAlertType = threshold == 100 ? .exceeded : .warning80
+                triggerAlert(for: budget, type: alertType, progress: progress, periodKey: periodKey)
             }
             
-            // Check projected overspend
-            if budget.alertOnProjectedOverspend && !budget.isPeriodEnded {
-                checkProjectedOverspend(budget: budget, currentSpent: spent)
-            }
-        }
-    }
-    
-    /// Check if budget is projected to overspend
-    private func checkProjectedOverspend(budget: Budget, currentSpent: Decimal) {
-        let daysElapsed = budget.totalDays - budget.daysRemaining
-        guard daysElapsed > 0 else { return }
-        
-        let dailyAverage = currentSpent / Decimal(daysElapsed)
-        let projectedTotal = dailyAverage * Decimal(budget.totalDays)
-        
-        if projectedTotal > budget.effectiveLimit && budget.lastAlertThreshold < 100 {
-            triggerAlert(for: budget, type: .projectedOverspend, progress: Double(truncating: projectedTotal as NSNumber) / Double(truncating: budget.effectiveLimit as NSNumber))
         }
     }
     
     // MARK: - Alert Triggering
     
     /// Trigger both local and in-app notification
-    private func triggerAlert(for budget: Budget, type: BudgetAlertType, progress: Double) {
+    private func triggerAlert(for budget: Budget, type: BudgetAlertType, progress: Double, periodKey: String? = nil) {
         let notification = BudgetNotification(
             budgetId: budget.id,
             budgetName: budget.displayName,
             alertType: type,
             progress: progress,
-            timestamp: Date()
+            timestamp: Date(),
+            periodKey: periodKey ?? budget.periodKey()
         )
         
         // Add to in-app notifications
@@ -97,7 +106,13 @@ class BudgetNotificationService: ObservableObject {
         
         // Schedule local notification
         Task {
-            await scheduleLocalNotification(notification)
+            guard await scheduleLocalNotification(notification) else { return }
+            budget.recordAlertTriggered(threshold: type.threshold)
+            budget.lastAlertPeriodKey = notification.periodKey
+            budget.updatedAt = Date()
+            budget.needsSync = true
+            do { try modelContext?.save() }
+            catch { ErrorService.shared.handlePersistenceError(error, context: "BudgetNotificationService.persistAlertDedupe") }
         }
     }
     
@@ -151,7 +166,7 @@ class BudgetNotificationService: ObservableObject {
     
     // MARK: - Local Notifications
     
-    private func scheduleLocalNotification(_ notification: BudgetNotification) async {
+    private func scheduleLocalNotification(_ notification: BudgetNotification) async -> Bool {
         let center = UNUserNotificationCenter.current()
         
         let content = UNMutableNotificationContent()
@@ -171,18 +186,26 @@ class BudgetNotificationService: ObservableObject {
         
         // Create request with unique identifier
         let request = UNNotificationRequest(
-            identifier: notification.id.uuidString,
+            identifier: Self.requestIdentifier(budgetID: notification.budgetId,
+                                               periodKey: notification.periodKey,
+                                               threshold: notification.alertType.threshold),
             content: content,
             trigger: nil // Deliver immediately
         )
         
         do {
             try await center.add(request)
+            return true
         } catch {
             #if DEBUG
             print("Failed to schedule notification: \(error)")
             #endif
+            return false
         }
+    }
+
+    nonisolated static func requestIdentifier(budgetID: UUID, periodKey: String, threshold: Int) -> String {
+        "budgetAlert_\(budgetID.uuidString)_\(periodKey)_\(threshold)"
     }
     
     // MARK: - Scheduled Reminders
@@ -313,15 +336,17 @@ struct BudgetNotification: Identifiable, Codable {
     let alertType: BudgetAlertType
     let progress: Double
     let timestamp: Date
+    var periodKey: String = ""
     var isRead: Bool
     
-    init(budgetId: UUID, budgetName: String, alertType: BudgetAlertType, progress: Double, timestamp: Date) {
+    init(budgetId: UUID, budgetName: String, alertType: BudgetAlertType, progress: Double, timestamp: Date, periodKey: String = "") {
         self.id = UUID()
         self.budgetId = budgetId
         self.budgetName = budgetName
         self.alertType = alertType
         self.progress = progress
         self.timestamp = timestamp
+        self.periodKey = periodKey.isEmpty ? budgetId.uuidString : periodKey
         self.isRead = false
     }
     

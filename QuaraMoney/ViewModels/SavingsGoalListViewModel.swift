@@ -6,13 +6,13 @@ class SavingsGoalListViewModel {
     var showCompletedGoals = false
 
     func activeGoals(from goals: [SavingsGoal], matching searchText: String) -> [SavingsGoal] {
-        let filtered = goals.filter { !$0.isCompleted }
+        let filtered = goals.filter { SavingsGoalReconciler.total(for: $0).total < $0.targetAmount }
         if searchText.isEmpty { return filtered }
         return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }
 
     func completedGoals(from goals: [SavingsGoal], matching searchText: String) -> [SavingsGoal] {
-        let filtered = goals.filter { $0.isCompleted }
+        let filtered = goals.filter { SavingsGoalReconciler.total(for: $0).total >= $0.targetAmount }
         if searchText.isEmpty { return filtered }
         return filtered.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
     }

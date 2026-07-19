@@ -87,14 +87,6 @@ struct MoreView: View {
                 }
 
                 Section(L10n.More.insights) {
-                    NavigationLink(destination: LazyView(BudgetInsightsView())) {
-                        Label {
-                            Text(L10n.Budget.insights)
-                        } icon: {
-                            ListIconView(systemImage: "chart.line.uptrend.xyaxis", color: .blue)
-                        }
-                    }
-
                     NavigationLink(destination: LazyView(EventListView())) {
                         Label {
                             Text(L10n.Event.title)

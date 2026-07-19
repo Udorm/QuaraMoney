@@ -220,11 +220,7 @@ class FilteredTransactionsViewModel {
             return
         }
 
-        // Invalidate wallet caches before deleting
-        transaction.sourceWallet?.invalidateBalanceCache()
-        transaction.destinationWallet?.invalidateBalanceCache()
-
-        modelContext?.delete(transaction)
+        SoftDeleteService.deleteTransaction(transaction)
         do {
             try modelContext?.save()
         } catch {

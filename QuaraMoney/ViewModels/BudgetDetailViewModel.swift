@@ -10,11 +10,13 @@ final class BudgetDetailViewModel {
     // MARK: - Inputs
     let budget: Budget
     let transactions: [Transaction]
+    let periodOffset: Int
 
     // MARK: - Init
-    init(budget: Budget, transactions: [Transaction]) {
+    init(budget: Budget, transactions: [Transaction], periodOffset: Int = 0) {
         self.budget = budget
         self.transactions = transactions
+        self.periodOffset = periodOffset
     }
 
     // MARK: - Derived Values
@@ -25,7 +27,7 @@ final class BudgetDetailViewModel {
 
     /// Transactions relevant to this budget (filtered by category, period, expense type)
     var relevantTransactions: [Transaction] {
-        let periodRange = budget.periodDateRange
+        let periodRange = displayedPeriodRange
         let categoryIds = budget.trackedCategoryIds
 
         return transactions.filter { txn in
@@ -46,8 +48,27 @@ final class BudgetDetailViewModel {
         BudgetCalculator.calculateSpending(
             for: budget,
             transactions: transactions,
-            targetCurrency: preferredCurrency
+            targetCurrency: preferredCurrency,
+            periodRange: displayedPeriodRange
         )
+    }
+
+    var showsPeriodNavigator: Bool { budget.periodType != .custom }
+
+    var displayedPeriodRange: (start: Date, end: Date) {
+        guard showsPeriodNavigator, periodOffset != 0 else { return budget.periodDateRange }
+        let calendar = Calendar.current
+        let current = budget.periodDateRange.start
+        let reference: Date
+        switch budget.periodType {
+        case .weekly: reference = calendar.date(byAdding: .weekOfYear, value: periodOffset, to: current) ?? current
+        case .biweekly: reference = calendar.date(byAdding: .day, value: periodOffset * 14, to: current) ?? current
+        case .monthly: reference = calendar.date(byAdding: .month, value: periodOffset, to: current) ?? current
+        case .quarterly: reference = calendar.date(byAdding: .month, value: periodOffset * 3, to: current) ?? current
+        case .yearly: reference = calendar.date(byAdding: .year, value: periodOffset, to: current) ?? current
+        case .custom: return budget.periodDateRange
+        }
+        return budget.periodDateRange(containing: reference)
     }
 
     /// Budget limit converted to preferred currency

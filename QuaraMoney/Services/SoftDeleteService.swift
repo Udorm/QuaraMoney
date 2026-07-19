@@ -29,10 +29,12 @@ enum SoftDeleteService {
     /// Soft-deletes a transaction and its owned location, refreshing affected
     /// wallet balances.
     static func deleteTransaction(_ transaction: Transaction) {
+        let goal = transaction.savingsGoal
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()
         transaction.location?.markSoftDeleted()
         transaction.markSoftDeleted()
+        if let goal { SavingsGoalReconciler.reconcile(goal) }
     }
 
     /// Reverses `deleteTransaction` (Undo): clears the tombstones and re-stamps
@@ -49,6 +51,7 @@ enum SoftDeleteService {
         }
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()
+        if let goal = transaction.savingsGoal { SavingsGoalReconciler.reconcile(goal) }
     }
 
     // MARK: - Category

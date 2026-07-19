@@ -69,6 +69,7 @@ nonisolated struct SyncTransactionRow: Codable, Sendable {
     @NullEncodable var recurring_rule_id: UUID?
     @NullEncodable var debt_id: UUID?
     @NullEncodable var savings_goal_id: UUID?
+    var savings_is_withdrawal: Bool
     var created_at: Date
     var updated_at: Date
     @NullEncodable var deleted_at: Date?
@@ -120,6 +121,7 @@ nonisolated struct SyncSavingsGoalRow: Codable, Sendable {
     @NullEncodable var goal_description: String?
     var target_amount: Decimal
     var current_amount: Decimal
+    @NullEncodable var starting_balance_currency_code: String?
     var currency_code: String
     @NullEncodable var target_date: Date?
     var created_date: Date
@@ -292,6 +294,10 @@ nonisolated struct SyncBudgetRow: Codable, Sendable {
     var last_alert_threshold: Int
     @NullEncodable var budget_category_type_raw: String?
     @NullEncodable var category_id: UUID?
+    @NullEncodable var target_kind: String?
+    @NullEncodable var alert_mode: String?
+    @NullEncodable var last_alert_period_key: String?
+    @NullEncodable var week_start_day: Int?
     @NullEncodable var deleted_at: Date?
 }
 

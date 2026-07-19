@@ -9,11 +9,12 @@ struct BudgetDetailView: View {
     
     @State private var showEditBudget = false
     @State private var transactionToEdit: Transaction?
+    @State private var periodOffset = 0
     
     // MARK: - ViewModel (owns all budget calculations)
     
     private var vm: BudgetDetailViewModel {
-        BudgetDetailViewModel(budget: budget, transactions: transactions)
+        BudgetDetailViewModel(budget: budget, transactions: transactions, periodOffset: periodOffset)
     }
     
     // MARK: - View-only helpers
@@ -42,6 +43,27 @@ struct BudgetDetailView: View {
     
     var body: some View {
         List {
+            if vm.showsPeriodNavigator {
+                Section {
+                    HStack {
+                        Button { periodOffset -= 1 } label: { Image(systemName: "chevron.left") }
+                            .accessibilityLabel("plan.previous_period".localized)
+                        Spacer()
+                        VStack(spacing: 2) {
+                            Text(budget.periodType.formatPeriod(startDate: vm.displayedPeriodRange.start))
+                                .appFont(size: 17, weight: .semibold)
+                            if periodOffset != 0 {
+                                Text("plan.historical_rule_note".localized)
+                                    .appFont(size: 12, weight: .regular).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Button { if periodOffset < 0 { periodOffset += 1 } } label: { Image(systemName: "chevron.right") }
+                            .disabled(periodOffset == 0)
+                            .accessibilityLabel("plan.next_period".localized)
+                    }
+                }
+            }
             // MARK: - Header Section with Donut Chart
             Section {
                 VStack(spacing: 24) {
@@ -140,16 +162,6 @@ struct BudgetDetailView: View {
                     Spacer()
                     Text(budgetLimitConverted.formattedAmount(for: preferredCurrency))
                         .foregroundStyle(.secondary)
-                }
-                
-                if budget.rolloverAmount > 0 {
-                    HStack {
-                        Label(L10n.Budget.rolloverTitle, systemImage: "arrow.up.circle.fill")
-                            .foregroundStyle(ThemeManager.shared.incomeColor)
-                        Spacer()
-                        Text("+\(budget.rolloverAmount.formattedAmount(for: preferredCurrency))")
-                            .foregroundStyle(ThemeManager.shared.incomeColor)
-                    }
                 }
                 
                 HStack {
@@ -267,12 +279,6 @@ struct BudgetDetailView: View {
                         }
                     }
                     
-                    HStack {
-                        Text(L10n.Budget.rolloverTitle)
-                        Spacer()
-                        Text(budget.rolloverExcess ? L10n.Budget.enabled : L10n.Budget.disabled)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             } header: {
                 Text(L10n.Settings.title)

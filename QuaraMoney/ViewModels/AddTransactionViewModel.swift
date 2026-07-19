@@ -29,6 +29,7 @@ class AddTransactionViewModel: BaseViewModel {
     var excludeFromReports: Bool = false
     var debt: Debt?
     var selectedSavingsGoal: SavingsGoal?
+    var savingsIsWithdrawal = false
     var selectedLocation: TransactionLocationSelection?
 
     var exchangeRate: Double = 1.0
@@ -79,6 +80,7 @@ class AddTransactionViewModel: BaseViewModel {
             if txn.type == .transfer {
                 self.destinationWallet = txn.destinationWallet
                 self.selectedSavingsGoal = txn.savingsGoal
+                self.savingsIsWithdrawal = txn.savingsIsWithdrawal
             } else {
                 self.selectedCategory = txn.category
             }
@@ -194,6 +196,7 @@ class AddTransactionViewModel: BaseViewModel {
     @discardableResult
     func saveTransaction() -> Bool {
         guard evaluatedAmount > 0, let wallet = selectedWallet else { return false }
+        let previousGoal = existingTransaction?.savingsGoal
         
         let transaction: Transaction
         if let existing = existingTransaction {
@@ -221,10 +224,12 @@ class AddTransactionViewModel: BaseViewModel {
             transaction.exchangeRate = Decimal(exchangeRate)
             transaction.category = nil
             transaction.savingsGoal = selectedSavingsGoal
+            transaction.savingsIsWithdrawal = savingsIsWithdrawal
         } else {
             transaction.category = selectedCategory
             transaction.destinationWallet = nil
             transaction.savingsGoal = nil
+            transaction.savingsIsWithdrawal = false
             // Store exchange rate for multi-currency income/expense
             transaction.exchangeRate = Decimal(exchangeRate)
         }
@@ -260,6 +265,10 @@ class AddTransactionViewModel: BaseViewModel {
 
         if existingTransaction == nil {
             dataService.insert(transaction)
+        }
+        if let previousGoal { SavingsGoalReconciler.reconcile(previousGoal) }
+        if let selectedSavingsGoal, selectedSavingsGoal.id != previousGoal?.id {
+            SavingsGoalReconciler.reconcile(selectedSavingsGoal)
         }
         
         do {

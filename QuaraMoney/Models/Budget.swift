@@ -20,6 +20,16 @@ final class Budget {
     
     /// Currency of the budget limit
     var currencyCode: String = "USD"
+
+    /// Additive, lossless budget target discriminator for cloud compatibility.
+    var targetKindRaw: String?
+
+    /// Additive alert policy. Nil is interpreted from legacy toggles.
+    var alertModeRaw: String?
+    var lastAlertPeriodKey: String?
+
+    /// Calendar weekday (1...7) used to derive weekly periods identically on every device.
+    var weekStartDay: Int?
     
     // MARK: - Period Configuration (New)
     
@@ -162,6 +172,10 @@ final class Budget {
         self.alertAt100 = alertAt100
         self.budgetCategoryTypeRaw = budgetCategoryType?.rawValue
         self.categories = categories
+        self.targetKindRaw = ((categories?.isEmpty == false) || category != nil)
+            ? BudgetTargetKind.categories.rawValue : BudgetTargetKind.total.rawValue
+        self.alertModeRaw = BudgetAlertMode.nearingOver.rawValue
+        self.weekStartDay = periodType == .weekly ? Calendar.current.firstWeekday : nil
         
         // Set legacy fields from start date for compatibility
         let calendar = Calendar.current
@@ -218,17 +232,47 @@ final class Budget {
     
     /// Whether this is a total/overall budget (no specific category)
     var isTotalBudget: Bool {
-        (category == nil && (categories == nil || categories?.isEmpty == true))
+        targetKind == .total
+    }
+
+    var targetKind: BudgetTargetKind {
+        get {
+            if let targetKindRaw, let value = BudgetTargetKind(rawValue: targetKindRaw) { return value }
+            return ((categories?.isEmpty == false) || category != nil) ? .categories : .total
+        }
+        set { targetKindRaw = newValue.rawValue }
+    }
+
+    var alertMode: BudgetAlertMode {
+        get {
+            if let alertModeRaw, let value = BudgetAlertMode(rawValue: alertModeRaw) { return value }
+            switch (alertAt80, alertAt100) {
+            case (false, false): return .off
+            case (true, false): return .nearing
+            case (false, true): return .overOnly
+            case (true, true): return .nearingOver
+            }
+        }
+        set { alertModeRaw = newValue.rawValue }
     }
     
 
     
     /// The effective budget period date range
     var periodDateRange: (start: Date, end: Date) {
+        periodDateRange(containing: Date())
+    }
+
+    func periodDateRange(containing date: Date, calendar baseCalendar: Calendar = .current) -> (start: Date, end: Date) {
         if periodType == .custom, let customEnd = customEndDate {
-            return (startDate, customEnd)
+            let calendar = baseCalendar
+            let start = calendar.startOfDay(for: startDate)
+            let inclusiveEnd = calendar.startOfDay(for: customEnd)
+            return (start, calendar.date(byAdding: .day, value: 1, to: inclusiveEnd) ?? inclusiveEnd)
         }
-        return periodType.dateRange(from: startDate)
+        var calendar = baseCalendar
+        if periodType == .weekly, let weekStartDay { calendar.firstWeekday = weekStartDay }
+        return periodType.currentPeriodRange(containing: date, calendar: calendar)
     }
     
     /// End date of the current period
@@ -243,7 +287,7 @@ final class Budget {
     
     /// The effective budget limit including rollover
     var effectiveLimit: Decimal {
-        amountLimit + rolloverAmount
+        amountLimit
     }
     
     /// Days remaining in the current budget period
@@ -266,16 +310,38 @@ final class Budget {
     
     /// Whether the budget period is active (current)
     var isActive: Bool {
+        if periodType != .custom { return true }
         let now = Date()
         return now >= startDate && now < endDate
+    }
+
+    var needsAttention: Bool {
+        amountLimit <= 0 || (targetKind == .categories && trackedCategoryIds.isEmpty)
+    }
+
+    func periodKey(containing date: Date = Date(), calendar: Calendar = .current) -> String {
+        if periodType == .custom { return id.uuidString }
+        var calendar = calendar
+        if periodType == .weekly, let weekStartDay { calendar.firstWeekday = weekStartDay }
+        let start = periodType.currentPeriodRange(containing: date, calendar: calendar).start
+        let year = calendar.component(.year, from: start)
+        switch periodType {
+        case .weekly, .biweekly:
+            let week = calendar.component(.weekOfYear, from: start)
+            return String(format: "%04d-W%02d", calendar.component(.yearForWeekOfYear, from: start), week)
+        case .monthly: return String(format: "%04d-%02d", year, calendar.component(.month, from: start))
+        case .quarterly: return "\(year)-Q\(((calendar.component(.month, from: start) - 1) / 3) + 1)"
+        case .yearly: return String(format: "%04d", year)
+        case .custom: return id.uuidString
+        }
     }
     
     /// All category IDs this budget tracks (for filtering transactions)
     var trackedCategoryIds: [UUID] {
         if let categories = categories, !categories.isEmpty {
-            return categories.map { $0.id }
+            return categories.filter { $0.deletedAt == nil }.map { $0.id }
         }
-        if let category = category {
+        if let category = category, category.deletedAt == nil {
             return [category.id]
         }
         return [] // Total budget tracks all
@@ -360,6 +426,24 @@ final class Budget {
         if amountLimit < 0 { errors.append(.negativeOrZeroAmount(field: "Budget limit")) }
         if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
         return errors
+    }
+}
+
+enum BudgetTargetKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case total, categories
+    var id: String { rawValue }
+}
+
+enum BudgetAlertMode: String, Codable, CaseIterable, Identifiable {
+    case off, nearing, overOnly, nearingOver
+    var id: String { rawValue }
+    var thresholds: [Int] {
+        switch self {
+        case .off: return []
+        case .nearing: return [80]
+        case .overOnly: return [100]
+        case .nearingOver: return [80, 100]
+        }
     }
 }
 

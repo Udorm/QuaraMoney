@@ -12,7 +12,7 @@ import Supabase
 
 nonisolated private struct MaintenanceDatabaseResult: Sendable {
     let commit: StartupMaintenanceGuard.CommitResult
-    let rolloverNotificationPayloads: [BudgetRolloverNotificationPayload]
+    let planMarkerKey: String
 }
 
 nonisolated private enum MaintenanceDatabaseOutcome: Sendable {
@@ -277,6 +277,7 @@ struct QuaraMoneyApp: App {
                         RecurringBackgroundRefresh.schedule()
                     }
                 case .active:
+                    BudgetNotificationService.shared.evaluateStore()
                     // Returning to the foreground: prompt for biometrics if locked.
                     if securityManager.isAppLocked {
                         securityManager.authenticate()
@@ -307,6 +308,13 @@ struct QuaraMoneyApp: App {
             }
             .onReceive(SyncEngine.shared.$hasCompletedInitialSync.removeDuplicates()) { _ in
                 handleSyncSettlementChange()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .currencyRatesDidChange)) { _ in
+                let context = sharedModelContainer.mainContext
+                SyncEngine.shared.withSyncWriteGuard {
+                    _ = try? SavingsGoalReconciler.reconcileAll(in: context, markNeedsSync: false)
+                }
+                NotificationCenter.default.post(name: .dataDidUpdate, object: CurrencyManager.shared)
             }
         }
         .modelContainer(sharedModelContainer)
@@ -650,8 +658,7 @@ struct QuaraMoneyApp: App {
               ) else { return .invalidated }
 
         let container = sharedModelContainer
-        let rates = CurrencyManager.shared.rates
-        let preferredCurrency = CurrencyManager.shared.preferredCurrencyCode
+        let maintenanceRates = CurrencyManager.shared.rates
         let databaseTask = Task.detached(priority: .utility) {
             guard !Task.isCancelled else {
                 return MaintenanceDatabaseOutcome.invalidated
@@ -668,12 +675,6 @@ struct QuaraMoneyApp: App {
 
             let context = ModelContext(container)
             context.autosaveEnabled = false
-            let rollover = BudgetRolloverService.prepareBudgetRollovers(
-                modelContext: context,
-                rates: rates,
-                preferredCurrency: preferredCurrency
-            )
-
             do {
                 try CategoryCatalog.stampAndDedupe(
                     in: context,
@@ -685,6 +686,12 @@ struct QuaraMoneyApp: App {
                         _ = try CategoryCatalog.fetchOrCreate(key: definition.key, in: context)
                     }
                 }
+                let planMaintenance = try PlanDataMaintenance.run(
+                    in: context,
+                    ownerID: expectedIdentity.localOwnerID,
+                    rates: maintenanceRates,
+                    commitsMarker: false
+                )
 
                 guard !Task.isCancelled else {
                     context.rollback()
@@ -705,10 +712,7 @@ struct QuaraMoneyApp: App {
                     return MaintenanceDatabaseOutcome.invalidated
                 }
                 return MaintenanceDatabaseOutcome.saved(
-                    MaintenanceDatabaseResult(
-                        commit: commit,
-                        rolloverNotificationPayloads: rollover.notificationPayloads
-                    )
+                    MaintenanceDatabaseResult(commit: commit, planMarkerKey: planMaintenance.markerKey)
                 )
             } catch {
                 context.rollback()
@@ -740,28 +744,16 @@ struct QuaraMoneyApp: App {
             // Completion belongs to this exact generation and is set only after
             // the guarded caller-owned save succeeds.
             accountMaintenanceCompleted = true
+            UserDefaults.standard.set(true, forKey: result.planMarkerKey)
 
             if result.commit.hadChanges {
                 NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-            }
-
-            for payload in result.rolloverNotificationPayloads {
-                guard StartupMaintenanceGuard.isCurrent(
-                    expectedIdentity,
-                    current: currentMaintenanceIdentity
-                ) else {
-                    BudgetRolloverService.cancelNotifications(result.rolloverNotificationPayloads)
-                    await RecurringNotificationService.clearAllPendingRequests()
-                    return .invalidated
-                }
-                await BudgetRolloverService.scheduleNotification(payload)
             }
 
             guard StartupMaintenanceGuard.isCurrent(
                 expectedIdentity,
                 current: currentMaintenanceIdentity
             ) else {
-                BudgetRolloverService.cancelNotifications(result.rolloverNotificationPayloads)
                 await RecurringNotificationService.clearAllPendingRequests()
                 return .invalidated
             }

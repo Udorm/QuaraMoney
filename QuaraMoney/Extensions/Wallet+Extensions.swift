@@ -54,16 +54,7 @@ extension Wallet {
     ///   3. legacy exchangeRate  → amount × exchangeRate (pre-storedRate rows).
     ///   4. constant fallback    → best-effort conversion for rows with no rate.
     func amountInWalletCurrency(for txn: Transaction) -> Decimal {
-        if txn.currencyCode == currencyCode {
-            return txn.amount
-        }
-        if let rate = txn.storedRate, rate > 0 {
-            return txn.amount * rate
-        }
-        if txn.exchangeRate > 0 && txn.exchangeRate != 1.0 {
-            return txn.amount * txn.exchangeRate
-        }
-        return convertWithFallbackRates(txn.amount, from: txn.currencyCode)
+        TransferSideAmountResolver.resolve(txn, in: self)
     }
 
     /// Signed effect of an outgoing transaction (this wallet is the source)

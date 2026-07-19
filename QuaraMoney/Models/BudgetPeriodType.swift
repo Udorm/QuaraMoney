@@ -1,7 +1,7 @@
 import Foundation
 
 /// Budget period types supporting flexible budgeting timeframes
-enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
+enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable, Sendable {
     case weekly
     case biweekly
     case monthly
@@ -34,7 +34,7 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
     }
     
     /// Calculate the date range for a budget period starting from a given date
-    func dateRange(from startDate: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
+    nonisolated func dateRange(from startDate: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
         let start = calendar.startOfDay(for: startDate)
         
         switch self {
@@ -83,7 +83,7 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
     }
     
     /// Get the start of the current period containing a date
-    func periodStart(containing date: Date, calendar: Calendar = .current) -> Date {
+    nonisolated func periodStart(containing date: Date, calendar: Calendar = .current) -> Date {
         switch self {
         case .weekly:
             let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
@@ -117,6 +117,12 @@ enum BudgetPeriodType: String, Codable, CaseIterable, Identifiable {
         case .custom:
             return calendar.startOfDay(for: date)
         }
+    }
+
+    /// Calendar-aligned half-open period containing `date`.
+    nonisolated func currentPeriodRange(containing date: Date, calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let start = periodStart(containing: date, calendar: calendar)
+        return dateRange(from: start, calendar: calendar)
     }
     
     /// Format the period for display

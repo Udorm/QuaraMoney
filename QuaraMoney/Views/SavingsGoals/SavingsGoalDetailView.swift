@@ -7,6 +7,7 @@ struct SavingsGoalDetailView: View {
     @Bindable var goal: SavingsGoal
 
     @State private var showAddContribution = false
+    @State private var showWithdrawal = false
     @State private var showEditGoal = false
 
     private var goalColor: Color {
@@ -52,7 +53,7 @@ struct SavingsGoalDetailView: View {
                     // Donut Chart
                     ZStack {
                         Chart {
-                            if goal.isCompleted {
+                            if SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount {
                                 SectorMark(
                                     angle: .value("Saved", 100),
                                     innerRadius: .ratio(0.65),
@@ -83,9 +84,9 @@ struct SavingsGoalDetailView: View {
                         VStack(spacing: 4) {
                             Text(goal.progressPercent(converter: CurrencyManager.shared.convert))
                                 .appFont(.largeTitle, weight: .bold)
-                                .foregroundStyle(goal.isCompleted ? goalColor : .primary)
+                                .foregroundStyle(SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount ? goalColor : .primary)
 
-                            Text(goal.isCompleted ? L10n.Savings.complete : L10n.Savings.progress)
+                            Text(SavingsGoalReconciler.total(for: goal).total >= goal.targetAmount ? L10n.Savings.complete : L10n.Savings.progress)
                                 .appFont(.subheadline, weight: .medium)
                                 .foregroundStyle(.secondary)
                         }
@@ -115,7 +116,7 @@ struct SavingsGoalDetailView: View {
 
                 if goal.currentAmount > 0 || goal.transactionContributedAmount(converter: CurrencyManager.shared.convert) > 0 {
                     HStack {
-                        Text(L10n.Savings.manualContributions)
+                        Text("savings.starting_balance".localized)
                         Spacer()
                         Text(goal.currentAmount.formattedAmount(for: goal.currencyCode))
                             .foregroundStyle(.secondary)
@@ -146,15 +147,6 @@ struct SavingsGoalDetailView: View {
                     Text(goal.statusMessage)
                         .foregroundStyle(goal.isOnTrack(converter: CurrencyManager.shared.convert) ? .green : .orange)
                         .appFont(.subheadline, weight: .medium)
-                }
-
-                if goal.autoContributeEnabled, let amount = goal.autoContributeAmount {
-                    HStack {
-                        Text(L10n.Savings.autoContribute)
-                        Spacer()
-                        Text("\(amount.formattedAmount(for: goal.currencyCode)) / \(goal.autoContributePeriod?.displayName ?? "")")
-                            .foregroundStyle(.secondary)
-                    }
                 }
 
                 if let wallet = goal.linkedWallet {
@@ -198,17 +190,17 @@ struct SavingsGoalDetailView: View {
                             Spacer()
                         }
                     }
-                }
-            }
-
-            // MARK: Actions
-            if goal.isCompleted {
-                Section {
-                    Button {
-                        goal.isCompleted = false
-                        goal.completedDate = nil
-                    } label: {
-                        Label(L10n.Savings.markActive, systemImage: "arrow.uturn.backward")
+                    ForEach(transactions.filter { SavingsLedger.isEligible($0, for: goal) }.prefix(5)) { transaction in
+                        HStack {
+                            Label(transaction.savingsIsWithdrawal ? "savings.withdrawal".localized : "savings.contribution".localized,
+                                  systemImage: transaction.savingsIsWithdrawal ? "arrow.up.right" : "arrow.down.left")
+                            Spacer()
+                            if let side = TransferSideAmountResolver.ledgerAmount(for: transaction) {
+                                Text((transaction.savingsIsWithdrawal ? -side.amount : side.amount)
+                                    .formattedAmount(for: side.currencyCode))
+                                    .appFont(size: 15, weight: .semibold).monospacedDigit()
+                            }
+                        }
                     }
                 }
             }
@@ -217,14 +209,11 @@ struct SavingsGoalDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if !goal.isCompleted {
-                    Button {
-                        showAddContribution = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel(L10n.Savings.recordContribution)
-                }
+                Menu {
+                    Button("savings.contribution".localized, systemImage: "arrow.down.left") { showAddContribution = true }
+                    Button("savings.withdrawal".localized, systemImage: "arrow.up.right") { showWithdrawal = true }
+                } label: { Image(systemName: "plus") }
+                .accessibilityLabel(L10n.Savings.recordContribution)
 
                 Button {
                     showEditGoal = true
@@ -235,7 +224,10 @@ struct SavingsGoalDetailView: View {
             }
         }
         .sheet(isPresented: $showAddContribution) {
-            SavingsContributionSheet(goal: goal)
+            SavingsContributionSheet(goal: goal, isWithdrawal: false)
+        }
+        .sheet(isPresented: $showWithdrawal) {
+            SavingsContributionSheet(goal: goal, isWithdrawal: true)
         }
         .sheet(isPresented: $showEditGoal) {
             EditSavingsGoalView(goal: goal)
@@ -255,6 +247,7 @@ struct SavingsGoalDetailView: View {
 private struct SavingsContributionSheet: View {
     @Environment(\.modelContext) private var modelContext
     let goal: SavingsGoal
+    let isWithdrawal: Bool
 
     var body: some View {
         let vm = AddTransactionViewModel(
@@ -269,8 +262,10 @@ private struct SavingsContributionSheet: View {
         vm.type = .transfer
         vm.note = goal.name
         vm.selectedSavingsGoal = goal
+        vm.savingsIsWithdrawal = isWithdrawal
         if let wallet = goal.linkedWallet {
-            vm.destinationWallet = wallet
+            if isWithdrawal { vm.selectedWallet = wallet }
+            else { vm.destinationWallet = wallet }
         }
     }
 }

@@ -1,6 +1,15 @@
 import SwiftUI
 import SwiftData
 
+private enum BudgetTargetType: String, CaseIterable, Identifiable {
+    case specificCategories, total
+    var id: String { rawValue }
+    var displayName: String {
+        self == .total ? "plan.total".localized : "plan.categories".localized
+    }
+    var icon: String { self == .total ? "sum" : "square.grid.2x2" }
+}
+
 struct EditBudgetView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -167,25 +176,7 @@ struct EditBudgetView: View {
                 
                 // MARK: - Budget Amount
                 Section(L10n.Budget.limit) {
-                    Toggle(L10n.Budget.usePercentage, isOn: $usePercentage)
-                    
-                    if usePercentage {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("\(Int(percentageValue))%")
-                                    .appFont(.title2, weight: .bold)
-                                    .monospacedDigit()
-                                Spacer()
-                                Text(L10n.Budget.ofIncome)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Slider(value: $percentageValue, in: 5...100, step: 5)
-                                .tint(.blue)
-                        }
-                        .padding(.vertical, 4)
-                    } else {
-                        HStack {
+                    HStack {
                             TextField(L10n.Transaction.amount, text: $amountString)
                                 .keyboardType(.decimalPad)
 
@@ -196,8 +187,7 @@ struct EditBudgetView: View {
                                     Text(selectedCurrency)
                                         .appFont(.subheadline, weight: .bold)
                                     Image(systemName: "chevron.down")
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
+                                        .appFont(size: 12, weight: .bold)
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -205,14 +195,13 @@ struct EditBudgetView: View {
                                 .foregroundColor(.primary)
                                 .clipShape(Capsule())
                             }
-                        }
                     }
                 }
                 
                 // MARK: - Period Configuration
                 Section(L10n.Budget.periodType) {
                     Picker(L10n.Budget.periodType, selection: $periodType) {
-                        ForEach(BudgetPeriodType.allCases) { period in
+                        ForEach([BudgetPeriodType.weekly, .monthly, .quarterly, .yearly, .custom]) { period in
                             Label(period.displayName, systemImage: period.icon)
                                 .tag(period)
                         }
@@ -241,23 +230,6 @@ struct EditBudgetView: View {
                     }
                 }
                 
-                // MARK: - Recurring Options
-                Section {
-                    Toggle(L10n.Budget.recurring, isOn: $isRecurring)
-                    
-                    if isRecurring {
-                        Toggle(L10n.Budget.rollover, isOn: $rolloverExcess)
-                    }
-                } header: {
-                    Text(L10n.Budget.recurring)
-                } footer: {
-                    if isRecurring {
-                        Text(rolloverExcess 
-                             ? L10n.Budget.rolloverDescription
-                             : L10n.Budget.resetDescription)
-                    }
-                }
-                
                 // MARK: - Advanced Options
                 DisclosureGroup(L10n.Common.advancedOptions, isExpanded: $showAdvancedOptions) {
                     // Alert Settings
@@ -271,27 +243,6 @@ struct EditBudgetView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    // Budget Category Type
-                    Picker(L10n.Budget.category, selection: $budgetCategoryType) {
-                        Text("budget.threshold.none".localized).tag(nil as BudgetCategoryType?)
-                        ForEach(BudgetCategoryType.allCases, id: \.self) { type in
-                            Label(type.displayName, systemImage: type.icon)
-                                .tag(type as BudgetCategoryType?)
-                        }
-                    }
-                    
-                }
-                
-                // MARK: - Current Status (Read-only info)
-                if budget.rolloverAmount > 0 {
-                    Section(L10n.Budget.currentPeriod) {
-                        HStack {
-                            Text(L10n.Budget.rolloverAmountLabel)
-                            Spacer()
-                            Text(budget.rolloverAmount.formattedAmount(for: budget.currencyCode))
-                                .foregroundStyle(ThemeManager.shared.incomeColor)
-                        }
-                    }
                 }
             }
             .navigationTitle(L10n.Budget.edit)
@@ -340,9 +291,11 @@ struct EditBudgetView: View {
         case .specificCategories:
             budget.categories = categories.filter { selectedCategories.contains($0.id) }
             budget.category = nil
+            budget.targetKind = .categories
         case .total:
             budget.categories = nil
             budget.category = nil
+            budget.targetKind = .total
         }
         
         // Update period
@@ -356,14 +309,10 @@ struct EditBudgetView: View {
         budget.year = calendar.component(.year, from: startDate)
         
         // Update recurring
-        budget.isRecurring = isRecurring
-        budget.rolloverExcess = rolloverExcess
+        budget.isRecurring = periodType != .custom
         
         // Update amount
-        if usePercentage {
-            budget.amountType = .percentOfIncome(percentageValue / 100.0)
-            budget.amountLimit = 0 // Will be calculated dynamically
-        } else if let amount = Decimal(string: amountString) {
+        if let amount = Decimal(string: amountString) {
             budget.amountType = .fixed(amount)
             budget.amountLimit = amount
         }
@@ -372,9 +321,19 @@ struct EditBudgetView: View {
         budget.alertAt50 = alertAt50
         budget.alertAt80 = alertAt80
         budget.alertAt100 = alertAt100
+        budget.alertMode = switch (alertAt80, alertAt100) {
+        case (false, false): .off
+        case (true, false): .nearing
+        case (false, true): .overOnly
+        case (true, true): .nearingOver
+        }
         
         // Update category type
         budget.budgetCategoryType = budgetCategoryType
+        budget.updatedAt = Date()
+        budget.needsSync = true
+        try? modelContext.save()
+        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
 
         HapticManager.shared.success()
     }

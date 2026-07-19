@@ -36,8 +36,9 @@ enum SchemaV1: VersionedSchema {
 /// Migration plan that SwiftData uses to migrate between schema versions.
 ///
 /// NOTE on the Supabase sync metadata (`syncUserID`, `updatedAt`, `deletedAt`,
-/// `needsSync`) and explicit optional relationship inverses (for example,
-/// `Category.multiCategoryBudgets`): these are **additive, optional/defaulted**
+/// `needsSync`), `Budget.categorySetDirty`, and explicit optional relationship
+/// inverses (for example, `Category.multiCategoryBudgets`): these are
+/// **additive, optional/defaulted**
 /// properties, so they migrate automatically and non-destructively via
 /// SwiftData's lightweight inference under the existing `SchemaV1` version —
 /// the same way earlier fields (e.g. `Transaction.tags`, `storedRate`) were added.

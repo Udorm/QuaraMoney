@@ -293,6 +293,8 @@ nonisolated struct SyncBudgetRow: Codable, Sendable {
     @NullEncodable var last_alert_triggered_date: Date?
     var last_alert_threshold: Int
     @NullEncodable var budget_category_type_raw: String?
+    /// Read-only legacy fallback on pull. Every budget push must encode this as
+    /// nil; `budget_categories` is the sole cloud write representation.
     @NullEncodable var category_id: UUID?
     @NullEncodable var target_kind: String?
     @NullEncodable var alert_mode: String?

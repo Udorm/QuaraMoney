@@ -45,14 +45,7 @@ struct BudgetFormView: View {
         self.onDeleted = onDeleted
         self.mutationExecutor = PlanMutationExecutor()
 
-        let categoryIDs: Set<UUID>
-        if let selected = existing?.categories, !selected.isEmpty {
-            categoryIDs = Set(selected.map(\.id))
-        } else if let category = existing?.category {
-            categoryIDs = [category.id]
-        } else {
-            categoryIDs = []
-        }
+        let categoryIDs = Set(existing?.effectiveTrackedCategories.map(\.id) ?? [])
         let initialCurrency = existing?.currencyCode ?? CurrencyManager.shared.preferredCurrencyCode
         let initialStart = existing?.startDate ?? Date()
 
@@ -488,6 +481,40 @@ struct BudgetFormView: View {
         selectedCategories: [Category],
         now: Date
     ) {
+        Self.applyFormValues(
+            to: budget,
+            name: name,
+            amount: amount,
+            currencyCode: currencyCode,
+            selectedCategories: selectedCategories,
+            targetKind: targetKind,
+            periodType: periodType,
+            customStart: customStart,
+            customEnd: customEnd,
+            alertMode: alertMode,
+            isNewBudget: existing == nil,
+            now: now
+        )
+    }
+
+    /// Shared by the production save closure and category-link regression tests.
+    /// Keep the category setter unconditional: its own normalized change
+    /// detection is what makes a name-only save safe.
+    @MainActor
+    static func applyFormValues(
+        to budget: Budget,
+        name: String,
+        amount: Decimal,
+        currencyCode: String,
+        selectedCategories: [Category],
+        targetKind: BudgetTargetKind,
+        periodType: BudgetPeriodType,
+        customStart: Date,
+        customEnd: Date,
+        alertMode: BudgetAlertMode,
+        isNewBudget: Bool,
+        now: Date
+    ) {
         budget.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : name
         budget.amountType = .fixed(amount)
         budget.amountLimit = amount
@@ -497,7 +524,7 @@ struct BudgetFormView: View {
         if periodType == .custom {
             budget.startDate = customStart
             budget.customEndDate = customEnd
-        } else if existing == nil {
+        } else if isNewBudget {
             budget.startDate = now
             budget.customEndDate = nil
         } else {
@@ -556,6 +583,7 @@ private struct BudgetFormModelSnapshot {
     let year: Int
     let updatedAt: Date
     let needsSync: Bool
+    let categorySetDirty: Bool
 
     init(_ budget: Budget) {
         name = budget.name
@@ -577,6 +605,7 @@ private struct BudgetFormModelSnapshot {
         year = budget.year
         updatedAt = budget.updatedAt
         needsSync = budget.needsSync
+        categorySetDirty = budget.categorySetDirty
     }
 
     func restore(_ budget: Budget) {
@@ -599,6 +628,7 @@ private struct BudgetFormModelSnapshot {
         budget.year = year
         budget.updatedAt = updatedAt
         budget.needsSync = needsSync
+        budget.categorySetDirty = categorySetDirty
     }
 }
 

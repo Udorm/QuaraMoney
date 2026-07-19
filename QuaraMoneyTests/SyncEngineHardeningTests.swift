@@ -105,24 +105,30 @@ final class SyncEngineHardeningTests: XCTestCase {
         augustBudget.setTrackedCategories([category], targetKind: .categories)
         julyBudget.needsSync = false
         augustBudget.needsSync = false
+        julyBudget.categorySetDirty = false
+        augustBudget.categorySetDirty = false
         context.insert(category)
         context.insert(julyBudget)
         context.insert(augustBudget)
         try context.save()
 
         let repairTimestamp = Date(timeIntervalSince1970: 10_000)
-        let shouldRepair = SyncEngine.applySyncedTrackedCategories(
-            [],
+        let result = SyncEngine.applySyncedTrackedCategories(
+            cloudCategoryIDs: [],
+            resolvedCategoriesByID: [:],
             targetKind: .categories,
             to: julyBudget,
             repairTimestamp: repairTimestamp
         )
 
-        XCTAssertTrue(shouldRepair)
+        XCTAssertEqual(result.action, .emptyRepaired)
         XCTAssertEqual(julyBudget.trackedCategoryIds, [category.id])
         XCTAssertEqual(augustBudget.trackedCategoryIds, [category.id])
-        XCTAssertTrue(julyBudget.category === category)
-        XCTAssertTrue(augustBudget.category === category)
+        XCTAssertNil(julyBudget.category)
+        XCTAssertNil(augustBudget.category)
+        XCTAssertEqual(julyBudget.categories?.map(\.id), [category.id])
+        XCTAssertEqual(augustBudget.categories?.map(\.id), [category.id])
+        XCTAssertTrue(julyBudget.categorySetDirty)
         XCTAssertTrue(julyBudget.needsSync)
         XCTAssertFalse(augustBudget.needsSync)
         XCTAssertEqual(julyBudget.updatedAt, repairTimestamp)
@@ -133,19 +139,22 @@ final class SyncEngineHardeningTests: XCTestCase {
         let budget = Budget(amountLimit: 100)
         budget.setTrackedCategories([category], targetKind: .categories)
         budget.needsSync = false
+        budget.categorySetDirty = false
         context.insert(category)
         context.insert(budget)
         try context.save()
 
-        let shouldRepair = SyncEngine.applySyncedTrackedCategories(
-            [],
+        let result = SyncEngine.applySyncedTrackedCategories(
+            cloudCategoryIDs: [],
+            resolvedCategoriesByID: [:],
             targetKind: .total,
             to: budget
         )
 
-        XCTAssertFalse(shouldRepair)
+        XCTAssertEqual(result.action, .totalCleared)
         XCTAssertEqual(budget.targetKind, .total)
         XCTAssertTrue(budget.trackedCategoryIds.isEmpty)
+        XCTAssertFalse(budget.categorySetDirty)
         XCTAssertFalse(budget.needsSync)
     }
 

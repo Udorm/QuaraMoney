@@ -338,14 +338,7 @@ nonisolated enum PlanMetricsLoader {
             sortBy: [SortDescriptor(\.createdAt)]
         )
         return try context.fetch(descriptor).map { budget in
-            let models: [Category]
-            if let categories = budget.categories, !categories.isEmpty {
-                models = categories.filter { $0.deletedAt == nil }
-            } else if let category = budget.category, category.deletedAt == nil {
-                models = [category]
-            } else {
-                models = []
-            }
+            let models = budget.effectiveTrackedCategories
             return PlanBudgetSnapshot(
                 id: budget.id,
                 amountLimit: budget.amountLimit,

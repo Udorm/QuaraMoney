@@ -10,8 +10,31 @@ nonisolated struct PlanMaintenanceResult: Sendable, Equatable {
 enum PlanDataMaintenance {
     nonisolated static let version = 1
 
+    /// Store-format gate for the one-time budget category join reconciliation.
+    /// The owner suffix mirrors the Plan maintenance marker so account switches
+    /// never let one user's completed repair suppress another user's.
+    nonisolated static let budgetCategoryStoreVersion = 1
+
     nonisolated static func markerKey(ownerID: UUID?) -> String {
         "planDataMigration.v\(version).\(ownerID?.uuidString ?? "local")"
+    }
+
+    nonisolated static func budgetCategoryReconciliationMarkerKey(ownerID: UUID) -> String {
+        "budgetCategoryJoinReconciliation.v\(budgetCategoryStoreVersion).\(ownerID.uuidString)"
+    }
+
+    nonisolated static func needsBudgetCategoryReconciliation(
+        ownerID: UUID,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        !defaults.bool(forKey: budgetCategoryReconciliationMarkerKey(ownerID: ownerID))
+    }
+
+    nonisolated static func commitBudgetCategoryReconciliation(
+        ownerID: UUID,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.set(true, forKey: budgetCategoryReconciliationMarkerKey(ownerID: ownerID))
     }
 
     @discardableResult

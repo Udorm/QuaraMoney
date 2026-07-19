@@ -367,14 +367,14 @@ final class Budget {
     func setTrackedCategories(_ selectedCategories: [Category], targetKind: BudgetTargetKind) {
         self.targetKind = targetKind
         guard targetKind == .categories else {
-            category = nil
             categories = nil
+            category = nil
             return
         }
 
         if selectedCategories.count == 1 {
-            category = selectedCategories[0]
             categories = nil
+            category = selectedCategories[0]
         } else {
             category = nil
             categories = selectedCategories

@@ -108,7 +108,7 @@ final class PlanReworkTests: XCTestCase {
         XCTAssertEqual(Set(existing.trackedCategoryIds), [category.id])
         XCTAssertEqual(Set(newBudget.trackedCategoryIds), [category.id])
         XCTAssertTrue(newBudget.category === category)
-        XCTAssertNil(newBudget.categories)
+        XCTAssertTrue(newBudget.categories?.isEmpty != false)
     }
 
     func testTransferSideResolverAndWithdrawalLedger() {

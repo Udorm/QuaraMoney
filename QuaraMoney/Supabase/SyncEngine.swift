@@ -1325,6 +1325,42 @@ final class SyncEngine: ObservableObject {
         localNeedsSync && localUpdatedAt > remoteUpdatedAt
     }
 
+    /// A category-targeted budget with no category is not a valid remote state.
+    /// Older clients could create exactly that state when two budgets shared a
+    /// category. Preserve any valid local selection and queue it for push so the
+    /// next phase of this same sync repairs the cloud row instead of repeatedly
+    /// clearing the budget after every pull.
+    @discardableResult
+    static func applySyncedTrackedCategories(
+        _ syncedCategories: [Category],
+        targetKind syncedTargetKind: BudgetTargetKind,
+        to budget: Budget,
+        repairTimestamp: Date = Date()
+    ) -> Bool {
+        let localCategories: [Category]
+        if let categories = budget.categories, !categories.isEmpty {
+            localCategories = categories.filter { $0.deletedAt == nil }
+        } else if let category = budget.category, category.deletedAt == nil {
+            localCategories = [category]
+        } else {
+            localCategories = []
+        }
+
+        let shouldRepairCloud = syncedTargetKind == .categories
+            && syncedCategories.isEmpty
+            && !localCategories.isEmpty
+        budget.setTrackedCategories(
+            shouldRepairCloud ? localCategories : syncedCategories,
+            targetKind: syncedTargetKind
+        )
+
+        if shouldRepairCloud {
+            budget.updatedAt = repairTimestamp
+            budget.needsSync = true
+        }
+        return shouldRepairCloud
+    }
+
     // MARK: - Pull
 
     private func pullWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1856,12 +1892,17 @@ final class SyncEngine: ObservableObject {
                 let syncedCategories = joinedCategories.isEmpty ? legacyCategory.map { [$0] } ?? [] : joinedCategories
                 let syncedTargetKind = row.target_kind.flatMap { BudgetTargetKind(rawValue: $0) }
                     ?? (syncedCategories.isEmpty ? .total : .categories)
-                b.setTrackedCategories(syncedCategories, targetKind: syncedTargetKind)
+                let shouldRepairCloudCategories = Self.applySyncedTrackedCategories(
+                    syncedCategories,
+                    targetKind: syncedTargetKind,
+                    to: b
+                )
                 if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
                    let amountType = BudgetAmountType.decode(from: data) {
                     b.amountType = amountType
                 }
-                b.deletedAt = row.deleted_at; b.syncUserID = row.user_id; b.needsSync = false
+                b.deletedAt = row.deleted_at; b.syncUserID = row.user_id
+                if !shouldRepairCloudCategories { b.needsSync = false }
             }
             try context.save()
         }

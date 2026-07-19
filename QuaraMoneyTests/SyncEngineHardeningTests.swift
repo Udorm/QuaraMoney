@@ -95,6 +95,60 @@ final class SyncEngineHardeningTests: XCTestCase {
                                                   remoteUpdatedAt: when))
     }
 
+    // MARK: - Budget category sync repair
+
+    func testInvalidRemoteBudgetCategoryStatePreservesLocalSelectionAndQueuesRepair() throws {
+        let category = Category(name: "Food", icon: "fork.knife", colorHex: "#000000", type: .expense)
+        let julyBudget = Budget(amountLimit: 100)
+        let augustBudget = Budget(amountLimit: 120)
+        julyBudget.setTrackedCategories([category], targetKind: .categories)
+        augustBudget.setTrackedCategories([category], targetKind: .categories)
+        julyBudget.needsSync = false
+        augustBudget.needsSync = false
+        context.insert(category)
+        context.insert(julyBudget)
+        context.insert(augustBudget)
+        try context.save()
+
+        let repairTimestamp = Date(timeIntervalSince1970: 10_000)
+        let shouldRepair = SyncEngine.applySyncedTrackedCategories(
+            [],
+            targetKind: .categories,
+            to: julyBudget,
+            repairTimestamp: repairTimestamp
+        )
+
+        XCTAssertTrue(shouldRepair)
+        XCTAssertEqual(julyBudget.trackedCategoryIds, [category.id])
+        XCTAssertEqual(augustBudget.trackedCategoryIds, [category.id])
+        XCTAssertTrue(julyBudget.category === category)
+        XCTAssertTrue(augustBudget.category === category)
+        XCTAssertTrue(julyBudget.needsSync)
+        XCTAssertFalse(augustBudget.needsSync)
+        XCTAssertEqual(julyBudget.updatedAt, repairTimestamp)
+    }
+
+    func testExplicitRemoteTotalBudgetStillClearsLocalCategory() throws {
+        let category = Category(name: "Food", icon: "fork.knife", colorHex: "#000000", type: .expense)
+        let budget = Budget(amountLimit: 100)
+        budget.setTrackedCategories([category], targetKind: .categories)
+        budget.needsSync = false
+        context.insert(category)
+        context.insert(budget)
+        try context.save()
+
+        let shouldRepair = SyncEngine.applySyncedTrackedCategories(
+            [],
+            targetKind: .total,
+            to: budget
+        )
+
+        XCTAssertFalse(shouldRepair)
+        XCTAssertEqual(budget.targetKind, .total)
+        XCTAssertTrue(budget.trackedCategoryIds.isEmpty)
+        XCTAssertFalse(budget.needsSync)
+    }
+
     // MARK: - resolveRef (FK resolution with link preservation)
 
     func testResolveRef_nonNilExistingID_resolvesToModel() throws {

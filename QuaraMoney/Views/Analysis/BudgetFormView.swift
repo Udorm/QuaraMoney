@@ -45,14 +45,7 @@ struct BudgetFormView: View {
         self.onDeleted = onDeleted
         self.mutationExecutor = PlanMutationExecutor()
 
-        let categoryIDs: Set<UUID>
-        if let selected = existing?.categories, !selected.isEmpty {
-            categoryIDs = Set(selected.map(\.id))
-        } else if let category = existing?.category {
-            categoryIDs = [category.id]
-        } else {
-            categoryIDs = []
-        }
+        let categoryIDs = Set(existing?.effectiveTrackedCategories.map(\.id) ?? [])
         let initialCurrency = existing?.currencyCode ?? CurrencyManager.shared.preferredCurrencyCode
         let initialStart = existing?.startDate ?? Date()
 
@@ -70,6 +63,10 @@ struct BudgetFormView: View {
 
     private var expenseCategories: [Category] {
         categories.filter { $0.type == .expense }
+    }
+
+    private var selectedExpenseCategories: [Category] {
+        expenseCategories.filter { selectedCategoryIDs.contains($0.id) }
     }
 
     private var parsedAmount: Decimal? { Decimal(string: amount) }
@@ -114,7 +111,7 @@ struct BudgetFormView: View {
                                 Spacer()
                                 Text(selectedCategoryIDs.isEmpty
                                      ? "common.select".localized
-                                     : "plan.selected_categories".localized(with: selectedCategoryIDs.count))
+                                     : "\(selectedCategoryIDs.count)")
                                     .foregroundStyle(.secondary)
                                 Image(systemName: "chevron.right")
                                     .appFont(.caption)
@@ -124,9 +121,20 @@ struct BudgetFormView: View {
                         }
                         .buttonStyle(.plain)
 
-                        ForEach(expenseCategories.filter { selectedCategoryIDs.contains($0.id) }) { category in
-                            Label(category.displayName, systemImage: category.icon)
-                                .foregroundStyle(Color(hex: category.colorHex) ?? .secondary)
+                        if !selectedExpenseCategories.isEmpty {
+                            FlowLayout(spacing: 8) {
+                                ForEach(selectedExpenseCategories) { category in
+                                    CategoryChip(
+                                        category: category,
+                                        isSelected: true,
+                                        isHighlighted: false
+                                    ) {
+                                        selectedCategoryIDs.remove(category.id)
+                                    }
+                                    .fixedSize(horizontal: true, vertical: false)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
                     } else {
                         Label("budget.allExpenses".localized, systemImage: "sum")
@@ -293,7 +301,7 @@ struct BudgetFormView: View {
             }
         } else if let suggestion, let suggestedAmount = suggestion.suggestedAmount {
             Button {
-                amount = NSDecimalNumber(decimal: suggestedAmount).stringValue
+                amount = roundedAmountString(suggestedAmount)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -303,6 +311,10 @@ struct BudgetFormView: View {
                         Spacer()
                         Text("plan.use_suggestion".localized)
                             .appFont(.subheadline, weight: .semibold)
+                            .foregroundStyle(.tint)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.accentColor.opacity(0.12), in: Capsule())
                     }
                     Text(confidenceCopy(suggestion.confidence))
                         .appFont(.caption)
@@ -312,6 +324,13 @@ struct BudgetFormView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func roundedAmountString(_ value: Decimal) -> String {
+        var source = value
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &source, 2, .plain)
+        return NSDecimalNumber(decimal: rounded).stringValue
     }
 
     private var periodUnit: String {
@@ -404,7 +423,7 @@ struct BudgetFormView: View {
 
     private func save() {
         guard let parsedAmount, canSave else { return }
-        let selectedCategories = expenseCategories.filter { selectedCategoryIDs.contains($0.id) }
+        let selectedCategories = selectedExpenseCategories
         let now = Date()
 
         do {
@@ -432,8 +451,7 @@ struct BudgetFormView: View {
                             currencyCode: currencyCode,
                             periodType: periodType,
                             startDate: periodType == .custom ? customStart : now,
-                            customEndDate: periodType == .custom ? customEnd : nil,
-                            categories: targetKind == .categories ? selectedCategories : nil
+                            customEndDate: periodType == .custom ? customEnd : nil
                         )
                         modelContext.insert(budget)
                         inserted = budget
@@ -463,18 +481,50 @@ struct BudgetFormView: View {
         selectedCategories: [Category],
         now: Date
     ) {
+        Self.applyFormValues(
+            to: budget,
+            name: name,
+            amount: amount,
+            currencyCode: currencyCode,
+            selectedCategories: selectedCategories,
+            targetKind: targetKind,
+            periodType: periodType,
+            customStart: customStart,
+            customEnd: customEnd,
+            alertMode: alertMode,
+            isNewBudget: existing == nil,
+            now: now
+        )
+    }
+
+    /// Shared by the production save closure and category-link regression tests.
+    /// Keep the category setter unconditional: its own normalized change
+    /// detection is what makes a name-only save safe.
+    @MainActor
+    static func applyFormValues(
+        to budget: Budget,
+        name: String,
+        amount: Decimal,
+        currencyCode: String,
+        selectedCategories: [Category],
+        targetKind: BudgetTargetKind,
+        periodType: BudgetPeriodType,
+        customStart: Date,
+        customEnd: Date,
+        alertMode: BudgetAlertMode,
+        isNewBudget: Bool,
+        now: Date
+    ) {
         budget.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : name
         budget.amountType = .fixed(amount)
         budget.amountLimit = amount
         budget.currencyCode = currencyCode
-        budget.targetKind = targetKind
-        budget.category = nil
-        budget.categories = targetKind == .categories ? selectedCategories : nil
+        budget.setTrackedCategories(selectedCategories, targetKind: targetKind)
         budget.periodType = periodType
         if periodType == .custom {
             budget.startDate = customStart
             budget.customEndDate = customEnd
-        } else if existing == nil {
+        } else if isNewBudget {
             budget.startDate = now
             budget.customEndDate = nil
         } else {
@@ -533,6 +583,7 @@ private struct BudgetFormModelSnapshot {
     let year: Int
     let updatedAt: Date
     let needsSync: Bool
+    let categorySetDirty: Bool
 
     init(_ budget: Budget) {
         name = budget.name
@@ -554,6 +605,7 @@ private struct BudgetFormModelSnapshot {
         year = budget.year
         updatedAt = budget.updatedAt
         needsSync = budget.needsSync
+        categorySetDirty = budget.categorySetDirty
     }
 
     func restore(_ budget: Budget) {
@@ -576,6 +628,7 @@ private struct BudgetFormModelSnapshot {
         budget.year = year
         budget.updatedAt = updatedAt
         budget.needsSync = needsSync
+        budget.categorySetDirty = categorySetDirty
     }
 }
 

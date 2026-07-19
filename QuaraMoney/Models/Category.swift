@@ -32,7 +32,12 @@ final class Category {
 
     // Relationships
     @Relationship(deleteRule: .deny) var transactions: [Transaction]?
-    @Relationship(deleteRule: .cascade) var budgets: [Budget]?
+    /// Inverse for the legacy single-category budget link.
+    @Relationship(deleteRule: .cascade, inverse: \Budget.category) var budgets: [Budget]?
+    /// A distinct inverse is required for the multi-category join. If both
+    /// budget links share the inferred `budgets` inverse, assigning this category
+    /// to a new budget detaches it from the previous budget.
+    @Relationship(deleteRule: .nullify, inverse: \Budget.categories) var multiCategoryBudgets: [Budget]?
     @Relationship(deleteRule: .nullify) var recurringRules: [RecurringRule]?
 
     init(name: String, icon: String, colorHex: String, type: TransactionType, isSystem: Bool = false, canonicalKey: String? = nil) {

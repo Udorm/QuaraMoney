@@ -67,6 +67,7 @@ struct FilteredTransactionsDetailView: View {
         .navigationTitle(config.title)
         .navigationBarTitleDisplayMode(.large)
         .searchable(text: $vm.searchText, placement: .toolbar)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

@@ -1248,11 +1248,11 @@
 "plan.progress" = "Progress";
 "plan.progress_over_time" = "Progress over time";
 "plan.quick_actions" = "Quick Actions";
-"plan.recent_contributions" = "Recent contributions";
-"plan.recent_transactions" = "Recent transactions";
+"plan.recent_contributions" = "Top contributions";
+"plan.recent_transactions" = "Top transactions";
 "plan.remaining" = "Remaining";
 "plan.saved" = "Saved";
-"plan.saved_of" = "Saved %@ of %@";
+"plan.saved_of" = "%@ of %@ saved";
 "plan.savings_card_subtitle" = "Build toward what matters";
 "plan.savings_progress" = "Savings progress";
 "plan.savings_segment" = "Saving goal status";
@@ -1261,7 +1261,7 @@
 "plan.selected_categories" = "%d categories selected";
 "plan.spending_trend" = "Spending trend";
 "plan.spent" = "Spent";
-"plan.spent_of" = "Spent %@ of %@";
+"plan.spent_of" = "%@ of %@ spent";
 "plan.spent_this_month" = "spent this month";
 "plan.starts_date" = "Starts %@";
 "plan.starts_in_days" = "Starts in %d days";

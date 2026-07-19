@@ -319,18 +319,21 @@ nonisolated enum CategoryCatalog {
             r.category = winner
             stampLocalEdit(r)
         }
-        // Budgets: single-category link plus the multi-category join set.
-        // (loser.budgets holds cascade-owned budgets via `category`.)
+        // Budgets converge to the join-only representation. Include the winner
+        // in the effective set before the legacy scalar is cleared; the join
+        // sweep below then replaces any remaining loser entry by UUID.
         for b in loser.budgets ?? [] {
-            b.category = winner
+            var union = b.effectiveTrackedCategories
+            if !union.contains(where: { $0.id == winner.id }) { union.append(winner) }
+            b.setTrackedCategories(union, targetKind: .categories)
             stampLocalEdit(b)
         }
         if let budgets = try? context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.deletedAt == nil })) {
             for b in budgets {
-                guard var cats = b.categories, let idx = cats.firstIndex(where: { $0 === loser }) else { continue }
-                cats.remove(at: idx)
-                if !cats.contains(where: { $0 === winner }) { cats.append(winner) }
-                b.categories = cats
+                guard b.effectiveTrackedCategories.contains(where: { $0.id == loser.id }) else { continue }
+                var cats = b.effectiveTrackedCategories.filter { $0.id != loser.id }
+                if !cats.contains(where: { $0.id == winner.id }) { cats.append(winner) }
+                b.setTrackedCategories(cats, targetKind: .categories)
                 stampLocalEdit(b)
             }
         }

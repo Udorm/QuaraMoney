@@ -30,12 +30,6 @@ struct SavingsGoalRowView: View {
                     }
 
                     Spacer(minLength: 4)
-                    if metrics.isDeterminate {
-                        Text(PlanDisplayFormatting.percent(metrics.progress))
-                            .appFont(.caption, weight: .semibold)
-                            .foregroundStyle(color)
-                            .monospacedDigit()
-                    }
                 }
 
                 if let targetDate = goal.targetDate {
@@ -51,14 +45,13 @@ struct SavingsGoalRowView: View {
                 }
 
                 if metrics.isDeterminate {
-                    Text("plan.saved_of".localized(
-                        with: metrics.saved.formattedAmount(for: goal.currencyCode),
-                        goal.targetAmount.formattedAmount(for: goal.currencyCode)
-                    ))
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    PlanProgressBar(progress: metrics.progress, color: color)
+                    (Text(metrics.saved.formattedAmount(for: goal.currencyCode))
+                        .foregroundStyle(.primary)
+                     + Text(" / \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
+                        .foregroundStyle(.secondary))
+                        .appFont(.caption, weight: .medium)
+                        .monospacedDigit()
+                    PlanProgressLine(progress: metrics.progress, color: color)
                 } else {
                     Text(metrics.saved.formattedAmount(for: goal.currencyCode))
                         .appFont(.caption, weight: .medium)

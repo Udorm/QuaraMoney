@@ -1248,8 +1248,8 @@
 "plan.progress" = "វឌ្ឍនភាព";
 "plan.progress_over_time" = "វឌ្ឍនភាពតាមពេលវេលា";
 "plan.quick_actions" = "សកម្មភាពរហ័ស";
-"plan.recent_contributions" = "ប្រាក់ដែលបានបន្ថែមថ្មីៗ";
-"plan.recent_transactions" = "ប្រតិបត្តិការថ្មីៗ";
+"plan.recent_contributions" = "ការបន្ថែមប្រាក់ធំបំផុត";
+"plan.recent_transactions" = "ប្រតិបត្តិការធំបំផុត";
 "plan.remaining" = "នៅសល់";
 "plan.saved" = "បានសន្សំ";
 "plan.saved_of" = "បានសន្សំ %@ ក្នុងចំណោម %@";

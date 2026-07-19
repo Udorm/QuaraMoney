@@ -12,6 +12,7 @@ struct BudgetDetailView: View {
     @State private var store = PlanBudgetDetailStore()
     @State private var refreshPolicy = PlanRefreshPolicy()
     @State private var showEditForm = false
+    @State private var showAllTransactions = false
     @State private var transactionToEdit: Transaction?
 
     private var accentColor: Color {
@@ -71,6 +72,20 @@ struct BudgetDetailView: View {
         .sheet(item: $transactionToEdit) { transaction in
             AddTransactionContainer(transaction: transaction, isNewTransaction: false)
         }
+        .sheet(isPresented: $showAllTransactions) {
+            if let state = store.state {
+                NavigationStack {
+                    FilteredTransactionsDetailView(config: seeAllConfig(state))
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("common.done".localized) {
+                                    showAllTransactions = false
+                                }
+                            }
+                        }
+                }
+            }
+        }
         .alert(
             "common.error".localized,
             isPresented: Binding(get: { store.errorMessage != nil }, set: { _ in })
@@ -123,22 +138,17 @@ struct BudgetDetailView: View {
                 .appFont(.title2, weight: .bold)
                 .monospacedDigit()
 
-                PlanProgressBar(
+                PlanProgressLine(
                     progress: state.projection.progress,
                     color: state.projection.isOnTrack == false ? .red : accentColor
                 )
-
-                Text(PlanDisplayFormatting.percent(state.projection.progress))
-                    .appFont(.subheadline, weight: .semibold)
-                    .foregroundStyle(state.projection.isOnTrack == false ? .red : accentColor)
-                    .monospacedDigit()
 
                 if state.isEnded {
                     Text(finalResult(state))
                         .appFont(.headline, weight: .semibold)
                         .foregroundStyle(state.projection.overage > 0 ? .red : .green)
                 } else {
-                    HStack(spacing: 0) {
+                    HStack(spacing: 16) {
                         statColumn(
                             title: "plan.remaining".localized,
                             value: state.projection.remaining.formattedAmount(for: budget.currencyCode)
@@ -262,12 +272,13 @@ struct BudgetDetailView: View {
                     .appFont(.headline, weight: .bold)
                 Spacer()
                 if !store.recentTransactions.isEmpty {
-                    NavigationLink {
-                        FilteredTransactionsDetailView(config: seeAllConfig(state))
+                    Button {
+                        showAllTransactions = true
                     } label: {
                         Text("common.seeAll".localized)
                             .appFont(.subheadline, weight: .semibold)
                     }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -306,6 +317,7 @@ struct BudgetDetailView: View {
             dateRangeDescription: PlanDisplayFormatting.range(state.range),
             categoryIds: budget.targetKind == .categories ? budget.trackedCategoryIds : nil,
             categoryInfos: budget.targetKind == .categories ? budget.trackedCategoryInfos : nil,
+            defaultSortOption: .highestAmount,
             reportExclusionPolicy: .exclude,
             archivedWalletPolicy: .include,
             summaryCurrencyCode: budget.currencyCode,

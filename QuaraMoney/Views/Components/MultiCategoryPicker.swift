@@ -24,27 +24,55 @@ struct MultiCategoryPicker: View {
                 || category.name.localizedCaseInsensitiveContains(searchText)
         }
     }
+
+    private var expenseCategories: [Category] {
+        allCategories.filter { $0.type == .expense }
+    }
+
+    private var areAllSelected: Bool {
+        !expenseCategories.isEmpty && expenseCategories.allSatisfy { selectedCategories.contains($0.id) }
+    }
     
     var body: some View {
         NavigationStack {
-            List {
-                if filteredCategories.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                } else {
-                    ForEach(filteredCategories) { category in
-                        SelectableRow(
-                            title: category.displayName,
-                            icon: category.icon,
-                            iconColor: Color(hex: category.colorHex) ?? .gray,
-                            isSelected: selectedCategories.contains(category.id),
-                            selectionStyle: .circleCheckmark
-                        ) {
-                            toggleCategory(category)
+            VStack(spacing: 0) {
+                if !expenseCategories.isEmpty {
+                    HStack {
+                        Spacer()
+                        Button(areAllSelected ? L10n.Common.deselectAll : L10n.Common.selectAll) {
+                            if areAllSelected {
+                                deselectAll()
+                            } else {
+                                selectAll()
+                            }
+                        }
+                        .appFont(.subheadline, weight: .semibold)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                }
+
+                List {
+                    if filteredCategories.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                    } else {
+                        ForEach(filteredCategories) { category in
+                            SelectableRow(
+                                title: category.displayName,
+                                icon: category.icon,
+                                iconColor: Color(hex: category.colorHex) ?? .gray,
+                                isSelected: selectedCategories.contains(category.id),
+                                selectionStyle: .circleCheckmark
+                            ) {
+                                toggleCategory(category)
+                            }
                         }
                     }
                 }
+                .listStyle(.insetGrouped)
             }
             .searchable(text: $searchText, placement: .toolbar, prompt: L10n.Common.search)
+            .searchToolbarBehavior(.minimize)
             .navigationTitle(L10n.Budget.selectCategories)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -58,15 +86,13 @@ struct MultiCategoryPicker: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        if selectedCategories.isEmpty {
-                            selectAll()
-                        } else {
-                            deselectAll()
-                        }
+                        dismiss()
                     } label: {
-                        Text(selectedCategories.isEmpty ? L10n.Common.selectAll : L10n.Common.deselectAll)
-                            .appFont(.subheadline)
+                        Image(systemName: "checkmark")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedCategories.isEmpty)
+                    .accessibilityLabel(L10n.Common.done)
                 }
             }
         }
@@ -81,7 +107,7 @@ struct MultiCategoryPicker: View {
     }
     
     private func selectAll() {
-        selectedCategories = Set(allCategories.filter { $0.type == .expense }.map(\.id))
+        selectedCategories = Set(expenseCategories.map(\.id))
     }
     
     private func deselectAll() {

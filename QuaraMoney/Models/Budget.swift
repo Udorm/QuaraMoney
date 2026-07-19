@@ -10,6 +10,11 @@ final class Budget {
     var deletedAt: Date?
     var needsSync: Bool = true
 
+    /// Whether the local category set is an intentional local choice that still
+    /// needs to be published to the cloud join table. Additive/defaulted so
+    /// existing stores migrate through SwiftData's lightweight inference.
+    var categorySetDirty: Bool = false
+
     // MARK: - Core Properties
     
     /// Budget name (optional, auto-generated if nil)
@@ -130,7 +135,8 @@ final class Budget {
     
     // MARK: - Relationships
     
-    /// Single category (nil = total/overall budget)
+    /// Legacy single-category fallback. New app writes use `categories` only;
+    /// this remains readable so pre-join local stores can converge lazily.
     @Relationship(deleteRule: .nullify) var category: Category?
 
     /// List of categories for this budget (New - replaces single category and group)
@@ -186,7 +192,8 @@ final class Budget {
         self.amountType = .fixed(amountLimit)
     }
     
-    /// Legacy initializer for backward compatibility
+    /// Legacy-only initializer for backward compatibility. New code should write
+    /// category selections with `setTrackedCategories(_:targetKind:)`.
     convenience init(amountLimit: Decimal, currencyCode: String = "USD", category: Category?, month: Int, year: Int) {
         // Convert legacy month/year to start date
         var components = DateComponents()
@@ -215,7 +222,8 @@ final class Budget {
         if let name = name, !name.isEmpty {
             return name
         }
-        if let categories = categories, !categories.isEmpty {
+        let categories = effectiveTrackedCategories
+        if !categories.isEmpty {
             if categories.count == 1 {
                 return categories.first?.displayName ?? "Budget"
             } else if categories.count == 2 {
@@ -223,9 +231,6 @@ final class Budget {
             } else {
                 return "\(categories[0].displayName) & \(categories.count - 1) others"
             }
-        }
-        if let category = category {
-            return category.displayName
         }
         return "Total Budget"
     }
@@ -316,7 +321,7 @@ final class Budget {
     }
 
     var needsAttention: Bool {
-        amountLimit <= 0 || (targetKind == .categories && trackedCategoryIds.isEmpty)
+        amountLimit <= 0 || (targetKind == .categories && effectiveTrackedCategories.isEmpty)
     }
 
     func periodKey(containing date: Date = Date(), calendar: Calendar = .current) -> String {
@@ -336,29 +341,58 @@ final class Budget {
         }
     }
     
-    /// All category IDs this budget tracks (for filtering transactions)
+    /// UUID-deduplicated union of the live join set and the live legacy scalar.
+    /// UUID sorting makes every reader and sync snapshot deterministic even when
+    /// SwiftData returns a to-many relationship in a different order.
+    var effectiveTrackedCategories: [Category] {
+        var byID: [UUID: Category] = [:]
+        for category in categories ?? [] where category.deletedAt == nil {
+            byID[category.id] = category
+        }
+        if let category, category.deletedAt == nil, byID[category.id] == nil {
+            byID[category.id] = category
+        }
+        return byID.values.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    /// All category IDs this budget tracks (for filtering transactions).
     var trackedCategoryIds: [UUID] {
-        if let categories = categories, !categories.isEmpty {
-            return categories.filter { $0.deletedAt == nil }.map { $0.id }
-        }
-        if let category = category, category.deletedAt == nil {
-            return [category.id]
-        }
-        return [] // Total budget tracks all
+        effectiveTrackedCategories.map(\.id)
     }
 
     /// Category display info for filter chips
     var trackedCategoryInfos: [FilterCategoryInfo] {
-        if let categories = categories, !categories.isEmpty {
-            return categories.map { FilterCategoryInfo(id: $0.id, name: $0.displayName, icon: $0.icon, colorHex: $0.colorHex) }
+        effectiveTrackedCategories.map {
+            FilterCategoryInfo(id: $0.id, name: $0.displayName, icon: $0.icon, colorHex: $0.colorHex)
         }
-        if let category = category {
-            return [FilterCategoryInfo(id: category.id, name: category.displayName, icon: category.icon, colorHex: category.colorHex)]
-        }
-        return []
     }
 
     // MARK: - Methods
+
+    /// Persists every category selection through the to-many join. The legacy
+    /// scalar is cleared on every app write and is only read as a fallback.
+    func setTrackedCategories(_ selectedCategories: [Category], targetKind: BudgetTargetKind) {
+        let selectedIDs = Set(selectedCategories.map(\.id))
+        let currentIDs = Set(effectiveTrackedCategories.map(\.id))
+        let isRealChange = selectedIDs != currentIDs || targetKind != self.targetKind
+        if isRealChange {
+            categorySetDirty = true
+        }
+
+        self.targetKind = targetKind
+        guard targetKind == .categories else {
+            categories = nil
+            category = nil
+            return
+        }
+
+        var uniqueByID: [UUID: Category] = [:]
+        for selectedCategory in selectedCategories where uniqueByID[selectedCategory.id] == nil {
+            uniqueByID[selectedCategory.id] = selectedCategory
+        }
+        categories = uniqueByID.values.sorted { $0.id.uuidString < $1.id.uuidString }
+        category = nil
+    }
     
     /// Calculate the effective limit for percentage-based budgets
     func calculateEffectiveLimit(income: Decimal) -> Decimal {

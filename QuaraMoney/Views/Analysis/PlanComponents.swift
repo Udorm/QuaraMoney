@@ -5,28 +5,49 @@ import SwiftUI
 struct PlanCard<Content: View>: View {
     var tint: Color?
     var spacing: CGFloat
+    var usesGlass: Bool
     @ViewBuilder var content: () -> Content
 
     init(
         tint: Color? = nil,
         spacing: CGFloat = 16,
+        usesGlass: Bool = false,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.tint = tint
         self.spacing = spacing
+        self.usesGlass = usesGlass
         self.content = content
     }
 
-    var body: some View {
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: spacing) {
             content()
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            (tint?.opacity(0.09) ?? Color(.secondarySystemGroupedBackground)),
-            in: RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-        )
+    }
+
+    @ViewBuilder
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+        if #available(iOS 26.0, *), usesGlass {
+            if let tint {
+                cardContent
+                    .glassEffect(.regular.tint(tint.opacity(0.16)), in: shape)
+                    .clipShape(shape)
+            } else {
+                cardContent
+                    .glassEffect(.regular, in: shape)
+                    .clipShape(shape)
+            }
+        } else {
+            cardContent
+                .background(
+                    (tint?.opacity(0.09) ?? Color(.secondarySystemGroupedBackground)),
+                    in: shape
+                )
+        }
     }
 }
 
@@ -67,7 +88,7 @@ struct PlanProgressBar: View {
                 }
             }
         }
-        .frame(height: 8)
+        .frame(height: 10)
         .accessibilityElement()
         .accessibilityLabel("plan.progress".localized)
         .accessibilityValue(
@@ -75,6 +96,31 @@ struct PlanProgressBar: View {
                 ? "plan.percent_accessibility".localized(with: percent)
                 : "plan.partial_data".localized
         )
+    }
+}
+
+struct PlanProgressLine: View {
+    let progress: Decimal
+    let color: Color
+    var isDeterminate = true
+
+    var body: some View {
+        HStack(spacing: 10) {
+            PlanProgressBar(
+                progress: progress,
+                color: color,
+                isDeterminate: isDeterminate
+            )
+
+            if isDeterminate {
+                Text(PlanDisplayFormatting.percent(progress))
+                    .appFont(.caption, weight: .semibold)
+                    .foregroundStyle(color)
+                    .monospacedDigit()
+                    .fixedSize()
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 
@@ -105,7 +151,12 @@ struct PlanPartialDataLabel: View {
 
 enum PlanDisplayFormatting {
     static func percent(_ progress: Decimal) -> String {
-        "\(NSDecimalNumber(decimal: max(0, progress) * 100).intValue)%"
+        let value = NSDecimalNumber(decimal: max(0, progress)).doubleValue
+        return value.formatted(
+            .percent
+                .locale(.app)
+                .precision(.fractionLength(0))
+        )
     }
 
     static func displayEnd(for range: PlanDateRange, calendar: Calendar = .current) -> Date {

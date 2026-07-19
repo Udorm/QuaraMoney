@@ -179,6 +179,23 @@ nonisolated enum PlanMetricsLoader {
         let recentIDs = records
             .filter { relevantIDs.contains($0.snapshot.id) }
             .sorted {
+                let leftAmount = CurrencyManager.convertOrNil(
+                    amount: $0.snapshot.amount,
+                    from: $0.snapshot.currencyCode,
+                    to: budget.currencyCode,
+                    rates: rates
+                )
+                let rightAmount = CurrencyManager.convertOrNil(
+                    amount: $1.snapshot.amount,
+                    from: $1.snapshot.currencyCode,
+                    to: budget.currencyCode,
+                    rates: rates
+                )
+                if let leftAmount, let rightAmount, leftAmount != rightAmount {
+                    return leftAmount > rightAmount
+                }
+                if leftAmount != nil, rightAmount == nil { return true }
+                if leftAmount == nil, rightAmount != nil { return false }
                 if $0.snapshot.date != $1.snapshot.date { return $0.snapshot.date > $1.snapshot.date }
                 return $0.snapshot.id.uuidString < $1.snapshot.id.uuidString
             }
@@ -276,10 +293,7 @@ nonisolated enum PlanMetricsLoader {
             calendar: calendar,
             rates: rates
         )
-        let displayRows = rows.sorted {
-            if $0.date != $1.date { return $0.date > $1.date }
-            return $0.id.uuidString < $1.id.uuidString
-        }.map { row in
+        let displayRows = rows.map { row in
             PlanSavingsLedgerDisplayRow(
                 id: row.id,
                 date: row.date,
@@ -294,6 +308,19 @@ nonisolated enum PlanMetricsLoader {
                 ),
                 goalCurrencyCode: goal.currencyCode
             )
+        }.sorted {
+            if let leftAmount = $0.convertedAmount, let rightAmount = $1.convertedAmount {
+                let leftSigned = $0.isWithdrawal ? -leftAmount : leftAmount
+                let rightSigned = $1.isWithdrawal ? -rightAmount : rightAmount
+                if leftSigned != rightSigned { return leftSigned > rightSigned }
+            }
+            if $0.convertedAmount != nil, $1.convertedAmount == nil { return true }
+            if $0.convertedAmount == nil, $1.convertedAmount != nil { return false }
+            let leftOriginal = $0.isWithdrawal ? -$0.originalAmount : $0.originalAmount
+            let rightOriginal = $1.isWithdrawal ? -$1.originalAmount : $1.originalAmount
+            if leftOriginal != rightOriginal { return leftOriginal > rightOriginal }
+            if $0.date != $1.date { return $0.date > $1.date }
+            return $0.id.uuidString < $1.id.uuidString
         }
         return PlanSavingsDetailState(
             goalID: goalID,
@@ -311,14 +338,7 @@ nonisolated enum PlanMetricsLoader {
             sortBy: [SortDescriptor(\.createdAt)]
         )
         return try context.fetch(descriptor).map { budget in
-            let models: [Category]
-            if let categories = budget.categories, !categories.isEmpty {
-                models = categories.filter { $0.deletedAt == nil }
-            } else if let category = budget.category, category.deletedAt == nil {
-                models = [category]
-            } else {
-                models = []
-            }
+            let models = budget.effectiveTrackedCategories
             return PlanBudgetSnapshot(
                 id: budget.id,
                 amountLimit: budget.amountLimit,

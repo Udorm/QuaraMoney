@@ -49,6 +49,68 @@ final class PlanReworkTests: XCTestCase {
         XCTAssertEqual(budget.alertMode, .overOnly)
     }
 
+    func testCustomBudgetsCanShareCategoryAcrossDifferentDateRanges() throws {
+        let container = TestModelContainer.create()
+        let context = container.mainContext
+        let category = Category(name: "Food", icon: "fork.knife", colorHex: "#000000", type: .expense)
+        let july = Budget(
+            amountLimit: 100,
+            periodType: .custom,
+            startDate: date(2026, 7, 1),
+            customEndDate: date(2026, 7, 31),
+            categories: [category]
+        )
+        let august = Budget(
+            amountLimit: 120,
+            periodType: .custom,
+            startDate: date(2026, 8, 1),
+            customEndDate: date(2026, 8, 31),
+            categories: [category]
+        )
+
+        context.insert(category)
+        context.insert(july)
+        try context.save()
+        context.insert(august)
+        try context.save()
+
+        let savedBudgets = try context.fetch(FetchDescriptor<Budget>())
+        XCTAssertEqual(savedBudgets.count, 2)
+        XCTAssertEqual(Set(july.trackedCategoryIds), [category.id])
+        XCTAssertEqual(Set(august.trackedCategoryIds), [category.id])
+    }
+
+    func testSingleCategoryStorageDoesNotDetachExistingMultiCategoryBudget() throws {
+        let container = TestModelContainer.create()
+        let context = container.mainContext
+        let category = Category(name: "Food", icon: "fork.knife", colorHex: "#000000", type: .expense)
+        let existing = Budget(
+            amountLimit: 100,
+            periodType: .custom,
+            startDate: date(2026, 7, 1),
+            customEndDate: date(2026, 7, 31),
+            categories: [category]
+        )
+        let newBudget = Budget(
+            amountLimit: 120,
+            periodType: .custom,
+            startDate: date(2026, 8, 1),
+            customEndDate: date(2026, 8, 31)
+        )
+        newBudget.setTrackedCategories([category], targetKind: .categories)
+
+        context.insert(category)
+        context.insert(existing)
+        try context.save()
+        context.insert(newBudget)
+        try context.save()
+
+        XCTAssertEqual(Set(existing.trackedCategoryIds), [category.id])
+        XCTAssertEqual(Set(newBudget.trackedCategoryIds), [category.id])
+        XCTAssertNil(newBudget.category)
+        XCTAssertEqual(newBudget.categories?.map(\.id), [category.id])
+    }
+
     func testTransferSideResolverAndWithdrawalLedger() {
         let source = Wallet(name: "USD", currencyCode: "USD", icon: "wallet.pass", colorHex: "#000000")
         let destination = Wallet(name: "KHR", currencyCode: "KHR", icon: "wallet.pass", colorHex: "#000000")

@@ -38,7 +38,7 @@ struct SavingsGoalListView: View {
                     Text("plan.completed".localized).tag(PlanSavingsSegment.completed)
                 }
                 .pickerStyle(.segmented)
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
             .listRowBackground(Color.clear)
 
@@ -85,7 +85,8 @@ struct SavingsGoalListView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("plan.savings".localized)
-        .searchable(text: $searchText, prompt: "common.search".localized)
+        .searchable(text: $searchText, placement: .toolbar, prompt: "common.search".localized)
+        .searchToolbarBehavior(.minimize)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

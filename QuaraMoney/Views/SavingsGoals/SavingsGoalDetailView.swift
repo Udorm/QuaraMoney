@@ -14,6 +14,7 @@ struct SavingsGoalDetailView: View {
     @State private var showContribution = false
     @State private var showWithdrawal = false
     @State private var showEditForm = false
+    @State private var showAllContributions = false
 
     private var color: Color { Color(hex: goal.colorHex) ?? .green }
 
@@ -62,6 +63,20 @@ struct SavingsGoalDetailView: View {
         .sheet(isPresented: $showEditForm) {
             SavingsGoalFormView(existing: goal) {
                 dismiss()
+            }
+        }
+        .sheet(isPresented: $showAllContributions) {
+            if let state = store.state {
+                NavigationStack {
+                    SavingsLedgerListView(goal: goal, rows: state.ledgerRows)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("common.done".localized) {
+                                    showAllContributions = false
+                                }
+                            }
+                        }
+                }
             }
         }
         .alert(
@@ -132,13 +147,9 @@ struct SavingsGoalDetailView: View {
                 .appFont(.title2, weight: .bold)
                 .monospacedDigit()
 
-                PlanProgressBar(progress: state.metrics.progress, color: color)
-                Text(PlanDisplayFormatting.percent(state.metrics.progress))
-                    .appFont(.subheadline, weight: .semibold)
-                    .foregroundStyle(color)
-                    .monospacedDigit()
+                PlanProgressLine(progress: state.metrics.progress, color: color)
 
-                HStack(spacing: 0) {
+                HStack(spacing: 16) {
                     statColumn(
                         title: "plan.to_go".localized,
                         value: state.metrics.remaining.formattedAmount(for: goal.currencyCode)
@@ -229,12 +240,13 @@ struct SavingsGoalDetailView: View {
                     .appFont(.headline, weight: .bold)
                 Spacer()
                 if !state.ledgerRows.isEmpty {
-                    NavigationLink {
-                        SavingsLedgerListView(goal: goal, rows: state.ledgerRows)
+                    Button {
+                        showAllContributions = true
                     } label: {
                         Text("common.seeAll".localized)
                             .appFont(.subheadline, weight: .semibold)
                     }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -285,15 +297,32 @@ private struct SavingsLedgerListView: View {
     let goal: SavingsGoal
     let rows: [PlanSavingsLedgerDisplayRow]
 
+    @State private var searchText = ""
+
     private var color: Color { Color(hex: goal.colorHex) ?? .green }
 
+    private var matchingRows: [PlanSavingsLedgerDisplayRow] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return rows }
+        return rows.filter { row in
+            let kind = row.isWithdrawal ? "plan.withdrawal".localized : "plan.contribution".localized
+            let amount = (row.convertedAmount ?? row.originalAmount).formattedAmount(
+                for: row.convertedAmount == nil ? row.originalCurrencyCode : row.goalCurrencyCode
+            )
+            return kind.localizedCaseInsensitiveContains(query) ||
+                amount.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
-        List(rows) { row in
+        List(matchingRows) { row in
             SavingsLedgerRowView(row: row, color: color)
         }
         .listStyle(.insetGrouped)
         .navigationTitle("plan.contributions".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, placement: .toolbar, prompt: "common.search".localized)
+        .searchToolbarBehavior(.minimize)
     }
 }
 

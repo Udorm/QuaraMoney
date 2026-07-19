@@ -114,7 +114,7 @@ final class BudgetDetailViewModel {
     }
 
     var budgetIcon: String {
-        if let category = budget.category {
+        if let category = budget.effectiveTrackedCategories.first {
             return category.icon
         }
         return "sum"

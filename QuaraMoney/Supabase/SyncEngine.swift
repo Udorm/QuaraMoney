@@ -158,7 +158,7 @@ final class SyncEngine: ObservableObject {
         if has(FetchDescriptor<EventWalletExportRecord>(predicate: #Predicate { $0.needsSync })) { return true }
         if has(FetchDescriptor<Debt>(predicate: #Predicate { $0.needsSync })) { return true }
         if has(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.needsSync })) { return true }
-        if has(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync })) { return true }
+        if has(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync || $0.categorySetDirty })) { return true }
         if has(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.needsSync })) { return true }
         if has(FetchDescriptor<TransactionLocation>(predicate: #Predicate { $0.needsSync })) { return true }
         return false
@@ -446,7 +446,7 @@ final class SyncEngine: ObservableObject {
     /// Flags every local synced row `needsSync = true` so the next push uploads
     /// the full dataset. Runs under the sync-write guard so the mutation tracker
     /// doesn't also rewrite `updatedAt` on every record.
-    private func forceAllLocalNeedsSync(context: ModelContext) {
+    func forceAllLocalNeedsSync(context: ModelContext) {
         withSyncWriteGuard {
             func flag<T: PersistentModel & SyncTrackable>(_ type: T.Type) {
                 if let rows = try? context.fetch(FetchDescriptor<T>()) {
@@ -459,6 +459,9 @@ final class SyncEngine: ObservableObject {
             flag(EventSettlementSnapshot.self); flag(EventSettlementTransfer.self)
             flag(EventWalletExportRecord.self); flag(Transaction.self)
             flag(Budget.self); flag(TransactionLocation.self)
+            if let budgets = try? context.fetch(FetchDescriptor<Budget>()) {
+                for budget in budgets { budget.categorySetDirty = true }
+            }
             try? context.save()
         }
     }
@@ -491,10 +494,12 @@ final class SyncEngine: ObservableObject {
     enum SyncError: LocalizedError {
         case notOperational
         case noUser
+        case budgetJoinPaginationStalled
         var errorDescription: String? {
             switch self {
             case .notOperational: return "Cloud sync is not enabled or configured."
             case .noUser: return "You must be signed in to sync."
+            case .budgetJoinPaginationStalled: return "Budget category pagination did not advance."
             }
         }
     }
@@ -586,6 +591,10 @@ final class SyncEngine: ObservableObject {
         // write+save spans is wrapped in `withSyncWriteGuard`.
         didApplyRemoteChanges = false
 
+        let needsBudgetCategoryReconciliation = Self
+            .prepareBudgetCategoryReconciliation(ownerID: uid)
+        var budgetPullSucceeded = false
+
         // Each table step runs in its own do/catch and records a failure instead
         // of aborting the rest of the sync. Before, a single throwing row (network
         // blip mid-table, one constraint-violating or oversized row, a failed image
@@ -655,7 +664,23 @@ final class SyncEngine: ObservableObject {
         await runStep("pull event settlement transfers") { try await self.pullEventSettlementTransfers(context, client, uid) }
         await runStep("pull event wallet export records") { try await self.pullEventWalletExportRecords(context, client, uid) }
         await runStep("pull transactions") { try await self.pullTransactions(context, client, uid) }
-        await runStep("pull budgets") { try await self.pullBudgets(context, client, uid) }
+        await runStep("pull budgets") {
+            let cloudBudgetIDs = try await self.pullBudgets(context, client, uid)
+            if needsBudgetCategoryReconciliation {
+                try self.withSyncWriteGuard {
+                    let localOnlyCount = try Self.flagLocalOnlyBudgetCategorySets(
+                        context: context,
+                        cloudBudgetIDs: cloudBudgetIDs,
+                        ownerID: uid
+                    )
+                    if localOnlyCount > 0 { try context.save() }
+                    #if DEBUG
+                    print("[SyncEngine] budget-category reconciliation: cloud=\(cloudBudgetIDs.count), local-only flagged=\(localOnlyCount)")
+                    #endif
+                }
+            }
+            budgetPullSucceeded = true
+        }
         await runStep("pull transaction locations") { try await self.pullTransactionLocations(context, client, uid) }
 
         // Push parents → children. Rows the pull just reconciled are no longer dirty.
@@ -689,6 +714,14 @@ final class SyncEngine: ObservableObject {
 
         if failures.isEmpty {
             lastSyncDate = Date()
+            if needsBudgetCategoryReconciliation, budgetPullSucceeded {
+                // Commit only after the full sync (including the category join
+                // push) succeeds. Any partial failure retries the cursor reset.
+                PlanDataMaintenance.commitBudgetCategoryReconciliation(ownerID: uid)
+                #if DEBUG
+                print("[SyncEngine] budget-category reconciliation: committed owner/store marker")
+                #endif
+            }
             if !hasCompletedInitialSync {
                 hasCompletedInitialSync = true
                 UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
@@ -899,6 +932,7 @@ final class SyncEngine: ObservableObject {
             for c in foreignRows(Category.self) {
                 let referenced = !(c.transactions ?? []).isEmpty
                     || !(c.budgets ?? []).isEmpty
+                    || !(c.multiCategoryBudgets ?? []).isEmpty
                     || !(c.recurringRules ?? []).isEmpty
                 if referenced { adopt(c) } else { context.delete(c); dropped += 1 }
             }
@@ -1161,39 +1195,83 @@ final class SyncEngine: ObservableObject {
         finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
-    private func pushBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
-        let pending = try context.fetch(FetchDescriptor<Budget>(predicate: #Predicate { $0.needsSync }))
-        guard !pending.isEmpty else { return }
-        let snapshot = updatedAtSnapshot(pending)
-        let rows = pending.map { b in
-            SyncBudgetRow(id: b.id, user_id: uid, name: b.name, amount_limit: b.amountLimit,
-                          currency_code: b.currencyCode, period_type_raw: b.periodType.rawValue,
-                          start_date: b.startDate, created_at: b.createdAt, updated_at: b.updatedAt,
-                          custom_end_date: b.customEndDate, month: b.month, year: b.year,
-                          is_recurring: b.isRecurring, rollover_excess: b.rolloverExcess,
-                          rollover_amount: b.rolloverAmount,
-                          amount_type_data: b.amountType.encode().flatMap { String(data: $0, encoding: .utf8) },
-                          alert_at_50: b.alertAt50, alert_at_80: b.alertAt80, alert_at_100: b.alertAt100,
-                          alert_on_projected_overspend: b.alertOnProjectedOverspend,
-                          last_alert_triggered_date: b.lastAlertTriggeredDate,
-                          last_alert_threshold: b.lastAlertThreshold,
-                          budget_category_type_raw: b.budgetCategoryType?.rawValue,
-                          category_id: b.category?.id, target_kind: b.targetKindRaw,
-                          alert_mode: b.alertModeRaw, last_alert_period_key: b.lastAlertPeriodKey,
-                          week_start_day: b.weekStartDay, deleted_at: b.deletedAt)
-        }
-        let returned = try await upsertInChunks(rows, to: "budgets", client)
-        // Rebuild each budget's category join rows (delete then insert current set).
-        for b in pending {
-            try await client.from("budget_categories").delete().eq("budget_id", value: b.id.uuidString).execute()
-            let joins = (b.categories ?? []).map {
-                SyncBudgetCategoryRow(budget_id: b.id, category_id: $0.id, user_id: uid)
+    struct BudgetPushSnapshot {
+        let budgetID: UUID
+        let parentDTO: SyncBudgetRow
+        let categorySetDirty: Bool
+        let categoryIDs: [UUID]
+        let updatedAt: Date
+
+        func joinRows(userID: UUID) -> [SyncBudgetCategoryRow] {
+            categoryIDs.map {
+                SyncBudgetCategoryRow(budget_id: budgetID, category_id: $0, user_id: userID)
             }
+        }
+    }
+
+    static func makeBudgetPushSnapshots(_ budgets: [Budget], userID uid: UUID) -> [BudgetPushSnapshot] {
+        budgets.map { b in
+            let parentDTO = SyncBudgetRow(
+                id: b.id, user_id: uid, name: b.name, amount_limit: b.amountLimit,
+                currency_code: b.currencyCode, period_type_raw: b.periodType.rawValue,
+                start_date: b.startDate, created_at: b.createdAt, updated_at: b.updatedAt,
+                custom_end_date: b.customEndDate, month: b.month, year: b.year,
+                is_recurring: b.isRecurring, rollover_excess: b.rolloverExcess,
+                rollover_amount: b.rolloverAmount,
+                amount_type_data: b.amountType.encode().flatMap { String(data: $0, encoding: .utf8) },
+                alert_at_50: b.alertAt50, alert_at_80: b.alertAt80, alert_at_100: b.alertAt100,
+                alert_on_projected_overspend: b.alertOnProjectedOverspend,
+                last_alert_triggered_date: b.lastAlertTriggeredDate,
+                last_alert_threshold: b.lastAlertThreshold,
+                budget_category_type_raw: b.budgetCategoryType?.rawValue,
+                category_id: nil,
+                target_kind: b.targetKindRaw,
+                alert_mode: b.alertModeRaw,
+                last_alert_period_key: b.lastAlertPeriodKey,
+                week_start_day: b.weekStartDay,
+                deleted_at: b.deletedAt
+            )
+            return BudgetPushSnapshot(
+                budgetID: b.id,
+                parentDTO: parentDTO,
+                categorySetDirty: b.categorySetDirty,
+                categoryIDs: b.effectiveTrackedCategories.map(\.id),
+                updatedAt: b.updatedAt
+            )
+        }
+    }
+
+    private func pushBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let pending = try context.fetch(FetchDescriptor<Budget>(
+            predicate: #Predicate { $0.needsSync || $0.categorySetDirty }
+        ))
+        guard !pending.isEmpty else { return }
+        // Parent DTO, category intent, and effective join ids are captured as one
+        // immutable snapshot before the first network suspension.
+        let snapshots = Self.makeBudgetPushSnapshots(pending, userID: uid)
+        #if DEBUG
+        print("[SyncEngine] push budgets: parents=\(snapshots.count), join rebuilds=\(snapshots.filter(\.categorySetDirty).count)")
+        #endif
+        let returned = try await upsertInChunks(snapshots.map(\.parentDTO), to: "budgets", client)
+        var rebuiltBudgetIDs: Set<UUID> = []
+        for snapshot in snapshots where snapshot.categorySetDirty {
+            try await client.from("budget_categories").delete()
+                .eq("budget_id", value: snapshot.budgetID.uuidString)
+                .execute()
+            let joins = snapshot.joinRows(userID: uid)
             if !joins.isEmpty {
                 try await client.from("budget_categories").insert(joins).execute()
             }
+            rebuiltBudgetIDs.insert(snapshot.budgetID)
         }
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishBudgetPush(
+            returned,
+            pending: pending,
+            snapshots: snapshots,
+            rebuiltBudgetIDs: rebuiltBudgetIDs,
+            uid: uid,
+            context: context
+        )
     }
 
     private func pushTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1289,6 +1367,44 @@ final class SyncEngine: ObservableObject {
         }
     }
 
+    /// Budget completion additionally clears category intent, but only for join
+    /// sets rebuilt from the same unchanged pre-await snapshot.
+    func finishBudgetPush(
+        _ returned: [SyncBudgetRow],
+        pending: [Budget],
+        snapshots: [BudgetPushSnapshot],
+        rebuiltBudgetIDs: Set<UUID>,
+        uid: UUID,
+        context: ModelContext
+    ) {
+        withSyncWriteGuard {
+            let snapshotByID = Dictionary(
+                snapshots.map { ($0.budgetID, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            let serverDates = Dictionary(
+                returned.map { ($0.id, $0.updated_at) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            var clearedCategorySets = 0
+            for budget in pending {
+                guard let snapshot = snapshotByID[budget.id],
+                      snapshot.updatedAt == budget.updatedAt else { continue }
+                if snapshot.categorySetDirty, rebuiltBudgetIDs.contains(budget.id) {
+                    budget.categorySetDirty = false
+                    clearedCategorySets += 1
+                }
+                if let serverDate = serverDates[budget.id] { budget.updatedAt = serverDate }
+                budget.needsSync = false
+                budget.assignOwner(uid)
+            }
+            try? context.save()
+            #if DEBUG
+            print("[SyncEngine] push budgets: cleared category intent for \(clearedCategorySets) rebuilt sets")
+            #endif
+        }
+    }
+
     /// Hex SHA-256 — identity for uploaded image bytes, so receipts/covers/
     /// avatars re-upload only when the pixels actually changed.
     static func sha256(_ data: Data) -> String {
@@ -1322,6 +1438,197 @@ final class SyncEngine: ObservableObject {
     /// pull site (both the delete branch and the normal-apply branch).
     static func localChangeWins(localNeedsSync: Bool, localUpdatedAt: Date, remoteUpdatedAt: Date) -> Bool {
         localNeedsSync && localUpdatedAt > remoteUpdatedAt
+    }
+
+    enum BudgetCategoryReconciliationAction: Equatable {
+        case localDirtyPreserved
+        case totalCleared
+        case incompletePreserved
+        case emptyRepaired
+        case cloudApplied
+    }
+
+    struct BudgetCategoryReconciliationResult: Equatable {
+        let action: BudgetCategoryReconciliationAction
+        let liveCount: Int
+        let tombstonedCount: Int
+        let absentCount: Int
+    }
+
+    struct BudgetRowApplyResult: Equatable {
+        let parentLocalWins: Bool
+        let categoryResult: BudgetCategoryReconciliationResult
+    }
+
+    /// Reconciles the category set independently of parent-row LWW. A dirty set
+    /// is deliberate local intent; otherwise cloud joins (including tombstones)
+    /// are authoritative under the frozen precedence matrix.
+    @discardableResult
+    static func applySyncedTrackedCategories(
+        cloudCategoryIDs: [UUID],
+        resolvedCategoriesByID: [UUID: Category],
+        targetKind syncedTargetKind: BudgetTargetKind,
+        to budget: Budget,
+        repairTimestamp: Date = Date()
+    ) -> BudgetCategoryReconciliationResult {
+        let cloudIDs = Array(Set(cloudCategoryIDs)).sorted { $0.uuidString < $1.uuidString }
+        let liveCategories = cloudIDs.compactMap { id -> Category? in
+            guard let category = resolvedCategoriesByID[id], category.deletedAt == nil else { return nil }
+            return category
+        }
+        let tombstonedCount = cloudIDs.reduce(into: 0) { count, id in
+            if resolvedCategoriesByID[id]?.deletedAt != nil { count += 1 }
+        }
+        let absentCount = cloudIDs.reduce(into: 0) { count, id in
+            if resolvedCategoriesByID[id] == nil { count += 1 }
+        }
+
+        func result(_ action: BudgetCategoryReconciliationAction) -> BudgetCategoryReconciliationResult {
+            BudgetCategoryReconciliationResult(
+                action: action,
+                liveCount: liveCategories.count,
+                tombstonedCount: tombstonedCount,
+                absentCount: absentCount
+            )
+        }
+
+        guard !budget.categorySetDirty else {
+            return result(.localDirtyPreserved)
+        }
+
+        if syncedTargetKind == .total {
+            budget.setTrackedCategories([], targetKind: .total)
+            budget.categorySetDirty = false
+            return result(.totalCleared)
+        }
+
+        if absentCount > 0 {
+            // Preserve the current set and target kind. A successful direct
+            // category fetch that returns no row is incomplete, not evidence of
+            // deletion, and must not turn local data into publishable intent.
+            budget.categorySetDirty = false
+            return result(.incompletePreserved)
+        }
+
+        let localCategories = budget.effectiveTrackedCategories
+        if cloudIDs.isEmpty, !localCategories.isEmpty, syncedTargetKind == .categories {
+            budget.setTrackedCategories(localCategories, targetKind: .categories)
+            budget.categorySetDirty = true
+            budget.updatedAt = repairTimestamp
+            budget.needsSync = true
+            return result(.emptyRepaired)
+        }
+
+        // All ids resolved live or tombstoned. Tombstones are authoritative, so
+        // a non-empty all-tombstoned cloud set intentionally clears the budget.
+        budget.setTrackedCategories(liveCategories, targetKind: syncedTargetKind)
+        budget.categorySetDirty = false
+        return result(.cloudApplied)
+    }
+
+    /// Applies one live budget row with parent scalar LWW and category-set
+    /// reconciliation as separate decisions.
+    @discardableResult
+    static func applySyncedBudgetRow(
+        _ row: SyncBudgetRow,
+        cloudCategoryIDs: [UUID],
+        resolvedCategoriesByID: [UUID: Category],
+        to budget: Budget,
+        repairTimestamp: Date = Date()
+    ) -> BudgetRowApplyResult {
+        let parentLocalWins = localChangeWins(
+            localNeedsSync: budget.needsSync,
+            localUpdatedAt: budget.updatedAt,
+            remoteUpdatedAt: row.updated_at
+        )
+
+        if !parentLocalWins {
+            budget.name = row.name
+            budget.amountLimit = row.amount_limit
+            budget.currencyCode = row.currency_code
+            budget.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
+            budget.startDate = row.start_date
+            budget.createdAt = row.created_at
+            budget.updatedAt = row.updated_at
+            budget.customEndDate = row.custom_end_date
+            budget.month = row.month
+            budget.year = row.year
+            budget.isRecurring = row.is_recurring
+            budget.rolloverExcess = row.rollover_excess
+            budget.rolloverAmount = row.rollover_amount
+            budget.alertAt50 = row.alert_at_50
+            budget.alertAt80 = row.alert_at_80
+            budget.alertAt100 = row.alert_at_100
+            budget.alertOnProjectedOverspend = row.alert_on_projected_overspend
+            budget.lastAlertTriggeredDate = row.last_alert_triggered_date
+            budget.lastAlertThreshold = row.last_alert_threshold
+            budget.alertModeRaw = row.alert_mode
+            budget.lastAlertPeriodKey = row.last_alert_period_key
+            budget.weekStartDay = row.week_start_day
+            budget.budgetCategoryType = row.budget_category_type_raw.flatMap(BudgetCategoryType.init(rawValue:))
+            budget.deletedAt = row.deleted_at
+            if let raw = row.amount_type_data,
+               let data = raw.data(using: .utf8),
+               let amountType = BudgetAmountType.decode(from: data) {
+                budget.amountType = amountType
+            }
+        }
+
+        let syncedTargetKind = row.target_kind.flatMap(BudgetTargetKind.init(rawValue:))
+            ?? (cloudCategoryIDs.isEmpty ? .total : .categories)
+        let categoryResult = applySyncedTrackedCategories(
+            cloudCategoryIDs: cloudCategoryIDs,
+            resolvedCategoriesByID: resolvedCategoriesByID,
+            targetKind: syncedTargetKind,
+            to: budget,
+            repairTimestamp: repairTimestamp
+        )
+
+        budget.syncUserID = row.user_id
+        if parentLocalWins {
+            budget.needsSync = true
+        } else {
+            budget.needsSync = budget.categorySetDirty
+        }
+
+        #if DEBUG
+        print(
+            "[SyncEngine] pull budget \(row.id): parentLocalWins=\(parentLocalWins), " +
+            "category=\(categoryResult.action), live=\(categoryResult.liveCount), " +
+            "tombstoned=\(categoryResult.tombstonedCount), absent=\(categoryResult.absentCount), " +
+            "dirty=\(budget.categorySetDirty)"
+        )
+        #endif
+        return BudgetRowApplyResult(parentLocalWins: parentLocalWins, categoryResult: categoryResult)
+    }
+
+    /// During the one-time full re-pull, only budgets with no matching cloud row
+    /// are local-only. Flag their non-empty effective sets so the first push
+    /// installs joins; never infer category intent from `needsSync`.
+    @discardableResult
+    static func flagLocalOnlyBudgetCategorySets(
+        context: ModelContext,
+        cloudBudgetIDs: Set<UUID>,
+        ownerID: UUID
+    ) throws -> Int {
+        let budgets = try context.fetch(FetchDescriptor<Budget>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        ))
+        var flagged = 0
+        var unexpectedOwnedLocalOnly = 0
+        for budget in budgets where !cloudBudgetIDs.contains(budget.id) {
+            guard !budget.effectiveTrackedCategories.isEmpty else { continue }
+            if budget.syncUserID == ownerID { unexpectedOwnedLocalOnly += 1 }
+            budget.categorySetDirty = true
+            budget.needsSync = true
+            flagged += 1
+        }
+        #if DEBUG
+        if unexpectedOwnedLocalOnly > 0 {
+            print("[SyncEngine] budget-category reconciliation: \(unexpectedOwnedLocalOnly) unmatched rows already claimed by owner")
+        }
+        #endif
+        return flagged
     }
 
     // MARK: - Pull
@@ -1809,19 +2116,83 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    private func pullBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+    private func pullBudgets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws -> Set<UUID> {
         let rows: [SyncBudgetRow] = try await fetchChanged("budgets", client, uid)
-        guard !rows.isEmpty else { return }
-        // Category join rows (no cursor; small set). Map budget → category ids.
-        let joinRows: [SyncBudgetCategoryRow] = try await client.from("budget_categories")
-            .select().eq("user_id", value: uid.uuidString).execute().value
-        let joinMap = Dictionary(grouping: joinRows, by: { $0.budget_id }).mapValues { $0.map(\.category_id) }
+        return try await pullBudgetRows(
+            rows,
+            context: context,
+            ownerID: uid,
+            fetchJoinRows: { budgetIDs in
+                try await self.fetchBudgetCategoryJoinRows(
+                    budgetIDs: budgetIDs,
+                    client: client,
+                    ownerID: uid
+                )
+            },
+            fetchCategoryRows: { categoryIDs in
+                try await self.fetchBudgetReferencedCategoryRows(
+                    categoryIDs: categoryIDs,
+                    client: client,
+                    ownerID: uid
+                )
+            }
+        )
+    }
+
+    /// Injectable budget-pull core used by production and hardening tests. The
+    /// budget cursor advances only inside the final synchronous apply span, so a
+    /// throwing eager category fetch leaves it untouched.
+    @discardableResult
+    func pullBudgetRows(
+        _ rows: [SyncBudgetRow],
+        context: ModelContext,
+        ownerID uid: UUID,
+        fetchJoinRows: ([UUID]) async throws -> [SyncBudgetCategoryRow],
+        fetchCategoryRows: ([UUID]) async throws -> [SyncCategoryRow]
+    ) async throws -> Set<UUID> {
+        guard !rows.isEmpty else { return [] }
+
+        let budgetIDs = Array(Set(rows.map(\.id))).sorted { $0.uuidString < $1.uuidString }
+        let joinRows = try await fetchJoinRows(budgetIDs)
+        let joinMap = Dictionary(grouping: joinRows, by: \.budget_id).mapValues { rows in
+            Array(Set(rows.map(\.category_id))).sorted { $0.uuidString < $1.uuidString }
+        }
+        let cloudIDsByBudget = Dictionary(uniqueKeysWithValues: rows.map { row in
+            let joined = joinMap[row.id] ?? []
+            let cloudIDs = joined.isEmpty ? row.category_id.map { [$0] } ?? [] : joined
+            return (row.id, cloudIDs)
+        })
+
+        let allCloudCategoryIDs = Set(cloudIDsByBudget.values.flatMap { $0 })
+        var missingCategoryIDs: [UUID] = []
+        for categoryID in allCloudCategoryIDs {
+            if try fetchByID(Category.self, id: categoryID, in: context) == nil {
+                missingCategoryIDs.append(categoryID)
+            }
+        }
+        missingCategoryIDs.sort { $0.uuidString < $1.uuidString }
+
+        if !missingCategoryIDs.isEmpty {
+            // This fetch is deliberately outside the write guard. A thrown fetch
+            // aborts before budget apply/cursor advancement; the synchronous
+            // local upsert below is guarded separately.
+            let categoryRows = try await fetchCategoryRows(missingCategoryIDs)
+            try withSyncWriteGuard {
+                try upsertBudgetReferencedCategories(categoryRows, context: context)
+                try context.save()
+            }
+        }
+
         try withSyncWriteGuard {
             try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
                     if let dead = try fetchByID(Budget.self, id: row.id, in: context) {
                         if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
+                        dead.deletedAt = row.deleted_at
+                        dead.updatedAt = row.updated_at
+                        dead.syncUserID = row.user_id
+                        dead.categorySetDirty = false
+                        dead.needsSync = false
                     }
                     return
                 }
@@ -1833,31 +2204,146 @@ final class SyncEngine: ObservableObject {
                     b.needsSync = false
                     context.insert(b)
                 }
-                if Self.localChangeWins(localNeedsSync: b.needsSync, localUpdatedAt: b.updatedAt, remoteUpdatedAt: row.updated_at) { return }
-                b.name = row.name; b.amountLimit = row.amount_limit; b.currencyCode = row.currency_code
-                b.periodType = BudgetPeriodType(rawValue: row.period_type_raw) ?? .monthly
-                b.startDate = row.start_date; b.createdAt = row.created_at; b.updatedAt = row.updated_at
-                b.customEndDate = row.custom_end_date; b.month = row.month; b.year = row.year
-                b.isRecurring = row.is_recurring; b.rolloverExcess = row.rollover_excess
-                b.rolloverAmount = row.rollover_amount
-                b.alertAt50 = row.alert_at_50; b.alertAt80 = row.alert_at_80; b.alertAt100 = row.alert_at_100
-                b.alertOnProjectedOverspend = row.alert_on_projected_overspend
-                b.lastAlertTriggeredDate = row.last_alert_triggered_date
-                b.lastAlertThreshold = row.last_alert_threshold
-                b.targetKindRaw = row.target_kind
-                b.alertModeRaw = row.alert_mode
-                b.lastAlertPeriodKey = row.last_alert_period_key
-                b.weekStartDay = row.week_start_day
-                b.budgetCategoryType = row.budget_category_type_raw.flatMap { BudgetCategoryType(rawValue: $0) }
-                b.category = try resolveRef(Category.self, id: row.category_id, current: b.category, in: context)
-                b.categories = try (joinMap[row.id] ?? []).compactMap { try fetchByID(Category.self, id: $0, in: context) }
-                if let raw = row.amount_type_data, let data = raw.data(using: .utf8),
-                   let amountType = BudgetAmountType.decode(from: data) {
-                    b.amountType = amountType
+                let cloudCategoryIDs = cloudIDsByBudget[row.id] ?? []
+                var resolvedCategoriesByID: [UUID: Category] = [:]
+                for categoryID in cloudCategoryIDs {
+                    if let category = try fetchByID(Category.self, id: categoryID, in: context) {
+                        resolvedCategoriesByID[categoryID] = category
+                    }
                 }
-                b.deletedAt = row.deleted_at; b.syncUserID = row.user_id; b.needsSync = false
+                Self.applySyncedBudgetRow(
+                    row,
+                    cloudCategoryIDs: cloudCategoryIDs,
+                    resolvedCategoriesByID: resolvedCategoriesByID,
+                    to: b
+                )
             }
             try context.save()
+        }
+        return Set(rows.map(\.id))
+    }
+
+    /// Fetches only joins for the pulled budget ids. Each bounded id chunk uses
+    /// composite `(budget_id, category_id)` keyset pagination, so the server's
+    /// response cap cannot truncate a large account or one unusually broad
+    /// budget.
+    private func fetchBudgetCategoryJoinRows(
+        budgetIDs: [UUID],
+        client: SupabaseClient,
+        ownerID uid: UUID
+    ) async throws -> [SyncBudgetCategoryRow] {
+        guard !budgetIDs.isEmpty else { return [] }
+        let idChunkSize = 100
+        var allRows: [SyncBudgetCategoryRow] = []
+        var chunkStart = 0
+        while chunkStart < budgetIDs.count {
+            let chunk = Array(budgetIDs[chunkStart..<min(chunkStart + idChunkSize, budgetIDs.count)])
+            var lastKey: (budgetID: UUID, categoryID: UUID)?
+            while true {
+                var query = client.from("budget_categories")
+                    .select()
+                    .eq("user_id", value: uid.uuidString)
+                    .in("budget_id", values: chunk.map(\.uuidString))
+                if let lastKey {
+                    query = query.or(
+                        "budget_id.gt.\(lastKey.budgetID.uuidString)," +
+                        "and(budget_id.eq.\(lastKey.budgetID.uuidString)," +
+                        "category_id.gt.\(lastKey.categoryID.uuidString))"
+                    )
+                }
+                let page: [SyncBudgetCategoryRow] = try await query
+                    .order("budget_id", ascending: true)
+                    .order("category_id", ascending: true)
+                    .limit(Self.pageSize)
+                    .execute().value
+                allRows.append(contentsOf: page)
+                guard page.count == Self.pageSize else { break }
+                guard let last = page.last else { break }
+                let nextKey = (last.budget_id, last.category_id)
+                if let lastKey,
+                   lastKey.budgetID == nextKey.0,
+                   lastKey.categoryID == nextKey.1 {
+                    throw SyncError.budgetJoinPaginationStalled
+                }
+                lastKey = nextKey
+            }
+            chunkStart += idChunkSize
+        }
+        #if DEBUG
+        print("[SyncEngine] pull budget joins: budgets=\(budgetIDs.count), rows=\(allRows.count)")
+        #endif
+        return allRows
+    }
+
+    /// Directly fetches category rows referenced by pulled joins but absent from
+    /// SwiftData. A thrown request aborts the budget step before cursor advance.
+    private func fetchBudgetReferencedCategoryRows(
+        categoryIDs: [UUID],
+        client: SupabaseClient,
+        ownerID uid: UUID
+    ) async throws -> [SyncCategoryRow] {
+        guard !categoryIDs.isEmpty else { return [] }
+        let idChunkSize = 100
+        var rows: [SyncCategoryRow] = []
+        var chunkStart = 0
+        while chunkStart < categoryIDs.count {
+            let chunk = Array(categoryIDs[chunkStart..<min(chunkStart + idChunkSize, categoryIDs.count)])
+            let page: [SyncCategoryRow] = try await client.from("categories")
+                .select()
+                .eq("user_id", value: uid.uuidString)
+                .in("id", values: chunk.map(\.uuidString))
+                .order("id", ascending: true)
+                .limit(Self.pageSize)
+                .execute().value
+            rows.append(contentsOf: page)
+            chunkStart += idChunkSize
+        }
+        #if DEBUG
+        print("[SyncEngine] pull budget categories: requested=\(categoryIDs.count), resolved=\(rows.count)")
+        #endif
+        return rows
+    }
+
+    /// Upserts eager category results without touching the categories cursor.
+    /// Unlike the ordinary tombstone pull, an absent tombstoned category is
+    /// materialized locally so budget classification can honor that tombstone.
+    private func upsertBudgetReferencedCategories(
+        _ rows: [SyncCategoryRow],
+        context: ModelContext
+    ) throws {
+        for row in rows {
+            let category = try fetchByID(Category.self, id: row.id, in: context) ?? {
+                let new = Category(
+                    name: row.name,
+                    icon: row.icon ?? "",
+                    colorHex: row.color_hex ?? "",
+                    type: TransactionType(rawValue: row.type) ?? .expense,
+                    isSystem: row.is_system,
+                    canonicalKey: row.canonical_key
+                )
+                new.id = row.id
+                new.needsSync = false
+                context.insert(new)
+                return new
+            }()
+            if Self.localChangeWins(
+                localNeedsSync: category.needsSync,
+                localUpdatedAt: category.updatedAt,
+                remoteUpdatedAt: row.updated_at
+            ) {
+                continue
+            }
+            category.name = row.name
+            category.icon = row.icon ?? ""
+            category.colorHex = row.color_hex ?? ""
+            category.type = TransactionType(rawValue: row.type) ?? category.type
+            category.isSystem = row.is_system
+            if let key = row.canonical_key { category.canonicalKey = key }
+            category.createdAt = row.created_at
+            category.updatedAt = row.updated_at
+            category.deletedAt = row.deleted_at
+            category.syncUserID = row.user_id
+            category.needsSync = false
         }
     }
 
@@ -2100,7 +2586,28 @@ final class SyncEngine: ObservableObject {
 
     // MARK: - Cursor persistence (per table, UserDefaults)
 
-    private static func cursorKey(_ table: String) -> String { "syncCursor.v1.\(table)" }
+    nonisolated static func cursorKey(_ table: String) -> String { "syncCursor.v1.\(table)" }
+
+    /// Owner/store-version gate for the one-time self-heal. Preparation resets
+    /// only the budgets cursor; the marker is committed by `syncNow` after every
+    /// sync step succeeds.
+    @discardableResult
+    nonisolated static func prepareBudgetCategoryReconciliation(
+        ownerID: UUID,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        let needed = PlanDataMaintenance.needsBudgetCategoryReconciliation(
+            ownerID: ownerID,
+            defaults: defaults
+        )
+        if needed {
+            defaults.removeObject(forKey: cursorKey("budgets"))
+            #if DEBUG
+            print("[SyncEngine] budget-category reconciliation: reset budgets cursor for owner \(ownerID)")
+            #endif
+        }
+        return needed
+    }
 
     private static func cursorDate(for table: String) -> Date? {
         let t = UserDefaults.standard.double(forKey: cursorKey(table))

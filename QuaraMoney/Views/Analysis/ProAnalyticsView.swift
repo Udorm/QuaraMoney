@@ -59,24 +59,6 @@ struct ProAnalyticsView: View {
                 .animation(.easeInOut(duration: 0.2), value: vm.layout)
                 .animation(.easeInOut(duration: 0.2), value: vm.filter)
             }
-            // Paging: a decisive horizontal swipe anywhere on the dashboard moves one period
-            // back/forward. It's the quick complement to picking a specific period in the
-            // filter sheet; vertical scrolling is left untouched.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 30)
-                    .onEnded { value in
-                        let dx = value.translation.width
-                        guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
-                        if dx < 0 {
-                            guard vm.canNavigateForward else { return }
-                            HapticManager.shared.selection()
-                            vm.navigateForward()
-                        } else {
-                            HapticManager.shared.selection()
-                            vm.navigateBack()
-                        }
-                    }
-            )
             .navigationDestination(for: ProDashboardDetail.self) { detail in
                 ProSectionDetailPage(detail: detail, vm: vm, wallets: wallets, categories: categories)
             }
@@ -294,103 +276,101 @@ struct ProSectionHeader: View {
 
 // MARK: - Overview Card
 
+/// Overview is a 2×2 grid of equal-sized metric tiles (Net Worth · Income ·
+/// Expenses · Net) that share the same grouped-card background as the rest of
+/// the dashboard's cards, so the color stays consistent in light and dark mode.
+/// The old single card (with the savings-rate progress bar) was split into these
+/// four to give each metric its own scannable surface.
 struct ProOverviewCard: View {
     @Bindable var vm: ProAnalyticsViewModel
 
     private var r: ProAnalyticsProcessor.Result { vm.result }
     private var currency: String { vm.preferredCurrency }
 
-    private var savingsRate: Double {
-        guard r.income > 0 else { return 0 }
-        return (r.net / r.income).doubleValue
-    }
-
     var body: some View {
-        ProCard {
-            // Net worth
-            VStack(alignment: .leading, spacing: 4) {
-                Text("analysis.pro.netWorth".localized.uppercased())
-                    .appFont(.caption2, weight: .bold)
-                    .foregroundStyle(.secondary)
-                Text(r.netWorth.formattedAmount(for: currency))
-                    .appFont(.largeTitle, weight: .bold)
-                    .foregroundStyle(r.netWorth >= 0 ? .primary : ThemeManager.shared.expenseColor)
-                    .contentTransition(.numericText())
-            }
-
-            Divider()
-
-            // Income / Expense / Net with deltas
-            HStack(alignment: .top, spacing: 0) {
-                statColumn(
-                    label: L10n.Transaction.TransactionType.income.uppercased(),
+        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            GridRow {
+                ProMetricTile(
+                    label: "analysis.pro.netWorth".localized,
+                    subtitle: "analysis.pro.netWorth.sub".localized,
+                    amount: r.netWorth,
+                    currency: currency,
+                    valueColor: r.netWorth >= 0 ? .primary : ThemeManager.shared.expenseColor
+                )
+                ProMetricTile(
+                    label: L10n.Transaction.TransactionType.income,
                     amount: r.income,
+                    currency: currency,
                     previous: r.prevIncome,
-                    color: ThemeManager.shared.incomeColor,
-                    higherIsBetter: true
-                )
-                Divider().frame(height: 44)
-                statColumn(
-                    label: "analysis.pro.expenses".localized.uppercased(),
-                    amount: r.expense,
-                    previous: r.prevExpense,
-                    color: ThemeManager.shared.expenseColor,
-                    higherIsBetter: false
-                )
-                Divider().frame(height: 44)
-                statColumn(
-                    label: "analysis.net".localized.uppercased(),
-                    amount: r.net,
-                    previous: r.prevNet,
-                    color: r.net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor,
-                    higherIsBetter: true
+                    higherIsBetter: true,
+                    valueColor: ThemeManager.shared.incomeColor
                 )
             }
-
-            // Savings rate
-            if r.income > 0 {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("analysis.pro.savingsRate".localized)
-                            .appFont(.caption, weight: .semibold)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(savingsRate.formatted(.percent.precision(.fractionLength(0))))
-                            .appFont(.caption, weight: .bold)
-                            .foregroundStyle(savingsRate >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
-                    }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color(.systemGray5))
-                                .frame(height: 8)
-                            Capsule()
-                                .fill((savingsRate >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor).gradient)
-                                .frame(width: geo.size.width * CGFloat(min(max(savingsRate, 0), 1)), height: 8)
-                        }
-                    }
-                    .frame(height: 8)
-                }
+            GridRow {
+                ProMetricTile(
+                    label: "analysis.pro.expenses".localized,
+                    amount: r.expense,
+                    currency: currency,
+                    previous: r.prevExpense,
+                    higherIsBetter: false,
+                    valueColor: ThemeManager.shared.expenseColor
+                )
+                ProMetricTile(
+                    label: "analysis.net".localized,
+                    amount: r.net,
+                    currency: currency,
+                    previous: r.prevNet,
+                    higherIsBetter: true,
+                    valueColor: r.net >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+                )
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func statColumn(label: String, amount: Decimal, previous: Decimal, color: Color, higherIsBetter: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .appFont(.caption2, weight: .semibold)
+/// A single equal-sized metric tile. Shows a value with either a period-over-
+/// period `DeltaBadge` (when `previous` is supplied) or a static `subtitle`.
+/// The fixed `minHeight` keeps all four Overview tiles identical.
+private struct ProMetricTile: View {
+    let label: String
+    var subtitle: String? = nil
+    let amount: Decimal
+    let currency: String
+    var previous: Decimal? = nil
+    var higherIsBetter: Bool = true
+    var valueColor: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label.uppercased())
+                .appFont(.caption2, weight: .bold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(amount.formattedAmountShort(for: vm.preferredCurrency))
-                .appFont(.subheadline, weight: .bold)
-                .foregroundStyle(color)
+            Text(amount.formattedAmountShort(for: currency))
+                .appFont(.title3, weight: .bold)
+                .foregroundStyle(valueColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            DeltaBadge(current: amount, previous: previous, higherIsBetter: higherIsBetter)
+                .minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+            Spacer(minLength: 4)
+            if let previous {
+                DeltaBadge(current: amount, previous: previous, higherIsBetter: higherIsBetter)
+            } else if let subtitle {
+                Text(subtitle)
+                    .appFont(.caption2, weight: .semibold)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .padding(16)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
     }
 }
 
@@ -559,7 +539,7 @@ struct ProInsightsCard: View {
 /// First row of the scroll content: an inline chip rail, all scrolling together. The leading
 /// chip is the date — its own `‹ ›` glyphs step the period back/forward in place, while tapping
 /// the label/calendar icon opens the filter sheet (period type, specific instance, and every
-/// other constraint). The remainder is the expense ⇄ income scope chip plus one removable chip
+/// other constraint). The remainder is the expense/income menu plus one removable chip
 /// per active constraint.
 struct ProScopeBar: View {
     @Bindable var vm: ProAnalyticsViewModel
@@ -583,6 +563,26 @@ struct ProScopeBar: View {
 
     private var canNavigateBack: Bool { vm.selectedPeriod != .custom }
 
+    /// Keep inline type changes consistent with the full filter sheet by discarding category
+    /// selections that do not belong to the newly selected transaction type.
+    private var transactionTypeSelection: Binding<TransactionTypeFilter> {
+        Binding(
+            get: { vm.filter.transactionType },
+            set: { newValue in
+                guard newValue != vm.filter.transactionType else { return }
+                let categoryType: TransactionType = newValue == .income ? .income : .expense
+                let compatibleCategoryIDs = Set(
+                    categories.lazy.filter { $0.type == categoryType }.map(\.id)
+                )
+
+                var updatedFilter = vm.filter
+                updatedFilter.transactionType = newValue
+                updatedFilter.categoryIds.formIntersection(compatibleCategoryIDs)
+                vm.filter = updatedFilter
+            }
+        )
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -596,17 +596,15 @@ struct ProScopeBar: View {
                     onTap: openFilters
                 )
 
-                // Type scope chip — always present, taps cycle expense ⇄ income. The double
-                // chevron (not a directional arrow) signals "tap to switch", matching the
-                // convention pickers and menus use elsewhere in iOS.
-                Chip(
-                    systemImage: "chevron.up.chevron.down",
+                // Type scope menu — always present. A native menu makes both choices visible
+                // before changing the dashboard and marks the current selection with a check.
+                TypeMenuChip(
+                    selection: transactionTypeSelection,
                     text: typeLabel,
-                    tint: vm.filter.transactionType == .income ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor,
-                    style: .solid
-                ) {
-                    vm.filter.transactionType = vm.filter.transactionType == .income ? .expense : .income
-                }
+                    tint: vm.filter.transactionType == .income
+                        ? ThemeManager.shared.incomeColor
+                        : ThemeManager.shared.expenseColor
+                )
 
                 // Wallet chips (iterate the sorted query for stable order)
                 ForEach(wallets.filter { vm.filter.walletIds.contains($0.id) }) { wallet in
@@ -662,7 +660,7 @@ struct ProScopeBar: View {
         }
     }
 
-    /// Small pill used in the filter bar.
+    /// Pill used in the filter bar. Its 44-point height matches the minimum native touch target.
     private struct Chip: View {
         enum Style { case solid, tinted, outline }
         let systemImage: String
@@ -674,20 +672,20 @@ struct ProScopeBar: View {
 
         var body: some View {
             Button(action: action) {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: systemImage)
-                        .appFont(.caption2, weight: .semibold)
+                        .appFont(.caption, weight: .semibold)
                     Text(text)
-                        .appFont(.caption, weight: .medium)
+                        .appFont(.subheadline, weight: .medium)
                         .lineLimit(1)
                     if removable {
                         Image(systemName: "xmark")
-                            .appFont(.caption2, weight: .bold)
+                            .appFont(.caption, weight: .bold)
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
                 .background(background)
                 .foregroundStyle(foreground)
                 .clipShape(Capsule())
@@ -715,6 +713,40 @@ struct ProScopeBar: View {
         }
     }
 
+    /// Native menu picker presented with the same capsule styling as the other scope chips.
+    private struct TypeMenuChip: View {
+        @Binding var selection: TransactionTypeFilter
+        let text: String
+        let tint: Color
+
+        var body: some View {
+            Menu {
+                Picker("analysis.transactionType".localized, selection: $selection) {
+                    Text(L10n.Transaction.TransactionType.expense)
+                        .tag(TransactionTypeFilter.expense)
+                    Text(L10n.Transaction.TransactionType.income)
+                        .tag(TransactionTypeFilter.income)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(text)
+                        .appFont(.subheadline, weight: .semibold)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .appFont(.caption, weight: .bold)
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(tint)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("analysis.transactionType".localized)
+            .accessibilityValue(text)
+        }
+    }
+
     /// Date chip with its navigation folded in: `‹`/`›` step the period back/forward without
     /// leaving the chip, styled the same as the trailing chevron so all three glyphs read as
     /// one control; tapping the calendar/label segment opens the filter sheet.
@@ -727,37 +759,40 @@ struct ProScopeBar: View {
         let onTap: () -> Void
 
         var body: some View {
-            HStack(spacing: 6) {
+            HStack(spacing: 0) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
-                        .appFont(.caption2, weight: .bold)
+                        .appFont(.caption, weight: .bold)
                         .foregroundStyle(canGoBack ? Color.accentColor : Color.accentColor.opacity(0.35))
+                        .frame(width: 32, height: 44)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canGoBack)
 
                 Button(action: onTap) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "calendar")
-                            .appFont(.caption2, weight: .semibold)
+                            .appFont(.caption, weight: .semibold)
                         Text(text)
-                            .appFont(.caption, weight: .medium)
+                            .appFont(.subheadline, weight: .medium)
                             .lineLimit(1)
                             .contentTransition(.numericText())
                     }
+                    .padding(.horizontal, 6)
+                    .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
 
                 Button(action: onForward) {
                     Image(systemName: "chevron.right")
-                        .appFont(.caption2, weight: .bold)
+                        .appFont(.caption, weight: .bold)
                         .foregroundStyle(canGoForward ? Color.accentColor : Color.accentColor.opacity(0.35))
+                        .frame(width: 32, height: 44)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canGoForward)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 4)
             .background(Color.accentColor.opacity(0.15))
             .foregroundStyle(Color.accentColor)
             .clipShape(Capsule())

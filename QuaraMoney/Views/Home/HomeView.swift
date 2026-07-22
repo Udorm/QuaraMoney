@@ -36,7 +36,6 @@ struct HomeContentView: View {
     @Bindable var viewModel: HomeViewModel
     @State private var showingAddTransaction = false
     @State private var transactionToEdit: Transaction?
-    @State private var isSearchPresented = false
     @State private var backdateTarget: BackdateTarget?
     @State private var isVisible = false
     private var router = AppRouter.shared
@@ -337,18 +336,20 @@ struct DailyHeader: View {
                 .appFont(.subheadline)
                 .foregroundStyle(section.dailyTotal >= 0 ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor)
             if let onAddTapped {
-                // Icon-sized tap target, flush with the row's trailing edge
-                // (matches the amount alignment below) with a little leading
-                // padding for a comfortable target. A wide invisible frame
-                // here previously centered the icon away from the edge —
-                // inconsistent alignment and a too-large gap from the total.
                 Button(action: onAddTapped) {
-                    Image(systemName: "plus.circle")
-                        .font(.subheadline)
-                        .padding(.leading, 10)
+                    Image(systemName: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .frame(width: 40, height: 26)
+                        .background(Color.accentColor.opacity(0.14), in: Capsule())
+                        // The visible capsule's trailing edge stays aligned to
+                        // the list header's standard right margin.
+                        .frame(width: 44, height: 44, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
-                .foregroundStyle(.secondary)
+                // Preserve a full native touch target while reporting only the
+                // icon's compact height to the section header layout.
+                .padding(.vertical, -14)
                 .buttonStyle(.plain)
                 .accessibilityLabel("a11y.addTransactionOn".localized(with: section.date.appFormatted(date: .long, time: .omitted)))
             }

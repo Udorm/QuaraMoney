@@ -36,10 +36,12 @@ struct PlanCard<Content: View>: View {
                 cardContent
                     .glassEffect(.regular.tint(tint.opacity(0.16)), in: shape)
                     .clipShape(shape)
+                    .contentShape(shape)
             } else {
                 cardContent
                     .glassEffect(.regular, in: shape)
                     .clipShape(shape)
+                    .contentShape(shape)
             }
         } else {
             cardContent
@@ -47,7 +49,62 @@ struct PlanCard<Content: View>: View {
                     (tint?.opacity(0.09) ?? Color(.secondarySystemGroupedBackground)),
                     in: shape
                 )
+                .contentShape(shape)
         }
+    }
+}
+
+/// Gives the current amount clear visual priority while keeping the target
+/// nearby as supporting context. The vertical fallback prevents long currency
+/// values and Khmer copy from becoming cramped at larger text sizes.
+struct PlanAmountSummary: View {
+    let title: String
+    let amount: String
+    var targetAmount: String?
+    var amountColor: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .appFont(.caption, weight: .semibold)
+                .foregroundStyle(.secondary)
+
+            if let targetAmount {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        amountText
+                            .fixedSize(horizontal: true, vertical: false)
+                        targetText(targetAmount)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        amountText
+                        targetText(targetAmount)
+                    }
+                }
+            } else {
+                amountText
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var amountText: some View {
+        Text(amount)
+            .appFont(.title, weight: .bold)
+            .foregroundStyle(amountColor)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+    }
+
+    private func targetText(_ targetAmount: String) -> some View {
+        Text("plan.of_amount".localized(with: targetAmount))
+            .appFont(.subheadline, weight: .medium)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .lineLimit(1)
     }
 }
 

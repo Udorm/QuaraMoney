@@ -9,6 +9,7 @@ import Combine
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
+    @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil }) private var recurringRules: [RecurringRule]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @AppStorage("analyticsProMode") private var analyticsProMode: Bool = false
     @State private var showCreateWallet = false
@@ -57,6 +58,7 @@ struct ContentView: View {
                                 .appFont(.caption2)
                         }
                     }
+                    .badge(dueRecurringCount)
                 }
                 .tabViewStyle(.sidebarAdaptable)
             } else {
@@ -76,6 +78,7 @@ struct ContentView: View {
                     Tab(L10n.Tab.more, systemImage: "ellipsis", value: 3) {
                         LazyView(MoreView())
                     }
+                    .badge(dueRecurringCount)
                 }
                 .tabViewStyle(.automatic)
             }
@@ -106,9 +109,15 @@ struct ContentView: View {
                 .interactiveDismissDisabled()
         }
     }
+
+    /// Matches the recurring inbox count shown in More. Keeping this query at
+    /// the tab root lets the badge update even while MoreView remains lazy.
+    private var dueRecurringCount: Int {
+        recurringRules.filter { RecurringRuleService.isDue($0) }.count
+    }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Wallet.self, inMemory: true)
+        .modelContainer(for: [Wallet.self, RecurringRule.self], inMemory: true)
 }

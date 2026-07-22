@@ -879,6 +879,7 @@
 "analysis.pro.mode.basic" = "មូលដ្ឋាន";
 "analysis.pro.mode.pro" = "Pro";
 "analysis.pro.netWorth" = "ទ្រព្យសុទ្ធ";
+"analysis.pro.netWorth.sub" = "គ្រប់កាបូបទាំងអស់";
 "analysis.pro.expenses" = "ចំណាយ";
 "analysis.pro.savingsRate" = "អត្រាសន្សំ";
 "analysis.pro.new" = "ថ្មី";
@@ -1241,7 +1242,9 @@
 "plan.no_ended_budgets" = "មិនមានថវិកាដែលបានបញ្ចប់";
 "plan.no_goals_segment_description" = "បង្កើតគោលដៅសន្សំ ដើម្បីតាមដានវឌ្ឍនភាពរបស់អ្នក។";
 "plan.on_track_with_unknown" = "ថវិកា %d ក្នុងចំណោម %d កំពុងត្រឹមត្រូវ · %d មិនស្គាល់";
+"plan.of_amount" = "ក្នុងចំណោម %@";
 "plan.over_by" = "លើស %@";
+"plan.over_budget" = "លើសថវិកា";
 "plan.partial_data" = "ទិន្នន័យមិនពេញលេញ";
 "plan.partial_data_conversion" = "ចំនួនប្រាក់ខ្លះមិនអាចបម្លែងបាន";
 "plan.percent_accessibility" = "%d ភាគរយ";

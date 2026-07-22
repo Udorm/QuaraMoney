@@ -131,29 +131,25 @@ struct BudgetDetailView: View {
                     .appFont(.subheadline)
                     .foregroundStyle(.secondary)
             } else if state.projection.isDeterminate {
-                Text("plan.spent_of".localized(
-                    with: state.projection.spent.formattedAmount(for: budget.currencyCode),
-                    state.projection.limit.formattedAmount(for: budget.currencyCode)
-                ))
-                .appFont(.title2, weight: .bold)
-                .monospacedDigit()
+                budgetPrimaryAmount(state)
 
                 PlanProgressLine(
                     progress: state.projection.progress,
                     color: state.projection.isOnTrack == false ? .red : accentColor
                 )
 
-                if state.isEnded {
-                    Text(finalResult(state))
-                        .appFont(.headline, weight: .semibold)
-                        .foregroundStyle(state.projection.overage > 0 ? .red : .green)
-                } else {
-                    HStack(spacing: 16) {
+                HStack(spacing: 16) {
+                    statColumn(
+                        title: "plan.spent".localized,
+                        value: state.projection.spent.formattedAmount(for: budget.currencyCode)
+                    )
+                    Divider().frame(height: 44)
+                    if state.isEnded {
                         statColumn(
-                            title: "plan.remaining".localized,
-                            value: state.projection.remaining.formattedAmount(for: budget.currencyCode)
+                            title: "plan.limit".localized,
+                            value: state.projection.limit.formattedAmount(for: budget.currencyCode)
                         )
-                        Divider().frame(height: 44)
+                    } else {
                         statColumn(
                             title: "plan.left_per_day".localized,
                             value: leftPerDay(state).formattedAmount(for: budget.currencyCode)
@@ -161,9 +157,11 @@ struct BudgetDetailView: View {
                     }
                 }
             } else {
-                Text(state.projection.spent.formattedAmount(for: budget.currencyCode))
-                    .appFont(.title2, weight: .bold)
-                    .monospacedDigit()
+                PlanAmountSummary(
+                    title: "plan.spent".localized,
+                    amount: state.projection.spent.formattedAmount(for: budget.currencyCode),
+                    amountColor: .orange
+                )
                 PlanProgressBar(
                     progress: state.projection.progress,
                     color: .orange,
@@ -171,6 +169,24 @@ struct BudgetDetailView: View {
                 )
                 PlanPartialDataLabel()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func budgetPrimaryAmount(_ state: PlanBudgetDetailState) -> some View {
+        if state.projection.overage > 0 {
+            PlanAmountSummary(
+                title: "plan.over_budget".localized,
+                amount: state.projection.overage.formattedAmount(for: budget.currencyCode),
+                amountColor: .red
+            )
+        } else {
+            PlanAmountSummary(
+                title: "plan.remaining".localized,
+                amount: state.projection.remaining.formattedAmount(for: budget.currencyCode),
+                targetAmount: state.projection.limit.formattedAmount(for: budget.currencyCode),
+                amountColor: accentColor
+            )
         }
     }
 
@@ -189,17 +205,6 @@ struct BudgetDetailView: View {
     private func leftPerDay(_ state: PlanBudgetDetailState) -> Decimal {
         guard state.daysLeftIncludingToday > 0 else { return 0 }
         return state.projection.remaining / Decimal(state.daysLeftIncludingToday)
-    }
-
-    private func finalResult(_ state: PlanBudgetDetailState) -> String {
-        if state.projection.overage > 0 {
-            return "plan.over_by".localized(
-                with: state.projection.overage.formattedAmount(for: budget.currencyCode)
-            )
-        }
-        return "plan.under_by".localized(
-            with: state.projection.remaining.formattedAmount(for: budget.currencyCode)
-        )
     }
 
     private func trendCard(_ state: PlanBudgetDetailState) -> some View {

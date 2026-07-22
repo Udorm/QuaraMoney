@@ -116,27 +116,38 @@ struct PlanOverviewView: View {
                         .foregroundStyle(.orange)
                 case .aggregateWithLimit:
                     if let limit = metrics.limit {
-                        Text("plan.spent_of".localized(
-                            with: metrics.spent.formattedAmount(for: metrics.currencyCode),
-                            limit.formattedAmount(for: metrics.currencyCode)
-                        ))
-                        .appFont(.title2, weight: .bold)
-                        .monospacedDigit()
-                    }
-                    if let progress = metrics.progress, metrics.isDeterminate {
-                        PlanProgressLine(progress: progress, color: .accentColor)
-                        budgetClassification(metrics)
+                        if metrics.isDeterminate {
+                            budgetPrimaryAmount(metrics, limit: limit)
+
+                            if let progress = metrics.progress {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    PlanProgressLine(progress: progress, color: budgetAmountColor(metrics))
+                                    budgetSupportingAmounts(metrics, limit: limit)
+                                    budgetClassification(metrics)
+                                }
+                            } else {
+                                budgetClassification(metrics)
+                            }
+                        } else {
+                            PlanAmountSummary(
+                                title: "plan.spent".localized,
+                                amount: metrics.spent.formattedAmount(for: metrics.currencyCode),
+                                amountColor: .orange
+                            )
+                            VStack(alignment: .leading, spacing: 10) {
+                                PlanPartialDataLabel()
+                                budgetClassification(metrics)
+                            }
+                        }
                     } else {
                         PlanPartialDataLabel()
                         budgetClassification(metrics)
                     }
                 case .spendingOnly:
-                    Text(metrics.spent.formattedAmount(for: metrics.currencyCode))
-                        .appFont(.title2, weight: .bold)
-                        .monospacedDigit()
-                    Text("plan.spent_this_month".localized)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
+                    PlanAmountSummary(
+                        title: "plan.spent_this_month".localized,
+                        amount: metrics.spent.formattedAmount(for: metrics.currencyCode)
+                    )
                     if !metrics.isDeterminate { PlanPartialDataLabel() }
                     budgetClassification(metrics)
                 }
@@ -145,6 +156,71 @@ struct PlanOverviewView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func budgetPrimaryAmount(_ metrics: PlanBudgetOverviewMetrics, limit: Decimal) -> some View {
+        let overage = max(0, metrics.spent - limit)
+        if overage > 0 {
+            PlanAmountSummary(
+                title: "plan.over_budget".localized,
+                amount: overage.formattedAmount(for: metrics.currencyCode),
+                amountColor: .red
+            )
+        } else {
+            PlanAmountSummary(
+                title: "plan.remaining".localized,
+                amount: max(0, limit - metrics.spent).formattedAmount(for: metrics.currencyCode),
+                targetAmount: limit.formattedAmount(for: metrics.currencyCode),
+                amountColor: .accentColor
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func budgetSupportingAmounts(_ metrics: PlanBudgetOverviewMetrics, limit: Decimal) -> some View {
+        if metrics.spent > limit {
+            HStack(spacing: 16) {
+                overviewStat(
+                    title: "plan.spent".localized,
+                    value: metrics.spent.formattedAmount(for: metrics.currencyCode)
+                )
+                Divider().frame(height: 34)
+                overviewStat(
+                    title: "plan.limit".localized,
+                    value: limit.formattedAmount(for: metrics.currencyCode)
+                )
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                Text("plan.spent".localized)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Text(metrics.spent.formattedAmount(for: metrics.currencyCode))
+                    .appFont(.subheadline, weight: .semibold)
+                    .monospacedDigit()
+            }
+        }
+    }
+
+    private func overviewStat(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .appFont(.subheadline, weight: .semibold)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func budgetAmountColor(_ metrics: PlanBudgetOverviewMetrics) -> Color {
+        guard let progress = metrics.progress, progress > 1 else { return .accentColor }
+        return .red
     }
 
     private var budgetSubtitle: String {
@@ -193,23 +269,23 @@ struct PlanOverviewView: View {
                 case .empty:
                     EmptyView()
                 case .allCompleted:
-                    Text("plan.all_goals_completed".localized)
-                        .appFont(.title3, weight: .bold)
+                    PlanAmountSummary(
+                        title: "plan.saved".localized,
+                        amount: metrics.saved.formattedAmount(for: metrics.currencyCode),
+                        amountColor: .green
+                    )
+                    Label("plan.all_goals_completed".localized, systemImage: "checkmark.circle.fill")
+                        .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.green)
-                    Text("plan.lifetime_saved".localized(
-                        with: metrics.saved.formattedAmount(for: metrics.currencyCode)
-                    ))
-                    .appFont(.subheadline)
-                    .foregroundStyle(.secondary)
                     if !metrics.isDeterminate { PlanPartialDataLabel() }
                 case .active:
                     if let target = metrics.target {
-                        Text("plan.saved_of".localized(
-                            with: metrics.saved.formattedAmount(for: metrics.currencyCode),
-                            target.formattedAmount(for: metrics.currencyCode)
-                        ))
-                        .appFont(.title2, weight: .bold)
-                        .monospacedDigit()
+                        PlanAmountSummary(
+                            title: "plan.saved".localized,
+                            amount: metrics.saved.formattedAmount(for: metrics.currencyCode),
+                            targetAmount: target.formattedAmount(for: metrics.currencyCode),
+                            amountColor: .green
+                        )
                     }
                     if let progress = metrics.progress {
                         PlanProgressLine(

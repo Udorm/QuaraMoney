@@ -140,12 +140,12 @@ struct SavingsGoalDetailView: View {
                 .appFont(.headline, weight: .bold)
 
             if state.metrics.isDeterminate {
-                Text("plan.saved_of".localized(
-                    with: state.metrics.saved.formattedAmount(for: goal.currencyCode),
-                    goal.targetAmount.formattedAmount(for: goal.currencyCode)
-                ))
-                .appFont(.title2, weight: .bold)
-                .monospacedDigit()
+                PlanAmountSummary(
+                    title: "plan.saved".localized,
+                    amount: state.metrics.saved.formattedAmount(for: goal.currencyCode),
+                    targetAmount: goal.targetAmount.formattedAmount(for: goal.currencyCode),
+                    amountColor: color
+                )
 
                 PlanProgressLine(progress: state.metrics.progress, color: color)
 
@@ -163,9 +163,11 @@ struct SavingsGoalDetailView: View {
                     }
                 }
             } else {
-                Text(state.metrics.saved.formattedAmount(for: goal.currencyCode))
-                    .appFont(.title2, weight: .bold)
-                    .monospacedDigit()
+                PlanAmountSummary(
+                    title: "plan.saved".localized,
+                    amount: state.metrics.saved.formattedAmount(for: goal.currencyCode),
+                    amountColor: .orange
+                )
                 PlanProgressBar(progress: state.metrics.progress, color: .orange, isDeterminate: false)
                 PlanPartialDataLabel()
             }

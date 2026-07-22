@@ -879,6 +879,7 @@
 "analysis.pro.mode.basic" = "Basic";
 "analysis.pro.mode.pro" = "Pro";
 "analysis.pro.netWorth" = "Net Worth";
+"analysis.pro.netWorth.sub" = "Across all wallets";
 "analysis.pro.expenses" = "Expenses";
 "analysis.pro.savingsRate" = "Savings Rate";
 "analysis.pro.new" = "New";
@@ -1241,7 +1242,9 @@
 "plan.no_ended_budgets" = "No ended budgets";
 "plan.no_goals_segment_description" = "Create a saving goal to track your progress.";
 "plan.on_track_with_unknown" = "%d of %d budgets on track · %d unknown";
+"plan.of_amount" = "of %@";
 "plan.over_by" = "Over by %@";
+"plan.over_budget" = "Over budget";
 "plan.partial_data" = "Partial data";
 "plan.partial_data_conversion" = "Some amounts could not be converted";
 "plan.percent_accessibility" = "%d percent";

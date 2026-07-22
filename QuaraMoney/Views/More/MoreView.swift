@@ -77,13 +77,31 @@ struct MoreView: View {
                     }
 
                     NavigationLink(destination: LazyView(RecurringRuleListView())) {
-                        Label {
-                            Text(L10n.More.recurringRules)
-                        } icon: {
-                            ListIconView(systemImage: "repeat", color: .teal)
+                        HStack {
+                            Label {
+                                Text(L10n.More.recurringRules)
+                            } icon: {
+                                ListIconView(systemImage: "repeat", color: .teal)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            // Keep the count inside the row label, rather than
+                            // using NavigationLink.badge(_:), so it stays before
+                            // the system disclosure indicator just like Apple's
+                            // Settings rows with a trailing value.
+                            if dueRecurringCount > 0 {
+                                Text(dueRecurringCount, format: .number)
+                                    .appFont(.caption, weight: .semibold)
+                                    .monospacedDigit()
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Color.red, in: Capsule())
+                                    .accessibilityLabel(L10n.Recurring.Review.banner(dueRecurringCount))
+                            }
                         }
                     }
-                    .badge(dueRecurringCount)
                 }
 
                 Section(L10n.More.insights) {

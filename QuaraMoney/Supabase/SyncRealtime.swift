@@ -28,6 +28,15 @@ final class SyncRealtime {
     private var observeTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var context: ModelContext?
+    private var pendingIdentities: Set<SyncEngine.EventIdentity> = []
+    private var hasUnfingerprintableEvent = false
+    private var generation: UInt64 = 0
+    private var debounceDelay: Duration = .seconds(1.5)
+
+    private struct IdentityPayload: Decodable {
+        let id: UUID
+        let updated_at: Date
+    }
 
     private init() {}
 
@@ -37,12 +46,14 @@ final class SyncRealtime {
               let client = SupabaseManager.shared.client,
               channel == nil else { return }
         self.context = context
+        SyncEngine.shared.configureSyncContext(context)
+        let startGeneration = generation
         let channel = client.channel("quaramoney-sync")
         self.channel = channel
 
         // Register a per-table binding BEFORE subscribing (required ordering).
         let streams = Self.watchedTables.map { table in
-            channel.postgresChange(AnyAction.self, schema: "public", table: table)
+            (table, channel.postgresChange(AnyAction.self, schema: "public", table: table))
         }
 
         observeTask = Task { [weak self] in
@@ -64,20 +75,11 @@ final class SyncRealtime {
 
             // Fan the per-table change streams into one resync trigger.
             await withTaskGroup(of: Void.self) { group in
-                for stream in streams {
+                for (table, stream) in streams {
                     group.addTask { [weak self] in
                         for await change in stream {
-                            let kind: String
-                            switch change {
-                            case .insert: kind = "INSERT"
-                            case .update: kind = "UPDATE"
-                            case .delete: kind = "DELETE"
-                            }
-                            #if DEBUG
-                            print("[SyncRealtime] remote \(kind) received; scheduling resync")
-                            #endif
                             guard let self else { return }
-                            await self.scheduleSync()
+                            await self.receive(change, table: table, generation: startGeneration)
                         }
                     }
                 }
@@ -87,20 +89,118 @@ final class SyncRealtime {
 
     /// Stops listening (e.g. on background or sign-out).
     func stop() {
+        generation &+= 1
         observeTask?.cancel(); observeTask = nil
         debounceTask?.cancel(); debounceTask = nil
+        pendingIdentities.removeAll()
+        hasUnfingerprintableEvent = false
+        context = nil
+        SyncEngine.shared.stopSyncLifecycle()
         guard let channel else { return }
         self.channel = nil
         Task { await channel.unsubscribe() }
     }
 
-    private func scheduleSync() {
-        guard context != nil else { return }
-        debounceTask?.cancel()
-        debounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled, let self, let ctx = self.context else { return }
-            await SyncEngine.shared.syncIfOperational(context: ctx)
+    private func receive(_ change: AnyAction, table: String, generation eventGeneration: UInt64) {
+        guard eventGeneration == generation, context != nil else { return }
+        let kind: String
+        switch change {
+        case .insert: kind = "INSERT"
+        case .update: kind = "UPDATE"
+        case .delete: kind = "DELETE"
+        }
+
+        routeDecodedEvent(identity: Self.identity(from: change, table: table), kind: kind)
+    }
+
+    private func routeDecodedEvent(identity: SyncEngine.EventIdentity?, kind: String) {
+        if let identity {
+            if SyncEngine.shared.isOwnEcho(identity) {
+                #if DEBUG
+                print("[SyncRealtime] own \(kind) echo suppressed table=\(identity.table) id=\(identity.id)")
+                #endif
+                return
+            }
+            if SyncEngine.shared.isSyncing {
+                #if DEBUG
+                print("[SyncRealtime] remote \(kind) received mid-sync; buffering identity")
+                #endif
+                SyncEngine.shared.receiveRealtimeEvent(identity)
+                return
+            }
+            #if DEBUG
+            print("[SyncRealtime] remote \(kind) received; scheduling resync")
+            #endif
+            scheduleSync(identity: identity)
+        } else {
+            #if DEBUG
+            print("[SyncRealtime] remote \(kind) received without fingerprint; scheduling resync")
+            #endif
+            scheduleSync(identity: nil)
         }
     }
+
+    private static func identity(from change: AnyAction, table: String) -> SyncEngine.EventIdentity? {
+        let payload: IdentityPayload
+        do {
+            switch change {
+            case .insert(let action):
+                payload = try action.decodeRecord(as: IdentityPayload.self, decoder: AnyJSON.decoder)
+            case .update(let action):
+                payload = try action.decodeRecord(as: IdentityPayload.self, decoder: AnyJSON.decoder)
+            case .delete:
+                return nil
+            }
+        } catch {
+            return nil
+        }
+        return SyncEngine.EventIdentity(table: table, id: payload.id, updatedAt: payload.updated_at)
+    }
+
+    private func scheduleSync(identity: SyncEngine.EventIdentity?) {
+        guard context != nil else { return }
+        if let identity {
+            pendingIdentities.insert(identity)
+        } else {
+            hasUnfingerprintableEvent = true
+        }
+        debounceTask?.cancel()
+        debounceTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: self.debounceDelay)
+            guard !Task.isCancelled, self.context != nil else { return }
+            let identities = self.pendingIdentities
+            let forceRun = self.hasUnfingerprintableEvent
+            self.pendingIdentities.removeAll()
+            self.hasUnfingerprintableEvent = false
+            if forceRun {
+                SyncEngine.shared.enqueueSync(reason: .realtime)
+            } else {
+                SyncEngine.shared.enqueueSync(reason: .realtime, eventIdentities: identities)
+            }
+        }
+    }
+
+    #if DEBUG
+    func injectPayloadForTesting(
+        identity: SyncEngine.EventIdentity?,
+        context: ModelContext
+    ) {
+        self.context = context
+        routeDecodedEvent(identity: identity, kind: "TEST")
+    }
+
+    func setDebounceDelayForTesting(_ delay: Duration) {
+        debounceDelay = delay
+    }
+
+    func resetForTesting() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        pendingIdentities.removeAll()
+        hasUnfingerprintableEvent = false
+        context = nil
+        debounceDelay = .seconds(1.5)
+    }
+    #endif
 }

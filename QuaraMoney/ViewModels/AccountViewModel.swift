@@ -39,6 +39,7 @@ final class AccountViewModel {
     /// lands in the cloud without waiting for the next app-level trigger.
     func pushProfileEdit(avatarChanged: Bool = false, context: ModelContext) {
         ProfileSyncService.shared.noteLocalEdit(avatarChanged: avatarChanged)
-        Task { await SyncEngine.shared.syncIfOperational(context: context) }
+        SyncEngine.shared.configureSyncContext(context)
+        SyncEngine.shared.enqueueSync(reason: .profileEdit)
     }
 }

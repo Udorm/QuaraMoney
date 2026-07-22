@@ -1076,6 +1076,18 @@
 "account.sync.lastSynced" = "Last synced %@";
 "account.sync.tapToUpload" = "Tap sync to upload your data";
 
+// MARK: - Cloud sync safety
+"sync.error.noContext" = "Cloud sync has no model context.";
+"sync.error.signOutInterrupted" = "Cloud sync was interrupted before sign-out.";
+"sync.error.signOutPending" = "Local changes could not be uploaded. Sign-out was cancelled.";
+"sync.error.awaitingConflict" = "Cloud sync is waiting for conflict resolution.";
+"sync.error.requiresConflict" = "Cloud sync requires conflict resolution.";
+"sync.error.accountVerification" = "Cloud account verification failed.";
+"sync.error.generic" = "Cloud sync failed.";
+"sync.error.previousAccount" = "This device still has changes that belong to the previous account. Sign back into that account to upload them before switching.";
+"sync.error.signOutChanged" = "Local data changed during sign-out and was kept on this device.";
+"sync.error.preWipeChanged" = "Local data changed before the local wipe and was kept on this device.";
+
 // MARK: - UX consistency pass: Accessibility
 "a11y.sortTransactions" = "Sort transactions";
 "a11y.addTransactionOn" = "Add transaction on %@";

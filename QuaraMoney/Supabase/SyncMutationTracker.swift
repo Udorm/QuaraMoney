@@ -62,6 +62,14 @@ enum SyncMutationTracker {
     /// re-flagged as local changes — which would echo them back forever.
     static var isApplyingSyncChanges = false
 
+    /// Monotonic evidence that a genuine local save was stamped. Sign-out uses
+    /// this as the post-authentication TOCTOU backstop before wiping the store.
+    private(set) static var localMutationRevision: UInt64 = 0
+
+    #if DEBUG
+    private static var saveSource = "unattributed"
+    #endif
+
     private static var started = false
     private static weak var observedContext: ModelContext?
 
@@ -125,23 +133,57 @@ enum SyncMutationTracker {
         }
     }
 
+    static func withSaveSource<T>(
+        _ source: String = #function,
+        _ body: () throws -> T
+    ) rethrows -> T {
+        #if DEBUG
+        let previous = saveSource
+        saveSource = source
+        defer { saveSource = previous }
+        #endif
+        return try body()
+    }
+
     private static func stampPendingChanges() {
         guard !isApplyingSyncChanges, let context = observedContext else { return }
         let now = Date()
-        
+        var didStamp = false
         let deletedIdentifiers = Set(context.deletedModelsArray.map { $0.persistentModelID })
-        
+
         for model in context.insertedModelsArray {
             guard let trackable = model as? SyncTrackable else { continue }
             guard !deletedIdentifiers.contains(model.persistentModelID) else { continue }
             trackable.updatedAt = now
             trackable.needsSync = true
+            didStamp = true
+            #if DEBUG
+            print("[SyncEngine] local save source=\(saveSource) inserted=\(type(of: model)) id=\(trackable.id)")
+            #endif
         }
         for model in context.changedModelsArray {
             guard let trackable = model as? SyncTrackable else { continue }
             guard !deletedIdentifiers.contains(model.persistentModelID) else { continue }
             trackable.updatedAt = now
             trackable.needsSync = true
+            didStamp = true
+            #if DEBUG
+            print("[SyncEngine] local save source=\(saveSource) changed=\(type(of: model)) id=\(trackable.id)")
+            #endif
+        }
+        if didStamp {
+            localMutationRevision &+= 1
         }
     }
+
+    #if DEBUG
+    static func resetMutationRevisionForTesting() {
+        localMutationRevision = 0
+    }
+
+    static func stampPendingChangesForTesting(in context: ModelContext) {
+        observedContext = context
+        stampPendingChanges()
+    }
+    #endif
 }

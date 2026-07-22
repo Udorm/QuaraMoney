@@ -316,3 +316,63 @@ Per the skill, convergence is **not** faked. Status at termination:
 - The Round-5 fixes are applied but unverified by a sixth review.
 - No unresolved disagreement exists between Claude and Codex — the deadlock is procedural (the round
   cap), not substantive.
+
+## Act 3 — Build
+
+### Round 1 — Codex build (thread 019f896e-a50f-7be3-9f9f-cde9261015b9)
+
+Codex implemented all 7 plan steps with full write access on branch `fix/sync-perpetual-loop`
+(~48 min). 16 files changed, +1801/-271. Its own report claimed 266 tests green and flagged three
+deviations honestly (see below).
+
+### Claude's verdict — ACCEPTED, no fix rounds needed
+
+Verified independently rather than trusting the report:
+
+- **Proof re-run by Claude**, not taken from Codex's paste:
+  `xcodebuild test -scheme QuaraMoney -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
+  → `Executed 266 tests, with 0 failures (0 unexpected)` · `** TEST SUCCEEDED **`. 47 of those are new.
+- **Localization parity** — `Scripts/check_missing_keys.py` passes; EN/KM both gained the new
+  sync-safety keys.
+- **`PLAN.md` / `PLAN-REVIEW-LOG.md` untouched**, as instructed.
+
+Hard project rules all hold:
+
+- **No `Task.detached` in the executor** — it is `Task { @MainActor [weak self] in }` (SyncEngine.swift:258).
+  The remaining `Task.detached` hits in the repo are all pre-existing files this change did not touch.
+- **Cursor still never advances on push** — `setCursor` has exactly one call site, inside the pull's
+  `applyLocal`.
+- **`isApplyingSyncChanges` never wraps an `await`** — both spans (656–659 manual, 1813–1814
+  `withSyncWriteGuard`) are synchronous; the `await requestSyncAndWait` at 757 sits *after* the guard
+  block closes.
+- **Every trigger routes through the coordinator** — zero direct `syncIfOperational` / `syncNow`
+  callers remain outside `SyncEngine`.
+
+Spot-checks on the highest-risk logic:
+
+- **Root cause genuinely fixed** — `SyncRealtime.scheduleSync` no longer runs `syncNow` inside the
+  debounce task; it calls the nonblocking `enqueueSync`, so `debounceTask?.cancel()` can only abort a
+  sleep, never in-flight work.
+- **Timestamp matching is canonical** — `EventIdentity` normalizes to microseconds
+  (`Int64((timeIntervalSince1970 * 1_000_000).rounded())`) and compares on that integer, so
+  fractional-second rendering differences between PostgREST and Realtime cannot silently defeat
+  suppression (the Round-3 risk). Fingerprints are non-consuming; `reclassifyPendingEvents()`
+  implements the pre-response race fix.
+- **Sign-out barrier is correct** — `performProtectedSignOut` throws on flush failure *before*
+  `authenticationSignOut()`, and re-validates `cleanRevision` after it via `canWipe`, then again in
+  `wipe`. The TOCTOU is closed and the whole thing is injectable, hence deterministically testable.
+- **Latch fix is correct** — `lastAlertThreshold = 0` now assigns only when the value differs. The
+  still-unconditional `needsSync = true` in `triggerAlert` sits behind the `lastAlertThreshold <
+  threshold` gate, so it is a bounded one-shot alert transition, not a loop.
+- **Step 5** implemented as `ApplyOutcome(didPersistLocalState:didChangeVisibleData:)` across all
+  12 pull appliers.
+
+Deviations accepted (all disclosed by Codex, none silent):
+
+1. `QuaraMoney.xcscheme` — test parallelization `YES` → `NO`, working around iOS 26.5 simulator clone
+   crashes. Test-infra only; no app behaviour change. Matches the known-bad 26.5 runtime.
+2. `Models/Category.swift` — added the explicit `inverse: \Transaction.category` to an existing
+   relationship. Out of scope, but low risk: it declares what SwiftData was already inferring and
+   matches the sibling relationships in the same file. Needed to get the pre-existing suite green.
+3. Live 60-second device observation (acceptance criteria 1 & 2) not performed — requires an
+   authenticated running app. Deferred to the user.

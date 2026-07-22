@@ -46,6 +46,10 @@ final class ProfileSyncService {
         FileManager.default.fileExists(atPath: Self.avatarFileURL.path)
     }
 
+    var hasPendingChanges: Bool {
+        defaults.bool(forKey: needsSyncKey) || defaults.bool(forKey: avatarDirtyKey)
+    }
+
     /// Call after any local profile edit (rename, new photo, photo removal) so
     /// the next sync pushes it. `avatarChanged` additionally marks the avatar
     /// bytes for upload.
@@ -78,7 +82,11 @@ final class ProfileSyncService {
 
     // MARK: - Sync
 
-    func sync(_ client: SupabaseClient, uid: UUID) async throws {
+    func sync(
+        _ client: SupabaseClient,
+        uid: UUID,
+        validate: @MainActor () throws -> Void = {}
+    ) async throws {
         let needsPush = defaults.bool(forKey: needsSyncKey)
         let localUpdatedAt = Date(timeIntervalSince1970: defaults.double(forKey: updatedAtKey))
 
@@ -87,12 +95,13 @@ final class ProfileSyncService {
             .eq("id", value: uid.uuidString)
             .limit(1)
             .execute().value
+        try validate()
         let remote = rows.first
 
         if let remote {
             let localWins = needsPush && localUpdatedAt > remote.updated_at
             if !localWins {
-                try await apply(remote, client)
+                try await apply(remote, client, validate: validate)
                 defaults.set(false, forKey: needsSyncKey)
                 defaults.set(false, forKey: avatarDirtyKey)
                 defaults.set(remote.updated_at.timeIntervalSince1970, forKey: updatedAtKey)
@@ -114,6 +123,7 @@ final class ProfileSyncService {
                 _ = try await client.storage.from("receipts").upload(
                     avatarStoragePath!, data: data,
                     options: FileOptions(contentType: "image/jpeg", upsert: true))
+                try validate()
             }
         }
 
@@ -124,6 +134,7 @@ final class ProfileSyncService {
         let returned: [SyncProfileRow] = try await client.from("profiles")
             .upsert(row)
             .execute().value
+        try validate()
 
         defaults.set(false, forKey: needsSyncKey)
         defaults.set(false, forKey: avatarDirtyKey)
@@ -134,7 +145,11 @@ final class ProfileSyncService {
         }
     }
 
-    private func apply(_ remote: SyncProfileRow, _ client: SupabaseClient) async throws {
+    private func apply(
+        _ remote: SyncProfileRow,
+        _ client: SupabaseClient,
+        validate: @MainActor () throws -> Void
+    ) async throws {
         if let name = remote.display_name, !name.isEmpty {
             defaults.set(name, forKey: nameKey)
         } else if let metaName = client.auth.currentUser?.userMetadata["display_name"]?.stringValue,
@@ -154,6 +169,7 @@ final class ProfileSyncService {
             // — not on every idle sync cycle.
             if remoteChanged || !localAvatarExists {
                 let data = try await client.storage.from("receipts").download(path: path)
+                try validate()
                 try data.write(to: Self.avatarFileURL, options: .atomic)
                 defaults.set(Self.avatarFileURL.path(), forKey: avatarPathKey)
                 NotificationCenter.default.post(name: .profileDidChange, object: self)

@@ -211,18 +211,51 @@ final class SupabaseAuthManager: ObservableObject {
         // sync ran clean, the initial upload has completed, AND no dirty rows or
         // queued deletions remain — so an offline or racing sign-out can't lose
         // un-synced edits.
-        await SyncEngine.shared.flushBeforeSignOut()
-        let safeToWipe = SyncEngine.shared.lastError == nil
-            && SyncEngine.shared.hasCompletedInitialSync
-            && !SyncEngine.shared.hasPendingLocalChanges()
         do {
-            try await client.auth.signOut()
+            try await Self.performProtectedSignOut(
+                flush: { await SyncEngine.shared.flushBeforeSignOut() },
+                authenticationSignOut: { try await client.auth.signOut() },
+                canWipe: { SyncEngine.shared.canWipeAfterAuthenticationSignOut(cleanRevision: $0) },
+                wipe: { revision in
+                    await SyncEngine.shared.wipeForSignOut(expectedCleanRevision: revision)
+                }
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
-        if safeToWipe {
-            // Shared-device privacy: clear local data so it's not visible after logout.
-            SyncEngine.shared.wipeForSignOut()
+    }
+
+    struct SignOutSafetyError: LocalizedError, Sendable {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    static func performProtectedSignOut(
+        flush: @MainActor () async -> Result<UInt64, SyncEngine.SyncFailure>,
+        authenticationSignOut: @MainActor () async throws -> Void,
+        canWipe: @MainActor (UInt64) -> Bool,
+        wipe: @MainActor (UInt64) async -> Bool
+    ) async throws {
+        let cleanRevision: UInt64
+        switch await flush() {
+        case .success(let revision):
+            cleanRevision = revision
+        case .failure(let failure):
+            // Authentication sign-out is deliberately aborted. Retaining rows is
+            // not enough: a later different-account sign-in could otherwise wipe
+            // edits that never reached the previous account's cloud.
+            throw failure
+        }
+        try await authenticationSignOut()
+        guard canWipe(cleanRevision) else {
+            throw SignOutSafetyError(
+                message: "sync.error.signOutChanged".localized
+            )
+        }
+        guard await wipe(cleanRevision) else {
+            throw SignOutSafetyError(
+                message: "sync.error.preWipeChanged".localized
+            )
         }
     }
 
@@ -243,7 +276,7 @@ final class SupabaseAuthManager: ObservableObject {
         // The server-side user no longer exists; drop the local session (the
         // global sign-out endpoint would 403) and clear the device copy.
         try? await client.auth.signOut(scope: .local)
-        SyncEngine.shared.wipeForSignOut()
+        _ = await SyncEngine.shared.wipeForSignOut()
         state = .signedOut
         infoMessage = "Your account and all cloud data have been deleted."
     }

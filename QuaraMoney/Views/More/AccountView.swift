@@ -403,7 +403,10 @@ struct AccountView: View {
             Spacer()
 
             Button {
-                Task { await sync.syncNow(context: modelContext) }
+                Task {
+                    sync.configureSyncContext(modelContext)
+                    _ = await sync.requestSyncAndWait(reason: .manualRefresh)
+                }
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .appFont(.subheadline, weight: .semibold)

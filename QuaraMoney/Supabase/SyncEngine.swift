@@ -47,6 +47,95 @@ final class SyncEngine: ObservableObject {
     private var autoSyncContext: ModelContext?
     private var debounceTask: Task<Void, Never>?
 
+    enum SyncReason: String, Sendable {
+        case realtime
+        case localSave
+        case maintenance
+        case foreground
+        case manualRefresh
+        case signIn
+        case conflictResolution
+        case profileEdit
+        case signOut
+    }
+
+    struct SyncFailure: LocalizedError, Sendable {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    enum SyncOutcome: Sendable {
+        case success
+        case failed(SyncFailure)
+        case cancelled
+    }
+
+    nonisolated struct EventIdentity: Hashable, Sendable {
+        let table: String
+        let id: UUID
+        private let timestampMicroseconds: Int64
+
+        init(table: String, id: UUID, updatedAt: Date) {
+            self.table = table
+            self.id = id
+            timestampMicroseconds = Self.canonicalTimestamp(updatedAt)
+        }
+
+        private static func canonicalTimestamp(_ date: Date) -> Int64 {
+            Int64((date.timeIntervalSince1970 * 1_000_000).rounded())
+        }
+    }
+
+    private struct PendingRun {
+        var forceRun = false
+        var eventIdentities: Set<EventIdentity> = []
+        var ticketIDs: Set<UUID> = []
+
+        var hasWork: Bool { forceRun || !eventIdentities.isEmpty || !ticketIDs.isEmpty }
+
+        mutating func clear() {
+            forceRun = false
+            eventIdentities.removeAll()
+            ticketIDs.removeAll()
+        }
+    }
+
+    private struct ExecutionResult {
+        let outcome: SyncOutcome
+        let staleCancellation: Bool
+    }
+
+    private struct RunIdentity: Equatable {
+        let userID: UUID
+        let generation: UInt64
+    }
+
+    private enum RunValidationError: Error {
+        case staleLifecycle
+    }
+
+    private struct PushedFingerprint {
+        let identity: EventIdentity
+        let expiresAt: Date
+    }
+
+    private var syncRunTask: Task<Void, Never>?
+    private var syncRunID: UUID?
+    private var pendingRun = PendingRun()
+    private var ticketContinuations: [UUID: CheckedContinuation<SyncOutcome, Never>] = [:]
+    private var lifecycleGeneration: UInt64 = 0
+    private var activeRunIdentity: RunIdentity?
+    private var recentlyPushed: [PushedFingerprint] = []
+    private var now: () -> Date = Date.init
+    private let fingerprintTTL: TimeInterval = 60
+    private let cancellationRetryLimit = 3
+
+    #if DEBUG
+    private var injectedSyncRunner: (@MainActor () async -> SyncOutcome)?
+    private var injectedPendingChanges: (@MainActor () -> Bool)?
+    private(set) var coordinatorRunCount = 0
+    #endif
+
     /// Held true while the first-sign-in conflict check is in flight (it does a
     /// network round-trip). Set synchronously before the `await` so no auto-sync
     /// can push local data in the gap before the check either clears it (no
@@ -61,14 +150,258 @@ final class SyncEngine: ObservableObject {
 
     private init() {}
 
+    // MARK: - Single-flight coordinator
+
+    func configureSyncContext(_ context: ModelContext) {
+        autoSyncContext = context
+    }
+
+    /// Nonblocking entry point for debounce, Realtime, and executor-internal
+    /// follow-ups. It never runs sync work in the caller's task.
+    func enqueueSync(
+        reason: SyncReason,
+        eventIdentities: Set<EventIdentity> = []
+    ) {
+        if reason == .realtime, !eventIdentities.isEmpty {
+            pendingRun.eventIdentities.formUnion(eventIdentities.filter { !isOwnEcho($0) })
+        } else {
+            pendingRun.forceRun = true
+        }
+        guard pendingRun.hasWork else { return }
+        #if DEBUG
+        print("[SyncEngine] enqueueSync reason=\(reason.rawValue) force=\(pendingRun.forceRun) events=\(pendingRun.eventIdentities.count)")
+        #endif
+        startSyncExecutorIfNeeded()
+    }
+
+    /// Awaitable entry point for refresh, sign-in settlement, conflict
+    /// resolution, and sign-out. Cancelling this waiter never cancels the stored
+    /// executor task.
+    func requestSyncAndWait(reason: SyncReason) async -> SyncOutcome {
+        let ticketID = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(returning: .cancelled)
+                    return
+                }
+                ticketContinuations[ticketID] = continuation
+                pendingRun.ticketIDs.insert(ticketID)
+                pendingRun.forceRun = true
+                #if DEBUG
+                print("[SyncEngine] requestSyncAndWait reason=\(reason.rawValue) ticket=\(ticketID)")
+                #endif
+                startSyncExecutorIfNeeded()
+            }
+        } onCancel: {
+            Task { @MainActor in
+                SyncEngine.shared.cancelTicket(ticketID)
+            }
+        }
+    }
+
+    /// Returns true when a fingerprintable Realtime event is not our own echo
+    /// and has been handed to the coordinator. Mid-run events remain buffered
+    /// until that run has registered all of its server timestamps.
+    @discardableResult
+    func receiveRealtimeEvent(_ identity: EventIdentity) -> Bool {
+        guard !isOwnEcho(identity) else {
+            #if DEBUG
+            print("[SyncRealtime] own echo suppressed table=\(identity.table) id=\(identity.id)")
+            #endif
+            return false
+        }
+        enqueueSync(reason: .realtime, eventIdentities: [identity])
+        return true
+    }
+
+    func isOwnEcho(table: String, id: UUID, updatedAt: Date) -> Bool {
+        isOwnEcho(EventIdentity(table: table, id: id, updatedAt: updatedAt))
+    }
+
+    func isOwnEcho(_ identity: EventIdentity) -> Bool {
+        pruneFingerprints()
+        return recentlyPushed.contains { $0.identity == identity }
+    }
+
+    private func registerFingerprint(table: String, id: UUID, updatedAt: Date) {
+        pruneFingerprints()
+        let identity = EventIdentity(table: table, id: id, updatedAt: updatedAt)
+        guard !recentlyPushed.contains(where: { $0.identity == identity }) else { return }
+        recentlyPushed.append(PushedFingerprint(
+            identity: identity,
+            expiresAt: now().addingTimeInterval(fingerprintTTL)
+        ))
+    }
+
+    private func pruneFingerprints() {
+        let cutoff = now()
+        recentlyPushed.removeAll { $0.expiresAt <= cutoff }
+    }
+
+    private func reclassifyPendingEvents() {
+        pendingRun.eventIdentities = pendingRun.eventIdentities.filter { !isOwnEcho($0) }
+    }
+
+    private func startSyncExecutorIfNeeded() {
+        guard syncRunTask == nil, pendingRun.hasWork else { return }
+        guard autoSyncContext != nil else {
+            let failure = SyncFailure(message: "sync.error.noContext".localized)
+            let tickets = pendingRun.ticketIDs
+            pendingRun.clear()
+            resolveTickets(tickets, with: .failed(failure))
+            return
+        }
+        let runID = UUID()
+        let generation = lifecycleGeneration
+        syncRunID = runID
+        syncRunTask = Task { @MainActor [weak self] in
+            await self?.runSyncExecutor(id: runID, generation: generation)
+        }
+    }
+
+    private func runSyncExecutor(id: UUID, generation: UInt64) async {
+        var cancellationAttempt = 0
+        defer {
+            if syncRunID == id {
+                syncRunTask = nil
+                syncRunID = nil
+                isSyncing = false
+                activeRunIdentity = nil
+                if lifecycleGeneration == generation {
+                    reclassifyPendingEvents()
+                    startSyncExecutorIfNeeded()
+                }
+                #if DEBUG
+                print("[SyncEngine] sync executor finished generation=\(generation)")
+                #endif
+            }
+        }
+
+        while lifecycleGeneration == generation {
+            reclassifyPendingEvents()
+            guard pendingRun.hasWork, let context = autoSyncContext else { return }
+            let ticketIDs = pendingRun.ticketIDs
+            pendingRun.clear()
+            isSyncing = true
+            #if DEBUG
+            coordinatorRunCount += 1
+            #endif
+
+            let result: ExecutionResult
+            #if DEBUG
+            if let injectedSyncRunner {
+                let outcome = await injectedSyncRunner()
+                result = ExecutionResult(
+                    outcome: outcome,
+                    staleCancellation: lifecycleGeneration != generation
+                )
+            } else {
+                result = await performSyncRun(context: context, generation: generation)
+            }
+            #else
+            result = await performSyncRun(context: context, generation: generation)
+            #endif
+            isSyncing = false
+            activeRunIdentity = nil
+
+            guard lifecycleGeneration == generation else {
+                resolveTickets(ticketIDs, with: .cancelled)
+                return
+            }
+            resolveTickets(ticketIDs, with: result.outcome)
+            reclassifyPendingEvents()
+
+            if case .cancelled = result.outcome {
+                guard !result.staleCancellation else { return }
+                cancellationAttempt += 1
+                guard cancellationAttempt <= cancellationRetryLimit else {
+                    #if DEBUG
+                    print("[SyncEngine] cancellation retry cap reached; waiting for a genuine trigger")
+                    #endif
+                    return
+                }
+                let delay = pow(2.0, Double(cancellationAttempt - 1)) * 0.25
+                #if DEBUG
+                print("[SyncEngine] same-generation cancellation; retry \(cancellationAttempt)/\(cancellationRetryLimit) in \(delay)s")
+                #endif
+                do {
+                    try await Task.sleep(for: .seconds(delay))
+                } catch {
+                    return
+                }
+                guard lifecycleGeneration == generation else { return }
+                pendingRun.forceRun = true
+                continue
+            }
+            cancellationAttempt = 0
+            guard pendingRun.hasWork else { return }
+        }
+    }
+
+    private func cancelTicket(_ id: UUID) {
+        pendingRun.ticketIDs.remove(id)
+        guard let continuation = ticketContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
+    private func resolveTickets(_ ids: Set<UUID>, with outcome: SyncOutcome) {
+        for id in ids {
+            ticketContinuations.removeValue(forKey: id)?.resume(returning: outcome)
+        }
+    }
+
+    /// Invalidates all work owned by the current app/account lifecycle. Pending
+    /// waiters terminate immediately; the old executor may only finish by
+    /// observing cancellation or failing the uid/generation validation.
+    func stopSyncLifecycle() {
+        lifecycleGeneration &+= 1
+        syncRunTask?.cancel()
+        pendingRun.clear()
+        recentlyPushed.removeAll()
+        let continuations = ticketContinuations.values
+        ticketContinuations.removeAll()
+        continuations.forEach { $0.resume(returning: .cancelled) }
+        activeRunIdentity = nil
+    }
+
+    private func cancelAndAwaitSyncExecutor() async {
+        let task = syncRunTask
+        stopSyncLifecycle()
+        await task?.value
+    }
+
+    private func validateActiveRun(_ identity: RunIdentity) throws {
+        if identity.generation != lifecycleGeneration
+            || SupabaseManager.shared.client?.auth.currentUser?.id != identity.userID {
+            throw RunValidationError.staleLifecycle
+        }
+        try Task.checkCancellation()
+    }
+
+    private func validateActiveRunIfNeeded() throws {
+        guard let activeRunIdentity else {
+            try Task.checkCancellation()
+            return
+        }
+        try validateActiveRun(activeRunIdentity)
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == URLError.cancelled.rawValue
+    }
+
     // MARK: - Auto-sync triggers
 
     /// Wires automatic sync: a debounced push after local saves. Idempotent.
     /// Safe to call when sync is off — `syncNow` guards on `isOperational`.
     func enableAutoSync(context: ModelContext) {
+        autoSyncContext = context
         guard !autoSyncStarted else { return }
         autoSyncStarted = true
-        autoSyncContext = context
         NotificationCenter.default.addObserver(
             forName: .dataDidUpdate,
             object: nil,
@@ -96,6 +429,7 @@ final class SyncEngine: ObservableObject {
     /// Use for foreground / post-sign-in triggers.
     /// No-ops while a first-sign-in conflict awaits user resolution.
     func syncIfOperational(context: ModelContext) async {
+        autoSyncContext = context
         #if DEBUG
         print("[SyncEngine] syncIfOperational called. isOperational: \(SupabaseFeatureFlags.isOperational)")
         #endif
@@ -111,7 +445,7 @@ final class SyncEngine: ObservableObject {
             #endif
             return
         }
-        await syncNow(context: context)
+        _ = await requestSyncAndWait(reason: .foreground)
     }
 
     /// Flushes pending local changes while the current account is still signed in.
@@ -122,25 +456,50 @@ final class SyncEngine: ObservableObject {
     /// immediately when a sync is already running, so without the wait the
     /// "flush" could be a silent no-op while edits newer than the running sync's
     /// push phase stayed local — and the subsequent wipe would destroy them.
-    func flushBeforeSignOut() async {
-        guard let context = autoSyncContext else { return }
-        await waitForSyncIdle()
-        await syncIfOperational(context: context)
-    }
-
-    /// Suspends until no sync is in flight. Poll-based: syncs are short-lived and
-    /// this only runs on sign-out.
-    func waitForSyncIdle() async {
-        while isSyncing {
-            try? await Task.sleep(for: .milliseconds(150))
+    func flushBeforeSignOut() async -> Result<UInt64, SyncFailure> {
+        debounceTask?.cancel()
+        debounceTask = nil
+        guard autoSyncContext != nil else {
+            return .failure(SyncFailure(message: "sync.error.noContext".localized))
         }
+
+        let maxPasses = 4
+        for _ in 0..<maxPasses {
+            let hasPending = hasPendingLocalChanges()
+            if !hasPending, syncRunTask == nil {
+                return .success(SyncMutationTracker.localMutationRevision)
+            }
+
+            let outcome = await requestSyncAndWait(reason: .signOut)
+            switch outcome {
+            case .success:
+                continue
+            case .failed(let failure):
+                return .failure(failure)
+            case .cancelled:
+                return .failure(SyncFailure(message: "sync.error.signOutInterrupted".localized))
+            }
+        }
+
+        guard !hasPendingLocalChanges(), syncRunTask == nil else {
+            return .failure(SyncFailure(message: "sync.error.signOutPending".localized))
+        }
+        return .success(SyncMutationTracker.localMutationRevision)
     }
 
     /// True when the device still holds anything a sync would push (dirty rows or
     /// queued deletions). Used as the final gate before a sign-out wipe.
     func hasPendingLocalChanges() -> Bool {
+        #if DEBUG
+        if let injectedPendingChanges { return injectedPendingChanges() }
+        #endif
         guard let context = autoSyncContext else { return false }
+        return hasPendingLocalChanges(in: context)
+    }
+
+    private func hasPendingLocalChanges(in context: ModelContext) -> Bool {
         if !SyncDeletionQueue.all().isEmpty { return true }
+        if ProfileSyncService.shared.hasPendingChanges { return true }
         func has<T>(_ descriptor: FetchDescriptor<T>) -> Bool {
             var d = descriptor
             d.fetchLimit = 1
@@ -164,6 +523,14 @@ final class SyncEngine: ObservableObject {
         return false
     }
 
+    /// Final post-authentication TOCTOU gate. Authentication may have suspended
+    /// long enough for an asynchronous writer to save; either revision movement
+    /// or a dirty row makes the wipe unsafe.
+    func canWipeAfterAuthenticationSignOut(cleanRevision: UInt64) -> Bool {
+        cleanRevision == SyncMutationTracker.localMutationRevision
+            && !hasPendingLocalChanges()
+    }
+
     /// Clears the local cache on sign-out (shared-device privacy). Guarded so it
     /// creates no tombstones (the cloud copy is untouched). Caller must ensure
     /// pending changes were flushed first, so nothing un-synced is lost.
@@ -175,11 +542,15 @@ final class SyncEngine: ObservableObject {
     /// unowned (matches a fresh install), and canonical keys + the cloud's
     /// unique index + `stampAndDedupe` collapse these into the cloud's rows on
     /// the next sign-in.
-    func wipeForSignOut() {
-        guard let context = autoSyncContext else { return }
-        do {
-            SyncMutationTracker.isApplyingSyncChanges = true
-            defer { SyncMutationTracker.isApplyingSyncChanges = false }
+    @discardableResult
+    func wipeForSignOut(expectedCleanRevision: UInt64? = nil) async -> Bool {
+        await cancelAndAwaitSyncExecutor()
+        if let expectedCleanRevision,
+           !canWipeAfterAuthenticationSignOut(cleanRevision: expectedCleanRevision) {
+            return false
+        }
+        guard let context = autoSyncContext else { return false }
+        withSyncWriteGuard {
             wipeLocalData(context: context)
             resetSyncState()
         }
@@ -206,6 +577,7 @@ final class SyncEngine: ObservableObject {
         // signed-out account's numbers. Tagged `object: self` so auto-sync
         // ignores it (see enableAutoSync).
         NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+        return true
     }
 
     // MARK: - First sign-in conflict detection & resolution
@@ -363,6 +735,7 @@ final class SyncEngine: ObservableObject {
                 .eq("user_id", value: uid.uuidString)
                 .limit(1)
                 .execute().value
+            try validateActiveRunIfNeeded()
             if !rows.isEmpty { return true }
         }
         return false
@@ -374,16 +747,14 @@ final class SyncEngine: ObservableObject {
         guard let context = autoSyncContext,
               let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return }
         conflictState = .resolving
-        do {
-            SyncMutationTracker.isApplyingSyncChanges = true
+        await cancelAndAwaitSyncExecutor()
+        withSyncWriteGuard {
             wipeLocalData(context: context)
             resetSyncState()
-            SyncMutationTracker.isApplyingSyncChanges = false
         }
         NotificationCenter.default.post(name: .dataDidUpdate, object: self)
         UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
-        // Call syncNow directly: syncIfOperational is gated while resolving.
-        await syncNow(context: context)
+        _ = await requestSyncAndWait(reason: .conflictResolution)
         finishResolution()
     }
 
@@ -395,6 +766,7 @@ final class SyncEngine: ObservableObject {
               let client = SupabaseManager.shared.client,
               let uid = client.auth.currentUser?.id else { return }
         conflictState = .resolving
+        await cancelAndAwaitSyncExecutor()
 
         // Wipe the cloud copy child → parent so foreign keys don't block deletes.
         for table in Self.childFirstTableNames {
@@ -415,8 +787,7 @@ final class SyncEngine: ObservableObject {
         forceAllLocalNeedsSync(context: context)
 
         UserDefaults.standard.set(uid.uuidString, forKey: Self.localOwnerKey)
-        // Call syncNow directly: syncIfOperational is gated while resolving.
-        await syncNow(context: context)
+        _ = await requestSyncAndWait(reason: .conflictResolution)
         finishResolution()
     }
 
@@ -483,11 +854,11 @@ final class SyncEngine: ObservableObject {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled, let self, let ctx = self.autoSyncContext else { return }
+            guard !Task.isCancelled, let self, self.autoSyncContext != nil else { return }
             #if DEBUG
             print("[SyncEngine] Debounced auto-sync trigger firing.")
             #endif
-            await self.syncNow(context: ctx)
+            self.enqueueSync(reason: .localSave)
         }
     }
 
@@ -504,16 +875,10 @@ final class SyncEngine: ObservableObject {
         }
     }
 
-    func syncNow(context: ModelContext) async {
+    private func performSyncRun(context: ModelContext, generation: UInt64) async -> ExecutionResult {
         #if DEBUG
-        print("[SyncEngine] syncNow called. isSyncing: \(isSyncing)")
+        print("[SyncEngine] syncNow called. generation: \(generation)")
         #endif
-        guard !isSyncing else {
-            #if DEBUG
-            print("[SyncEngine] syncNow ignored: already syncing")
-            #endif
-            return
-        }
         // Hard stop while the first-sign-in conflict modal is up: nothing may push
         // or pull until the user resolves it. The resolvers set `conflictState` to
         // `.resolving` (not `.pendingUserDecision`) before calling this, so their
@@ -522,7 +887,10 @@ final class SyncEngine: ObservableObject {
             #if DEBUG
             print("[SyncEngine] syncNow blocked: first-sign-in conflict pending/checking")
             #endif
-            return
+            return ExecutionResult(
+                outcome: .failed(SyncFailure(message: "sync.error.awaitingConflict".localized)),
+                staleCancellation: false
+            )
         }
         // A password-recovery sign-in defers the whole sync pipeline until the
         // user has set their new password: an un-owned store would otherwise
@@ -532,22 +900,31 @@ final class SyncEngine: ObservableObject {
             #if DEBUG
             print("[SyncEngine] syncNow deferred: password recovery in progress")
             #endif
-            return
+            return ExecutionResult(outcome: .cancelled, staleCancellation: false)
         }
         guard SupabaseFeatureFlags.isOperational, let client = SupabaseManager.shared.client else {
             #if DEBUG
             print("[SyncEngine] syncNow failed: not operational")
             #endif
             lastError = SyncError.notOperational.errorDescription
-            return
+            return ExecutionResult(
+                outcome: .failed(SyncFailure(message: SyncError.notOperational.localizedDescription)),
+                staleCancellation: false
+            )
         }
         guard let uid = client.auth.currentUser?.id else {
             #if DEBUG
             print("[SyncEngine] syncNow failed: no user")
             #endif
             lastError = SyncError.noUser.errorDescription
-            return
+            return ExecutionResult(
+                outcome: .failed(SyncFailure(message: SyncError.noUser.localizedDescription)),
+                staleCancellation: false
+            )
         }
+
+        let runIdentity = RunIdentity(userID: uid, generation: generation)
+        activeRunIdentity = runIdentity
 
         // An un-owned store must PASS the first-sign-in check before anything
         // can push. Previously a failed cloud probe fell through to a full sync,
@@ -557,30 +934,34 @@ final class SyncEngine: ObservableObject {
         // next trigger retries. This also closes the foreground-sync path, which
         // used to bypass the check entirely.
         if UserDefaults.standard.string(forKey: Self.localOwnerKey) == nil {
-            switch await checkFirstSignInConflict(context: context) {
+            let conflictResult = await checkFirstSignInConflict(context: context)
+            do {
+                try validateActiveRun(runIdentity)
+            } catch {
+                return ExecutionResult(outcome: .cancelled, staleCancellation: true)
+            }
+            switch conflictResult {
             case .noConflict:
                 break
             case .conflict:
                 #if DEBUG
                 print("[SyncEngine] syncNow blocked: first-sign-in conflict raised")
                 #endif
-                return
+                return ExecutionResult(
+                    outcome: .failed(SyncFailure(message: "sync.error.requiresConflict".localized)),
+                    staleCancellation: false
+                )
             case .checkFailed:
                 #if DEBUG
                 print("[SyncEngine] syncNow blocked: first-sign-in cloud check failed")
                 #endif
-                return
+                return ExecutionResult(
+                    outcome: .failed(SyncFailure(message: lastError ?? "sync.error.accountVerification".localized)),
+                    staleCancellation: false
+                )
             }
         }
-
-        isSyncing = true
         lastError = nil
-        defer {
-            isSyncing = false
-            #if DEBUG
-            print("[SyncEngine] syncNow finished (isSyncing set to false)")
-            #endif
-        }
 
         // NOTE on the sync-write guard: it is NOT held across this whole
         // operation. syncNow runs on the main actor and suspends at every
@@ -603,9 +984,25 @@ final class SyncEngine: ObservableObject {
         // while the other tables still sync; the failed table keeps its `needsSync`
         // flags / cursor unchanged and simply retries next cycle.
         var failures: [String] = []
+        var aborted = false
+        var staleCancellation = false
         func runStep(_ label: String, _ work: () async throws -> Void) async {
-            do { try await work() }
+            guard !aborted else { return }
+            do {
+                try validateActiveRun(runIdentity)
+                try await work()
+                try validateActiveRun(runIdentity)
+            }
             catch {
+                if Self.isCancellation(error) || error is RunValidationError {
+                    aborted = true
+                    staleCancellation = runIdentity.generation != lifecycleGeneration
+                        || SupabaseManager.shared.client?.auth.currentUser?.id != runIdentity.userID
+                    #if DEBUG
+                    print("[SyncEngine] sync aborted — \(label); stale=\(staleCancellation)")
+                    #endif
+                    return
+                }
                 failures.append("\(label): \(error.localizedDescription)")
                 #if DEBUG
                 print("[SyncEngine] step failed — \(label): \(error)")
@@ -701,17 +1098,49 @@ final class SyncEngine: ObservableObject {
         await runStep("push transaction locations") { try await self.pushTransactionLocations(context, client, uid) }
 
         // Account profile (display name + avatar) — single-row pull/push.
-        await runStep("profile") { try await ProfileSyncService.shared.sync(client, uid: uid) }
+        await runStep("profile") {
+            try await ProfileSyncService.shared.sync(client, uid: uid) {
+                try self.validateActiveRun(runIdentity)
+            }
+        }
 
         // Retry any receipt/cover/avatar images that failed to download earlier.
         // Self-healing: successes clear themselves, failures stay queued. Never
         // counts as a sync failure (it can't block other data).
-        await drainImageDownloads(client, context)
+        await runStep("image downloads") {
+            try await self.drainImageDownloads(client, context)
+        }
+
+        if aborted {
+            invalidateAllWalletBalanceCaches(context)
+            if didApplyRemoteChanges {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+            }
+            #if DEBUG
+            print("[SyncEngine] syncNow finished (aborted)")
+            #endif
+            return ExecutionResult(outcome: .cancelled, staleCancellation: staleCancellation)
+        }
 
         // Pulled edits/deletions can change balances; the @Transient cache on
         // existing Wallet instances won't notice, so refresh them all.
         invalidateAllWalletBalanceCaches(context)
 
+        do {
+            try validateActiveRun(runIdentity)
+        } catch {
+            invalidateAllWalletBalanceCaches(context)
+            if didApplyRemoteChanges {
+                NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+            }
+            return ExecutionResult(
+                outcome: .cancelled,
+                staleCancellation: runIdentity.generation != lifecycleGeneration
+                    || SupabaseManager.shared.client?.auth.currentUser?.id != runIdentity.userID
+            )
+        }
+
+        let outcome: SyncOutcome
         if failures.isEmpty {
             lastSyncDate = Date()
             if needsBudgetCategoryReconciliation, budgetPullSucceeded {
@@ -726,10 +1155,12 @@ final class SyncEngine: ObservableObject {
                 hasCompletedInitialSync = true
                 UserDefaults.standard.set(true, forKey: "hasCompletedInitialSync.v1")
             }
+            outcome = .success
         } else {
             // Some tables failed; surface them but keep what succeeded. The initial
             // sync isn't marked complete on a partial failure, so it retries.
             lastError = failures.joined(separator: "\n")
+            outcome = .failed(SyncFailure(message: lastError ?? "sync.error.generic".localized))
         }
 
         // Refresh active view models only when a pull actually applied remote
@@ -739,12 +1170,21 @@ final class SyncEngine: ObservableObject {
             // Old-client budget writes converge immediately after pull. Derived
             // completion reconciliation stays local-only under the synchronous guard.
             let maintenanceRates = CurrencyManager.shared.rates
-            _ = try? PlanDataMaintenance.run(in: context, ownerID: uid, rates: maintenanceRates)
+            let maintenanceResult = withSyncWriteGuard {
+                try? PlanDataMaintenance.run(in: context, ownerID: uid, rates: maintenanceRates)
+            }
             withSyncWriteGuard {
                 _ = try? SavingsGoalReconciler.reconcileAll(in: context, markNeedsSync: false)
             }
             NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+            if maintenanceResult?.changed == true {
+                enqueueSync(reason: .maintenance)
+            }
         }
+        #if DEBUG
+        print("[SyncEngine] syncNow finished")
+        #endif
+        return ExecutionResult(outcome: outcome, staleCancellation: false)
     }
 
     // MARK: - Account scoping
@@ -766,6 +1206,14 @@ final class SyncEngine: ObservableObject {
     /// `nonisolated` for the background launch-maintenance task.
     nonisolated static var localOwnerUUID: UUID? {
         UserDefaults.standard.string(forKey: localOwnerKey).flatMap(UUID.init(uuidString:))
+    }
+
+    nonisolated static func accountSwitchMayWipe(
+        previousOwner: UUID,
+        currentOwner: UUID,
+        hasPendingChanges: Bool
+    ) -> Bool {
+        previousOwner == currentOwner || !hasPendingChanges
     }
 
     private static let allTableNames = [
@@ -794,17 +1242,33 @@ final class SyncEngine: ObservableObject {
     /// Call on sign-in, before syncing. The wipe runs under the sync-write guard
     /// so it does NOT create deletion tombstones (which would delete the previous
     /// account's *cloud* rows).
-    func reconcileAccountIfNeeded(context: ModelContext) {
-        guard let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return }
+    @discardableResult
+    func reconcileAccountIfNeeded(context: ModelContext) async -> Bool {
+        guard let uid = SupabaseManager.shared.client?.auth.currentUser?.id else { return false }
+        autoSyncContext = context
         let owner = UserDefaults.standard.string(forKey: Self.localOwnerKey).flatMap(UUID.init(uuidString:))
         // nil owner = first sign-in; checkFirstSignInConflict handles ownership
         // claiming for that case so we don't stomp the nil before it can check.
-        guard let owner else { return }
-        guard owner != uid else { return }
+        guard let owner else { return true }
+        guard owner != uid else { return true }
+        await cancelAndAwaitSyncExecutor()
+
+        // Durable account-switch backstop: retained un-pushed rows and deletion
+        // intents belong to the previous owner (including locally-created rows
+        // whose syncUserID is still nil). Never wipe them under the new account.
+        guard Self.accountSwitchMayWipe(
+            previousOwner: owner,
+            currentOwner: uid,
+            hasPendingChanges: hasPendingLocalChanges(in: context)
+        ) else {
+            lastError = "sync.error.previousAccount".localized
+            #if DEBUG
+            print("[SyncEngine] account switch refused: previous-owner changes are still pending")
+            #endif
+            return false
+        }
         // Different account owned this device — wipe and take ownership now.
-        do {
-            SyncMutationTracker.isApplyingSyncChanges = true
-            defer { SyncMutationTracker.isApplyingSyncChanges = false }
+        withSyncWriteGuard {
             wipeLocalData(context: context)
             resetSyncState()
         }
@@ -813,6 +1277,7 @@ final class SyncEngine: ObservableObject {
         // The previous account's profile identity must not leak to this one.
         ProfileSyncService.shared.clearLocal()
         NotificationCenter.default.post(name: .dataDidUpdate, object: self)
+        return true
     }
 
     /// Bulk-deletes all synced models locally (children before parents to respect
@@ -959,7 +1424,7 @@ final class SyncEngine: ObservableObject {
                       created_at: w.createdAt, updated_at: w.updatedAt, deleted_at: w.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "wallets", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "wallets", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushCategories(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -972,7 +1437,7 @@ final class SyncEngine: ObservableObject {
                         created_at: c.createdAt, updated_at: c.updatedAt, deleted_at: c.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "categories", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "categories", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1009,7 +1474,7 @@ final class SyncEngine: ObservableObject {
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "transactions", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "transactions", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1039,7 +1504,7 @@ final class SyncEngine: ObservableObject {
                          updated_at: e.updatedAt, deleted_at: e.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "events", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "events", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushDebts(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1053,7 +1518,7 @@ final class SyncEngine: ObservableObject {
                         updated_at: d.updatedAt, deleted_at: d.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "debts", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "debts", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1073,7 +1538,7 @@ final class SyncEngine: ObservableObject {
                                priority: g.priority, linked_wallet_id: g.linkedWallet?.id, deleted_at: g.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "savings_goals", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "savings_goals", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1090,7 +1555,7 @@ final class SyncEngine: ObservableObject {
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "recurring_rules", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "recurring_rules", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventMembers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1119,7 +1584,7 @@ final class SyncEngine: ObservableObject {
                                            updated_at: m.updatedAt, deleted_at: m.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "event_members", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_members", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventLedgerTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1137,7 +1602,7 @@ final class SyncEngine: ObservableObject {
                                           deleted_at: t.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_ledger_transactions", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_ledger_transactions", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventLedgerParticipants(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1150,7 +1615,7 @@ final class SyncEngine: ObservableObject {
                                           order_index: p.orderIndex, updated_at: p.updatedAt, deleted_at: p.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_ledger_participants", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_ledger_participants", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventSettlementSnapshots(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1163,7 +1628,7 @@ final class SyncEngine: ObservableObject {
                                            updated_at: s.updatedAt, deleted_at: s.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_settlement_snapshots", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_settlement_snapshots", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventSettlementTransfers(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1177,7 +1642,7 @@ final class SyncEngine: ObservableObject {
                                            updated_at: t.updatedAt, deleted_at: t.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_settlement_transfers", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_settlement_transfers", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     private func pushEventWalletExportRecords(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -1192,7 +1657,7 @@ final class SyncEngine: ObservableObject {
                                            updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "event_wallet_export_records", client)
-        finishPush(returned, pending: pending, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "event_wallet_export_records", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
     struct BudgetPushSnapshot {
@@ -1258,9 +1723,11 @@ final class SyncEngine: ObservableObject {
             try await client.from("budget_categories").delete()
                 .eq("budget_id", value: snapshot.budgetID.uuidString)
                 .execute()
+            try validateActiveRunIfNeeded()
             let joins = snapshot.joinRows(userID: uid)
             if !joins.isEmpty {
                 try await client.from("budget_categories").insert(joins).execute()
+                try validateActiveRunIfNeeded()
             }
             rebuiltBudgetIDs.insert(snapshot.budgetID)
         }
@@ -1299,19 +1766,29 @@ final class SyncEngine: ObservableObject {
                                        updated_at: loc.updatedAt, deleted_at: loc.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "transaction_locations", client)
-        finishPush(returned, pending: pairs.map { $0.1 }, snapshot: snapshot, uid: uid, context: context)
+        finishPush(returned, table: "transaction_locations", pending: pairs.map { $0.1 }, snapshot: snapshot, uid: uid, context: context)
     }
 
     /// Sets `deleted_at` on the server for each locally-deleted row, then clears
     /// the entry. No-ops for rows that were never pushed (update affects 0 rows).
     private func pushDeletions(_ client: SupabaseClient) async throws {
         struct DeletionPatch: Encodable { let deleted_at: Date }
+        struct ReturnedTombstone: Decodable {
+            let id: UUID
+            let updated_at: Date
+        }
         let patch = DeletionPatch(deleted_at: Date())
         for entry in SyncDeletionQueue.all() {
-            try await client.from(entry.table)
+            let returned: [ReturnedTombstone] = try await client.from(entry.table)
                 .update(patch)
                 .eq("id", value: entry.id.uuidString)
-                .execute()
+                .select("id, updated_at")
+                .execute().value
+            try validateActiveRunIfNeeded()
+            for row in returned {
+                registerFingerprint(table: entry.table, id: row.id, updatedAt: row.updated_at)
+            }
+            try validateActiveRunIfNeeded()
             SyncDeletionQueue.remove(entry)
         }
     }
@@ -1328,11 +1805,16 @@ final class SyncEngine: ObservableObject {
     /// tracker guard, so the save inside isn't re-flagged as a user edit. Must
     /// never wrap an `await`: while suspended, the guard would blind the tracker
     /// to genuine user saves happening on the main actor.
-    func withSyncWriteGuard<T>(_ body: () throws -> T) rethrows -> T {
+    func withSyncWriteGuard<T>(
+        source: String = #function,
+        _ body: () throws -> T
+    ) rethrows -> T {
         let previous = SyncMutationTracker.isApplyingSyncChanges
         SyncMutationTracker.isApplyingSyncChanges = true
         defer { SyncMutationTracker.isApplyingSyncChanges = previous }
-        return try body()
+        return try SyncMutationTracker.withSaveSource(source) {
+            try body()
+        }
     }
 
     /// Captures each model's `updatedAt` before a push's network await, so
@@ -1349,11 +1831,15 @@ final class SyncEngine: ObservableObject {
     /// instead of being silently marked synced with stale server state.
     private func finishPush<R: SyncServerRow>(
         _ returned: [R],
+        table: String,
         pending: [any SyncTrackable],
         snapshot: [UUID: Date],
         uid: UUID,
         context: ModelContext
     ) {
+        for row in returned {
+            registerFingerprint(table: table, id: row.id, updatedAt: row.updated_at)
+        }
         withSyncWriteGuard {
             let serverDates = Dictionary(returned.map { ($0.id, $0.updated_at) },
                                          uniquingKeysWith: { first, _ in first })
@@ -1377,6 +1863,9 @@ final class SyncEngine: ObservableObject {
         uid: UUID,
         context: ModelContext
     ) {
+        for row in returned {
+            registerFingerprint(table: "budgets", id: row.id, updatedAt: row.updated_at)
+        }
         withSyncWriteGuard {
             let snapshotByID = Dictionary(
                 snapshots.map { ($0.budgetID, $0) },
@@ -1635,17 +2124,27 @@ final class SyncEngine: ObservableObject {
 
     private func pullWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncWalletRow] = try await fetchChanged("wallets", client, uid)
+        try applyWalletRows(rows, context: context)
+    }
+
+    func applyWalletRows(_ rows: [SyncWalletRow], context: ModelContext) throws {
         guard !rows.isEmpty else { return }
         try withSyncWriteGuard {
             try applyLocal(table: "wallets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
                     if let existing = try fetchByID(Wallet.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }  // newer un-pushed local edit wins over a remote delete
+                        let visibleChanged = existing.deletedAt != row.deleted_at
+                        let persist = visibleChanged || Self.metadataNeedsApply(existing, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                        guard persist else { return .none }
                         existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                        existing.syncUserID = row.user_id
+                        return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
                     }
-                    return
+                    return .none
                 }
-                let w = try fetchByID(Wallet.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(Wallet.self, id: row.id, in: context)
+                let w = existing ?? {
                     let new = Wallet(name: row.name, currencyCode: row.currency_code, icon: row.icon, colorHex: row.color_hex)
                     new.id = row.id
                     new.needsSync = false
@@ -1653,13 +2152,20 @@ final class SyncEngine: ObservableObject {
                     return new
                 }()
                 // LWW: keep local if it has a newer un-pushed change.
-                if Self.localChangeWins(localNeedsSync: w.needsSync, localUpdatedAt: w.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: w.needsSync, localUpdatedAt: w.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (w.name, row.name), (w.currencyCode, row.currency_code),
+                    (w.icon, row.icon), (w.colorHex, row.color_hex),
+                    (w.isArchived, row.is_archived), (w.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(w, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 w.name = row.name; w.currencyCode = row.currency_code; w.icon = row.icon
                 w.colorHex = row.color_hex; w.isArchived = row.is_archived
                 w.createdAt = row.created_at; w.updatedAt = row.updated_at
                 w.deletedAt = row.deleted_at; w.syncUserID = row.user_id; w.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1670,12 +2176,18 @@ final class SyncEngine: ObservableObject {
             try applyLocal(table: "categories", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
                     if let existing = try fetchByID(Category.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
+                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }  // newer un-pushed local edit wins over a remote delete
+                        let visibleChanged = existing.deletedAt != row.deleted_at
+                        let persist = visibleChanged || Self.metadataNeedsApply(existing, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                        guard persist else { return .none }
                         existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
+                        existing.syncUserID = row.user_id
+                        return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
                     }
-                    return
+                    return .none
                 }
-                let c = try fetchByID(Category.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(Category.self, id: row.id, in: context)
+                let c = existing ?? {
                     let new = Category(name: row.name, icon: row.icon ?? "", colorHex: row.color_hex ?? "",
                                        type: TransactionType(rawValue: row.type) ?? .expense, isSystem: row.is_system,
                                        canonicalKey: row.canonical_key)
@@ -1684,7 +2196,14 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: c.needsSync, localUpdatedAt: c.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: c.needsSync, localUpdatedAt: c.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (c.name, row.name), (c.icon, row.icon ?? ""), (c.colorHex, row.color_hex ?? ""),
+                    (c.type.rawValue, row.type), (c.isSystem, row.is_system),
+                    (c.canonicalKey, row.canonical_key ?? c.canonicalKey), (c.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(c, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 c.name = row.name; c.icon = row.icon ?? ""; c.colorHex = row.color_hex ?? ""
                 c.type = TransactionType(rawValue: row.type) ?? c.type; c.isSystem = row.is_system
                 // Never let a pre-key cloud row (canonical_key null) erase a locally
@@ -1692,8 +2211,8 @@ final class SyncEngine: ObservableObject {
                 if let key = row.canonical_key { c.canonicalKey = key }
                 c.createdAt = row.created_at; c.updatedAt = row.updated_at
                 c.deletedAt = row.deleted_at; c.syncUserID = row.user_id; c.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1704,14 +2223,14 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let existing = try fetchByID(Transaction.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(
+                        try fetchByID(Transaction.self, id: row.id, in: context),
+                        ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at
+                    )
                 }
                 if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
-                let t = try fetchByID(Transaction.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(Transaction.self, id: row.id, in: context)
+                let t = existing ?? {
                     let new = Transaction(amount: row.amount, currencyCode: row.currency_code,
                                           date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
                                           exchangeRate: row.exchange_rate)
@@ -1720,29 +2239,44 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
+                let sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
+                let destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
+                let event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+                let recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
+                let debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
+                let savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (t.type.rawValue, row.type), (t.date, row.date), (t.note, row.note),
+                    (AnyHashable(t.tags), AnyHashable(row.tags)), (t.excludeFromReports, row.exclude_from_reports),
+                    (t.amount, row.amount), (t.currencyCode, row.currency_code),
+                    (t.exchangeRate, row.exchange_rate), (t.storedRate, row.stored_rate),
+                    (t.category?.id, category?.id), (t.sourceWallet?.id, sourceWallet?.id),
+                    (t.destinationWallet?.id, destinationWallet?.id), (t.event?.id, event?.id),
+                    (t.recurringRule?.id, recurringRule?.id), (t.debt?.id, debt?.id),
+                    (t.savingsGoal?.id, savingsGoal?.id), (t.savingsIsWithdrawal, row.savings_is_withdrawal),
+                    (t.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(t, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 t.type = TransactionType(rawValue: row.type) ?? t.type
                 t.date = row.date; t.note = row.note; t.tags = row.tags
                 t.excludeFromReports = row.exclude_from_reports
                 t.amount = row.amount; t.currencyCode = row.currency_code
                 t.exchangeRate = row.exchange_rate; t.storedRate = row.stored_rate
-                t.category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
-                t.sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
-                t.destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
-                t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
-                t.recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
-                t.debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
-                t.savingsGoal = try resolveRef(SavingsGoal.self, id: row.savings_goal_id, current: t.savingsGoal, in: context)
+                t.category = category; t.sourceWallet = sourceWallet; t.destinationWallet = destinationWallet
+                t.event = event; t.recurringRule = recurringRule; t.debt = debt; t.savingsGoal = savingsGoal
                 t.savingsIsWithdrawal = row.savings_is_withdrawal
                 t.createdAt = row.created_at; t.updatedAt = row.updated_at
                 t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
         // Download receipt images for rows that have a path but no local data.
         for (id, path) in pendingPhotoDownloads {
             guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
-            await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
+            try await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
         }
         if !pendingPhotoDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
@@ -1754,21 +2288,28 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "events", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let existing = try fetchByID(Event.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(Event.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 if let path = row.cover_image_path { pendingCoverDownloads.append((row.id, path)) }
-                let e = try fetchByID(Event.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(Event.self, id: row.id, in: context)
+                let e = existing ?? {
                     let new = Event(title: row.title, startDate: row.start_date)
                     new.id = row.id
                     new.needsSync = false
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: e.needsSync, localUpdatedAt: e.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: e.needsSync, localUpdatedAt: e.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (e.title, row.title), (e.startDate, row.start_date), (e.endDate, row.end_date),
+                    (e.totalBudget, row.total_budget), (e.notes, row.notes), (e.icon, row.icon),
+                    (e.colorHex, row.color_hex), (e.location, row.location), (e.status, row.status),
+                    (e.currencyCode, row.currency_code), (e.ledgerRevision, row.ledger_revision),
+                    (e.confirmedSettlementRevision, row.confirmed_settlement_revision),
+                    (e.ledgerMode.rawValue, row.ledger_mode), (e.latitude, row.latitude), (e.longitude, row.longitude)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(e, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 e.title = row.title; e.startDate = row.start_date; e.endDate = row.end_date
                 e.totalBudget = row.total_budget; e.notes = row.notes; e.icon = row.icon
                 e.colorHex = row.color_hex; e.location = row.location; e.status = row.status
@@ -1778,12 +2319,12 @@ final class SyncEngine: ObservableObject {
                 e.latitude = row.latitude; e.longitude = row.longitude
                 e.updatedAt = row.updated_at; e.deletedAt = row.deleted_at
                 e.syncUserID = row.user_id; e.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
         for (id, path) in pendingCoverDownloads {
             guard let e = try fetchByID(Event.self, id: id, in: context), e.coverImageData == nil else { continue }
-            await downloadAndStoreImage(path, kind: .eventCover, id: id, client, context)
+            try await downloadAndStoreImage(path, kind: .eventCover, id: id, client, context)
         }
         if !pendingCoverDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
@@ -1794,13 +2335,10 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "debts", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let existing = try fetchByID(Debt.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(Debt.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
-                let d = try fetchByID(Debt.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(Debt.self, id: row.id, in: context)
+                let d = existing ?? {
                     let new = Debt(personName: row.person_name, totalAmount: row.total_amount,
                                    currencyCode: row.currency_code, type: DebtType(rawValue: row.type) ?? .iOwe,
                                    dueDate: row.due_date, note: row.note)
@@ -1809,14 +2347,23 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: d.needsSync, localUpdatedAt: d.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: d.needsSync, localUpdatedAt: d.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (d.personName, row.person_name), (d.totalAmount, row.total_amount),
+                    (d.currencyCode, row.currency_code), (d.dueDate, row.due_date),
+                    (d.type.rawValue, row.type), (d.note, row.note),
+                    (d.dateCreated, row.date_created), (d.isCompleted, row.is_completed),
+                    (d.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(d, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 d.personName = row.person_name; d.totalAmount = row.total_amount; d.currencyCode = row.currency_code
                 d.dueDate = row.due_date; d.type = DebtType(rawValue: row.type) ?? d.type; d.note = row.note
                 d.dateCreated = row.date_created; d.isCompleted = row.is_completed
                 d.createdAt = row.created_at; d.updatedAt = row.updated_at; d.deletedAt = row.deleted_at
                 d.syncUserID = row.user_id; d.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1826,13 +2373,10 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "savings_goals", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(SavingsGoal.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
-                let g = try fetchByID(SavingsGoal.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(SavingsGoal.self, id: row.id, in: context)
+                let g = existing ?? {
                     let new = SavingsGoal(name: row.name, targetAmount: row.target_amount,
                                           currencyCode: row.currency_code, targetDate: row.target_date,
                                           iconName: row.icon_name, colorHex: row.color_hex)
@@ -1841,7 +2385,22 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: g.needsSync, localUpdatedAt: g.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let linkedWallet = try resolveRef(Wallet.self, id: row.linked_wallet_id, current: g.linkedWallet, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (g.name, row.name), (g.goalDescription, row.goal_description),
+                    (g.targetAmount, row.target_amount), (g.currentAmount, row.current_amount),
+                    (g.currencyCode, row.currency_code), (g.targetDate, row.target_date),
+                    (g.startingBalanceCurrencyCode, row.starting_balance_currency_code),
+                    (g.createdDate, row.created_date), (g.iconName, row.icon_name),
+                    (g.colorHex, row.color_hex), (g.isCompleted, row.is_completed),
+                    (g.completedDate, row.completed_date), (g.autoContributeEnabled, row.auto_contribute_enabled),
+                    (g.autoContributeAmount, row.auto_contribute_amount),
+                    (g.autoContributePeriod?.rawValue, row.auto_contribute_period_raw),
+                    (g.priority, row.priority), (g.linkedWallet?.id, linkedWallet?.id)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(g, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 g.name = row.name; g.goalDescription = row.goal_description; g.targetAmount = row.target_amount
                 g.currentAmount = row.current_amount; g.currencyCode = row.currency_code; g.targetDate = row.target_date
                 g.startingBalanceCurrencyCode = row.starting_balance_currency_code
@@ -1851,10 +2410,10 @@ final class SyncEngine: ObservableObject {
                 g.autoContributeAmount = row.auto_contribute_amount
                 g.autoContributePeriod = row.auto_contribute_period_raw.flatMap { BudgetPeriodType(rawValue: $0) }
                 g.priority = row.priority
-                g.linkedWallet = try resolveRef(Wallet.self, id: row.linked_wallet_id, current: g.linkedWallet, in: context)
+                g.linkedWallet = linkedWallet
                 g.deletedAt = row.deleted_at; g.syncUserID = row.user_id; g.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1864,13 +2423,10 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "recurring_rules", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let existing = try fetchByID(RecurringRule.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        existing.deletedAt = row.deleted_at; existing.updatedAt = row.updated_at; existing.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(RecurringRule.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
-                let r = try fetchByID(RecurringRule.self, id: row.id, in: context) ?? {
+                let existing = try fetchByID(RecurringRule.self, id: row.id, in: context)
+                let r = existing ?? {
                     let new = RecurringRule(name: row.name, amount: row.amount, currencyCode: row.currency_code,
                                             frequency: Frequency(rawValue: row.frequency) ?? .monthly,
                                             startDate: row.start_date,
@@ -1881,19 +2437,30 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
+                let category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (r.name, row.name), (r.amount, row.amount), (r.currencyCode, row.currency_code),
+                    (r.type.rawValue, row.type), (r.frequency.rawValue, row.frequency),
+                    (r.interval, row.interval), (r.startDate, row.start_date),
+                    (r.nextDueDate, row.next_due_date), (r.endDate, row.end_date),
+                    (r.isActive, row.is_active), (r.remindersEnabled, row.reminders_enabled),
+                    (r.wallet?.id, wallet?.id), (r.category?.id, category?.id)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(r, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 r.name = row.name; r.amount = row.amount; r.currencyCode = row.currency_code
                 r.type = TransactionType(rawValue: row.type) ?? r.type
                 r.frequency = Frequency(rawValue: row.frequency) ?? r.frequency
                 r.interval = row.interval
                 r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
                 r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
-                r.wallet = try resolveRef(Wallet.self, id: row.wallet_id, current: r.wallet, in: context)
-                r.category = try resolveRef(Category.self, id: row.category_id, current: r.category, in: context)
+                r.wallet = wallet; r.category = category
                 r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
                 r.syncUserID = row.user_id; r.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1904,11 +2471,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_members", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventMember.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventMember.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 if let path = row.avatar_path { pendingAvatarDownloads.append((row.id, path)) }
                 let existing = try fetchByID(EventMember.self, id: row.id, in: context)
@@ -1920,18 +2483,27 @@ final class SyncEngine: ObservableObject {
                     m.needsSync = false
                     context.insert(m)
                 }
-                if Self.localChangeWins(localNeedsSync: m.needsSync, localUpdatedAt: m.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: m.needsSync, localUpdatedAt: m.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let event = try resolveRef(Event.self, id: row.event_id, current: m.event, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (m.name, row.name), (m.avatarIcon, row.avatar_icon), (m.colorHex, row.color_hex),
+                    (m.isArchived, row.is_archived), (m.isLocalUser, row.is_local_user),
+                    (m.isBudgetPool, row.is_budget_pool), (m.sortOrder, row.sort_order),
+                    (m.createdAt, row.created_at), (m.event?.id, event?.id)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(m, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 m.name = row.name; m.avatarIcon = row.avatar_icon; m.colorHex = row.color_hex
                 m.isArchived = row.is_archived; m.isLocalUser = row.is_local_user; m.isBudgetPool = row.is_budget_pool
                 m.sortOrder = row.sort_order; m.createdAt = row.created_at; m.updatedAt = row.updated_at
-                m.event = try resolveRef(Event.self, id: row.event_id, current: m.event, in: context)
+                m.event = event
                 m.deletedAt = row.deleted_at; m.syncUserID = row.user_id; m.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
         for (id, path) in pendingAvatarDownloads {
             guard let m = try fetchByID(EventMember.self, id: id, in: context), m.avatarData == nil else { continue }
-            await downloadAndStoreImage(path, kind: .memberAvatar, id: id, client, context)
+            try await downloadAndStoreImage(path, kind: .memberAvatar, id: id, client, context)
         }
         if !pendingAvatarDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
     }
@@ -1942,11 +2514,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_ledger_transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventLedgerTransaction.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(EventLedgerTransaction.self, id: row.id, in: context)
                 let t: EventLedgerTransaction
@@ -1962,7 +2530,19 @@ final class SyncEngine: ObservableObject {
                     t.needsSync = false
                     context.insert(t)
                 }
-                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (t.kind.rawValue, row.kind), (t.title, row.title), (t.amountMinor, row.amount_minor),
+                    (t.paidSource.rawValue, row.paid_source), (t.paidByMemberId, row.paid_by_member_id),
+                    (t.splitType.rawValue, row.split_type), (t.date, row.date), (t.note, row.note),
+                    (t.categoryId, row.category_id), (t.categoryName, row.category_name),
+                    (t.categoryIcon, row.category_icon), (t.categoryColorHex, row.category_color_hex),
+                    (t.isSplitAll, row.is_split_all), (t.isDeleted, row.is_deleted),
+                    (t.event?.id, event?.id), (t.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(t, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 t.kind = EventLedgerTransactionKind(rawValue: row.kind) ?? t.kind
                 t.title = row.title; t.amountMinor = row.amount_minor
                 t.paidSource = EventExpensePaidSource(rawValue: row.paid_source) ?? t.paidSource
@@ -1971,11 +2551,11 @@ final class SyncEngine: ObservableObject {
                 t.date = row.date; t.note = row.note; t.categoryId = row.category_id
                 t.categoryName = row.category_name; t.categoryIcon = row.category_icon
                 t.categoryColorHex = row.category_color_hex; t.isSplitAll = row.is_split_all; t.isDeleted = row.is_deleted
-                t.event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
+                t.event = event
                 t.createdAt = row.created_at; t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
                 t.syncUserID = row.user_id; t.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -1985,11 +2565,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_ledger_participants", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventLedgerParticipant.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(EventLedgerParticipant.self, id: row.id, in: context)
                 let p: EventLedgerParticipant
@@ -2001,14 +2577,21 @@ final class SyncEngine: ObservableObject {
                     p.needsSync = false
                     context.insert(p)
                 }
-                if Self.localChangeWins(localNeedsSync: p.needsSync, localUpdatedAt: p.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: p.needsSync, localUpdatedAt: p.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
+                let member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (p.memberId, row.member_id), (p.orderIndex, row.order_index),
+                    (p.transaction?.id, transaction?.id), (p.member?.id, member?.id)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(p, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 p.memberId = row.member_id; p.orderIndex = row.order_index
-                p.transaction = try resolveRef(EventLedgerTransaction.self, id: row.transaction_id, current: p.transaction, in: context)
-                p.member = try resolveRef(EventMember.self, id: row.event_member_id, current: p.member, in: context)
+                p.transaction = transaction; p.member = member
                 p.updatedAt = row.updated_at; p.deletedAt = row.deleted_at
                 p.syncUserID = row.user_id; p.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -2018,11 +2601,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_settlement_snapshots", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(EventSettlementSnapshot.self, id: row.id, in: context)
                 let s: EventSettlementSnapshot
@@ -2033,13 +2612,20 @@ final class SyncEngine: ObservableObject {
                     s.needsSync = false
                     context.insert(s)
                 }
-                if Self.localChangeWins(localNeedsSync: s.needsSync, localUpdatedAt: s.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: s.needsSync, localUpdatedAt: s.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (s.ledgerRevision, row.ledger_revision), (s.event?.id, event?.id),
+                    (s.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(s, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 s.ledgerRevision = row.ledger_revision
-                s.event = try resolveRef(Event.self, id: row.event_id, current: s.event, in: context)
+                s.event = event
                 s.createdAt = row.created_at; s.updatedAt = row.updated_at; s.deletedAt = row.deleted_at
                 s.syncUserID = row.user_id; s.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -2049,11 +2635,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_settlement_transfers", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventSettlementTransfer.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(EventSettlementTransfer.self, id: row.id, in: context)
                 let t: EventSettlementTransfer
@@ -2065,14 +2647,22 @@ final class SyncEngine: ObservableObject {
                     t.needsSync = false
                     context.insert(t)
                 }
-                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (t.fromMemberId, row.from_member_id), (t.toMemberId, row.to_member_id),
+                    (t.amountMinor, row.amount_minor), (t.sequence, row.sequence),
+                    (t.snapshot?.id, snapshot?.id)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(t, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 t.fromMemberId = row.from_member_id; t.toMemberId = row.to_member_id
                 t.amountMinor = row.amount_minor; t.sequence = row.sequence
-                t.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: t.snapshot, in: context)
+                t.snapshot = snapshot
                 t.updatedAt = row.updated_at; t.deletedAt = row.deleted_at
                 t.syncUserID = row.user_id; t.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -2082,11 +2672,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "event_wallet_export_records", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(EventWalletExportRecord.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(EventWalletExportRecord.self, id: row.id, in: context)
                 let r: EventWalletExportRecord
@@ -2102,17 +2688,26 @@ final class SyncEngine: ObservableObject {
                     r.needsSync = false
                     context.insert(r)
                 }
-                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: r.needsSync, localUpdatedAt: r.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let event = try resolveRef(Event.self, id: row.event_id, current: r.event, in: context)
+                let snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: r.snapshot, in: context)
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (r.memberId, row.member_id), (r.walletTransactionId, row.wallet_transaction_id),
+                    (r.amountMinor, row.amount_minor), (r.direction.rawValue, row.direction),
+                    (r.exportType.rawValue, row.export_type), (r.event?.id, event?.id),
+                    (r.snapshot?.id, snapshot?.id), (r.createdAt, row.created_at)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(r, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 r.memberId = row.member_id; r.walletTransactionId = row.wallet_transaction_id
                 r.amountMinor = row.amount_minor
                 r.direction = EventWalletExportDirection(rawValue: row.direction) ?? r.direction
                 r.exportType = EventWalletExportType(rawValue: row.export_type) ?? r.exportType
-                r.event = try resolveRef(Event.self, id: row.event_id, current: r.event, in: context)
-                r.snapshot = try resolveRef(EventSettlementSnapshot.self, id: row.snapshot_id, current: r.snapshot, in: context)
+                r.event = event; r.snapshot = snapshot
                 r.createdAt = row.created_at; r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
                 r.syncUserID = row.user_id; r.needsSync = false
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -2154,6 +2749,7 @@ final class SyncEngine: ObservableObject {
 
         let budgetIDs = Array(Set(rows.map(\.id))).sorted { $0.uuidString < $1.uuidString }
         let joinRows = try await fetchJoinRows(budgetIDs)
+        try validateActiveRunIfNeeded()
         let joinMap = Dictionary(grouping: joinRows, by: \.budget_id).mapValues { rows in
             Array(Set(rows.map(\.category_id))).sorted { $0.uuidString < $1.uuidString }
         }
@@ -2177,24 +2773,21 @@ final class SyncEngine: ObservableObject {
             // aborts before budget apply/cursor advancement; the synchronous
             // local upsert below is guarded separately.
             let categoryRows = try await fetchCategoryRows(missingCategoryIDs)
+            try validateActiveRunIfNeeded()
             try withSyncWriteGuard {
-                try upsertBudgetReferencedCategories(categoryRows, context: context)
-                try context.save()
+                let outcome = try upsertBudgetReferencedCategories(categoryRows, context: context)
+                if outcome.didPersistLocalState { try context.save() }
+                if outcome.didChangeVisibleData { didApplyRemoteChanges = true }
             }
         }
 
         try withSyncWriteGuard {
             try applyLocal(table: "budgets", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(Budget.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at
-                        dead.updatedAt = row.updated_at
-                        dead.syncUserID = row.user_id
-                        dead.categorySetDirty = false
-                        dead.needsSync = false
-                    }
-                    return
+                    let dead = try fetchByID(Budget.self, id: row.id, in: context)
+                    let outcome = Self.applyRemoteDeletion(dead, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                    if outcome.didPersistLocalState { dead?.categorySetDirty = false }
+                    return outcome
                 }
                 let existing = try fetchByID(Budget.self, id: row.id, in: context)
                 let b: Budget
@@ -2211,14 +2804,63 @@ final class SyncEngine: ObservableObject {
                         resolvedCategoriesByID[categoryID] = category
                     }
                 }
+                let parentLocalWins = Self.localChangeWins(
+                    localNeedsSync: b.needsSync,
+                    localUpdatedAt: b.updatedAt,
+                    remoteUpdatedAt: row.updated_at
+                )
+                let decodedAmountType = row.amount_type_data
+                    .flatMap { $0.data(using: .utf8) }
+                    .flatMap(BudgetAmountType.decode(from:))
+                let parentVisibleChanged = !parentLocalWins && (existing == nil
+                    || b.amountType != (decodedAmountType ?? b.amountType)
+                    || !Self.fieldsMatch([
+                    (b.name, row.name), (b.amountLimit, row.amount_limit),
+                    (b.currencyCode, row.currency_code), (b.periodType.rawValue, row.period_type_raw),
+                    (b.startDate, row.start_date), (b.createdAt, row.created_at),
+                    (b.customEndDate, row.custom_end_date), (b.month, row.month), (b.year, row.year),
+                    (b.isRecurring, row.is_recurring), (b.rolloverExcess, row.rollover_excess),
+                    (b.rolloverAmount, row.rollover_amount), (b.alertAt50, row.alert_at_50),
+                    (b.alertAt80, row.alert_at_80), (b.alertAt100, row.alert_at_100),
+                    (b.alertOnProjectedOverspend, row.alert_on_projected_overspend),
+                    (b.lastAlertTriggeredDate, row.last_alert_triggered_date),
+                    (b.lastAlertThreshold, row.last_alert_threshold),
+                    (b.alertModeRaw, row.alert_mode), (b.lastAlertPeriodKey, row.last_alert_period_key),
+                    (b.weekStartDay, row.week_start_day),
+                    (b.budgetCategoryType?.rawValue, row.budget_category_type_raw)
+                ]))
+                let syncedTargetKind = row.target_kind.flatMap(BudgetTargetKind.init(rawValue:))
+                    ?? (cloudCategoryIDs.isEmpty ? .total : .categories)
+                let currentIDs = b.effectiveTrackedCategories.map(\.id).sorted { $0.uuidString < $1.uuidString }
+                let liveIDs = cloudCategoryIDs.compactMap { id in
+                    resolvedCategoriesByID[id]?.deletedAt == nil ? id : nil
+                }.sorted { $0.uuidString < $1.uuidString }
+                let hasAbsentCategory = cloudCategoryIDs.contains { resolvedCategoriesByID[$0] == nil }
+                let categoryVisibleChanged: Bool
+                if b.categorySetDirty || hasAbsentCategory
+                    || (cloudCategoryIDs.isEmpty && !currentIDs.isEmpty && syncedTargetKind == .categories) {
+                    categoryVisibleChanged = false
+                } else if syncedTargetKind == .total {
+                    categoryVisibleChanged = b.targetKind != .total || !currentIDs.isEmpty
+                } else {
+                    categoryVisibleChanged = b.targetKind != syncedTargetKind || currentIDs != liveIDs
+                }
+                let expectedCategoryDirty = b.categorySetDirty
+                    ? true
+                    : (cloudCategoryIDs.isEmpty && !currentIDs.isEmpty && syncedTargetKind == .categories)
+                let visibleChanged = existing == nil || parentVisibleChanged || categoryVisibleChanged
+                let persist = visibleChanged
+                    || Self.metadataNeedsApply(b, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                    || b.categorySetDirty != expectedCategoryDirty
+                guard persist else { return .none }
                 Self.applySyncedBudgetRow(
                     row,
                     cloudCategoryIDs: cloudCategoryIDs,
                     resolvedCategoriesByID: resolvedCategoriesByID,
                     to: b
                 )
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
         return Set(rows.map(\.id))
     }
@@ -2251,11 +2893,12 @@ final class SyncEngine: ObservableObject {
                         "category_id.gt.\(lastKey.categoryID.uuidString))"
                     )
                 }
-                let page: [SyncBudgetCategoryRow] = try await query
+            let page: [SyncBudgetCategoryRow] = try await query
                     .order("budget_id", ascending: true)
                     .order("category_id", ascending: true)
                     .limit(Self.pageSize)
                     .execute().value
+                try validateActiveRunIfNeeded()
                 allRows.append(contentsOf: page)
                 guard page.count == Self.pageSize else { break }
                 guard let last = page.last else { break }
@@ -2295,6 +2938,7 @@ final class SyncEngine: ObservableObject {
                 .order("id", ascending: true)
                 .limit(Self.pageSize)
                 .execute().value
+            try validateActiveRunIfNeeded()
             rows.append(contentsOf: page)
             chunkStart += idChunkSize
         }
@@ -2310,9 +2954,12 @@ final class SyncEngine: ObservableObject {
     private func upsertBudgetReferencedCategories(
         _ rows: [SyncCategoryRow],
         context: ModelContext
-    ) throws {
+    ) throws -> ApplyOutcome {
+        var didPersist = false
+        var didChangeVisibleData = false
         for row in rows {
-            let category = try fetchByID(Category.self, id: row.id, in: context) ?? {
+            let existing = try fetchByID(Category.self, id: row.id, in: context)
+            let category = existing ?? {
                 let new = Category(
                     name: row.name,
                     icon: row.icon ?? "",
@@ -2333,6 +2980,20 @@ final class SyncEngine: ObservableObject {
             ) {
                 continue
             }
+            let visibleChanged = existing == nil || !Self.fieldsMatch([
+                (category.name, row.name), (category.icon, row.icon ?? ""),
+                (category.colorHex, row.color_hex ?? ""), (category.type.rawValue, row.type),
+                (category.isSystem, row.is_system),
+                (category.canonicalKey, row.canonical_key ?? category.canonicalKey),
+                (category.createdAt, row.created_at), (category.deletedAt, row.deleted_at)
+            ])
+            let persist = visibleChanged || Self.metadataNeedsApply(
+                category,
+                ownerID: row.user_id,
+                updatedAt: row.updated_at,
+                deletedAt: row.deleted_at
+            )
+            guard persist else { continue }
             category.name = row.name
             category.icon = row.icon ?? ""
             category.colorHex = row.color_hex ?? ""
@@ -2344,7 +3005,13 @@ final class SyncEngine: ObservableObject {
             category.deletedAt = row.deleted_at
             category.syncUserID = row.user_id
             category.needsSync = false
+            didPersist = true
+            didChangeVisibleData = didChangeVisibleData || visibleChanged
         }
+        return ApplyOutcome(
+            didPersistLocalState: didPersist,
+            didChangeVisibleData: didChangeVisibleData
+        )
     }
 
     private func pullTransactionLocations(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -2353,11 +3020,7 @@ final class SyncEngine: ObservableObject {
         try withSyncWriteGuard {
             try applyLocal(table: "transaction_locations", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
                 if row.deleted_at != nil {
-                    if let dead = try fetchByID(TransactionLocation.self, id: row.id, in: context) {
-                        if Self.localChangeWins(localNeedsSync: dead.needsSync, localUpdatedAt: dead.updatedAt, remoteUpdatedAt: row.updated_at) { return }  // newer un-pushed local edit wins over a remote delete
-                        dead.deletedAt = row.deleted_at; dead.updatedAt = row.updated_at; dead.needsSync = false
-                    }
-                    return
+                    return Self.applyRemoteDeletion(try fetchByID(TransactionLocation.self, id: row.id, in: context), ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 }
                 let existing = try fetchByID(TransactionLocation.self, id: row.id, in: context)
                 let loc: TransactionLocation
@@ -2368,7 +3031,20 @@ final class SyncEngine: ObservableObject {
                     loc.needsSync = false
                     context.insert(loc)
                 }
-                if Self.localChangeWins(localNeedsSync: loc.needsSync, localUpdatedAt: loc.updatedAt, remoteUpdatedAt: row.updated_at) { return }
+                if Self.localChangeWins(localNeedsSync: loc.needsSync, localUpdatedAt: loc.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
+                let visibleChanged = existing == nil || !Self.fieldsMatch([
+                    (loc.displayName, row.display_name), (loc.fullAddress, row.full_address),
+                    (loc.shortAddress, row.short_address), (loc.latitude, row.latitude),
+                    (loc.longitude, row.longitude), (loc.horizontalAccuracyMeters, row.horizontal_accuracy_meters),
+                    (loc.capturedAt, row.captured_at), (loc.sourceRaw, row.source_raw),
+                    (loc.applePlaceID, row.apple_place_id),
+                    (AnyHashable(loc.alternateApplePlaceIDs), AnyHashable(row.alternate_apple_place_ids)),
+                    (loc.pointOfInterestCategoryRaw, row.point_of_interest_category_raw),
+                    (loc.locality, row.locality), (loc.administrativeArea, row.administrative_area),
+                    (loc.countryCode, row.country_code), (loc.normalizedSpatialKey, row.normalized_spatial_key)
+                ])
+                let persist = visibleChanged || Self.metadataNeedsApply(loc, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
+                guard persist else { return .none }
                 loc.displayName = row.display_name; loc.fullAddress = row.full_address
                 loc.shortAddress = row.short_address; loc.latitude = row.latitude; loc.longitude = row.longitude
                 loc.horizontalAccuracyMeters = row.horizontal_accuracy_meters; loc.capturedAt = row.captured_at
@@ -2383,8 +3059,8 @@ final class SyncEngine: ObservableObject {
                 if let tid = row.transaction_id, let t = try fetchByID(Transaction.self, id: tid, in: context) {
                     t.location = loc
                 }
+                return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
-            try context.save()
         }
     }
 
@@ -2406,13 +3082,11 @@ final class SyncEngine: ObservableObject {
                 .order("updated_at", ascending: true)
                 .range(from: offset, to: offset + Self.pageSize - 1)
                 .execute().value
+            try validateActiveRunIfNeeded()
             all.append(contentsOf: page)
             if page.count < Self.pageSize { break }
             offset += Self.pageSize
         }
-        // Any rows changed past our cursor count as remote changes to apply, so
-        // the completion broadcast (and a UI refresh) is warranted.
-        if !all.isEmpty { didApplyRemoteChanges = true }
         return all
     }
 
@@ -2429,6 +3103,7 @@ final class SyncEngine: ObservableObject {
             let chunk = Array(rows[index..<min(index + Self.pageSize, rows.count)])
             // `upsert` returns the stored rows by default (Prefer: return=representation).
             let page: [R] = try await client.from(table).upsert(chunk).execute().value
+            try validateActiveRunIfNeeded()
             returned.append(contentsOf: page)
             index += Self.pageSize
         }
@@ -2450,6 +3125,58 @@ final class SyncEngine: ObservableObject {
         }
     }
 
+    struct ApplyOutcome: Equatable {
+        let didPersistLocalState: Bool
+        let didChangeVisibleData: Bool
+
+        static let none = ApplyOutcome(
+            didPersistLocalState: false,
+            didChangeVisibleData: false
+        )
+    }
+
+    private static func fieldsMatch(_ pairs: [(AnyHashable?, AnyHashable?)]) -> Bool {
+        pairs.allSatisfy { $0.0 == $0.1 }
+    }
+
+    private static func metadataNeedsApply(
+        _ model: any SyncTrackable,
+        ownerID: UUID,
+        updatedAt: Date,
+        deletedAt: Date?
+    ) -> Bool {
+        model.updatedAt != updatedAt
+            || model.deletedAt != deletedAt
+            || model.needsSync
+            || (model as? any SyncOwned)?.syncOwner != ownerID
+    }
+
+    private static func applyRemoteDeletion(
+        _ model: (any SyncTrackable)?,
+        ownerID: UUID,
+        updatedAt: Date,
+        deletedAt: Date?
+    ) -> ApplyOutcome {
+        guard let model else { return .none }
+        if localChangeWins(
+            localNeedsSync: model.needsSync,
+            localUpdatedAt: model.updatedAt,
+            remoteUpdatedAt: updatedAt
+        ) { return .none }
+        let visibleChanged = model.deletedAt != deletedAt
+        guard visibleChanged || metadataNeedsApply(
+            model,
+            ownerID: ownerID,
+            updatedAt: updatedAt,
+            deletedAt: deletedAt
+        ) else { return .none }
+        model.deletedAt = deletedAt
+        model.updatedAt = updatedAt
+        model.needsSync = false
+        (model as? any SyncOwned)?.assignOwner(ownerID)
+        return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
+    }
+
     /// Applies pulled rows under the sync-write guard and advances the cursor.
     private func applyLocal<Row>(
         table: String,
@@ -2457,15 +3184,27 @@ final class SyncEngine: ObservableObject {
         context: ModelContext,
         rowDate: (Row) -> Date,
         rowID: (Row) -> UUID,
-        apply: (Row) throws -> Void
-    ) rethrows {
-        // (sync-write guard is held for the whole syncNow operation)
+        apply: (Row) throws -> ApplyOutcome
+    ) throws {
+        var aggregate = ApplyOutcome.none
         var maxDate = Self.cursorDate(for: table) ?? .distantPast
         for row in rows {
-            try apply(row)
+            try validateActiveRunIfNeeded()
+            let outcome = try apply(row)
+            aggregate = ApplyOutcome(
+                didPersistLocalState: aggregate.didPersistLocalState || outcome.didPersistLocalState,
+                didChangeVisibleData: aggregate.didChangeVisibleData || outcome.didChangeVisibleData
+            )
             maxDate = max(maxDate, rowDate(row))
         }
+        if aggregate.didPersistLocalState {
+            try context.save()
+        }
+        try validateActiveRunIfNeeded()
         Self.setCursor(maxDate, for: table)
+        if aggregate.didChangeVisibleData {
+            didApplyRemoteChanges = true
+        }
     }
 
     private func fetchByID<T: PersistentModel>(_ type: T.Type, id: UUID, in context: ModelContext) throws -> T? {
@@ -2515,10 +3254,13 @@ final class SyncEngine: ObservableObject {
     private func uploadImage(_ data: Data, to path: String, _ client: SupabaseClient) async throws {
         _ = try await client.storage.from("receipts").upload(
             path, data: data, options: FileOptions(contentType: "image/jpeg", upsert: true))
+        try validateActiveRunIfNeeded()
     }
 
     private func downloadImage(_ path: String, _ client: SupabaseClient) async throws -> Data {
-        try await client.storage.from("receipts").download(path: path)
+        let data = try await client.storage.from("receipts").download(path: path)
+        try validateActiveRunIfNeeded()
+        return data
     }
 
     /// Downloads an image and stores it on its model. On success the matching
@@ -2526,7 +3268,7 @@ final class SyncEngine: ObservableObject {
     /// sync retries instead of leaving the row permanently image-less (its cursor
     /// has already advanced, so the row itself never re-pulls to trigger this).
     private func downloadAndStoreImage(_ path: String, kind: SyncImageKind, id: UUID,
-                                       _ client: SupabaseClient, _ context: ModelContext) async {
+                                       _ client: SupabaseClient, _ context: ModelContext) async throws {
         let entry = SyncImageDownloadQueue.Entry(kind: kind, id: id, path: path)
         do {
             let data = try await downloadImage(path, client)
@@ -2548,8 +3290,12 @@ final class SyncEngine: ObservableObject {
                     m.avatarUploadedHash = hash
                 }
             }
+            try validateActiveRunIfNeeded()
             SyncImageDownloadQueue.remove(entry)
         } catch {
+            if !Self.shouldQueueImageFailure(error) {
+                throw error
+            }
             #if DEBUG
             print("[SyncEngine] image download failed (\(kind.rawValue) \(id)) — queued for retry: \(error)")
             #endif
@@ -2557,20 +3303,27 @@ final class SyncEngine: ObservableObject {
         }
     }
 
+    private static func shouldQueueImageFailure(_ error: Error) -> Bool {
+        !isCancellation(error) && !(error is RunValidationError)
+    }
+
     /// Retries every image that failed to download in an earlier sync. Runs at the
     /// end of `syncNow`; successes clear themselves from the queue.
-    private func drainImageDownloads(_ client: SupabaseClient, _ context: ModelContext) async {
+    private func drainImageDownloads(_ client: SupabaseClient, _ context: ModelContext) async throws {
         let pending = SyncImageDownloadQueue.all()
         guard !pending.isEmpty else { return }
         for entry in pending {
+            try validateActiveRunIfNeeded()
             // Skip (and clear) if the row already has its image — a stale entry.
             if imageAlreadyPresent(entry, context) {
+                try validateActiveRunIfNeeded()
                 SyncImageDownloadQueue.remove(entry)
                 continue
             }
-            await downloadAndStoreImage(entry.path, kind: entry.kind, id: entry.id, client, context)
+            try await downloadAndStoreImage(entry.path, kind: entry.kind, id: entry.id, client, context)
         }
-        withSyncWriteGuard { try? context.save() }
+        try validateActiveRunIfNeeded()
+        try withSyncWriteGuard { try context.save() }
     }
 
     private func imageAlreadyPresent(_ entry: SyncImageDownloadQueue.Entry, _ context: ModelContext) -> Bool {
@@ -2629,6 +3382,65 @@ final class SyncEngine: ObservableObject {
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
+
+    #if DEBUG
+    func setTestHooks(
+        runner: (@MainActor () async -> SyncOutcome)? = nil,
+        pendingChanges: (@MainActor () -> Bool)? = nil,
+        now: (() -> Date)? = nil
+    ) {
+        injectedSyncRunner = runner
+        injectedPendingChanges = pendingChanges
+        if let now { self.now = now }
+    }
+
+    func registerFingerprintForTesting(table: String, id: UUID, updatedAt: Date) {
+        registerFingerprint(table: table, id: id, updatedAt: updatedAt)
+    }
+
+    static func shouldQueueImageFailureForTesting(_ error: Error) -> Bool {
+        shouldQueueImageFailure(error)
+    }
+
+    func installPendingLocalSaveDebounceForTesting() {
+        debounceTask?.cancel()
+        debounceTask = Task {
+            try? await Task.sleep(for: .seconds(100))
+        }
+    }
+
+    var hasPendingLocalSaveDebounceForTesting: Bool { debounceTask != nil }
+    var pendingTicketCountForTesting: Int { ticketContinuations.count }
+    var didApplyRemoteChangesForTesting: Bool { didApplyRemoteChanges }
+
+    func resetDidApplyRemoteChangesForTesting() {
+        didApplyRemoteChanges = false
+    }
+
+    func waitForCoordinatorIdleForTesting() async {
+        while syncRunTask != nil {
+            await Task.yield()
+        }
+    }
+
+    func resetCoordinatorForTesting() async {
+        let task = syncRunTask
+        stopSyncLifecycle()
+        await task?.value
+        debounceTask?.cancel()
+        debounceTask = nil
+        pendingRun.clear()
+        recentlyPushed.removeAll()
+        ticketContinuations.removeAll()
+        injectedSyncRunner = nil
+        injectedPendingChanges = nil
+        now = Date.init
+        coordinatorRunCount = 0
+        didApplyRemoteChanges = false
+        autoSyncContext = nil
+        lastError = nil
+    }
+    #endif
 }
 
 /// Lets `finishPush` stamp — and `purgeForeignRows` inspect — the owning

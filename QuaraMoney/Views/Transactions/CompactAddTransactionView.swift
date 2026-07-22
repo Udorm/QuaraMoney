@@ -30,8 +30,6 @@ struct CompactAddTransactionView: View {
     @State private var showAllWallets = false
     @State private var showScanner = false
     @State private var showLocationPicker = false
-    @State private var showDatePopover = false
-    @State private var showTimePopover = false
     @State private var isFetchingCurrentLocation = false
     @State private var relativeDayOffset: Int = 0
     private let referenceDate = Calendar.current.startOfDay(for: Date())
@@ -808,23 +806,21 @@ struct CompactAddTransactionView: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 4)
             .contentShape(Rectangle())
-            .onTapGesture {
-                endNoteEditing()
-                showDatePopover = true
-            }
-            .popover(isPresented: $showDatePopover, arrowEdge: .bottom) {
+            .overlay {
+                // Invisible native control: piggybacks on the system's own
+                // compact-DatePicker popup (fast, correctly anchored, never
+                // clipped) while the visible pill above stays fully custom.
                 DatePicker(
                     "transaction.date".localized,
                     selection: $viewModel.date,
                     displayedComponents: [.date]
                 )
-                .datePickerStyle(.graphical)
+                .datePickerStyle(.compact)
                 .labelsHidden()
-                .frame(width: 320, height: 340)
-                .padding(8)
-                .presentationCompactAdaptation(.popover)
+                .opacity(0.02)
+                .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
             }
-            
+
             Button {
                 adjustDate(by: 1)
             } label: {
@@ -848,29 +844,23 @@ struct CompactAddTransactionView: View {
     }
 
     private var timeChip: some View {
-        Button {
-            endNoteEditing()
-            showTimePopover = true
-        } label: {
-            detailChip(
-                icon: "clock",
-                iconColor: .orange,
-                text: viewModel.date.appFormatted(date: .omitted, time: .shortened),
-                isSet: true
-            )
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showTimePopover, arrowEdge: .bottom) {
+        detailChip(
+            icon: "clock",
+            iconColor: .orange,
+            text: viewModel.date.appFormatted(date: .omitted, time: .shortened),
+            isSet: true
+        )
+        .overlay {
+            // Invisible native control — see dateChip's overlay for why.
             DatePicker(
                 "transaction.time".localized,
                 selection: $viewModel.date,
                 displayedComponents: [.hourAndMinute]
             )
-            .datePickerStyle(.wheel)
+            .datePickerStyle(.compact)
             .labelsHidden()
-            .frame(width: 220)
-            .padding(8)
-            .presentationCompactAdaptation(.popover)
+            .opacity(0.02)
+            .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
         }
         .accessibilityLabel("transaction.time".localized)
     }

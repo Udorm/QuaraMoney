@@ -7,110 +7,114 @@ struct RecurringRuleListView: View {
     
     @State private var editorTarget: EditorTarget?
     
-    private var dueRules: [RecurringRule] { rules.filter { RecurringRuleService.isDue($0) } }
-
-    // Date buckets cover ACTIVE rules only — paused rules don't generate, so
-    // bucketing them by "Overdue"/"This Month" is misleading. They get their own
-    // section so they stay findable and resumable.
-    private var activeRules: [RecurringRule] { rules.filter { $0.isActive } }
-    private var paused: [RecurringRule] { rules.filter { !$0.isActive } }
-
-    // "Overdue" means due *before today* — including earlier this month — so a
-    // past-due rule never hides under "This Month".
-    private var overdue: [RecurringRule] {
-        let todayStart = Calendar.current.startOfDay(for: Date())
-        return activeRules.filter { rule in
-            rule.nextDueDate < todayStart
-        }
+    /// All the buckets `body` renders, derived in one pass.
+    ///
+    /// These used to be sibling computed properties, each re-filtering
+    /// `activeRules` (itself a filter over `rules`), and `body` reads every
+    /// bucket three times — `!isEmpty`, `ForEach`, and `sectionHeader` — so the
+    /// same array was filtered on the order of ten times per render.
+    private struct RuleBuckets {
+        var due: [RecurringRule] = []
+        var overdue: [RecurringRule] = []
+        var thisMonth: [RecurringRule] = []
+        var nextMonth: [RecurringRule] = []
+        var later: [RecurringRule] = []
+        var paused: [RecurringRule] = []
     }
 
-    // "This Month" is the remainder of the current month from today onward.
-    private var thisMonth: [RecurringRule] {
+    private func makeBuckets() -> RuleBuckets {
         let cal = Calendar.current
-        let todayStart = cal.startOfDay(for: Date())
-        guard let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: Date())),
-              let startOfNextMonth = cal.date(byAdding: .month, value: 1, to: startOfMonth) else { return [] }
+        let now = Date()
+        let todayStart = cal.startOfDay(for: now)
+        let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: now))
+        let startOfNextMonth = startOfMonth.flatMap { cal.date(byAdding: .month, value: 1, to: $0) }
+        let startOfNextNextMonth = startOfMonth.flatMap { cal.date(byAdding: .month, value: 2, to: $0) }
 
-        return activeRules.filter { rule in
-            rule.nextDueDate >= todayStart && rule.nextDueDate < startOfNextMonth
+        var buckets = RuleBuckets()
+        for rule in rules {
+            if RecurringRuleService.isDue(rule) { buckets.due.append(rule) }
+
+            // Date buckets cover ACTIVE rules only — paused rules don't
+            // generate, so bucketing them by "Overdue"/"This Month" is
+            // misleading. They get their own section so they stay findable.
+            guard rule.isActive else {
+                buckets.paused.append(rule)
+                continue
+            }
+
+            // "Overdue" means due *before today* — including earlier this month
+            // — so a past-due rule never hides under "This Month".
+            if rule.nextDueDate < todayStart {
+                buckets.overdue.append(rule)
+            } else if let startOfNextMonth, rule.nextDueDate < startOfNextMonth {
+                buckets.thisMonth.append(rule)
+            } else if let startOfNextNextMonth, rule.nextDueDate < startOfNextNextMonth {
+                buckets.nextMonth.append(rule)
+            } else if startOfNextNextMonth != nil {
+                buckets.later.append(rule)
+            }
         }
-    }
-
-    private var nextMonth: [RecurringRule] {
-        let cal = Calendar.current
-        guard let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: Date())),
-              let startOfNextMonth = cal.date(byAdding: .month, value: 1, to: startOfMonth),
-              let startOfNextNextMonth = cal.date(byAdding: .month, value: 2, to: startOfMonth) else { return [] }
-
-        return activeRules.filter { rule in
-            rule.nextDueDate >= startOfNextMonth && rule.nextDueDate < startOfNextNextMonth
-        }
-    }
-
-    private var later: [RecurringRule] {
-        let cal = Calendar.current
-        guard let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: Date())),
-              let startOfNextNextMonth = cal.date(byAdding: .month, value: 2, to: startOfMonth) else { return [] }
-
-        return activeRules.filter { rule in
-            rule.nextDueDate >= startOfNextNextMonth
-        }
+        return buckets
     }
 
     var body: some View {
-        List {
+        let buckets = makeBuckets()
+
+        return List {
             Section {
                 RecurringProgressHeaderView(modelContext: modelContext)
                     .listRowInsets(EdgeInsets()) // Full-width card — aligns with sections below
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            
-            if !dueRules.isEmpty {
+
+            if !buckets.due.isEmpty {
                 Section {
-                    NavigationLink(destination: RecurringReviewView(allRules: rules)) {
-                        Label(L10n.Recurring.Review.banner(dueRules.count), systemImage: "tray.full")
+                    // LazyView: NavigationLink(destination:) builds its
+                    // destination when the ROW renders, not when it's pushed.
+                    NavigationLink(destination: LazyView(RecurringReviewView(allRules: rules))) {
+                        Label(L10n.Recurring.Review.banner(buckets.due.count), systemImage: "tray.full")
                             .appFont(.headline)
                             .foregroundStyle(Color.accentColor)
                     }
                 }
             }
 
-            if !overdue.isEmpty {
-                Section(header: sectionHeader(title: L10n.Recurring.overdue, rules: overdue)) {
-                    ForEach(overdue) { rule in
+            if !buckets.overdue.isEmpty {
+                Section(header: sectionHeader(title: L10n.Recurring.overdue, rules: buckets.overdue)) {
+                    ForEach(buckets.overdue) { rule in
                         ruleRow(for: rule)
                     }
                 }
             }
 
-            if !thisMonth.isEmpty {
-                Section(header: sectionHeader(title: L10n.Recurring.thisMonth, rules: thisMonth)) {
-                    ForEach(thisMonth) { rule in
-                        ruleRow(for: rule)
-                    }
-                }
-            }
-            
-            if !nextMonth.isEmpty {
-                Section(header: sectionHeader(title: L10n.Recurring.nextMonth, rules: nextMonth)) {
-                    ForEach(nextMonth) { rule in
-                        ruleRow(for: rule)
-                    }
-                }
-            }
-            
-            if !later.isEmpty {
-                Section(header: sectionHeader(title: L10n.Recurring.later, rules: later)) {
-                    ForEach(later) { rule in
+            if !buckets.thisMonth.isEmpty {
+                Section(header: sectionHeader(title: L10n.Recurring.thisMonth, rules: buckets.thisMonth)) {
+                    ForEach(buckets.thisMonth) { rule in
                         ruleRow(for: rule)
                     }
                 }
             }
 
-            if !paused.isEmpty {
+            if !buckets.nextMonth.isEmpty {
+                Section(header: sectionHeader(title: L10n.Recurring.nextMonth, rules: buckets.nextMonth)) {
+                    ForEach(buckets.nextMonth) { rule in
+                        ruleRow(for: rule)
+                    }
+                }
+            }
+
+            if !buckets.later.isEmpty {
+                Section(header: sectionHeader(title: L10n.Recurring.later, rules: buckets.later)) {
+                    ForEach(buckets.later) { rule in
+                        ruleRow(for: rule)
+                    }
+                }
+            }
+
+            if !buckets.paused.isEmpty {
                 Section(header: Text(L10n.Recurring.paused)) {
-                    ForEach(paused) { rule in
+                    ForEach(buckets.paused) { rule in
                         ruleRow(for: rule)
                     }
                 }

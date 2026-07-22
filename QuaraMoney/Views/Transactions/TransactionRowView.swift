@@ -146,36 +146,43 @@ struct TransactionRowView: View {
         return paidByName
     }
     
-    private var hasMetaLine: Bool {
-        debt != nil || subtitleText != nil
-    }
-
     var body: some View {
-        HStack(spacing: 12) {
+        // Every one of these is a computed property, so each *access* re-runs
+        // it — and the accessibility label below re-reads four of them. Read
+        // once per body evaluation: this row is the app's hottest view, and
+        // `timeText`/`iconColor` each involve a date format and a hex parse.
+        let title = titleText
+        let subtitle = subtitleText
+        let amount = amountText
+        let time = timeText
+        let linkedDebt = debt
+        let iconColor = Color(hex: iconColorHex) ?? .gray
+
+        return HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill((Color(hex: iconColorHex) ?? .gray).opacity(0.1))
+                    .fill(iconColor.opacity(0.1))
                     .frame(width: 34, height: 34)
 
                 Image(systemName: iconName)
                     .appFont(.subheadline)
-                    .foregroundStyle(Color(hex: iconColorHex) ?? .gray)
+                    .foregroundStyle(iconColor)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(titleText)
+                Text(title)
                     .appFont(.subheadline, weight: .medium)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                if hasMetaLine {
+                if linkedDebt != nil || subtitle != nil {
                     HStack(spacing: 4) {
-                        if let debt {
-                            debtBadge(debt)
+                        if let linkedDebt {
+                            debtBadge(linkedDebt)
                         }
 
-                        if let subtitleText {
-                            Text(subtitleText)
+                        if let subtitle {
+                            Text(subtitle)
                                 .appFont(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -188,12 +195,12 @@ struct TransactionRowView: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(amountText)
+                Text(amount)
                     .appFont(.subheadline, weight: .semibold)
                     .foregroundStyle(isPositive ? incomeColor : expenseColor)
                     .lineLimit(1)
 
-                Text(timeText)
+                Text(time)
                     .appFont(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -211,7 +218,7 @@ struct TransactionRowView: View {
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(titleText), \(amountText), \(timeText)\(subtitleText.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("\(title), \(amount), \(time)\(subtitle.map { ", \($0)" } ?? "")")
     }
 
     @ViewBuilder

@@ -14,9 +14,32 @@ struct DebtListView: View {
 
     private var preferredCurrency: String { CurrencyManager.shared.preferredCurrencyCode }
 
-    private var overdueDebts: [Debt] { viewModel.overdueDebts(allDebts) }
-    private var activeDebts: [Debt] { viewModel.activeDebts(allDebts) }
-    private var completedDebts: [Debt] { viewModel.completedDebts(allDebts) }
+    /// The three rendered buckets, derived in one pass.
+    ///
+    /// Each was a computed property calling a view-model method that filters
+    /// *and* sorts `allDebts`, and `body` reads them 3–4 times apiece.
+    private struct DebtBuckets {
+        let overdue: [Debt]
+        let active: [Debt]
+        let completed: [Debt]
+
+        /// True when a search is active but matches nothing.
+        func hasNoSearchResults(isSearching: Bool, showCompleted: Bool) -> Bool {
+            isSearching
+                && overdue.isEmpty
+                && active.isEmpty
+                && (!showCompleted || completed.isEmpty)
+        }
+    }
+
+    private func makeBuckets() -> DebtBuckets {
+        DebtBuckets(
+            overdue: viewModel.overdueDebts(allDebts),
+            active: viewModel.activeDebts(allDebts),
+            completed: viewModel.completedDebts(allDebts)
+        )
+    }
+
     private var hasAnyDebts: Bool {
         allDebts.contains { $0.type == viewModel.selectedType }
     }
@@ -24,16 +47,10 @@ struct DebtListView: View {
         allDebts.contains { $0.type == viewModel.selectedType && $0.isCompleted }
     }
 
-    /// True when a search is active but matches nothing.
-    private var hasNoSearchResults: Bool {
-        viewModel.isSearching
-            && overdueDebts.isEmpty
-            && activeDebts.isEmpty
-            && (!viewModel.showCompleted || completedDebts.isEmpty)
-    }
-
     var body: some View {
-        List {
+        let buckets = makeBuckets()
+
+        return List {
             if !hasAnyDebts {
                 Section {
                     emptyState
@@ -46,9 +63,9 @@ struct DebtListView: View {
                     heroContent
                 }
 
-                if !overdueDebts.isEmpty {
+                if !buckets.overdue.isEmpty {
                     Section {
-                        ForEach(overdueDebts) { debt in
+                        ForEach(buckets.overdue) { debt in
                             debtLink(debt)
                         }
                     } header: {
@@ -57,7 +74,7 @@ struct DebtListView: View {
                     }
                 }
 
-                if overdueDebts.isEmpty && activeDebts.isEmpty {
+                if buckets.overdue.isEmpty && buckets.active.isEmpty {
                     if !viewModel.isSearching {
                         Section {
                             allSettledRow
@@ -65,9 +82,9 @@ struct DebtListView: View {
                                 .listRowSeparator(.hidden)
                         }
                     }
-                } else if !activeDebts.isEmpty {
+                } else if !buckets.active.isEmpty {
                     Section {
-                        ForEach(activeDebts) { debt in
+                        ForEach(buckets.active) { debt in
                             debtLink(debt)
                         }
                     } header: {
@@ -75,9 +92,9 @@ struct DebtListView: View {
                     }
                 }
 
-                if viewModel.showCompleted && !completedDebts.isEmpty {
+                if viewModel.showCompleted && !buckets.completed.isEmpty {
                     Section {
-                        ForEach(completedDebts) { debt in
+                        ForEach(buckets.completed) { debt in
                             debtLink(debt)
                         }
                     } header: {
@@ -91,7 +108,7 @@ struct DebtListView: View {
         .navigationTitle(L10n.Debt.title)
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
-            if hasNoSearchResults {
+            if buckets.hasNoSearchResults(isSearching: viewModel.isSearching, showCompleted: viewModel.showCompleted) {
                 ContentUnavailableView.search(text: viewModel.searchText)
             }
         }

@@ -1,7 +1,46 @@
 import SwiftUI
 
+/// Memoized `Color(hex:)` results.
+///
+/// Parsing is `trimmingCharacters` + `replacingOccurrences` + a `Scanner` — all
+/// String work — and it runs from ~70 sites, including twice per transaction
+/// row and once per cell in the category/wallet/color pickers. The distinct hex
+/// values in play are the category and wallet palettes: a few dozen at most,
+/// so the cache is small and never needs eviction.
+///
+/// `nil` results are cached too, so a malformed hex isn't re-parsed every frame.
+private enum HexColorCache {
+    nonisolated private static let lock = NSLock()
+    nonisolated(unsafe) private static var colors: [String: Color?] = [:]
+
+    nonisolated static func color(for hex: String) -> Color? {
+        lock.lock()
+        if let cached = colors[hex] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let parsed = Color(parsingHex: hex)
+
+        lock.lock()
+        colors[hex] = parsed
+        lock.unlock()
+        return parsed
+    }
+}
+
 extension Color {
+    /// Cached hex → `Color`. Callers should keep using this; the uncached parse
+    /// lives in `init?(parsingHex:)`.
     init?(hex: String) {
+        guard let color = HexColorCache.color(for: hex) else { return nil }
+        self = color
+    }
+
+    /// The actual parse. Separate from `init?(hex:)` so the cache has something
+    /// to call without recursing.
+    fileprivate init?(parsingHex hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
 

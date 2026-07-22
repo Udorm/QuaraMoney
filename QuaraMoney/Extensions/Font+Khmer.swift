@@ -106,6 +106,50 @@ extension View {
     }
 }
 
+/// Fully-resolved `Font`s keyed by everything that can change one.
+///
+/// `AppFontModifier.body` runs for *every* `Text` in the app on *every* render
+/// pass (740+ call sites), and the unmemoized path allocated a
+/// `UITraitCollection` + a `UIFontMetrics`, ran `scaledValue(for:)`, then built
+/// a `String`/`NSString` cache key for `appWithCascade` — all to arrive at the
+/// same handful of fonts. Resolving once per distinct key removes that work
+/// from the scroll path entirely.
+///
+/// The key set is bounded (a dozen sizes × a few weights × the Dynamic Type
+/// ladder), and the cascade font itself never varies with app language, so this
+/// needs no invalidation hook.
+private enum AppFontCache {
+    struct Key: Hashable {
+        let size: CGFloat
+        let weight: Font.Weight
+        let referenceStyle: UIFont.TextStyle
+        let dynamicTypeSize: DynamicTypeSize
+    }
+
+    nonisolated private static let lock = NSLock()
+    nonisolated(unsafe) private static var fonts: [Key: Font] = [:]
+
+    nonisolated static func font(for key: Key) -> Font {
+        lock.lock()
+        if let cached = fonts[key] {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        // Resolved outside the lock: `UIFontMetrics`/CoreText can be slow on a
+        // cold key and must not block other callers.
+        let traits = UITraitCollection(preferredContentSizeCategory: key.dynamicTypeSize.uiContentSizeCategory)
+        let scaledSize = UIFontMetrics(forTextStyle: key.referenceStyle).scaledValue(for: key.size, compatibleWith: traits)
+        let font = Font(UIFont.appWithCascade(ofSize: scaledSize, weight: key.weight.toUIFontWeight()))
+
+        lock.lock()
+        fonts[key] = font
+        lock.unlock()
+        return font
+    }
+}
+
 /// Resolves the cascade font at a size scaled for the current Dynamic Type
 /// setting. Reading `dynamicTypeSize` from the environment means the font is
 /// recomputed whenever the user changes their text size. At the default size
@@ -117,9 +161,12 @@ private struct AppFontModifier: ViewModifier {
     let referenceStyle: UIFont.TextStyle
 
     func body(content: Content) -> some View {
-        let traits = UITraitCollection(preferredContentSizeCategory: dynamicTypeSize.uiContentSizeCategory)
-        let scaledSize = UIFontMetrics(forTextStyle: referenceStyle).scaledValue(for: size, compatibleWith: traits)
-        return content.font(Font(UIFont.appWithCascade(ofSize: scaledSize, weight: weight.toUIFontWeight())))
+        content.font(AppFontCache.font(for: .init(
+            size: size,
+            weight: weight,
+            referenceStyle: referenceStyle,
+            dynamicTypeSize: dynamicTypeSize
+        )))
     }
 }
 

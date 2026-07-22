@@ -75,7 +75,7 @@ struct SettingsView: View {
                     }
                 }
 
-                NavigationLink(destination: ThemeSettingsView()) {
+                NavigationLink(destination: LazyView(ThemeSettingsView())) {
                     Label {
                         LabeledContent {
                             HStack(spacing: 4) {
@@ -96,7 +96,7 @@ struct SettingsView: View {
             }
 
             Section("settings.currency".localized) {
-                NavigationLink(destination: CurrencySelectionView()) {
+                NavigationLink(destination: LazyView(CurrencySelectionView())) {
                     Label {
                         LabeledContent {
                             Text(currencyManager.preferredCurrencyCode)
@@ -165,7 +165,7 @@ struct SettingsView: View {
             }
 
             Section("settings.aiScanning.title".localized) {
-                NavigationLink(destination: ReceiptScanningSettingsView()) {
+                NavigationLink(destination: LazyView(ReceiptScanningSettingsView())) {
                     Label {
                         LabeledContent {
                             Text(securityManager.getAPIKey()?.isEmpty == false
@@ -182,7 +182,7 @@ struct SettingsView: View {
             }
 
             Section(L10n.Settings.dataManagement) {
-                NavigationLink(destination: ExportOptionsView()) {
+                NavigationLink(destination: LazyView(ExportOptionsView())) {
                     Label {
                         Text("settings.exportTransactions".localized)
                     } icon: {
@@ -190,7 +190,7 @@ struct SettingsView: View {
                     }
                 }
 
-                NavigationLink(destination: CSVImportView(modelContext: modelContext)) {
+                NavigationLink(destination: LazyView(CSVImportView(modelContext: modelContext))) {
                     Label {
                         Text(L10n.Settings.importCSV)
                     } icon: {

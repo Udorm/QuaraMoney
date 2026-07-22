@@ -15,11 +15,13 @@ struct TransactionProcessor {
         targetCurrency: String,
         sortAscending: Bool = false
     ) -> [DailySectionData] {
-        // Group by start of day
+        // Group by start of day. `Calendar.current` builds a fresh snapshot per
+        // access, so it is hoisted out of the per-transaction closure.
+        let calendar = Calendar.current
         let grouped = Dictionary(grouping: transactions) { txn -> Date in
-            Calendar.current.startOfDay(for: txn.date)
+            calendar.startOfDay(for: txn.date)
         }
-        
+
         let sortedKeys = grouped.keys.sorted(by: { sortAscending ? $0 < $1 : $0 > $1 })
         
         return sortedKeys.map { date in
@@ -41,11 +43,13 @@ struct TransactionProcessor {
         targetCurrency: String,
         sortAscending: Bool = false
     ) -> [DailyTransactionSection] {
-        // Group by start of day
+        // Group by start of day. `Calendar.current` builds a fresh snapshot per
+        // access, so it is hoisted out of the per-transaction closure.
+        let calendar = Calendar.current
         let grouped = Dictionary(grouping: transactions) { txn -> Date in
-            Calendar.current.startOfDay(for: txn.date)
+            calendar.startOfDay(for: txn.date)
         }
-        
+
         let sortedKeys = grouped.keys.sorted(by: { sortAscending ? $0 < $1 : $0 > $1 })
         
         return sortedKeys.map { date in

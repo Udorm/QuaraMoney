@@ -1,6 +1,24 @@
 import SwiftUI
 import SwiftData
 
+private extension UUID {
+    /// Byte-order comparison, used as a stable tie-break.
+    ///
+    /// Ordering is identical to comparing `uuidString`: uppercase hex is
+    /// monotonic with byte value and both strings carry dashes at the same
+    /// offsets, so the two orders agree — this one just doesn't allocate two
+    /// Strings per comparison.
+    func isOrderedBefore(_ other: UUID) -> Bool {
+        var lhs = self.uuid
+        var rhs = other.uuid
+        return withUnsafeBytes(of: &lhs) { l in
+            withUnsafeBytes(of: &rhs) { r in
+                memcmp(l.baseAddress!, r.baseAddress!, MemoryLayout<uuid_t>.size) < 0
+            }
+        }
+    }
+}
+
 struct EventDetailViewV2: View {
     let event: Event
     
@@ -55,9 +73,59 @@ struct EventDetailViewV2: View {
         let status: EventSettlementStatus
     }
 
-    /// One settlement pass per body evaluation. Previously four sibling
-    /// computed properties each invoked the engine independently.
+    /// Identifies a ledger state. `EventLedgerService` bumps `ledgerRevision` on
+    /// every mutation (all 10 paths) and `SyncEngine` writes the server's value
+    /// on pull, so it covers local and remote changes alike; the counts are a
+    /// cheap backstop for any row that changes without the event row moving.
+    private struct LedgerSignature: Equatable {
+        let ledgerRevision: Int64
+        let confirmedSettlementRevision: Int64?
+        let memberCount: Int
+        let transactionCount: Int
+    }
+
+    private var ledgerSignature: LedgerSignature {
+        LedgerSignature(
+            ledgerRevision: event.ledgerRevision,
+            confirmedSettlementRevision: event.confirmedSettlementRevision,
+            memberCount: members.count,
+            transactionCount: ledgerTransactions.count
+        )
+    }
+
+    /// Memoizes `DerivedState` across body evaluations.
+    ///
+    /// The settlement pass is genuinely expensive — it flat-maps every
+    /// participant link, sorts them, builds three dictionaries and runs the
+    /// greedy transfer algorithm — and it used to run on *every* body
+    /// evaluation, including every sheet toggle and alert-binding read. Holding
+    /// it in a reference type read from `body` (rather than `@State` written
+    /// from `body`, which is illegal) keeps the result synchronous, so pushing
+    /// this screen still renders a correct first frame.
+    @MainActor
+    private final class SettlementCache {
+        private var signature: LedgerSignature?
+        private var cached: DerivedState?
+
+        func state(for signature: LedgerSignature, compute: () -> DerivedState) -> DerivedState {
+            if let cached, self.signature == signature { return cached }
+            let fresh = compute()
+            self.signature = signature
+            self.cached = fresh
+            return fresh
+        }
+    }
+
+    @State private var settlementCache = SettlementCache()
+
+    /// One settlement pass per ledger change. Previously four sibling computed
+    /// properties each invoked the engine independently; then one pass per body
+    /// evaluation; now one pass per actual mutation.
     private var derivedState: DerivedState {
+        settlementCache.state(for: ledgerSignature) { computeDerivedState() }
+    }
+
+    private func computeDerivedState() -> DerivedState {
         let settlementMembers = members.filter { !$0.isBudgetPool }
         let activeTransactions = ledgerTransactions.filter { !$0.isDeleted }
         let participantLinks = ledgerTransactions
@@ -65,7 +133,10 @@ struct EventDetailViewV2: View {
             .filter { $0.deletedAt == nil }
             .sorted {
                 if $0.orderIndex == $1.orderIndex {
-                    return $0.id.uuidString < $1.id.uuidString
+                    // Compare UUIDs by their bytes. The old `uuidString`
+                    // comparison allocated two Strings per comparison, i.e.
+                    // O(n log n) allocations on every settlement pass.
+                    return $0.id.isOrderedBefore($1.id)
                 }
                 return $0.orderIndex < $1.orderIndex
             }

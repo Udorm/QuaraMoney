@@ -39,6 +39,9 @@ class WalletDetailViewModel {
     }
 
     var transactions: [Transaction] = []
+    /// Day-grouped sections with daily totals, derived once per fetch rather
+    /// than once per render. See `applyTransactions`.
+    var dailySections: [DailyTransactionSection] = []
     var hasLoadedOnce = false
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
@@ -198,7 +201,29 @@ class WalletDetailViewModel {
             }
         }
 
+        // `fetchAndProcess` already grouped and totalled off-main; resolving the
+        // IDs here means the list view never has to re-group in `body` (it did
+        // so on every re-render, including every search keystroke and every
+        // sheet present/dismiss). Mirrors HomeViewModel.applyData.
+        var resolvedSections: [DailyTransactionSection] = []
+        for section in result.dailySections {
+            var sectionTransactions: [Transaction] = []
+            for id in section.transactionIds {
+                if let txn = self.modelContext.model(for: id) as? Transaction {
+                    sectionTransactions.append(txn)
+                }
+            }
+            if !sectionTransactions.isEmpty {
+                resolvedSections.append(DailyTransactionSection(
+                    date: section.date,
+                    transactions: sectionTransactions,
+                    dailyTotal: section.dailyTotal
+                ))
+            }
+        }
+
         self.transactions = resolvedTransactions
+        self.dailySections = resolvedSections
         self.hasLoadedOnce = true
     }
 

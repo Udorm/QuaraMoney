@@ -44,7 +44,9 @@ class LanguageManager: ObservableObject {
             guard newValue != selectedLanguage else { return }
             selectedLanguageRaw = newValue.rawValue
             updateBundle()
-            // Locale-derived formatter caches must rebuild for the new language.
+            // Locale-derived caches must rebuild for the new language. The
+            // locale cache goes first — the formatter caches are keyed on it.
+            AppLocaleCache.invalidate()
             CurrencyFormatterCache.invalidate()
             AppDateFormatterCache.invalidate()
             // Update font refresh ID to trigger view updates
@@ -129,21 +131,98 @@ extension String {
 
 // MARK: - Locale & Date formatting for the selected language
 
+/// Memoized `Locale.app`.
+///
+/// `Locale.app` is read on every single date format (transaction rows, section
+/// headers, chart labels), and the uncached path did a `UserDefaults` read plus
+/// a `Locale(identifier:)` construction per call. Both are cheap individually
+/// and neither belongs in a scroll path.
+///
+/// Caching matches the semantics `LanguageManager.bundle` already has: the
+/// resolved locale is refreshed when the *in-app* language changes, not when
+/// the device locale changes mid-session.
+enum AppLocaleCache {
+    nonisolated private static let lock = NSLock()
+    nonisolated(unsafe) private static var cached: Locale?
+
+    nonisolated static func invalidate() {
+        lock.lock(); defer { lock.unlock() }
+        cached = nil
+    }
+
+    nonisolated static var current: Locale {
+        lock.lock()
+        if let cached {
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let locale = LanguageManager.shared.selectedLanguage.locale
+        lock.lock()
+        cached = locale
+        lock.unlock()
+        return locale
+    }
+}
+
 extension Locale {
     /// The locale for the in-app selected language (Khmer uses Khmer digits).
     ///
     /// `Date.formatted(...)` and `NumberFormatter`/`DateFormatter` default to the
     /// *device* locale (`Locale.autoupdatingCurrent`) and ignore SwiftUI's
     /// `\.locale` environment, so user-facing date strings must pass this explicitly.
-    static var app: Locale { LanguageManager.shared.selectedLanguage.locale }
+    static var app: Locale { AppLocaleCache.current }
+}
+
+// MARK: - Date.FormatStyle → DateFormatter.Style bridging
+
+private extension Date.FormatStyle.DateStyle {
+    /// The `DateFormatter.Style` that produces byte-identical output, or `nil`
+    /// when there is no exact equivalent (`.numeric` renders a 4-digit year
+    /// while `.short` renders 2) — those styles keep the `FormatStyle` path.
+    var equivalentFormatterStyle: DateFormatter.Style? {
+        switch self {
+        case .omitted: return DateFormatter.Style.none
+        case .abbreviated: return .medium
+        case .long: return .long
+        case .complete: return .full
+        default: return nil
+        }
+    }
+}
+
+private extension Date.FormatStyle.TimeStyle {
+    var equivalentFormatterStyle: DateFormatter.Style? {
+        switch self {
+        case .omitted: return DateFormatter.Style.none
+        case .shortened: return .short
+        case .standard: return .medium
+        case .complete: return .full
+        default: return nil
+        }
+    }
 }
 
 extension Date {
     /// Localized date/time string honoring the in-app selected language (incl.
     /// Khmer digits) — use instead of `.formatted(date:time:)` for user-facing text.
+    ///
+    /// Routes through `AppDateFormatterCache` (like every other formatter in the
+    /// app) rather than building a fresh `Date.FormatStyle` per call: this runs
+    /// twice per transaction row.
     func appFormatted(date dateStyle: Date.FormatStyle.DateStyle = .abbreviated,
                       time timeStyle: Date.FormatStyle.TimeStyle = .omitted) -> String {
-        formatted(Date.FormatStyle(date: dateStyle, time: timeStyle).locale(.app))
+        guard let dateFormatterStyle = dateStyle.equivalentFormatterStyle,
+              let timeFormatterStyle = timeStyle.equivalentFormatterStyle else {
+            return formatted(Date.FormatStyle(date: dateStyle, time: timeStyle).locale(.app))
+        }
+        return AppDateFormatterCache.formatter(
+            dateStyle: dateFormatterStyle,
+            timeStyle: timeFormatterStyle,
+            doesRelativeDateFormatting: false,
+            locale: .app
+        ).string(from: self)
     }
 }
 

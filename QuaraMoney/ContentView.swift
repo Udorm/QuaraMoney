@@ -8,7 +8,10 @@ import Combine
 // `.tabViewStyle(.sidebarAdaptable)` below.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(filter: #Predicate<Wallet> { $0.deletedAt == nil }) private var wallets: [Wallet]
+    // NOTE: deliberately *not* an `@Query`. This view is the app's root, so a
+    // live query would re-evaluate the whole tab tree on every wallet write —
+    // and the only question being asked is "does at least one wallet exist?",
+    // once, on first appearance.
     @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil }) private var recurringRules: [RecurringRule]
     @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @AppStorage("analyticsProMode") private var analyticsProMode: Bool = false
@@ -84,7 +87,10 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            if wallets.isEmpty {
+            var descriptor = FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })
+            descriptor.fetchLimit = 1
+            let existing = (try? modelContext.fetch(descriptor)) ?? []
+            if existing.isEmpty {
                 showCreateWallet = true
             }
         }

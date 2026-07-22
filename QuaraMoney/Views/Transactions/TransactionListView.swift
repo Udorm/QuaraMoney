@@ -8,19 +8,26 @@ struct TransactionListView: View {
     var sortOption: TransactionSortOption = .newestFirst
     var listHeader: String? = nil // Optional top-level header
     var unconvertedTransactionIDs: Set<UUID> = []
+    /// Pre-grouped sections from a caller that already derived them off the
+    /// render path (see `WalletDetailViewModel.dailySections`). When nil this
+    /// view groups on demand — correct, but it re-runs an O(n log n) sort plus
+    /// a currency conversion per transaction on *every* re-render, so callers
+    /// with a view model should supply it.
+    var precomputedSections: [DailyTransactionSection]? = nil
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
-    
+
     /// Groups transactions by date using shared TransactionProcessor
     private var dailySections: [DailyTransactionSection] {
-        TransactionProcessor.groupByDayObjects(
+        if let precomputedSections { return precomputedSections }
+        return TransactionProcessor.groupByDayObjects(
             transactions,
             rates: CurrencyManager.shared.rates,
             targetCurrency: CurrencyManager.shared.preferredCurrencyCode,
             sortAscending: sortOption == .oldestFirst
         )
     }
-    
+
     var body: some View {
         if transactions.isEmpty {
             Text(L10n.Budget.noTransactions)

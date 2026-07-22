@@ -104,6 +104,7 @@ struct WalletDetailView: View {
                     transactions: viewModel.transactions,
                     sortOption: viewModel.sortOption,
                     listHeader: viewModel.filterDescription,
+                    precomputedSections: viewModel.dailySections,
                     onEdit: { txn in
                         transactionToEdit = txn
                     },

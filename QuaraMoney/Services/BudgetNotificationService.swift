@@ -34,7 +34,11 @@ class BudgetNotificationService: ObservableObject {
             let transactions = try modelContext.fetch(FetchDescriptor<Transaction>()).filter { $0.deletedAt == nil }
             let spending = BudgetCalculator.spendingByBudgetCurrency(for: budgets, transactions: transactions)
             checkBudgetsAndTriggerAlerts(budgets: budgets, spending: spending)
-            if modelContext.hasChanges { try modelContext.save() }
+            if modelContext.hasChanges {
+                try SyncMutationTracker.withSaveSource("BudgetNotificationService.evaluateStore") {
+                    try modelContext.save()
+                }
+            }
         } catch {
             ErrorService.shared.handlePersistenceError(error, context: "BudgetNotificationService.evaluateStore")
         }
@@ -75,7 +79,9 @@ class BudgetNotificationService: ObservableObject {
             let progress = Double(truncating: spent as NSNumber) / Double(truncating: limit as NSNumber)
             
             let periodKey = budget.periodKey()
-            if budget.lastAlertPeriodKey != periodKey { budget.lastAlertThreshold = 0 }
+            if budget.lastAlertPeriodKey != periodKey, budget.lastAlertThreshold != 0 {
+                budget.lastAlertThreshold = 0
+            }
             let progressPercent = Int(progress * 100)
             let threshold = budget.alertMode.thresholds.sorted(by: >).first {
                 progressPercent >= $0 && budget.lastAlertThreshold < $0
@@ -107,11 +113,19 @@ class BudgetNotificationService: ObservableObject {
         // Schedule local notification
         Task {
             guard await scheduleLocalNotification(notification) else { return }
-            budget.recordAlertTriggered(threshold: type.threshold)
-            budget.lastAlertPeriodKey = notification.periodKey
+            if budget.lastAlertThreshold != type.threshold {
+                budget.recordAlertTriggered(threshold: type.threshold)
+            }
+            if budget.lastAlertPeriodKey != notification.periodKey {
+                budget.lastAlertPeriodKey = notification.periodKey
+            }
             budget.updatedAt = Date()
             budget.needsSync = true
-            do { try modelContext?.save() }
+            do {
+                try SyncMutationTracker.withSaveSource("BudgetNotificationService.persistAlertDedupe") {
+                    try modelContext?.save()
+                }
+            }
             catch { ErrorService.shared.handlePersistenceError(error, context: "BudgetNotificationService.persistAlertDedupe") }
         }
     }

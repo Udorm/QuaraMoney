@@ -7,7 +7,8 @@ extension View {
     /// it refresh. Safe on every scrollable screen.
     func syncPullToRefresh(_ context: ModelContext) -> some View {
         self.refreshable {
-            await SyncEngine.shared.syncIfOperational(context: context)
+            SyncEngine.shared.configureSyncContext(context)
+            _ = await SyncEngine.shared.requestSyncAndWait(reason: .manualRefresh)
         }
     }
 }

@@ -31,7 +31,7 @@ final class Category {
     var updatedAt: Date = Date()
 
     // Relationships
-    @Relationship(deleteRule: .deny) var transactions: [Transaction]?
+    @Relationship(deleteRule: .deny, inverse: \Transaction.category) var transactions: [Transaction]?
     /// Inverse for the legacy single-category budget link.
     @Relationship(deleteRule: .cascade, inverse: \Budget.category) var budgets: [Budget]?
     /// A distinct inverse is required for the multi-category join. If both

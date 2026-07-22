@@ -50,7 +50,8 @@ struct HomeContentView: View {
             VStack(spacing: 0) {
                 transactionList
                     .refreshable {
-                        await SyncEngine.shared.syncIfOperational(context: modelContext)
+                        SyncEngine.shared.configureSyncContext(modelContext)
+                        _ = await SyncEngine.shared.requestSyncAndWait(reason: .manualRefresh)
                     }
             }
             .undoToast($viewModel.recentlyDeleted, message: { _ in

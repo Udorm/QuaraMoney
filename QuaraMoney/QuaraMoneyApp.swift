@@ -286,7 +286,8 @@ struct QuaraMoneyApp: App {
                     let generation = authGeneration
                     let userID = currentAuthUserID
                     Task { @MainActor in
-                        await SyncEngine.shared.syncIfOperational(context: sharedModelContainer.mainContext)
+                        SyncEngine.shared.configureSyncContext(sharedModelContainer.mainContext)
+                        _ = await SyncEngine.shared.requestSyncAndWait(reason: .foreground)
                         guard StartupMaintenanceGuard.acceptsSettlementCompletion(
                             authUserID: userID,
                             generation: generation,
@@ -449,11 +450,15 @@ struct QuaraMoneyApp: App {
         ) else { return }
 
         let context = sharedModelContainer.mainContext
-        SyncEngine.shared.reconcileAccountIfNeeded(context: context)
         accountPipelineState = .checkingConflict
 
         pipelineTask?.cancel()
         pipelineTask = Task { @MainActor in
+            guard await SyncEngine.shared.reconcileAccountIfNeeded(context: context) else {
+                accountPipelineState = .checkFailed
+                startAccountMaintenanceIfNeeded()
+                return
+            }
             let result = await SyncEngine.shared.checkFirstSignInConflict(context: context)
             guard StartupMaintenanceGuard.acceptsSettlementCompletion(
                 authUserID: userID,
@@ -465,7 +470,7 @@ struct QuaraMoneyApp: App {
             switch result {
             case .noConflict:
                 accountPipelineState = .initialSyncInFlight
-                await SyncEngine.shared.syncIfOperational(context: context)
+                _ = await SyncEngine.shared.requestSyncAndWait(reason: .signIn)
                 guard StartupMaintenanceGuard.acceptsSettlementCompletion(
                     authUserID: userID,
                     generation: generation,

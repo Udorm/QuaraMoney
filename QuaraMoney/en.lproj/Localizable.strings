@@ -47,6 +47,15 @@
 "home.empty.message" = "Add your first income or expense to start tracking your money.";
 "home.emptyPeriod.title" = "No Transactions";
 
+// Home summary hero card
+"home.summary.spent" = "Spent · %@";
+"home.summary.deltaLessSoFar" = "%1$@ less than %2$@ by this day";
+"home.summary.deltaMoreSoFar" = "%1$@ more than %2$@ by this day";
+"home.summary.deltaLess" = "%1$@ less than %2$@";
+"home.summary.deltaMore" = "%1$@ more than %2$@";
+"home.summary.deltaSame" = "About the same as %@";
+"home.summary.scrubPrevious" = "%1$@ by then: %2$@";
+
 // MARK: - Wallets
 "wallet.title" = "Wallets";
 "wallet.add" = "Add Wallet";

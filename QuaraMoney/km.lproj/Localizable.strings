@@ -47,6 +47,15 @@
 "home.empty.message" = "បន្ថែមចំណូល ឬចំណាយដំបូងរបស់អ្នក ដើម្បីចាប់ផ្តើមតាមដានលុយរបស់អ្នក";
 "home.emptyPeriod.title" = "គ្មានប្រតិបត្តិការ";
 
+// Home summary hero card (កាតសង្ខេបទំព័រដើម)
+"home.summary.spent" = "ចំណាយ · %@";
+"home.summary.deltaLessSoFar" = "តិចជាង%2$@ %1$@ គិតត្រឹមថ្ងៃនេះ";
+"home.summary.deltaMoreSoFar" = "ច្រើនជាង%2$@ %1$@ គិតត្រឹមថ្ងៃនេះ";
+"home.summary.deltaLess" = "តិចជាង%2$@ %1$@";
+"home.summary.deltaMore" = "ច្រើនជាង%2$@ %1$@";
+"home.summary.deltaSame" = "ប្រហែលដូច%@";
+"home.summary.scrubPrevious" = "%1$@ គិតត្រឹមពេលនោះ៖ %2$@";
+
 // MARK: - Wallets (កាបូប)
 "wallet.title" = "កាបូបលុយ";
 "wallet.add" = "បន្ថែមកាបូប";

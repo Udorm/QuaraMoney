@@ -144,6 +144,30 @@ struct HomeContentView: View {
         showingAddTransaction = true
     }
 
+    /// The hero card's surface.
+    ///
+    /// This was a solid `Color.accentColor` fill, which made the card the
+    /// loudest thing on a screen whose actual content is the list below it, and
+    /// forced every figure on top to white — costing the card its semantic
+    /// income/expense color. It is now a standard grouped-background card with
+    /// the accent surviving only as a soft wash off the top-trailing corner
+    /// (and as the sparkline stroke inside).
+    private var heroCardBackground: some View {
+        RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
+            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            .overlay {
+                RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.accentColor.opacity(0.16), Color.accentColor.opacity(0)],
+                            center: .topTrailing,
+                            startRadius: 0,
+                            endRadius: 280
+                        )
+                    )
+            }
+    }
+
     private var summaryHeader: some View {
         HStack {
             Text(walletFilterDescription)
@@ -203,15 +227,13 @@ struct HomeContentView: View {
                             endDate: viewModel.currentEndDate,
                             previousPeriodCumulative: viewModel.previousPeriodCumulative,
                             compact: true,
-                            tintedBackground: true,
                             onNavigateToPro: {
                                 NotificationCenter.default.post(name: .openProAnalytics, object: nil)
                             }
                         )
                         .redacted(reason: viewModel.hasLoadedOnce ? [] : .placeholder)
                         .padding(18)
-                        .background(Color.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .background(heroCardBackground)
 
                         GlassPeriodSelector(
                             selectedTab: $viewModel.selectedTab,

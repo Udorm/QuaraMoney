@@ -128,6 +128,19 @@
 "transaction.excludeFromReports" = "មិនរាប់បញ្ចូលក្នុងរបាយការណ៍";
 "transaction.deletedToast" = "បានលុបប្រតិបត្តិការ";
 "transaction.category" = "ប្រភេទ";
+"transaction.bulk.selectedCount" = "បានជ្រើសរើស %d";
+"transaction.bulk.changeCategory" = "ប្ដូរប្រភេទ";
+"transaction.bulk.tags" = "ស្លាក";
+"transaction.bulk.addTag" = "បន្ថែមស្លាក";
+"transaction.bulk.removeTag" = "ដកស្លាក";
+"transaction.bulk.deselect" = "ដកការជ្រើសរើស";
+"transaction.bulk.tagPlaceholder" = "ឈ្មោះស្លាក";
+"transaction.bulk.tagHelp" = "បញ្ចូលស្លាកមួយដោយគ្មានដកឃ្លា។ និមិត្តសញ្ញា # មិនចាំបាច់ទេ។";
+"transaction.bulk.removeTagHelp" = "ស្លាកដែលបានជ្រើសរើសនឹងត្រូវដកចេញពីប្រតិបត្តិការដែលបានជ្រើសរើស។";
+"transaction.bulk.noTags" = "គ្មានស្លាកសម្រាប់ដកចេញ";
+"transaction.bulk.error.emptySelection" = "ជ្រើសរើសប្រតិបត្តិការយ៉ាងហោចណាស់មួយ។";
+"transaction.bulk.error.incompatibleCategory" = "ដើម្បីប្ដូរប្រភេទ សូមជ្រើសរើសប្រតិបត្តិការចំណូល ឬចំណាយដែលមានប្រភេទដូចគ្នា។ មិនអាចប្ដូរប្រភេទសម្រាប់ប្រតិបត្តិការដែលភ្ជាប់នឹងបំណុលបានទេ។";
+"transaction.bulk.error.invalidTag" = "បញ្ចូលស្លាកដោយប្រើអក្សរ លេខ ឬសញ្ញាគូសក្រោម ដោយគ្មានដកឃ្លា។";
 "transaction.scanReceipt" = "ស្កេនវិក្កយបត្រ";
 "transaction.currency" = "រូបិយប័ណ្ណ";
 

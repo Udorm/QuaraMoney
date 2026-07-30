@@ -65,6 +65,14 @@ final class TransactionTagSuggestionTests: XCTestCase {
         XCTAssertEqual(TransactionTagParser.activeTagToken(in: "ទិញ #អាហា"), "អាហា")
     }
 
+    func testNormalizesTagInput() {
+        XCTAssertEqual(TransactionTagParser.normalizedTag(" #Coffee "), "Coffee")
+        XCTAssertEqual(TransactionTagParser.normalizedTag("កាហ្វេ"), "កាហ្វេ")
+        XCTAssertNil(TransactionTagParser.normalizedTag("two words"))
+        XCTAssertNil(TransactionTagParser.normalizedTag("#"))
+        XCTAssertNil(TransactionTagParser.normalizedTag("food!"))
+    }
+
     // MARK: - Ranking
 
     private func makeTransaction(

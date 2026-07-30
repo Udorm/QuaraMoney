@@ -128,6 +128,19 @@
 "transaction.excludeFromReports" = "Exclude from Reports";
 "transaction.deletedToast" = "Transaction deleted";
 "transaction.category" = "Category";
+"transaction.bulk.selectedCount" = "%d selected";
+"transaction.bulk.changeCategory" = "Change Category";
+"transaction.bulk.tags" = "Tags";
+"transaction.bulk.addTag" = "Add Tag";
+"transaction.bulk.removeTag" = "Remove Tag";
+"transaction.bulk.deselect" = "Deselect";
+"transaction.bulk.tagPlaceholder" = "Tag name";
+"transaction.bulk.tagHelp" = "Enter one tag without spaces. The # symbol is optional.";
+"transaction.bulk.removeTagHelp" = "The selected tag will be removed wherever it appears in the selected transactions.";
+"transaction.bulk.noTags" = "No Tags to Remove";
+"transaction.bulk.error.emptySelection" = "Select at least one transaction.";
+"transaction.bulk.error.incompatibleCategory" = "To change category, select income or expense transactions of the same type. Debt-linked transactions cannot change category.";
+"transaction.bulk.error.invalidTag" = "Enter a tag using letters, numbers, or underscores without spaces.";
 "transaction.scanReceipt" = "Scan Receipt";
 "transaction.currency" = "Currency";
 

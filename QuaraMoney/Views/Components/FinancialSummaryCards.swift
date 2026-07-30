@@ -469,7 +469,11 @@ private struct SpendSummaryHero: View {
                 }
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            // The capsule has its own vertical padding, so baseline-aligning
+            // the container placed its visual center below the large amount.
+            // Optical centering keeps the inline comparison intentionally tied
+            // to the headline on compact iPhone layouts.
+            HStack(alignment: .center, spacing: 8) {
                 Text(headlineAmount.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
                     .appFont(.title, weight: .bold)
                     .foregroundStyle(palette.primaryValue)
@@ -506,16 +510,18 @@ private struct SpendSummaryHero: View {
     // MARK: Delta chip
 
     private func deltaChip(percent: Int, isDown: Bool) -> some View {
-        HStack(spacing: 2) {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
             Image(systemName: isDown ? "arrow.down" : "arrow.up")
                 .appFont(.caption2, weight: .bold)
             Text("\(abs(percent))%")
-                .appFont(.caption, weight: .semibold)
+                .appFont(.caption2, weight: .semibold)
+                .monospacedDigit()
         }
         .foregroundStyle(comparisonColor)
         .padding(.horizontal, 8)
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .background(Capsule().fill(comparisonColor.opacity(0.14)))
+        .fixedSize(horizontal: true, vertical: true)
         .accessibilityElement(children: .combine)
     }
 

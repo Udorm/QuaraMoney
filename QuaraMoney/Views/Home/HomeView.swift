@@ -38,12 +38,19 @@ struct HomeContentView: View {
     @State private var transactionToEdit: Transaction?
     @State private var backdateTarget: BackdateTarget?
     @State private var isVisible = false
-    @State private var isSelectingTransactions = false
+    /// Drives SwiftUI's native multi-selection. Owning the `EditMode` here (and
+    /// injecting it into the list's environment) is what buys the system
+    /// behaviours a hand-rolled checkmark column can't: two-finger drag-select,
+    /// the standard row inset animation, and free `List(selection:)` plumbing.
+    @State private var editMode: EditMode = .inactive
     @State private var selectedTransactionIDs = Set<UUID>()
     @State private var showingBulkCategoryPicker = false
     @State private var bulkTagOperation: TransactionBulkTagOperation?
+    @State private var showingBulkLocationPicker = false
+    @State private var bulkLocationSelection: TransactionLocationSelection?
+    @State private var showingBulkDeleteConfirmation = false
     @State private var bulkEditErrorMessage: String?
-    @State private var showingSortOptions = false
+    @State private var bulkMutation: TransactionBulkMutation?
     private var router = AppRouter.shared
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
@@ -54,22 +61,15 @@ struct HomeContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                transactionList
-                    .refreshable {
-                        SyncEngine.shared.configureSyncContext(modelContext)
-                        _ = await SyncEngine.shared.requestSyncAndWait(reason: .manualRefresh)
-                    }
-            }
+            searchableContent
             .undoToast($viewModel.recentlyDeleted, message: { _ in
                 "transaction.deletedToast".localized
             }, onUndo: { token in
                 viewModel.undoDelete(token)
             })
+            .undoToast($bulkMutation, message: bulkUndoMessage, onUndo: revertBulkMutation)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if isSelectingTransactions {
-                    bulkActionBar
-                } else {
+                if !isSelectingTransactions {
                     HStack {
                         Spacer()
                         Button {
@@ -85,13 +85,18 @@ struct HomeContentView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            .navigationTitle("QuaraMoney")
-            .navigationBarTitleDisplayMode(.large)
-            .searchable(
-                text: $viewModel.searchText,
-                prompt: "common.search".localized
-            )
-            .searchToolbarBehavior(.minimize)
+            // Photos' model: select mode *replaces* the tab bar with the action
+            // bar rather than stacking one above the other. Hiding it is also
+            // what makes a real `.bottomBar` toolbar viable — an earlier attempt
+            // rendered its items as ghosts *underneath* the floating tab bar,
+            // which is why the bar had to be a hand-built inset until now.
+            .toolbarVisibility(isSelectingTransactions ? .hidden : .automatic, for: .tabBar)
+            // Mail/Photos retitle the bar to the live selection count and drop to
+            // the inline metric while editing; the subtitle carries the running
+            // total, which is the number that actually matters here.
+            .navigationTitle(isSelectingTransactions ? selectionTitle : "QuaraMoney")
+            .navigationSubtitle(isSelectingTransactions ? selectionTotalDescription : "")
+            .navigationBarTitleDisplayMode(isSelectingTransactions ? .inline : .large)
             // Visibility gating: the VM refreshes on .dataDidUpdate only while
             // this tab is on screen; changes that arrive while hidden are
             // applied on the next appearance. The first onAppear also performs
@@ -134,6 +139,18 @@ struct HomeContentView: View {
                     onApply: { tag in applyBulkTag(tag, operation: operation) }
                 )
             }
+            .sheet(isPresented: $showingBulkLocationPicker) {
+                TransactionLocationPickerView(selection: $bulkLocationSelection)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            // The picker writes its binding only on Done, so a non-nil value here
+            // is an explicit confirmation — Cancel leaves the reset nil in place.
+            .onChange(of: bulkLocationSelection) { _, selection in
+                guard let selection else { return }
+                applyBulkLocation(selection)
+                bulkLocationSelection = nil
+            }
             .debtDeletionBlockedAlert($viewModel.blockedDeletionMessage)
             .sheet(item: $backdateTarget) { target in
                 AddTransactionContainer(transaction: nil, isNewTransaction: true, initialDate: target.date)
@@ -161,30 +178,18 @@ struct HomeContentView: View {
             } message: {
                 Text(bulkEditErrorMessage ?? "")
             }
-            .confirmationDialog(
-                L10n.Sort.title,
-                isPresented: $showingSortOptions,
-                titleVisibility: .visible
-            ) {
-                ForEach(TransactionSortOption.allCases) { option in
-                    Button {
-                        viewModel.sortOption = option
-                        HapticManager.shared.selection()
-                    } label: {
-                        if viewModel.sortOption == option {
-                            Label(option.displayName, systemImage: "checkmark")
-                        } else {
-                            Text(option.displayName)
-                        }
-                    }
-                }
-            }
             .toolbar {
+                // The leading slot is one control that swaps role — Select while
+                // browsing, Done while selecting — instead of a Done appearing
+                // opposite it. Filtering stays reachable in both modes, so the
+                // trailing group survives the switch and only drops Sort, which
+                // is meaningless against a selection.
                 if isSelectingTransactions {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(L10n.Common.done) { endTransactionSelection() }
+                            .fontWeight(.semibold)
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
                         Button(selectionCoversAllDisplayedTransactions
                                ? "common.deselectAll".localized
                                : "common.selectAll".localized) {
@@ -193,16 +198,28 @@ struct HomeContentView: View {
                             } else {
                                 selectedTransactionIDs = Set(displayedTransactions.map(\.id))
                             }
+                            HapticManager.shared.selection()
                         }
+                        homeFilterButton
+                    }
+                    ToolbarItemGroup(placement: .bottomBar) {
+                        bulkCategoryButton
+                        Spacer()
+                        bulkTagsMenu
+                        Spacer()
+                        bulkWalletMenu
+                        Spacer()
+                        bulkMoreMenu
+                        Spacer()
+                        bulkDeleteButton
                     }
                 } else {
                     if !displayedTransactions.isEmpty {
                         ToolbarItem(placement: .topBarLeading) {
                             Button {
-                                isSelectingTransactions = true
-                                HapticManager.shared.selection()
+                                beginTransactionSelection()
                             } label: {
-                                Image(systemName: "checkmark.circle")
+                                Image(systemName: "checkmark")
                             }
                             .accessibilityLabel("common.select".localized)
                         }
@@ -216,6 +233,35 @@ struct HomeContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Search is a browsing affordance, so it leaves the bar while editing —
+    /// the same thing Mail and Files do. `.searchable` has no "disabled" form,
+    /// so the modifier has to be applied conditionally; the branch is kept as
+    /// tight as possible around the list, and `searchText` lives on the view
+    /// model rather than in `@State`, so nothing is lost across the swap.
+    @ViewBuilder
+    private var searchableContent: some View {
+        if isSelectingTransactions {
+            refreshableList
+        } else {
+            refreshableList
+                .searchable(
+                    text: $viewModel.searchText,
+                    prompt: "common.search".localized
+                )
+                .searchToolbarBehavior(.minimize)
+        }
+    }
+
+    private var refreshableList: some View {
+        VStack(spacing: 0) {
+            transactionList
+                .refreshable {
+                    SyncEngine.shared.configureSyncContext(modelContext)
+                    _ = await SyncEngine.shared.requestSyncAndWait(reason: .manualRefresh)
+                }
         }
     }
 
@@ -234,13 +280,27 @@ struct HomeContentView: View {
         .accessibilityLabel(L10n.Filter.title)
     }
 
-    /// Explicit toolbar button used beside Filter. A Button is intentional here:
-    /// `Menu` can be represented as an ellipsis when grouped in a compact toolbar.
+    /// Photos' sort affordance: a `Menu`, so iOS 26 morphs the toolbar button
+    /// itself into the Liquid Glass options panel anchored right under it —
+    /// where the old `confirmationDialog` threw a full-width sheet up from the
+    /// bottom of the screen instead. An inline `Picker` supplies the checkmark
+    /// and single-selection semantics for free.
+    ///
+    /// (The earlier note here warned a grouped `Menu` can collapse to an
+    /// ellipsis; with only Filter beside it this bar renders the real glyph.)
     private var homeSortButton: some View {
-        Button {
-            showingSortOptions = true
+        Menu {
+            Picker(selection: $viewModel.sortOption, label: Text(L10n.Sort.title)) {
+                ForEach(TransactionSortOption.allCases) { option in
+                    Label(option.displayName, systemImage: option.systemImage).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
         } label: {
             Image(systemName: "arrow.up.arrow.down")
+        }
+        .onChange(of: viewModel.sortOption) { _, _ in
+            HapticManager.shared.selection()
         }
         .accessibilityLabel("a11y.sortTransactions".localized)
     }
@@ -267,60 +327,170 @@ struct HomeContentView: View {
         displayedTransactions.filter { selectedTransactionIDs.contains($0.id) }
     }
 
-    /// Home owns this inset instead of using a navigation `.bottomBar` toolbar.
-    /// The root `TabView` consumes the device's bottom safe area, so an inset on
-    /// Home's content naturally stacks above the persistent tab bar.
-    private var bulkActionBar: some View {
-        HStack(spacing: 12) {
-            Text("transaction.bulk.selectedCount".localized(with: selectedTransactionIDs.count))
-                .appFont(.footnote, weight: .semibold)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+    // MARK: - Bulk action bar
+    //
+    // Icon-only items in a real `.bottomBar` toolbar, the way Photos presents
+    // batch actions: the frequent edits sit on the surface, the rest collapse
+    // into a single overflow menu, and the destructive action is isolated at the
+    // trailing edge. Sizing, spacing and the glass background all come from the
+    // system now that the tab bar yields the space. Every item carries an
+    // accessibility label because the glyph is the only visible affordance.
 
-            Spacer(minLength: 4)
+    private var bulkCategoryButton: some View {
+        Button {
+            guard bulkEditableCategoryType != nil else {
+                HapticManager.shared.notification(type: .error)
+                bulkEditErrorMessage = "transaction.bulk.error.incompatibleCategory".localized
+                return
+            }
+            showingBulkCategoryPicker = true
+        } label: {
+            // `tag` is already the app's category glyph — More → Categories,
+            // the Pro Analytics category chips and the largest-transaction rows
+            // all fall back to it.
+            Image(systemName: "tag")
+        }
+        .disabled(selectedTransactionIDs.isEmpty)
+        .accessibilityLabel("transaction.bulk.changeCategory".localized)
+    }
 
+    /// `number` (the `#` glyph) for the hashtag feature, since `tag` belongs to
+    /// categories above and the tag chips elsewhere render as literal `#name`.
+    private var bulkTagsMenu: some View {
+        Menu {
             Button {
-                guard bulkEditableCategoryType != nil else {
-                    bulkEditErrorMessage = "transaction.bulk.error.incompatibleCategory".localized
-                    return
-                }
-                showingBulkCategoryPicker = true
+                bulkTagOperation = .add
             } label: {
-                Label("transaction.bulk.changeCategory".localized, systemImage: "folder")
-                    .appFont(.footnote, weight: .semibold)
-                    .lineLimit(1)
+                Label("transaction.bulk.addTag".localized, systemImage: "plus")
             }
-            .buttonStyle(.bordered)
-            .disabled(selectedTransactionIDs.isEmpty)
+            Button {
+                bulkTagOperation = .remove
+            } label: {
+                Label("transaction.bulk.removeTag".localized, systemImage: "minus")
+            }
+            .disabled(selectedAvailableTags.isEmpty)
+        } label: {
+            Image(systemName: "number")
+        }
+        .disabled(selectedTransactionIDs.isEmpty)
+        .accessibilityLabel("transaction.bulk.tags".localized)
+    }
 
-            Menu {
+    /// Wallets are listed inline rather than behind a sheet — the list is short
+    /// and a menu keeps the whole move to two taps. Ineligible selections
+    /// disable the control instead of failing after the fact.
+    private var bulkWalletMenu: some View {
+        Menu {
+            ForEach(wallets) { wallet in
                 Button {
-                    bulkTagOperation = .add
+                    applyBulkWallet(wallet)
                 } label: {
-                    Label("transaction.bulk.addTag".localized, systemImage: "tag")
+                    Label {
+                        Text(verbatim: wallet.name)
+                    } icon: {
+                        Image(systemName: wallet.icon)
+                    }
                 }
-                Button {
-                    bulkTagOperation = .remove
-                } label: {
-                    Label("transaction.bulk.removeTag".localized, systemImage: "tag.slash")
-                }
-                .disabled(selectedAvailableTags.isEmpty)
-            } label: {
-                Label("transaction.bulk.tags".localized, systemImage: "tag")
-                    .appFont(.footnote, weight: .semibold)
-                    .lineLimit(1)
             }
-            .buttonStyle(.bordered)
-            .disabled(selectedTransactionIDs.isEmpty)
+        } label: {
+            Image(systemName: "wallet.bifold")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Divider()
+        .disabled(bulkWalletMoveCount == 0)
+        .accessibilityLabel("transaction.bulk.moveToWallet".localized)
+    }
+
+    private var bulkMoreMenu: some View {
+        Menu {
+            Section {
+                Button {
+                    bulkLocationSelection = nil
+                    showingBulkLocationPicker = true
+                } label: {
+                    Label("transaction.bulk.setLocation".localized, systemImage: "mappin.and.ellipse")
+                }
+                Button(role: .destructive) {
+                    applyBulkLocation(nil)
+                } label: {
+                    Label("transaction.bulk.clearLocation".localized, systemImage: "mappin.slash")
+                }
+                .disabled(!selectionHasAnyLocation)
+            }
+
+            Section {
+                if selectionIsAllExcluded {
+                    Button {
+                        applyBulkExclusion(false)
+                    } label: {
+                        Label("transaction.bulk.includeInReports".localized, systemImage: "eye")
+                    }
+                } else {
+                    Button {
+                        applyBulkExclusion(true)
+                    } label: {
+                        Label("transaction.bulk.excludeFromReports".localized, systemImage: "eye.slash")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
+        .disabled(selectedTransactionIDs.isEmpty)
+        .accessibilityLabel("common.more".localized)
+    }
+
+    private var bulkDeleteButton: some View {
+        Button(role: .destructive) {
+            showingBulkDeleteConfirmation = true
+        } label: {
+            Image(systemName: "trash")
+        }
+        .tint(.red)
+        .disabled(bulkDeletableTransactions.isEmpty)
+        .accessibilityLabel(L10n.Common.delete)
+        // Attached to the button, not the navigation root: SwiftUI anchors the
+        // confirmation popover to the view carrying the modifier, so it grows
+        // out of the trash glyph the way iOS 26's own destructive bar actions
+        // do. Hosting it at the root left it stranded at the top of the screen.
+        .confirmationDialog(
+            deleteConfirmationTitle,
+            isPresented: $showingBulkDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.Common.delete, role: .destructive) { applyBulkDelete() }
+            Button(L10n.Common.cancel, role: .cancel) {}
+        } message: {
+            if bulkDeletableTransactions.count < selectedTransactions.count {
+                Text("transaction.bulk.deleteSkipsAnchors".localized)
+            }
+        }
+    }
+
+    // MARK: - Selection state
+
+    private var isSelectingTransactions: Bool { editMode.isEditing }
+
+    private var selectionTitle: String {
+        selectedTransactionIDs.isEmpty
+            ? "transaction.bulk.selectPrompt".localized
+            : "transaction.bulk.selectedCount".localized(with: selectedTransactionIDs.count)
+    }
+
+    /// Net value of the selection in the user's preferred currency. Income adds,
+    /// expense subtracts; transfers and adjustments net to zero across wallets
+    /// and are left out rather than double-counted.
+    private var selectionTotalDescription: String {
+        guard !selectedTransactions.isEmpty else { return "" }
+        let preferred = CurrencyManager.shared.preferredCurrencyCode
+        let total = selectedTransactions.reduce(Decimal.zero) { running, transaction in
+            guard transaction.type == .income || transaction.type == .expense else { return running }
+            let converted = CurrencyManager.shared.convert(
+                amount: transaction.amount,
+                from: transaction.currencyCode,
+                to: preferred
+            )
+            return running + (transaction.type == .income ? converted : -converted)
+        }
+        return total.formattedAmount(for: preferred)
     }
 
     private var selectionCoversAllDisplayedTransactions: Bool {
@@ -356,55 +526,124 @@ struct HomeContentView: View {
         return spellings.values.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
-    private func toggleTransactionSelection(_ transaction: Transaction) {
-        if selectedTransactionIDs.contains(transaction.id) {
-            selectedTransactionIDs.remove(transaction.id)
-        } else {
-            selectedTransactionIDs.insert(transaction.id)
-        }
+    private var bulkWalletMoveCount: Int {
+        selectedTransactions.filter(TransactionBulkEditingService.isWalletMoveEligible).count
+    }
+
+    private var bulkDeletableTransactions: [Transaction] {
+        selectedTransactions.filter { !$0.isDebtAnchor }
+    }
+
+    private var selectionHasAnyLocation: Bool {
+        selectedTransactions.contains { $0.location != nil }
+    }
+
+    private var selectionIsAllExcluded: Bool {
+        TransactionBulkEditingService.allExcludedFromReports(selectedTransactions)
+    }
+
+    private var deleteConfirmationTitle: String {
+        "transaction.bulk.deleteConfirm".localized(with: bulkDeletableTransactions.count)
+    }
+
+    private func beginTransactionSelection() {
+        withAnimation { editMode = .active }
         HapticManager.shared.selection()
     }
 
     private func beginTransactionSelection(with transaction: Transaction) {
-        isSelectingTransactions = true
+        withAnimation { editMode = .active }
         selectedTransactionIDs = [transaction.id]
         HapticManager.shared.selection()
     }
 
     private func endTransactionSelection() {
-        isSelectingTransactions = false
+        withAnimation { editMode = .inactive }
         selectedTransactionIDs.removeAll()
     }
 
+    // MARK: - Bulk mutations
+
     private func applyBulkCategory(_ category: Category) {
-        do {
+        performBulkEdit {
             try TransactionBulkEditingService.changeCategory(
                 of: selectedTransactions,
                 to: category,
                 in: modelContext
             )
-            HapticManager.shared.notification(type: .success)
-            endTransactionSelection()
-        } catch {
-            HapticManager.shared.notification(type: .error)
-            bulkEditErrorMessage = bulkEditMessage(for: error)
         }
     }
 
     private func applyBulkTag(_ tag: String, operation: TransactionBulkTagOperation) {
-        do {
+        performBulkEdit {
             switch operation {
             case .add:
                 try TransactionBulkEditingService.addTag(tag, to: selectedTransactions, in: modelContext)
             case .remove:
                 try TransactionBulkEditingService.removeTag(tag, from: selectedTransactions, in: modelContext)
             }
+        }
+    }
+
+    private func applyBulkWallet(_ wallet: Wallet) {
+        performBulkEdit {
+            try TransactionBulkEditingService.move(selectedTransactions, toWallet: wallet, in: modelContext)
+        }
+    }
+
+    private func applyBulkLocation(_ selection: TransactionLocationSelection?) {
+        performBulkEdit {
+            try TransactionBulkEditingService.setLocation(selection, for: selectedTransactions, in: modelContext)
+        }
+    }
+
+    private func applyBulkExclusion(_ excluded: Bool) {
+        performBulkEdit {
+            try TransactionBulkEditingService.setExcludedFromReports(
+                excluded,
+                for: selectedTransactions,
+                in: modelContext
+            )
+        }
+    }
+
+    private func applyBulkDelete() {
+        performBulkEdit {
+            try TransactionBulkEditingService.delete(selectedTransactions, in: modelContext)
+        }
+    }
+
+    /// Runs one mutation, then surfaces it as an Undo toast and leaves selection
+    /// mode. The single-delete toast is cleared first so the two snackbars can
+    /// never stack on top of each other.
+    private func performBulkEdit(_ mutate: () throws -> TransactionBulkMutation) {
+        do {
+            let mutation = try mutate()
+            viewModel.recentlyDeleted = nil
+            bulkMutation = mutation
             HapticManager.shared.notification(type: .success)
             endTransactionSelection()
         } catch {
             HapticManager.shared.notification(type: .error)
             bulkEditErrorMessage = bulkEditMessage(for: error)
         }
+    }
+
+    private func revertBulkMutation(_ mutation: TransactionBulkMutation) {
+        do {
+            try mutation.revert(in: modelContext)
+            HapticManager.shared.selection()
+        } catch {
+            HapticManager.shared.notification(type: .error)
+            bulkEditErrorMessage = bulkEditMessage(for: error)
+        }
+    }
+
+    /// Partial application is reported in the toast rather than an alert: the
+    /// edit did succeed for most rows, so an error dialog would overstate it.
+    private func bulkUndoMessage(_ mutation: TransactionBulkMutation) -> String {
+        guard mutation.skippedCount > 0 else { return mutation.summary }
+        return mutation.summary + " · " + "transaction.bulk.skipped".localized(with: mutation.skippedCount)
     }
 
     private func bulkEditMessage(for error: Error) -> String {
@@ -464,7 +703,7 @@ struct HomeContentView: View {
     }
 
     private var transactionList: some View {
-        List {
+        List(selection: $selectedTransactionIDs) {
             if isFirstRunEmpty {
                 Section {
                     AppEmptyStateView(
@@ -484,6 +723,7 @@ struct HomeContentView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                .selectionDisabled()
             } else {
                 Section {
                     VStack(spacing: 16) {
@@ -532,6 +772,10 @@ struct HomeContentView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                // The hero card, period selector and empty states are chrome —
+                // `List(selection:)` would otherwise offer selection circles
+                // beside them the moment edit mode turns on.
+                .selectionDisabled()
 
                 if isResultEmpty {
                     Section {
@@ -547,14 +791,12 @@ struct HomeContentView: View {
                         }
                     }
                     .listRowSeparator(.hidden)
+                    .selectionDisabled()
                 } else if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
                     // Sorted flat list
                     ForEach(viewModel.sortedTransactions) { txn in
                         HomeTransactionRow(
                             transaction: txn,
-                            isSelecting: isSelectingTransactions,
-                            isSelected: selectedTransactionIDs.contains(txn.id),
-                            onSelectionToggle: { toggleTransactionSelection(txn) },
                             onBeginSelection: { beginTransactionSelection(with: txn) },
                             onEdit: { transactionToEdit = txn },
                             onDelete: { viewModel.deleteTransaction(txn) }
@@ -578,9 +820,6 @@ struct HomeContentView: View {
                             ForEach(section.transactions) { txn in
                                 HomeTransactionRow(
                                     transaction: txn,
-                                    isSelecting: isSelectingTransactions,
-                                    isSelected: selectedTransactionIDs.contains(txn.id),
-                                    onSelectionToggle: { toggleTransactionSelection(txn) },
                                     onBeginSelection: { beginTransactionSelection(with: txn) },
                                     onEdit: { transactionToEdit = txn },
                                     onDelete: { viewModel.deleteTransaction(txn) }
@@ -594,67 +833,68 @@ struct HomeContentView: View {
         .listStyle(.insetGrouped)
         .listSectionSpacing(4) // Reduce section spacing and top padding
         .environment(\.defaultMinListHeaderHeight, 0)
+        .environment(\.editMode, $editMode)
     }
 }
 
 // Subview for Transaction Row to reduce complexity
 struct HomeTransactionRow: View {
     let transaction: Transaction
-    let isSelecting: Bool
-    let isSelected: Bool
-    let onSelectionToggle: () -> Void
     let onBeginSelection: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
-    
-    var body: some View {
-        Button(action: isSelecting ? onSelectionToggle : onEdit) {
-            HStack(spacing: 12) {
-                if isSelecting {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .appFont(.title3)
-                        .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                        .accessibilityHidden(true)
-                }
-                TransactionRowView(transaction: transaction)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if !isSelecting {
-                Button(role: .destructive, action: onDelete) {
-                    Label(L10n.Common.delete, systemImage: "trash")
-                }
 
-                Button(action: onEdit) {
-                    Label(L10n.Common.edit, systemImage: "pencil")
-                }
-                .tint(.blue)
-            }
-        }
-        .contextMenu {
-            if isSelecting {
-                Button(action: onSelectionToggle) {
-                    Label(
-                        isSelected ? "transaction.bulk.deselect".localized : "common.select".localized,
-                        systemImage: isSelected ? "circle" : "checkmark.circle"
-                    )
-                }
-            } else {
-                Button(action: onBeginSelection) {
-                    Label("common.select".localized, systemImage: "checkmark.circle")
-                }
-                Button(action: onEdit) {
-                    Label(L10n.Common.edit, systemImage: "pencil")
-                        .appFont(.body)
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Label(L10n.Common.delete, systemImage: "trash")
-                        .appFont(.body)
+    @Environment(\.editMode) private var editMode
+
+    private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
+
+    var body: some View {
+        rowContent
+            // Swipe actions and the context menu both compete with edit mode's
+            // drag-to-select, which is why the system suppresses them there too.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                if !isEditing {
+                    Button(role: .destructive, action: onDelete) {
+                        Label(L10n.Common.delete, systemImage: "trash")
+                    }
+
+                    Button(action: onEdit) {
+                        Label(L10n.Common.edit, systemImage: "pencil")
+                    }
+                    .tint(.blue)
                 }
             }
+            .contextMenu {
+                if !isEditing {
+                    Button(action: onBeginSelection) {
+                        Label("common.select".localized, systemImage: "checkmark.circle")
+                    }
+                    Button(action: onEdit) {
+                        Label(L10n.Common.edit, systemImage: "pencil")
+                            .appFont(.body)
+                    }
+                    Button(role: .destructive, action: onDelete) {
+                        Label(L10n.Common.delete, systemImage: "trash")
+                            .appFont(.body)
+                    }
+                }
+            }
+    }
+
+    /// A `Button` would swallow the tap that `List(selection:)` needs to toggle
+    /// the row, so edit mode renders the bare content and lets the list own the
+    /// gesture — including the two-finger drag across many rows.
+    @ViewBuilder
+    private var rowContent: some View {
+        if isEditing {
+            TransactionRowView(transaction: transaction)
+                .contentShape(Rectangle())
+        } else {
+            Button(action: onEdit) {
+                TransactionRowView(transaction: transaction)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 }

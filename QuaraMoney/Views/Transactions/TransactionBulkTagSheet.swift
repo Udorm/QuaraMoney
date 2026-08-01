@@ -55,7 +55,7 @@ struct TransactionBulkTagSheet: View {
                         if availableTags.isEmpty {
                             ContentUnavailableView(
                                 "transaction.bulk.noTags".localized,
-                                systemImage: "tag.slash"
+                                systemImage: "number"
                             )
                         } else {
                             ForEach(availableTags, id: \.self) { tag in

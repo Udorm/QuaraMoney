@@ -167,6 +167,14 @@ enum SoftDeleteService {
     }
 
     /// dest-per-source conversion using current rates, falling back to constants.
+    ///
+    /// Shared with `TransactionBulkEditingService.move(_:toWallet:in:)` so a
+    /// bulk wallet move re-derives `storedRate` exactly the way a wallet
+    /// deletion already does.
+    static func conversionRate(from source: String, to dest: String) -> Decimal {
+        rate(from: source, to: dest)
+    }
+
     private static func rate(from source: String, to dest: String) -> Decimal {
         if source == dest { return 1.0 }
         let manager = CurrencyManager.shared

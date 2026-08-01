@@ -133,7 +133,6 @@
 "transaction.bulk.tags" = "Tags";
 "transaction.bulk.addTag" = "Add Tag";
 "transaction.bulk.removeTag" = "Remove Tag";
-"transaction.bulk.deselect" = "Deselect";
 "transaction.bulk.tagPlaceholder" = "Tag name";
 "transaction.bulk.tagHelp" = "Enter one tag without spaces. The # symbol is optional.";
 "transaction.bulk.removeTagHelp" = "The selected tag will be removed wherever it appears in the selected transactions.";
@@ -141,6 +140,25 @@
 "transaction.bulk.error.emptySelection" = "Select at least one transaction.";
 "transaction.bulk.error.incompatibleCategory" = "To change category, select income or expense transactions of the same type. Debt-linked transactions cannot change category.";
 "transaction.bulk.error.invalidTag" = "Enter a tag using letters, numbers, or underscores without spaces.";
+"transaction.bulk.error.noEligible" = "None of the selected transactions can take this change.";
+"transaction.bulk.selectPrompt" = "Select";
+"transaction.bulk.moveToWallet" = "Move to Wallet";
+"transaction.bulk.setLocation" = "Set Location";
+"transaction.bulk.clearLocation" = "Remove Location";
+"transaction.bulk.excludeFromReports" = "Exclude from Reports";
+"transaction.bulk.includeInReports" = "Include in Reports";
+"transaction.bulk.deleteConfirm" = "Delete %d Transactions?";
+"transaction.bulk.deleteSkipsAnchors" = "Transactions that anchor a debt will be kept. Delete the debt itself from Debts & Loans.";
+"transaction.bulk.skipped" = "%d skipped";
+"transaction.bulk.undo.category" = "Category changed for %d";
+"transaction.bulk.undo.addTag" = "Tag added to %d";
+"transaction.bulk.undo.removeTag" = "Tag removed from %d";
+"transaction.bulk.undo.wallet" = "%d moved to wallet";
+"transaction.bulk.undo.location" = "Location set on %d";
+"transaction.bulk.undo.locationCleared" = "Location removed from %d";
+"transaction.bulk.undo.excluded" = "%d excluded from reports";
+"transaction.bulk.undo.included" = "%d included in reports";
+"transaction.bulk.undo.deleted" = "%d transactions deleted";
 "transaction.scanReceipt" = "Scan Receipt";
 "transaction.currency" = "Currency";
 

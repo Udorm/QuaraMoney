@@ -106,6 +106,7 @@
 "transaction.add" = "Add Transaction";
 "transaction.amount" = "Amount";
 "transaction.note" = "Add note...";
+"transaction.noteLabel" = "Note";
 "transaction.rate" = "Rate";
 "transaction.tag.add" = "Add tag %@";
 "transaction.type" = "Type";
@@ -426,9 +427,6 @@
 "settings.general" = "General";
 "settings.compactEntry" = "Compact Transaction Entry";
 "settings.compactEntry.footer" = "One-screen entry form with the keypad always visible — every input is one tap away, no scrolling needed.";
-"transaction.layout.menu" = "Layout";
-"transaction.layout.classic" = "Classic";
-"transaction.layout.compact" = "Compact";
 "settings.defaultCurrency" = "Default Currency";
 "settings.themeColors" = "Theme & Colors";
 "settings.importCSV" = "Import from CSV";

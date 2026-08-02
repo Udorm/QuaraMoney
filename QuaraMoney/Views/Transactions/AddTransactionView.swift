@@ -8,10 +8,6 @@ struct AddTransactionView: View {
     let isNewTransaction: Bool
     let locksSavingsGoal: Bool
 
-    /// Shared with `AddTransactionContainer`; flipping it swaps this screen for
-    /// the compact layout live (the container keeps the same view model).
-    @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
-
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -69,29 +65,6 @@ struct AddTransactionView: View {
     /// so the debt's derived ledger (totals, repayments) can't be silently
     /// corrupted by changing the amount, type, or currency.
     private var isDebtLinked: Bool { viewModel.debt != nil }
-
-    /// Debt-linked and balance-adjustment entries only exist on the classic
-    /// screen, so the layout switch is offered only when the compact layout is
-    /// actually reachable (mirrors `AddTransactionContainer.usesCompactEntry`).
-    private var canSwitchLayout: Bool {
-        !isDebtLinked && viewModel.type != .adjustment
-    }
-
-    /// Nav-bar overflow menu: pick the classic or compact entry layout.
-    @ViewBuilder
-    private var layoutMenu: some View {
-        Menu {
-            Picker("transaction.layout.menu".localized, selection: $useCompactTransactionEntry) {
-                Label("transaction.layout.classic".localized, systemImage: "list.bullet.rectangle")
-                    .tag(false)
-                Label("transaction.layout.compact".localized, systemImage: "rectangle.compress.vertical")
-                    .tag(true)
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-        }
-        .accessibilityLabel("transaction.layout.menu".localized)
-    }
 
     private var filteredCategories: [Category] {
         categories.filter { $0.type == viewModel.type }
@@ -484,10 +457,11 @@ struct AddTransactionView: View {
             .safeAreaInset(edge: .bottom, alignment: .trailing) {
                 // Scanning overwrites the form from a receipt, so it's only offered
                 // for a fresh, non-debt-linked entry, and tucked away while the
-                // calculator keyboard is occupying the same corner of the screen.
+                // calculator keyboard — or the note keyboard's "Done" pill — is
+                // occupying the same corner of the screen.
                 // A safe-area inset (not a ZStack overlay) so the list reserves
                 // space for it instead of scrolling content underneath.
-                if isNewTransaction && !isDebtLinked && !showKeyboard {
+                if isNewTransaction && !isDebtLinked && !showKeyboard && !isNoteFieldFocused {
                     Button {
                         showScanner = true
                     } label: {
@@ -536,11 +510,6 @@ struct AddTransactionView: View {
                     }
                     .accessibilityLabel(L10n.Common.cancel)
                 }
-                if canSwitchLayout {
-                    ToolbarItem(placement: .topBarLeading) {
-                        layoutMenu
-                    }
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if viewModel.saveTransaction() {
@@ -553,6 +522,19 @@ struct AddTransactionView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.isValid)
                     .accessibilityLabel("a11y.saveTransaction".localized)
+                }
+
+                // The note field is multi-line, so Return no longer dismisses.
+                // Only shown while it holds focus — the amount uses the app's
+                // own calculator pad, which this toolbar must not sit above.
+                if isNoteFieldFocused {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("common.done".localized) {
+                            isNoteFieldFocused = false
+                        }
+                        .appFont(.subheadline, weight: .semibold)
+                    }
                 }
             }
             .sheet(isPresented: $showScanner) {
@@ -981,10 +963,18 @@ struct AddTransactionView: View {
             }
 
             // Note Field — supports inline #tags; suggestions render below.
+            // Grows with the note (a single-line field only ever shows a window
+            // around the caret, so a long note can never be read back in full).
+            // Return inserts a newline on a vertical field, so the keyboard
+            // toolbar's "Done" replaces the old submit-to-dismiss.
             Label {
-                TextField(L10n.Transaction.note, text: $viewModel.note)
+                // The greedy frame is what makes the vertical field wrap: left
+                // to its own devices it takes its ideal (whole-string) width
+                // inside a Label and scrolls on one line instead.
+                TextField(L10n.Transaction.note, text: $viewModel.note, axis: .vertical)
                     .focused($isNoteFieldFocused)
-                    .submitLabel(.done)
+                    .lineLimit(1...6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } icon: {
                 fieldIcon("note.text", color: .gray)
             }
@@ -1102,7 +1092,11 @@ struct WalletChip: View {
     let wallet: Wallet
     let isSelected: Bool
     let action: () -> Void
-    
+
+    /// Long wallet names truncate rather than stretching the pill wide enough to
+    /// push its neighbours (and the "More" chip) out of reach.
+    @ScaledMetric(relativeTo: .subheadline) private var maxLabelWidth: CGFloat = 150
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -1110,14 +1104,17 @@ struct WalletChip: View {
                     .appFont(.caption2)
                 Text(wallet.name)
                     .appFont(.subheadline, weight: .medium)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: maxLabelWidth, alignment: .leading)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(isSelected ? Color.accentColor : Color(.tertiarySystemGroupedBackground))
             .foregroundColor(isSelected ? .white : .primary)
-            .cornerRadius(16)
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: isSelected ? 0 : 1)
             )
         }

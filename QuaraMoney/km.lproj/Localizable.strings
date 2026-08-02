@@ -106,6 +106,7 @@
 "transaction.add" = "បន្ថែមប្រតិបត្តិការ";
 "transaction.amount" = "ចំនួនទឹកប្រាក់";
 "transaction.note" = "បន្ថែមកំណត់ចំណាំ...";
+"transaction.noteLabel" = "កំណត់ចំណាំ";
 "transaction.rate" = "អត្រា";
 "transaction.tag.add" = "បន្ថែមស្លាក %@";
 "transaction.type" = "ប្រភេទ";
@@ -426,9 +427,6 @@
 "settings.general" = "ទូទៅ";
 "settings.compactEntry" = "ការបញ្ចូលប្រតិបត្តិការសង្ខេប";
 "settings.compactEntry.footer" = "ទម្រង់បញ្ចូលក្នុងអេក្រង់តែមួយ ដោយក្ដារចុចបង្ហាញជានិច្ច — គ្រប់ការបញ្ចូលទាំងអស់ត្រូវការចុចតែម្ដង មិនចាំបាច់រំកិលអេក្រង់ឡើយ។";
-"transaction.layout.menu" = "ប្លង់";
-"transaction.layout.classic" = "បែបប្រពៃណី";
-"transaction.layout.compact" = "សង្ខេប";
 "settings.defaultCurrency" = "រូបិយប័ណ្ណលំនាំដើម";
 "settings.themeColors" = "រចនាប័ទ្ម និងពណ៌";
 "settings.importCSV" = "នាំចូលពី CSV";

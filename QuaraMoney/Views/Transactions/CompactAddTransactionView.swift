@@ -14,10 +14,6 @@ struct CompactAddTransactionView: View {
     @State var viewModel: AddTransactionViewModel
     let isNewTransaction: Bool
 
-    /// Shared with `AddTransactionContainer`; flipping it swaps this screen for
-    /// the classic layout live (the container keeps the same view model).
-    @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
-
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
@@ -58,6 +54,16 @@ struct CompactAddTransactionView: View {
     @State private var locationService = CurrentLocationService()
 
     private let maxQuickWallets = 4
+
+    /// Free text on the detail chips (note, place name, goal name) is truncated
+    /// at this width instead of stretching its pill across the row — the full
+    /// value stays one tap away in the note bar / location picker.
+    @ScaledMetric(relativeTo: .subheadline) private var chipTextMaxWidth: CGFloat = 180
+    /// Real rendered width of the current date label (character counts badly
+    /// mis-measure Khmer, which stacks combining marks and uses wider glyphs).
+    @State private var measuredDateLabelWidth: CGFloat = 0
+    @ScaledMetric(relativeTo: .subheadline) private var minDateLabelWidth: CGFloat = 70
+    @ScaledMetric(relativeTo: .subheadline) private var maxDateLabelWidth: CGFloat = 170
 
     init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
         self._viewModel = State(wrappedValue: viewModel)
@@ -252,15 +258,21 @@ struct CompactAddTransactionView: View {
 
     // MARK: - Note editing (keypad ⇄ system keyboard swap)
 
+    /// One spring for the whole chip⇄editor handoff, so the pill's tint and
+    /// width, the panel's bloom and the keypad's exit all move as one gesture.
+    /// Tuned close to the keyboard's own curve — the panel rides up with the
+    /// keyboard rather than racing it.
+    private static let noteEditorAnimation: Animation = .spring(duration: 0.32, bounce: 0.12)
+
     private func beginNoteEditing() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(Self.noteEditorAnimation) {
             isNoteBarVisible = true
         }
     }
 
     private func endNoteEditing() {
         noteFieldFocused = false
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(Self.noteEditorAnimation) {
             isNoteBarVisible = false
         }
     }
@@ -270,13 +282,20 @@ struct CompactAddTransactionView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                formContent
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
-                
-                Spacer()
-                
+                // Scrollable so the *form* absorbs the squeeze when the keyboard
+                // is up — a plain VStack + Spacer instead compresses the bottom
+                // bar's growing note field back down to one line. Content that
+                // fits never bounces, so this reads identically to a static
+                // layout in the normal case.
+                ScrollView {
+                    formContent
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.never)
+
                 bottomBar
             }
             .background(Color(.systemGroupedBackground))
@@ -292,9 +311,6 @@ struct CompactAddTransactionView: View {
                         Image(systemName: "xmark")
                     }
                     .accessibilityLabel(L10n.Common.cancel)
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    layoutMenu
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
                     // Reads `isValid` inside its own body so a keystroke (which
@@ -469,22 +485,6 @@ struct CompactAddTransactionView: View {
         }
     }
 
-    /// Nav-bar overflow menu: pick the classic or compact entry layout.
-    @ViewBuilder
-    private var layoutMenu: some View {
-        Menu {
-            Picker("transaction.layout.menu".localized, selection: $useCompactTransactionEntry) {
-                Label("transaction.layout.classic".localized, systemImage: "list.bullet.rectangle")
-                    .tag(false)
-                Label("transaction.layout.compact".localized, systemImage: "rectangle.compress.vertical")
-                    .tag(true)
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-        }
-        .accessibilityLabel("transaction.layout.menu".localized)
-    }
-
     // MARK: - Type selector
 
     private var typeSelector: some View {
@@ -538,7 +538,7 @@ struct CompactAddTransactionView: View {
                     showAddWallet = true
                 }
                 .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -645,9 +645,9 @@ struct CompactAddTransactionView: View {
             .padding(.vertical, 8)
             .background(Color(.tertiarySystemGroupedBackground))
             .foregroundColor(.secondary)
-            .cornerRadius(16)
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
             )
             .contentShape(Rectangle())
@@ -672,7 +672,7 @@ struct CompactAddTransactionView: View {
                     showAddCategory = true
                 }
                 .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -710,30 +710,37 @@ struct CompactAddTransactionView: View {
         }
     }
 
-    /// Shared pill container for the detail chips.
+    /// Shared pill container for the detail chips. `isActive` marks the chip
+    /// whose editor is currently open on the bottom bar.
     private func detailChip(
         icon: String,
         iconColor: Color,
         text: String,
-        isSet: Bool
+        isSet: Bool,
+        isActive: Bool = false
     ) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .appFont(.footnote, weight: .semibold)
-                .foregroundStyle(iconColor)
+                .foregroundStyle(isActive ? Color.accentColor : iconColor)
             Text(text)
                 .appFont(.subheadline, weight: .medium)
-                .foregroundStyle(isSet ? .primary : .secondary)
+                .foregroundStyle(isActive ? Color.accentColor : (isSet ? Color.primary : Color.secondary))
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: chipTextMaxWidth, alignment: .leading)
+                // The note pill swaps its text for "Note" as the editor opens;
+                // crossfade it instead of cutting.
+                .contentTransition(.opacity)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(minHeight: 36)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(isActive ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground))
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                .stroke(isActive ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
         )
         .contentShape(Capsule())
     }
@@ -758,8 +765,21 @@ struct CompactAddTransactionView: View {
     }
 
     private var dateTextWidth: CGFloat {
-        let label = dateLabel(forOffset: relativeDayOffset)
-        return max(70, CGFloat(label.count) * 8.5 + 10)
+        min(max(minDateLabelWidth, measuredDateLabelWidth), maxDateLabelWidth)
+    }
+
+    /// Layout-neutral probe (backgrounds don't size their parent): renders the
+    /// current label at its natural size so the paged strip can be framed to the
+    /// width the text actually needs, in any language or Dynamic Type size.
+    private var dateLabelMeasurer: some View {
+        Text(dateLabel(forOffset: relativeDayOffset))
+            .appFont(.subheadline, weight: .medium)
+            .lineLimit(1)
+            .fixedSize()
+            .hidden()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                measuredDateLabelWidth = width + 6
+            }
     }
 
     private func adjustDate(by days: Int) {
@@ -802,6 +822,7 @@ struct CompactAddTransactionView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(width: dateTextWidth, height: 24)
                 .animation(.spring(response: 0.35, dampingFraction: 0.8), value: dateTextWidth)
+                .background(alignment: .leading) { dateLabelMeasurer }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 4)
@@ -869,15 +890,25 @@ struct CompactAddTransactionView: View {
         Button {
             beginNoteEditing()
         } label: {
+            // While the note bar is open it owns the text — mirroring it here
+            // only duplicates the editor until the pill truncates, and then
+            // silently contradicts it (the pill holds the head, the field
+            // follows the caret). The chip marks the destination instead.
             detailChip(
                 icon: "note.text",
                 iconColor: .gray,
-                text: viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note,
-                isSet: !viewModel.note.isEmpty
+                text: isNoteBarVisible
+                    ? "transaction.noteLabel".localized
+                    : (viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note),
+                isSet: !viewModel.note.isEmpty,
+                isActive: isNoteBarVisible
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Transaction.note)
+        // The pill truncates; VoiceOver still reads the whole note.
+        .accessibilityLabel(viewModel.note.isEmpty
+            ? L10n.Transaction.note
+            : "\(L10n.Transaction.note): \(viewModel.note)")
     }
 
     private var locationChip: some View {
@@ -910,6 +941,8 @@ struct CompactAddTransactionView: View {
                                 .appFont(.subheadline, weight: .medium)
                                 .foregroundStyle(viewModel.selectedLocation != nil ? .primary : .secondary)
                                 .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: chipTextMaxWidth, alignment: .leading)
                         }
                     }
                     .buttonStyle(.plain)
@@ -935,7 +968,9 @@ struct CompactAddTransactionView: View {
                 .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
             }
         }
-        .accessibilityLabel("transaction.location".localized)
+        .accessibilityLabel(viewModel.selectedLocation.map {
+            "\("transaction.location".localized): \($0.title)"
+        } ?? "transaction.location".localized)
     }
 
     private var savingsGoalChip: some View {
@@ -1007,19 +1042,7 @@ struct CompactAddTransactionView: View {
 
                 // Tag suggestion chips
                 ForEach(suggestedTagChips) { scored in
-                    Button {
-                        insertTag(scored.tag)
-                    } label: {
-                        Text("#\(scored.tag)")
-                            .appFont(.footnote, weight: .medium)
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Color.accentColor.opacity(0.12), in: Capsule())
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("transaction.tag.add".localized(with: scored.tag))
+                    TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
                 }
             }
             .padding(.horizontal, 16)
@@ -1034,8 +1057,11 @@ struct CompactAddTransactionView: View {
     @ViewBuilder
     private var bottomBar: some View {
         if isNoteBarVisible {
+            // Blooms open from its top edge — the edge nearest the chip that
+            // spawned it — while the keyboard supplies the upward motion. A
+            // `.move(edge: .bottom)` here would double that rise and overshoot.
             noteBar
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(.scale(scale: 0.94, anchor: .top).combined(with: .opacity))
         } else if rateFieldFocused {
             // The system decimal pad owns the bottom while the rate is edited.
             EmptyView()
@@ -1057,52 +1083,100 @@ struct CompactAddTransactionView: View {
         }
     }
 
+    /// Floating editor panel: an elevated card so the field reads as the focused
+    /// surface rather than another row blended into the form background.
     private var noteBar: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             if !suggestedTagChips.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(suggestedTagChips) { scored in
-                            Button {
-                                insertTag(scored.tag)
-                            } label: {
-                                Text("#\(scored.tag)")
-                                    .appFont(.footnote, weight: .medium)
-                                    .foregroundStyle(Color.accentColor)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
-                                    .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("transaction.tag.add".localized(with: scored.tag))
+                            TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    // Matches the field row below so the panel keeps one
+                    // left margin for everything inside it.
+                    .padding(.horizontal, 12)
                 }
             }
 
-            HStack(spacing: 12) {
-                Image(systemName: "note.text")
-                    .appFont(.footnote, weight: .semibold)
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .bottom, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "note.text")
+                        .appFont(.footnote, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 3)
 
-                TextField(L10n.Transaction.note, text: $viewModel.note)
-                    .focused($noteFieldFocused)
-                    .submitLabel(.done)
-                    .onSubmit { endNoteEditing() }
+                    // Grows with the note so the whole thing stays readable while
+                    // typing — a single-line field only ever shows a window around
+                    // the caret, which is also the only place a long note can be
+                    // read back in full. Return inserts a newline on a vertical
+                    // field, so "Done" is the way out.
+                    TextField(L10n.Transaction.note, text: $viewModel.note, axis: .vertical)
+                        .focused($noteFieldFocused)
+                        .lineLimit(1...4)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(
+                    Color(.tertiarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.45), lineWidth: 1)
+                )
 
                 Button("common.done".localized) {
                     endNoteEditing()
                 }
                 .appFont(.subheadline, weight: .semibold)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 16)
+            // 12 on both axes so the field's corner sits on the arc of the
+            // panel's — unequal insets can't be concentric on both edges.
+            .padding(.horizontal, 12)
         }
-        .padding(.vertical, 10)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .padding(.vertical, 12)
+        // `hero`, matching the amount card: both are the elevated focal surface
+        // of their moment. This also makes the field inside it exactly
+        // concentric — 24 minus its 12pt inset is the field's own 12.
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(color: .black.opacity(0.16), radius: 14, y: 3)
+        )
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
         .onAppear { noteFieldFocused = true }
+    }
+}
+
+// MARK: - Tag suggestion chip
+
+/// One `#tag` pill in the keypad / note-bar suggestion rails. Long tags truncate
+/// so a single outlier can't monopolise the rail.
+private struct TagSuggestionChip: View {
+    let tag: String
+    let action: () -> Void
+
+    @ScaledMetric(relativeTo: .footnote) private var maxLabelWidth: CGFloat = 140
+
+    var body: some View {
+        Button(action: action) {
+            Text("#\(tag)")
+                .appFont(.footnote, weight: .medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: maxLabelWidth, alignment: .leading)
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("transaction.tag.add".localized(with: tag))
     }
 }
 
@@ -1118,13 +1192,39 @@ private struct CompactAmountCard: View {
     let isNoteBarVisible: Bool
     let onTap: () -> Void
 
-    private var amountBackground: Color {
+    /// Glass is a translucent material; when the user has asked the system to
+    /// reduce transparency we fall back to the opaque tinted fill.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Drives the caret blink. Started once on appear as a repeating animation.
+    @State private var caretDimmed = false
+
+    /// The card's identity colour — also the caret and the glass tint, so the
+    /// whole surface reads as "expense" / "income" / "transfer" at a glance.
+    private var typeTint: Color {
         switch viewModel.type {
-        case .expense: return ThemeManager.shared.expenseColor.opacity(0.15)
-        case .income: return ThemeManager.shared.incomeColor.opacity(0.15)
-        case .transfer: return Color.blue.opacity(0.1)
-        default: return Color(.secondarySystemGroupedBackground)
+        case .expense: return ThemeManager.shared.expenseColor
+        case .income: return ThemeManager.shared.incomeColor
+        case .transfer: return .blue
+        default: return .secondary
         }
+    }
+
+    /// A fixed hero radius, matching the Home summary card — deliberately *not*
+    /// `ConcentricRectangle`. Concentricity only means something when the child's
+    /// corner can share a center of curvature with the parent's, which needs
+    /// roughly equal insets on both axes. This card is inset 16pt horizontally
+    /// but sits a nav bar's height below the sheet's top edge, so its corners
+    /// land in the sheet's inner region where no common center exists; the
+    /// concentric radius was being computed from a relationship the eye can't
+    /// see. At this card's size the resulting 16pt floor also read pinched.
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
+    }
+
+    private var isAmountEmpty: Bool {
+        viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0
     }
 
     private var exchangeRateString: String? {
@@ -1195,64 +1295,111 @@ private struct CompactAmountCard: View {
         return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
 
-    var body: some View {
+    /// Blinking insertion point, matching the system text caret. Capsule-capped
+    /// and tinted to the transaction type; held solid under Reduce Motion.
+    private var caret: some View {
+        Capsule()
+            .fill(typeTint)
+            .frame(width: 2.5, height: 36)
+            .opacity(caretDimmed ? 0 : 1)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
+                    caretDimmed = true
+                }
+            }
+            .onDisappear { caretDimmed = false }
+    }
+
+    /// Secondary readouts under the amount. Both are trailing-aligned on one row
+    /// so they hang off the amount's own edge instead of drifting centre.
+    @ViewBuilder
+    private var subline: some View {
+        let showsResult = amountHasOperators && viewModel.evaluatedAmount > 0
+        if showsResult || exchangeRateString != nil {
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+
+                if showsResult {
+                    Text("= \(formatAmount(viewModel.evaluatedAmount))")
+                        .appFont(.callout, weight: .medium)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+
+                if let exchangeRateStr = exchangeRateString {
+                    Text(exchangeRateStr)
+                        .appFont(.footnote)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+    }
+
+    private var cardContent: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
                 // Currency selector inline on the left
                 CurrencySegmentedPicker(currencyCode: $viewModel.selectedCurrencyCode)
                     .padding(.leading, 8)
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 // Amount input in the middle at the right
                 HStack(alignment: .center, spacing: 4) {
                     Text(String.currencySymbol(for: viewModel.selectedCurrencyCode))
                         .appFont(size: 28, weight: .semibold)
-                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.secondary)
+                        .foregroundStyle(isAmountEmpty ? Color.secondary.opacity(0.5) : Color.secondary)
 
                     Text(amountDisplayText)
                         .appFont(size: 44, weight: .bold)
                         .minimumScaleFactor(0.4)
                         .lineLimit(1)
-                        .foregroundStyle((viewModel.expression.isEmpty && viewModel.evaluatedAmount == 0) ? Color.secondary.opacity(0.5) : Color.primary)
+                        .foregroundStyle(isAmountEmpty ? Color.secondary.opacity(0.5) : Color.primary)
                         .contentTransition(.numericText())
                         .animation(.easeInOut(duration: 0.1), value: amountDisplayText)
 
                     if !isNoteBarVisible {
-                        Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(width: 2, height: 34)
+                        caret
+                            .accessibilityHidden(true)
                     }
                 }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    onTap()
-                }
                 .padding(.trailing, 8)
+                // One element: "Amount, $ 1,234" rather than three stray
+                // fragments (symbol, digits, caret) as VoiceOver swipes past.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(L10n.Transaction.amount)
+                .accessibilityValue("\(String.currencySymbol(for: viewModel.selectedCurrencyCode)) \(amountDisplayText)")
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .padding(.horizontal, 8)
 
-            if let exchangeRateStr = exchangeRateString {
-                Text(exchangeRateStr)
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.bottom, 6)
-            }
-
-            if amountHasOperators && viewModel.evaluatedAmount > 0 {
-                HStack {
-                    Spacer()
-                    Text("= \(formatAmount(viewModel.evaluatedAmount))")
-                        .appFont(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
-            }
+            subline
         }
         .frame(maxWidth: .infinity)
-        .background(amountBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    var body: some View {
+        let shape = cardShape
+
+        Group {
+            if reduceTransparency {
+                cardContent
+                    .background(typeTint.opacity(0.15), in: shape)
+            } else {
+                cardContent
+                    .glassEffect(.regular.tint(typeTint.opacity(0.18)), in: shape)
+            }
+        }
+        // The whole card dismisses the note editor, not just the digits — the
+        // amount is the thing the user is coming back to.
+        .contentShape(shape)
+        .onTapGesture { onTap() }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.type)
     }
 }
 
@@ -1316,11 +1463,15 @@ struct CategoryChip: View {
     let isSelected: Bool
     let isHighlighted: Bool
     let action: () -> Void
-    
+
+    /// Long category names truncate rather than stretching the pill past the
+    /// row (or, in a wrapping flow, past the screen edge).
+    @ScaledMetric(relativeTo: .subheadline) private var maxLabelWidth: CGFloat = 150
+
     private var categoryColor: Color {
         Color(hex: category.colorHex) ?? .gray
     }
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -1329,22 +1480,25 @@ struct CategoryChip: View {
                     .foregroundStyle(isSelected ? .white : categoryColor)
                 Text(category.displayName)
                     .appFont(.subheadline, weight: .medium)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: maxLabelWidth, alignment: .leading)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(isSelected ? categoryColor : Color(.tertiarySystemGroupedBackground))
             .foregroundColor(isSelected ? .white : .primary)
-            .cornerRadius(16)
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
             .overlay(
                 Group {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                             .stroke(Color.clear, lineWidth: 0)
                     } else if isHighlighted {
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                             .stroke(categoryColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     } else {
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     }
                 }

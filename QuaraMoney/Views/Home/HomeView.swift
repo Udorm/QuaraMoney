@@ -651,28 +651,30 @@ struct HomeContentView: View {
             ?? error.localizedDescription
     }
 
-    /// The hero card's surface.
+    /// The summary hero. Content-layer only — no custom surface, matching the
+    /// wallet screen's `NetWorthCard`: it's a plain row in a plain section, so
+    /// the inset-grouped `List` draws the card itself. That's what keeps it
+    /// identical to a native grouped card, radius included, at every size class
+    /// and accessibility setting.
     ///
-    /// This was a solid `Color.accentColor` fill, which made the card the
-    /// loudest thing on a screen whose actual content is the list below it, and
-    /// forced every figure on top to white — costing the card its semantic
-    /// income/expense color. It is now a standard grouped-background card with
-    /// the accent surviving only as a soft wash off the top-trailing corner
-    /// (and as the sparkline stroke inside).
-    private var heroCardBackground: some View {
-        RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground))
-            .overlay {
-                RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.accentColor.opacity(0.16), Color.accentColor.opacity(0)],
-                            center: .topTrailing,
-                            startRadius: 0,
-                            endRadius: 280
-                        )
-                    )
+    /// Successive hand-rolled surfaces here — a solid `Color.accentColor` fill,
+    /// then a grouped fill with a top-trailing accent wash, then `PlanCard`'s
+    /// tinted glass — were all attempts to approximate this.
+    private var heroCard: some View {
+        FinancialSummaryCards(
+            income: viewModel.incomeTotal,
+            expense: viewModel.expenseTotal,
+            dailySections: viewModel.dailySections,
+            startDate: viewModel.currentStartDate,
+            endDate: viewModel.currentEndDate,
+            previousPeriodCumulative: viewModel.previousPeriodCumulative,
+            compact: true,
+            onNavigateToPro: {
+                NotificationCenter.default.post(name: .openProAnalytics, object: nil)
             }
+        )
+        .redacted(reason: viewModel.hasLoadedOnce ? [] : .placeholder)
+        .padding(.vertical, 6)
     }
 
     private var summaryHeader: some View {
@@ -725,24 +727,20 @@ struct HomeContentView: View {
                 .listRowSeparator(.hidden)
                 .selectionDisabled()
             } else {
+                // Its own section, with the row background left alone so the
+                // *system* draws the card — the same treatment as the wallet
+                // screen's net-worth hero.
+                Section {
+                    heroCard
+                }
+                .listRowSeparator(.hidden)
+                // The hero card, period selector and empty states are chrome —
+                // `List(selection:)` would otherwise offer selection circles
+                // beside them the moment edit mode turns on.
+                .selectionDisabled()
+
                 Section {
                     VStack(spacing: 16) {
-                        FinancialSummaryCards(
-                            income: viewModel.incomeTotal,
-                            expense: viewModel.expenseTotal,
-                            dailySections: viewModel.dailySections,
-                            startDate: viewModel.currentStartDate,
-                            endDate: viewModel.currentEndDate,
-                            previousPeriodCumulative: viewModel.previousPeriodCumulative,
-                            compact: true,
-                            onNavigateToPro: {
-                                NotificationCenter.default.post(name: .openProAnalytics, object: nil)
-                            }
-                        )
-                        .redacted(reason: viewModel.hasLoadedOnce ? [] : .placeholder)
-                        .padding(18)
-                        .background(heroCardBackground)
-
                         GlassPeriodSelector(
                             selectedTab: $viewModel.selectedTab,
                             months: Array(viewModel.availableMonths.suffix(3))
@@ -767,14 +765,13 @@ struct HomeContentView: View {
                             .padding(.top, 4)
                         }
                     }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 12, trailing: 0))
+                    // Top inset + the list's 4pt section spacing reproduces the
+                    // 16pt gap this had when it shared a row with the hero.
+                    .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                // The hero card, period selector and empty states are chrome —
-                // `List(selection:)` would otherwise offer selection circles
-                // beside them the moment edit mode turns on.
                 .selectionDisabled()
 
                 if isResultEmpty {

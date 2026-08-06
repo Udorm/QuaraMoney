@@ -93,27 +93,6 @@ enum PlanDataMaintenance {
                 changed = true
             }
         }
-        if needsMigration {
-            for goal in goals where goal.deletedAt == nil {
-                let startingCurrency = goal.startingBalanceCurrencyCode ?? goal.currencyCode
-                var total = converted(goal.currentAmount, from: startingCurrency,
-                                      to: goal.currencyCode, rates: rates) ?? 0
-                for transaction in goal.linkedTransactions ?? [] where SavingsLedger.isEligible(transaction, for: goal) {
-                    guard let side = TransferSideAmountResolver.ledgerAmount(for: transaction) else { continue }
-                    guard let amount = converted(side.amount, from: side.currencyCode,
-                                                 to: goal.currencyCode, rates: rates) else { continue }
-                    total += transaction.savingsIsWithdrawal ? -amount : amount
-                }
-                let completed = max(0, total) >= goal.targetAmount
-                if completed != goal.isCompleted {
-                    goal.isCompleted = completed
-                    goal.completedDate = completed ? now : nil
-                    goal.needsSync = true
-                    goal.updatedAt = now
-                    changed = true
-                }
-            }
-        }
         if changed && commitsMarker { try context.save() }
         if needsMigration && commitsMarker {
             // The durable marker is committed only after the guarded save above succeeds.

@@ -311,10 +311,6 @@ struct QuaraMoneyApp: App {
                 handleSyncSettlementChange()
             }
             .onReceive(NotificationCenter.default.publisher(for: .currencyRatesDidChange)) { _ in
-                let context = sharedModelContainer.mainContext
-                SyncEngine.shared.withSyncWriteGuard {
-                    _ = try? SavingsGoalReconciler.reconcileAll(in: context, markNeedsSync: false)
-                }
                 NotificationCenter.default.post(name: .dataDidUpdate, object: CurrencyManager.shared)
             }
         }
@@ -664,6 +660,7 @@ struct QuaraMoneyApp: App {
 
         let container = sharedModelContainer
         let maintenanceRates = CurrencyManager.shared.rates
+        let maintenanceCurrency = CurrencyManager.shared.preferredCurrencyCode
         let databaseTask = Task.detached(priority: .utility) {
             guard !Task.isCancelled else {
                 return MaintenanceDatabaseOutcome.invalidated
@@ -696,6 +693,12 @@ struct QuaraMoneyApp: App {
                     ownerID: expectedIdentity.localOwnerID,
                     rates: maintenanceRates,
                     commitsMarker: false
+                )
+                _ = try SavingsWalletMigrationService.run(
+                    in: context,
+                    ownerID: expectedIdentity.localOwnerID,
+                    rates: maintenanceRates,
+                    netWorthCurrency: maintenanceCurrency
                 )
 
                 guard !Task.isCancelled else {
@@ -753,6 +756,9 @@ struct QuaraMoneyApp: App {
 
             if result.commit.hadChanges {
                 NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+                if expectedIdentity.authUserID != nil {
+                    SyncEngine.shared.enqueueSync(reason: .maintenance)
+                }
             }
 
             guard StartupMaintenanceGuard.isCurrent(

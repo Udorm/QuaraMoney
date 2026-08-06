@@ -68,7 +68,6 @@ nonisolated enum PlanMetricsLoader {
         calendar: Calendar
     ) throws -> PlanOverviewMetrics {
         let budgets = try fetchBudgetSnapshots(context: context)
-        let goals = try fetchGoalSnapshots(context: context)
 
         let month = BudgetPeriodType.monthly.currentPeriodRange(containing: now, calendar: calendar)
         var ranges = [PlanDateRange(start: month.start, end: month.end)]
@@ -83,20 +82,84 @@ nonisolated enum PlanMetricsLoader {
             context: context,
             ranges: BudgetListRangeAssembler.merge(ranges)
         )
-        let ledgerRows = try fetchSavingsLedgerRows(
-            context: context,
-            goalIDs: Set(goals.map(\.id))
-        )
-
-        return PlanOverviewMetrics.compute(
+        let legacyCalculation = PlanOverviewMetrics.compute(
             budgets: budgets,
             budgetTransactions: records.map(\.snapshot),
-            goals: goals,
-            ledgerRows: ledgerRows,
+            goals: [],
+            ledgerRows: [],
             preferredCurrency: preferredCurrency,
             rates: rates,
             now: now,
             calendar: calendar
+        )
+        return PlanOverviewMetrics(
+            budgets: legacyCalculation.budgets,
+            savings: try loadSavingsWalletOverview(
+                context: context,
+                preferredCurrency: preferredCurrency,
+                rates: rates
+            )
+        )
+    }
+
+    private static func loadSavingsWalletOverview(
+        context: ModelContext,
+        preferredCurrency: String,
+        rates: [String: Double]
+    ) throws -> PlanSavingsOverviewMetrics {
+        let wallets = try context.fetch(FetchDescriptor<Wallet>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        ))
+        let savings = wallets.filter { $0.isSavings && !$0.isArchived }
+        let adopted = Set(savings.compactMap(\.legacySavingsGoalID))
+        let pending = try context.fetch(FetchDescriptor<SavingsGoal>(
+            predicate: #Predicate { $0.deletedAt == nil }
+        )).filter { !adopted.contains($0.id) }.count
+        guard !savings.isEmpty || pending > 0 else {
+            return PlanSavingsOverviewMetrics(
+                mode: .empty, saved: 0, target: nil, currencyCode: preferredCurrency,
+                progress: nil, activeCount: 0, completedCount: 0,
+                unknownCount: 0, isDeterminate: true
+            )
+        }
+
+        let completed = savings.filter(\.isSavingsReached)
+        let active = savings.filter { !$0.isSavingsReached }
+        let included = active.isEmpty ? completed : active
+        var saved: Decimal = 0
+        var target: Decimal = 0
+        var unknown = pending
+        for wallet in included {
+            guard let convertedSaved = CurrencyManager.convertOrNil(
+                amount: wallet.balance,
+                from: wallet.currencyCode,
+                to: preferredCurrency,
+                rates: rates
+            ) else {
+                unknown += 1
+                continue
+            }
+            saved += convertedSaved
+            if !active.isEmpty, let targetAmount = wallet.targetAmount,
+               let convertedTarget = CurrencyManager.convertOrNil(
+                   amount: targetAmount,
+                   from: wallet.currencyCode,
+                   to: preferredCurrency,
+                   rates: rates
+               ) {
+                target += convertedTarget
+            } else if !active.isEmpty {
+                unknown += 1
+            }
+        }
+
+        let mode: PlanSavingsOverviewMode = active.isEmpty && pending == 0 ? .allCompleted : .active
+        return PlanSavingsOverviewMetrics(
+            mode: mode, saved: saved, target: mode == .active ? target : nil,
+            currencyCode: preferredCurrency,
+            progress: mode == .active && target > 0 ? min(1, max(0, saved / target)) : nil,
+            activeCount: active.count, completedCount: completed.count,
+            unknownCount: unknown, isDeterminate: unknown == 0
         )
     }
 

@@ -8,6 +8,8 @@ import SwiftUI
 /// instead of flashing $0 on first open.
 struct NetWorthCard: View {
     let total: Decimal
+    let spendable: Decimal
+    let savings: Decimal
     let series: [Wallet.BalancePoint]
     let currencyCode: String
     let hasLoaded: Bool
@@ -52,6 +54,11 @@ struct NetWorthCard: View {
                     .frame(height: 52)
             }
 
+            HStack(spacing: 20) {
+                breakdown("wallet.spendable".localized, amount: spendable)
+                breakdown("plan.savings".localized, amount: savings)
+            }
+
             HStack(spacing: 6) {
                 if let change {
                     HStack(spacing: 3) {
@@ -77,8 +84,23 @@ struct NetWorthCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("a11y.netWorth".localized(with: total.formattedAmount(for: currencyCode)))
     }
+
+    private func breakdown(_ title: String, amount: Decimal) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .appFont(.caption)
+                .foregroundStyle(.secondary)
+            Text(amount.formattedAmount(for: currencyCode))
+                .appFont(.subheadline, weight: .semibold)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 #Preview {
-    NetWorthCard(total: 1234.56, series: [], currencyCode: "USD", hasLoaded: true)
+    NetWorthCard(
+        total: 1234.56, spendable: 900, savings: 334.56,
+        series: [], currencyCode: "USD", hasLoaded: true
+    )
 }

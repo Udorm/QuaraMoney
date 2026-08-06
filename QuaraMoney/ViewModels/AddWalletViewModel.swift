@@ -8,7 +8,11 @@ class AddWalletViewModel: BaseViewModel {
     var currencyCode: String = "USD"
     var icon: String = "wallet.pass"
     var colorHex: String = "#007AFF" // Default iOS Blue
-    
+    var kind: WalletKind = .normal
+    var targetAmountText: String = ""
+    var hasTargetDate = false
+    var targetDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    var priority = 0
     private(set) var walletToEdit: Wallet?
     
     init(dataService: DataService, walletToEdit: Wallet? = nil) {
@@ -20,11 +24,19 @@ class AddWalletViewModel: BaseViewModel {
             self.currencyCode = wallet.currencyCode
             self.icon = wallet.icon
             self.colorHex = wallet.colorHex
+            self.kind = wallet.kind
+            self.targetAmountText = wallet.targetAmount.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+            self.hasTargetDate = wallet.targetDate != nil
+            self.targetDate = wallet.targetDate ?? self.targetDate
+            self.priority = wallet.priority
         }
     }
+
+    var targetAmount: Decimal? { Decimal(string: targetAmountText) }
     
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && (kind == .normal || (targetAmount ?? 0) > 0)
     }
     
     var isEditing: Bool {
@@ -34,45 +46,98 @@ class AddWalletViewModel: BaseViewModel {
     var isArchived: Bool {
         walletToEdit?.isArchived ?? false
     }
+
+    var canEditCurrency: Bool {
+        guard let wallet = walletToEdit else { return true }
+        return !wallet.isSavings || !wallet.hasAnyLedgerTransaction
+    }
     
-    func saveWallet() {
-        guard isValid else { return }
-        
-        if let wallet = walletToEdit {
-            wallet.name = name
+    @discardableResult
+    func saveWallet() -> Bool {
+        guard isValid else { return false }
+
+        do {
+            try WalletLedgerRules.validateSavingsConfiguration(kind: kind, targetAmount: targetAmount)
+            let wallet: Wallet
+            if let existing = walletToEdit {
+                try WalletLedgerRules.validateWalletUpdate(
+                    wallet: existing,
+                    proposedKind: kind,
+                    proposedCurrencyCode: currencyCode,
+                    proposedTargetAmount: targetAmount,
+                    proposedArchived: existing.isArchived
+                )
+                wallet = existing
+            } else {
+                wallet = Wallet(name: name, currencyCode: currencyCode, icon: icon, colorHex: colorHex)
+                dataService.insert(wallet)
+            }
+            wallet.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
             wallet.currencyCode = currencyCode
             wallet.icon = icon
             wallet.colorHex = colorHex
-            // Invalidate balance cache so it recalculates with the new currency
+            wallet.kind = kind
+            wallet.targetAmount = kind == .savings ? targetAmount : nil
+            wallet.targetDate = kind == .savings && hasTargetDate ? targetDate : nil
+            wallet.priority = kind == .savings ? priority : 0
+            wallet.updatedAt = Date()
+            wallet.needsSync = true
             wallet.invalidateBalanceCache()
-        } else {
-            let newWallet = Wallet(
-                name: name,
-                currencyCode: currencyCode,
-                icon: icon,
-                colorHex: colorHex
-            )
-            dataService.insert(newWallet)
+            try dataService.save()
+            HapticManager.shared.success()
+            return true
+        } catch {
+            dataService.rollback()
+            errorMessage = error.localizedDescription
+            HapticManager.shared.error()
+            return false
         }
-        HapticManager.shared.success()
     }
 
-    func archiveWallet() {
-        guard let wallet = walletToEdit else { return }
-        wallet.isArchived = true
-        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    @discardableResult
+    func archiveWallet() -> Bool {
+        guard let wallet = walletToEdit else { return false }
+        do {
+            try WalletLedgerRules.validateWalletUpdate(
+                wallet: wallet,
+                proposedKind: wallet.kind,
+                proposedCurrencyCode: wallet.currencyCode,
+                proposedTargetAmount: wallet.targetAmount,
+                proposedArchived: true
+            )
+            wallet.isArchived = true
+            wallet.updatedAt = Date(); wallet.needsSync = true
+            try dataService.save()
+            return true
+        } catch {
+            dataService.rollback()
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
     
     func unarchiveWallet() {
         guard let wallet = walletToEdit else { return }
         wallet.isArchived = false
-        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+        wallet.updatedAt = Date(); wallet.needsSync = true
+        do { try dataService.save() } catch {
+            dataService.rollback()
+            errorMessage = error.localizedDescription
+        }
     }
     
-    func deleteWallet() {
-        guard let wallet = walletToEdit else { return }
+    @discardableResult
+    func deleteWallet() -> Bool {
+        guard let wallet = walletToEdit else { return false }
         // Soft-delete (tombstone) so the deletion replicates to other devices.
-        SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
-        NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+        do {
+            try SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
+            try dataService.save()
+            return true
+        } catch {
+            dataService.rollback()
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 }

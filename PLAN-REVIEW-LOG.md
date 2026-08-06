@@ -312,3 +312,46 @@ Loop terminated at MAX_ROUNDS=5. No formal VERDICT: APPROVED was emitted, but no
 USER DECISIONS (recorded before build):
 - Auto-contribute hard gate: option (a) — DROP the dead autoContribute* fields; not migrated onto Wallet; retired in the later SchemaV2 removal release. Supersedes grill Q7.
 - Implementation: Codex builds it (Act 3, /codex-build) with SPEC_FILE=PLAN.md; Claude reviews the diff and runs the proof.
+
+## Act 3 — Build (Codex writes, Claude verifies)
+
+Builder: Codex gpt-5.6-sol (high effort), codex-cli 0.144.4, `codex exec --yolo`, one-shot whole spec. Branch feat/savings-as-wallet, clean tree at launch.
+
+### Round 1 — Codex build
+48 files changed, +1960/-1077, plus 6 new files (WalletLedgerRules.swift, SavingsWalletMigrationService.swift, SyncIntegrityStore.swift, SavingsWalletTests.swift, 20260806154757_savings_wallets.sql, supabase/tests/savings_wallets.sql).
+Codex self-reported: BUILD SUCCEEDED + 304 tests 0 failures on OS=26.4.1; localization parity 1222/1222; no hosted Supabase ops; no git mutations.
+
+### Claude's verdict — ACCEPTED (0 fix rounds needed)
+Independently verified, not taken on report:
+- PROOF RE-RUN BY CLAUDE: xcodebuild test ... OS=26.4.1 -> '** TEST SUCCEEDED **', 'Executed 304 tests, with 0 failures (0 unexpected)'. Build succeeded.
+- Localization parity re-run by Claude: check_missing_keys.py -> 'Localization parity check passed.'
+- FENCES HELD: git status shows no commits/branch changes; no hosted Supabase calls (SQL exists only as migration files + schema/rls mirrors); .vscode/ untouched; String+Localization.swift (auto-generated) untouched.
+- House conventions clean on the diff: 0 new .system(size:), 0 new static .font(.app(, no Double/Float money fields, no enum-in-#Predicate, enqueueSync used (not syncNow).
+- Spec fidelity spot-checked on the risk surface: WalletLedgerRules implements the exact per-type matrix incl. adjustment (#2 R5); migration service has the determinacy gate, rawTotal seeding (#3 R5), deterministic IDs, excludeFromReports provenance (#8 R3), hasCelebrated seeding (#12 R3), marker-gated idempotency, and single-currency net-worth invariant (#5 R3); SQL has kind NOT NULL DEFAULT + CHECK (#3 R5), NULL-safe target CHECK (#4 R4), 'for update ... order by id' (#6 R4), INSERT-OR-UPDATE triggers (#5 R4), apply_savings_wallet_migration atomic RPC (#1 R5), resurrection guard + partial unique index (#7 R2).
+- 12 new tests map 1:1 onto spec §8 incl. review-derived cases (Case-A net-worth-flat, Case-B idempotency, negative rawTotal withdrawal, indeterminate deferral, celebration latch, adopt-don't-remigrate, file-backed legacy fixture).
+- autoContribute correctly ABSENT from Wallet (user decision (a) honored).
+
+ACCEPTED DEVIATIONS (disclosed by Codex, judged sound by Claude):
+1. PROOF_CMD bug was mine: OS=26.4 does not exist on this machine (26.4.1 does). Codex reported the failure verbatim instead of silently substituting, then proved on 26.4.1. Correct behavior.
+2. Normal-wallet .deleteTransactions no longer nulls incoming transfers' destinationWallet. This touches NORMAL-wallet behavior (nominally out of scope) but is FORCED by the spec's own rule that transfers must always have both endpoints — nulling would create rows that fail validation on restore/sync-apply. Balances are unaffected (an outgoing transfer debits its source regardless of destination). Judged a necessary consequence, not a redesign; flagged to the user.
+3. Supabase local SQL tests written but not executed (Docker daemon unavailable). Codex did NOT fall back to the hosted project, per constraint. SQL trigger/RPC behavior therefore remains UNPROVEN until run against a local stack or preview branch.
+
+NOT IMPLEMENTED (correctly, per spec): SchemaV2 removal of SavingsGoal/legacy columns (deferred release); auto-contribute scheduler; concurrent multi-device convergence. SavingsLedgerCalculator/SavingsGoalReconciler retained for migration + tests, retired from production presentation.
+
+### Act 3 addendum — production cloud migration applied 2026-08-07
+
+Pre-flight scan of the live project (czhkvtmpebeowipawqjk) found 28 pre-existing rows that would have violated the new transaction-matrix trigger:
+- 24 transfers with source_wallet_id = destination_wallet_id (SampleDataService seed, note 'Pay Credit Card', $500/mo 2024-07..2026-06, both sides 'Bank Account') — money never moved, so balance-neutral.
+- 4 expenses with source_wallet_id IS NULL (2026-06-22 test debris, no wallet/category/note, amounts 89/7777/89/999999) — attached to no wallet, invisible to every balance.
+
+CLAUDE-FOUND BUG IN THE GENERATED SQL: validate_transaction_wallet_matrix fired on INSERT OR UPDATE for ALL rows including tombstoned ones. That made the 28 legacy rows permanently un-updatable AND created a deadlock — the cleanup UPDATE that tombstones them would itself have been rejected by the trigger it was clearing the way for. Fixed by adding an early 'if new.deleted_at is not null then return new; end if;' exemption (soft-deleted rows contribute to no balance, so validating their shape is pointless). Mirrored into supabase/schema.sql. Live rows remain fully enforced.
+
+Applied by the USER in the Supabase SQL editor (Claude's direct DB writes were blocked by the permission classifier, twice; not worked around):
+1. supabase/tests/STEP1_junk_row_cleanup.sql — tombstone-only (reversible), balance-neutral.
+2. supabase/migrations/20260806154757_savings_wallets.sql
+
+CLAUDE-VERIFIED POST-STATE (read-only queries): 28 rows tombstoned; 0 live violations; 7/7 new wallets columns; kind NOT NULL DEFAULT 'normal'; recurring_rules.pause_reason present; both CHECK constraints (wallets_kind_check, wallets_savings_target_check); all 3 triggers installed; apply_savings_wallet_migration RPC present; partial unique index on legacy_savings_goal_id present; deployed validate_transaction_wallet_matrix confirmed to contain the tombstone guard + row locking + deterministic lock order (i.e. the corrected file was applied).
+
+STILL UNPROVEN AT COMMIT TIME: the triggers have never actually fired. supabase/tests/STEP3_trigger_smoke_test.sql (12 assertions inside BEGIN...ROLLBACK) was written for the user to run. Docker was unavailable so Codex's supabase/tests/savings_wallets.sql never executed either.
+
+NEXT: device test with sync OFF (exercises the local Case A/B migration with zero cloud exposure), then sign in and sync.

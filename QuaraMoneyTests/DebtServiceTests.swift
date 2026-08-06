@@ -7,12 +7,15 @@ final class DebtServiceTests: XCTestCase {
     private var container: ModelContainer!
     private var context: ModelContext!
     private var service: DebtService!
+    private var wallet: Wallet!
 
     override func setUp() {
         super.setUp()
         container = TestModelContainer.create()
         context = container.mainContext
         service = DebtService(modelContext: context)
+        wallet = Wallet(name: "Test", currencyCode: "USD", icon: "wallet.pass", colorHex: "#000000")
+        context.insert(wallet)
         // Cross-currency assertions assume the canonical reference rates
         // (KHR = 4000/USD). `Debt` converts via `CurrencyManager.currentRates`,
         // which prefers live rates cached in UserDefaults. Clear that cache so the
@@ -24,6 +27,7 @@ final class DebtServiceTests: XCTestCase {
         container = nil
         context = nil
         service = nil
+        wallet = nil
         super.tearDown()
     }
 
@@ -36,7 +40,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: "Test",
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         XCTAssertEqual(debt.personName, "Alice")
@@ -53,7 +57,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         XCTAssertEqual(debt.personName, "Bob")
@@ -107,7 +111,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "KHR",
             dueDate: Date().addingTimeInterval(86400 * 30),
             note: "Monthly loan",
-            destinationWallet: nil
+            destinationWallet: wallet
         )
 
         XCTAssertEqual(debt.personName, "Charlie")
@@ -124,10 +128,10 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
-        try service.recordRepayment(for: debt, amount: Decimal(50), sourceWallet: nil)
+        try service.recordRepayment(for: debt, amount: Decimal(50), sourceWallet: wallet)
 
         XCTAssertEqual(debt.remainingAmount, Decimal(50))
         XCTAssertFalse(debt.isCompleted)
@@ -140,10 +144,10 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
-        try service.recordRepayment(for: debt, amount: Decimal(100), sourceWallet: nil)
+        try service.recordRepayment(for: debt, amount: Decimal(100), sourceWallet: wallet)
 
         XCTAssertTrue(debt.isCompleted)
     }
@@ -155,13 +159,13 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         XCTAssertThrowsError(try service.recordRepayment(
             for: debt,
             amount: Decimal(150),
-            sourceWallet: nil
+            sourceWallet: wallet
         )) { error in
             XCTAssertEqual(error as? DebtServiceError, .repaymentExceedsRemaining)
         }
@@ -176,7 +180,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         let dueDate = Date().addingTimeInterval(86400 * 7)
@@ -194,7 +198,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         try service.updateDebt(debt, person: "Alice", dueDate: nil, note: nil, newPrincipalAmount: Decimal(150))
@@ -211,9 +215,9 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
-        try service.recordRepayment(for: debt, amount: Decimal(60), sourceWallet: nil)
+        try service.recordRepayment(for: debt, amount: Decimal(60), sourceWallet: wallet)
 
         XCTAssertThrowsError(
             try service.updateDebt(debt, person: "Alice", dueDate: nil, note: nil, newPrincipalAmount: Decimal(50))
@@ -234,7 +238,7 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
 
         // Repayment of 4000 KHR ≈ $1 USD at the reference rate (KHR = 4000/USD).
@@ -255,9 +259,9 @@ final class DebtServiceTests: XCTestCase {
             currency: "USD",
             dueDate: nil,
             note: nil,
-            sourceWallet: nil
+            sourceWallet: wallet
         )
-        try service.recordRepayment(for: debt, amount: Decimal(100), sourceWallet: nil)
+        try service.recordRepayment(for: debt, amount: Decimal(100), sourceWallet: wallet)
         XCTAssertTrue(debt.isCompleted)
 
         // Simulate editing the principal advance up to $200 from the main editor.

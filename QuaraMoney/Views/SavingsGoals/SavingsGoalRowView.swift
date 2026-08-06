@@ -1,38 +1,28 @@
 import SwiftUI
 
 struct SavingsGoalRowView: View {
-    let goal: SavingsGoal
-    let metrics: SavingsGoalMetrics
+    let wallet: Wallet
 
-    private var color: Color { Color(hex: goal.colorHex) ?? .green }
+    private var color: Color { Color(hex: wallet.colorHex) ?? .green }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            PlanIconTile(systemImage: goal.iconName, color: color)
+            PlanIconTile(systemImage: wallet.icon, color: color)
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(goal.name)
+                    Text(wallet.name)
                         .appFont(.body, weight: .semibold)
                         .lineLimit(1)
-
-                    if metrics.isCompleted == true {
+                    if wallet.isSavingsReached {
                         Image(systemName: "checkmark.circle.fill")
                             .appFont(.caption)
                             .foregroundStyle(.green)
-                    } else if metrics.isBehind == true {
-                        Text("savings.behind".localized)
-                            .appFont(.caption2, weight: .semibold)
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.orange.opacity(0.12), in: Capsule())
                     }
-
                     Spacer(minLength: 4)
                 }
 
-                if let targetDate = goal.targetDate {
+                if let targetDate = wallet.targetDate {
                     Text("plan.target_date_value".localized(
                         with: targetDate.appFormatted(date: .abbreviated, time: .omitted)
                     ))
@@ -44,20 +34,13 @@ struct SavingsGoalRowView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if metrics.isDeterminate {
-                    (Text(metrics.saved.formattedAmount(for: goal.currencyCode))
-                        .foregroundStyle(.primary)
-                     + Text(" / \(goal.targetAmount.formattedAmount(for: goal.currencyCode))")
-                        .foregroundStyle(.secondary))
-                        .appFont(.caption, weight: .medium)
-                        .monospacedDigit()
-                    PlanProgressLine(progress: metrics.progress, color: color)
-                } else {
-                    Text(metrics.saved.formattedAmount(for: goal.currencyCode))
-                        .appFont(.caption, weight: .medium)
-                        .monospacedDigit()
-                    PlanPartialDataLabel()
-                }
+                (Text(wallet.balance.formattedAmount(for: wallet.currencyCode))
+                    .foregroundStyle(.primary)
+                 + Text(" / \((wallet.targetAmount ?? 0).formattedAmount(for: wallet.currencyCode))")
+                    .foregroundStyle(.secondary))
+                    .appFont(.caption, weight: .medium)
+                    .monospacedDigit()
+                PlanProgressLine(progress: wallet.savingsProgress, color: color)
             }
         }
         .padding(.vertical, 4)
@@ -65,18 +48,8 @@ struct SavingsGoalRowView: View {
 }
 
 #Preview {
-    let goal = SavingsGoal(name: "Emergency Fund", targetAmount: 10_000, currencyCode: "USD")
-    SavingsGoalRowView(
-        goal: goal,
-        metrics: SavingsGoalMetrics(
-            saved: 4_250,
-            remaining: 5_750,
-            progress: Decimal(string: "0.425")!,
-            monthlyTarget: 575,
-            isCompleted: false,
-            isBehind: true,
-            isDeterminate: true
-        )
-    )
-    .padding()
+    let wallet = Wallet(name: "Emergency Fund", currencyCode: "USD", icon: "target", colorHex: "#10B981")
+    wallet.kind = .savings
+    wallet.targetAmount = 10_000
+    return SavingsGoalRowView(wallet: wallet).padding()
 }

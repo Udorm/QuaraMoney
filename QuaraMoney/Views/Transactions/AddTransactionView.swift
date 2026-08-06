@@ -11,7 +11,6 @@ struct AddTransactionView: View {
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil }, sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
     
     // UI State
     @State private var showAllCategories = false
@@ -69,6 +68,10 @@ struct AddTransactionView: View {
     private var filteredCategories: [Category] {
         categories.filter { $0.type == viewModel.type }
     }
+
+    private var sourceWallets: [Wallet] {
+        viewModel.type == .transfer ? wallets : wallets.filter { !$0.isSavings }
+    }
     
     /// Contextually-ranked categories for the current type (falls back to name order until first compute).
     private var orderedCategories: [ScoredCategory] {
@@ -109,9 +112,10 @@ struct AddTransactionView: View {
     /// Keeps the grid to a single row of 4: when a "More" cell is needed (i.e. there
     /// are more wallets than fit), only 3 wallets are shown alongside it.
     private var frequentWallets: [Wallet] {
-        let ordered = scoredWallets.isEmpty ? wallets : scoredWallets.map(\.wallet)
+        let ordered = (scoredWallets.isEmpty ? sourceWallets : scoredWallets.map(\.wallet))
+            .filter { wallet in sourceWallets.contains { $0.id == wallet.id } }
         // Reserve the 4th slot for the More cell when the list overflows.
-        let limit = wallets.count > maxQuickWallets ? maxQuickWallets - 1 : maxQuickWallets
+        let limit = sourceWallets.count > maxQuickWallets ? maxQuickWallets - 1 : maxQuickWallets
 
         var items = Array(ordered.prefix(limit))
 
@@ -170,7 +174,7 @@ struct AddTransactionView: View {
 
     /// Resolves the background-ranked IDs back to this view's @Query models.
     private func applySuggestions(_ snapshot: SuggestionSnapshot) {
-        let walletsByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let walletsByID = Dictionary(sourceWallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
 
         scoredWallets = snapshot.wallets.compactMap { ranked in
@@ -390,50 +394,6 @@ struct AddTransactionView: View {
                                 destinationWalletSection
                             }
 
-                            // Savings Goal Picker for transfers
-                            if locksSavingsGoal, let goal = viewModel.selectedSavingsGoal {
-                                Section {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: goal.iconName)
-                                            .foregroundStyle(Color(hex: goal.colorHex) ?? .green)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("plan.saving_goal_locked".localized)
-                                                .appFont(.caption2)
-                                                .foregroundStyle(.secondary)
-                                            Text(goal.name)
-                                                .appFont(.subheadline, weight: .semibold)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "lock.fill")
-                                            .appFont(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            } else {
-                                Section {
-                                    savingsGoalPicker
-                                    if viewModel.selectedSavingsGoal != nil {
-                                        Picker("savings.direction".localized, selection: $viewModel.savingsIsWithdrawal) {
-                                            Text("savings.contribution".localized).tag(false)
-                                            Text("savings.withdrawal".localized).tag(true)
-                                        }
-                                        .pickerStyle(.segmented)
-                                    }
-                                }
-                                .onChange(of: viewModel.destinationWallet) { _, newDest in
-                                    guard let dest = newDest else {
-                                        viewModel.selectedSavingsGoal = nil
-                                        return
-                                    }
-                                    // Auto-select if exactly one active goal is linked to this wallet
-                                    let matchingGoals = savingsGoals.filter { goal in
-                                        !goal.isCompleted && goal.linkedWallet?.id == dest.id
-                                    }
-                                    if matchingGoals.count == 1 {
-                                        viewModel.selectedSavingsGoal = matchingGoals.first
-                                    }
-                                }
-                            }
                         } else if viewModel.type != .adjustment && !isDebtLinked {
                             // Category is hidden for debt-linked transactions —
                             // it's a managed system category and not editable.
@@ -542,7 +502,7 @@ struct AddTransactionView: View {
                     switch result {
                     case .success(let images):
                         if let firstImage = images.first {
-                            let walletSnapshots = wallets.map(ReceiptWalletSnapshot.init)
+                            let walletSnapshots = sourceWallets.map(ReceiptWalletSnapshot.init)
                             Task {
                                 await viewModel.scanReceipt(
                                     image: firstImage,
@@ -574,7 +534,7 @@ struct AddTransactionView: View {
                 // Provisional preselection (name order) so the form is instantly
                 // savable; upgraded to the ranked top wallet when the background
                 // suggestion compute lands (see applySuggestions).
-                if viewModel.selectedWallet == nil, let wallet = wallets.first {
+                if viewModel.selectedWallet == nil, let wallet = sourceWallets.first {
                     autoSelectedWalletID = wallet.id
                     viewModel.selectedWallet = wallet
                     viewModel.syncCurrencyToWallet()
@@ -693,7 +653,7 @@ struct AddTransactionView: View {
     // MARK: - Wallet Selector
     @ViewBuilder
     private var walletSelector: some View {
-        if wallets.isEmpty {
+        if sourceWallets.isEmpty {
             TransactionSetupPrompt(
                 icon: "wallet.pass",
                 tint: .accentColor,
@@ -718,7 +678,7 @@ struct AddTransactionView: View {
                     }
                 }
 
-                if wallets.count > maxQuickWallets {
+                if sourceWallets.count > maxQuickWallets {
                     moreWalletsButton { showAllWallets = true }
                 }
             }
@@ -765,7 +725,7 @@ struct AddTransactionView: View {
     /// saved immediately. Only acts when nothing is selected yet (i.e. the
     /// empty-state prompt drove the creation).
     private func autoSelectNewWalletIfNeeded() {
-        guard viewModel.selectedWallet == nil, let wallet = wallets.first else { return }
+        guard viewModel.selectedWallet == nil, let wallet = sourceWallets.first else { return }
         selectWallet(wallet)
         recomputeSuggestions()
     }
@@ -780,7 +740,7 @@ struct AddTransactionView: View {
     // MARK: - Wallet Picker Sheet
     private var walletPickerSheet: some View {
         TransactionWalletPickerSheet(
-            wallets: wallets,
+            wallets: sourceWallets,
             selectedWalletID: viewModel.selectedWallet?.id,
             onSelect: { wallet in
                 selectWallet(wallet)
@@ -1054,31 +1014,6 @@ struct AddTransactionView: View {
         }
     }
     
-    // MARK: - Savings Goal Picker (for Transfers)
-    private var savingsGoalPicker: some View {
-        let eligibleGoals = savingsGoals.filter { goal in
-            !goal.isCompleted && (goal.linkedWallet == nil || goal.linkedWallet?.id == viewModel.destinationWallet?.id)
-        }
-        // Sort: goals whose linkedWallet matches the destination wallet come first
-        let sortedGoals = eligibleGoals.sorted { g1, g2 in
-            let g1Matches = g1.linkedWallet?.id == viewModel.destinationWallet?.id && g1.linkedWallet != nil
-            let g2Matches = g2.linkedWallet?.id == viewModel.destinationWallet?.id && g2.linkedWallet != nil
-            if g1Matches != g2Matches { return g1Matches }
-            return g1.priority < g2.priority
-        }
-
-        return Picker(L10n.Savings.selectGoal, selection: $viewModel.selectedSavingsGoal) {
-            Text("budget.threshold.none".localized).tag(nil as SavingsGoal?)
-            ForEach(sortedGoals) { goal in
-                HStack {
-                    Image(systemName: goal.iconName)
-                    Text(goal.name)
-                }
-                .tag(goal as SavingsGoal?)
-            }
-        }
-    }
-
     private var reportingSection: some View {
         Section {
             // Exclude Toggle

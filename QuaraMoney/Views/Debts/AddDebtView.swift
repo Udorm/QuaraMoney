@@ -11,6 +11,8 @@ struct AddDebtView: View {
 
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
 
+    private var spendableWallets: [Wallet] { wallets.filter { !$0.isSavings } }
+
     init(debtToEdit: Debt? = nil) {
         let vm = DebtFormViewModel(debt: debtToEdit)
         _viewModel = State(wrappedValue: vm)
@@ -62,7 +64,7 @@ struct AddDebtView: View {
                     // MARK: Wallet (creation only)
                     if !viewModel.isEditing {
                         Section {
-                            DebtWalletChips(wallets: wallets, selectedWallet: $viewModel.selectedWallet, allowNone: false)
+                            DebtWalletChips(wallets: spendableWallets, selectedWallet: $viewModel.selectedWallet, allowNone: false)
                                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         } header: {
                             Text(viewModel.type == .iOwe ? "debt.toWallet".localized : "debt.fromWallet".localized)
@@ -144,7 +146,8 @@ struct AddDebtView: View {
                 // A wallet is required (no track-only) — default to one in the
                 // debt's currency, else the first available.
                 if !viewModel.isEditing && viewModel.selectedWallet == nil {
-                    viewModel.selectedWallet = wallets.first(where: { $0.currencyCode == viewModel.currencyCode }) ?? wallets.first
+                    viewModel.selectedWallet = spendableWallets.first(where: { $0.currencyCode == viewModel.currencyCode })
+                        ?? spendableWallets.first
                 }
             }
             .alert(L10n.Common.error, isPresented: $viewModel.showError) {

@@ -9,7 +9,6 @@ struct BudgetTabView: View {
 struct PlanOverviewView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-
     @State private var store = PlanOverviewStore()
     @State private var refreshPolicy = PlanRefreshPolicy()
     @State private var showBudgetForm = false

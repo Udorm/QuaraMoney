@@ -67,6 +67,10 @@ struct RecurringRuleEditorView: View {
         categories.filter { $0.type == type }
     }
 
+    private var spendableWallets: [Wallet] {
+        wallets.filter { !$0.isSavings }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -81,8 +85,7 @@ struct RecurringRuleEditorView: View {
                                 Text(currencyCode)
                                     .appFont(.subheadline, weight: .bold)
                                 Image(systemName: "chevron.down")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
+                                    .appFont(.caption2, weight: .bold)
                             }
                             .foregroundStyle(.secondary)
                         }
@@ -116,13 +119,13 @@ struct RecurringRuleEditorView: View {
                 }
 
                 Section(L10n.Recurring.assignments) {
-                    if wallets.isEmpty {
+                    if spendableWallets.isEmpty {
                         Text(L10n.Recurring.createWalletFirst)
                             .foregroundStyle(.red)
                     } else {
                         Picker(L10n.Wallet.selectWallet, selection: $selectedWallet) {
                             Text(L10n.Wallet.selectWallet).tag(nil as Wallet?)
-                            ForEach(wallets) { wallet in
+                            ForEach(spendableWallets) { wallet in
                                 Text(wallet.name).tag(wallet as Wallet?)
                             }
                         }
@@ -178,12 +181,12 @@ struct RecurringRuleEditorView: View {
                 // in-progress edits (frequency, dates, amount…).
                 if let rule = rule {
                     if selectedWallet == nil {
-                        selectedWallet = wallets.first { $0.id == rule.wallet?.id }
+                        selectedWallet = spendableWallets.first { $0.id == rule.wallet?.id }
                     }
                     if selectedCategory == nil {
                         selectedCategory = categories.first { $0.id == rule.category?.id }
                     }
-                } else if let firstWallet = wallets.first, selectedWallet == nil {
+                } else if let firstWallet = spendableWallets.first, selectedWallet == nil {
                     selectedWallet = firstWallet
                     if !currencyManuallySet { currencyCode = firstWallet.currencyCode }
                 }
@@ -216,6 +219,10 @@ struct RecurringRuleEditorView: View {
     private func save() {
         let normalizedAmountString = amountString.replacingOccurrences(of: ",", with: ".")
         guard let amount = Decimal(string: normalizedAmountString), let wallet = selectedWallet else { return }
+        guard !wallet.isSavings else {
+            if let rule { RecurringRuleService.pauseForInvalidSavingsWallet(rule, in: modelContext) }
+            return
+        }
 
         let cleanStartDate = Calendar.current.startOfDay(for: startDate)
         let cleanEndDate = hasEndDate ? Calendar.current.startOfDay(for: endDate) : nil
@@ -251,6 +258,7 @@ struct RecurringRuleEditorView: View {
         target.endDate = cleanEndDate
         target.remindersEnabled = remindersEnabled
         target.isActive = isActive
+        target.pauseReason = isActive ? nil : target.pauseReason
         target.wallet = wallet
         target.category = selectedCategory
 

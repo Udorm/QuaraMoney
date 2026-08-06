@@ -17,7 +17,6 @@ struct CompactAddTransactionView: View {
     // Query data
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
-    @Query(filter: #Predicate<SavingsGoal> { $0.deletedAt == nil }, sort: \SavingsGoal.priority) private var savingsGoals: [SavingsGoal]
 
     @Environment(\.modelContext) private var modelContext
 
@@ -76,6 +75,10 @@ struct CompactAddTransactionView: View {
         categories.filter { $0.type == viewModel.type }
     }
 
+    private var sourceWallets: [Wallet] {
+        viewModel.type == .transfer ? wallets : wallets.filter { !$0.isSavings }
+    }
+
     private var orderedCategories: [ScoredCategory] {
         let typeMatched = scoredCategories.filter { $0.category.type == viewModel.type }
         if typeMatched.isEmpty {
@@ -105,7 +108,8 @@ struct CompactAddTransactionView: View {
     }
 
     private var frequentWallets: [Wallet] {
-        let ordered = scoredWallets.isEmpty ? wallets : scoredWallets.map(\.wallet)
+        let ordered = (scoredWallets.isEmpty ? sourceWallets : scoredWallets.map(\.wallet))
+            .filter { wallet in sourceWallets.contains { $0.id == wallet.id } }
         return Array(ordered.prefix(maxQuickWallets))
     }
 
@@ -151,7 +155,7 @@ struct CompactAddTransactionView: View {
     /// Resolves the background-ranked IDs back to this view's @Query models and
     /// upgrades provisional auto-selections to the ranked top picks.
     private func applySuggestions(_ snapshot: SuggestionSnapshot) {
-        let walletsByID = Dictionary(wallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let walletsByID = Dictionary(sourceWallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let categoriesByID = Dictionary(categories.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
 
         scoredWallets = snapshot.wallets.compactMap { ranked in
@@ -328,7 +332,7 @@ struct CompactAddTransactionView: View {
                     switch result {
                     case .success(let images):
                         if let firstImage = images.first {
-                            let walletSnapshots = wallets.map(ReceiptWalletSnapshot.init)
+                            let walletSnapshots = sourceWallets.map(ReceiptWalletSnapshot.init)
                             Task {
                                 await viewModel.scanReceipt(
                                     image: firstImage,
@@ -351,7 +355,7 @@ struct CompactAddTransactionView: View {
             }
             .sheet(isPresented: $showAllWallets) {
                 TransactionWalletPickerSheet(
-                    wallets: wallets,
+                    wallets: sourceWallets,
                     selectedWalletID: viewModel.selectedWallet?.id,
                     onSelect: { wallet in
                         selectWallet(wallet)
@@ -383,7 +387,7 @@ struct CompactAddTransactionView: View {
                 // Provisional preselection (name order) so the form is instantly
                 // savable; upgraded to the ranked top picks when the background
                 // suggestion compute lands (see applySuggestions).
-                if viewModel.selectedWallet == nil, let wallet = wallets.first {
+                if viewModel.selectedWallet == nil, let wallet = sourceWallets.first {
                     autoSelectedWalletID = wallet.id
                     viewModel.selectedWallet = wallet
                     viewModel.syncCurrencyToWallet()
@@ -435,18 +439,6 @@ struct CompactAddTransactionView: View {
                 let offset = daysBetween(referenceDate, newDate)
                 if relativeDayOffset != offset {
                     relativeDayOffset = offset
-                }
-            }
-            .onChange(of: viewModel.destinationWallet) { _, newDest in
-                guard let dest = newDest else {
-                    viewModel.selectedSavingsGoal = nil
-                    return
-                }
-                let matchingGoals = savingsGoals.filter { goal in
-                    !goal.isCompleted && goal.linkedWallet?.id == dest.id
-                }
-                if matchingGoals.count == 1 {
-                    viewModel.selectedSavingsGoal = matchingGoals.first
                 }
             }
             .onChange(of: noteFieldFocused) { _, focused in
@@ -526,7 +518,7 @@ struct CompactAddTransactionView: View {
     private var walletSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("transaction.fromWallet".localized)
-            if wallets.isEmpty {
+            if sourceWallets.isEmpty {
                 TransactionSetupPrompt(
                     icon: "wallet.pass",
                     tint: .accentColor,
@@ -551,7 +543,7 @@ struct CompactAddTransactionView: View {
                             }
                         }
 
-                        if wallets.count > maxQuickWallets {
+                        if sourceWallets.count > maxQuickWallets {
                             moreChip { showAllWallets = true }
                         }
                     }
@@ -564,7 +556,7 @@ struct CompactAddTransactionView: View {
     /// Auto-selects the wallet the user just created so a first-time entry can be
     /// saved immediately. Only acts when nothing is selected yet.
     private func autoSelectNewWalletIfNeeded() {
-        guard viewModel.selectedWallet == nil, let wallet = wallets.first else { return }
+        guard viewModel.selectedWallet == nil, let wallet = sourceWallets.first else { return }
         selectWallet(wallet)
         recomputeSuggestions()
     }
@@ -704,9 +696,6 @@ struct CompactAddTransactionView: View {
             timeChip
             noteChip
             locationChip
-            if viewModel.type == .transfer {
-                savingsGoalChip
-            }
         }
     }
 
@@ -972,44 +961,6 @@ struct CompactAddTransactionView: View {
             "\("transaction.location".localized): \($0.title)"
         } ?? "transaction.location".localized)
     }
-
-    private var savingsGoalChip: some View {
-        let eligibleGoals = savingsGoals.filter { goal in
-            !goal.isCompleted && (goal.linkedWallet == nil || goal.linkedWallet?.id == viewModel.destinationWallet?.id)
-        }
-        let sortedGoals = eligibleGoals.sorted { g1, g2 in
-            let g1Matches = g1.linkedWallet?.id == viewModel.destinationWallet?.id && g1.linkedWallet != nil
-            let g2Matches = g2.linkedWallet?.id == viewModel.destinationWallet?.id && g2.linkedWallet != nil
-            if g1Matches != g2Matches { return g1Matches }
-            return g1.priority < g2.priority
-        }
-
-        return Menu {
-            Button {
-                viewModel.selectedSavingsGoal = nil
-            } label: {
-                Label("budget.threshold.none".localized, systemImage: "circle.slash")
-            }
-            ForEach(sortedGoals) { goal in
-                Button {
-                    viewModel.selectedSavingsGoal = goal
-                } label: {
-                    Label(goal.name, systemImage: goal.iconName)
-                }
-            }
-        } label: {
-            detailChip(
-                icon: viewModel.selectedSavingsGoal?.iconName ?? "flag",
-                iconColor: viewModel.selectedSavingsGoal.flatMap { Color(hex: $0.colorHex) } ?? .green,
-                text: viewModel.selectedSavingsGoal?.name ?? L10n.Savings.selectGoal,
-                isSet: viewModel.selectedSavingsGoal != nil
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Savings.selectGoal)
-    }
-
-
 
     private var calculatorSuggestionBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {

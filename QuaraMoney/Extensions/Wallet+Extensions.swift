@@ -2,6 +2,39 @@ import Foundation
 import SwiftData
 
 extension Wallet {
+    var isSavings: Bool { kind == .savings }
+
+    var isSavingsReached: Bool {
+        guard isSavings, let targetAmount, targetAmount > 0 else { return false }
+        return balance >= targetAmount
+    }
+
+    var savingsProgress: Decimal {
+        guard isSavings, let targetAmount, targetAmount > 0 else { return 0 }
+        return min(1, max(0, balance / targetAmount))
+    }
+
+    var savingsRemaining: Decimal? {
+        guard isSavings, let targetAmount, targetAmount > 0 else { return nil }
+        return targetAmount - balance
+    }
+
+    func suggestedMonthlyContribution(now: Date = Date(), calendar: Calendar = .current) -> Decimal? {
+        guard let targetDate, targetDate > now,
+              let remaining = savingsRemaining, remaining > 0 else { return nil }
+        let months = calendar.dateComponents([.month], from: now, to: targetDate).month ?? 0
+        return months > 0 ? remaining / Decimal(months) : remaining
+    }
+
+    var hasAnyLedgerTransaction: Bool {
+        (outgoingTransactions ?? []).contains { $0.deletedAt == nil }
+            || (incomingTransactions ?? []).contains { $0.deletedAt == nil }
+    }
+
+    func canReceiveSpendingTransaction(of type: TransactionType) -> Bool {
+        !isSavings || (type != .income && type != .expense)
+    }
+
     /// Invalidates the cached balance - call when transactions change
     func invalidateBalanceCache() {
         _balanceCacheStale = true
@@ -91,6 +124,18 @@ extension Wallet {
         if txn.event != nil { return nil }
         guard txn.type == .transfer else { return nil }
         return amountInWalletCurrency(for: txn)
+    }
+
+    /// Signed effect of one transaction on this wallet. Used by goal history,
+    /// migration invariants, and tests so those surfaces share balance semantics.
+    func ledgerDelta(for transaction: Transaction) -> Decimal? {
+        if transaction.sourceWallet?.id == id {
+            return outgoingDelta(for: transaction)
+        }
+        if transaction.destinationWallet?.id == id {
+            return incomingDelta(for: transaction)
+        }
+        return nil
     }
 
     /// Core balance computation - iterates all transactions

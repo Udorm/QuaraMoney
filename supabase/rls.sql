@@ -134,3 +134,8 @@ create policy "profiles_update_own" on public.profiles
 drop policy if exists "profiles_delete_own" on public.profiles;
 create policy "profiles_delete_own" on public.profiles
   for delete to authenticated using (id = (select auth.uid()));
+
+-- Atomic savings migration RPC: table access remains constrained by the
+-- existing owner RLS policies because the function is SECURITY INVOKER.
+revoke execute on function public.apply_savings_wallet_migration(jsonb, jsonb, uuid, timestamptz) from public, anon;
+grant execute on function public.apply_savings_wallet_migration(jsonb, jsonb, uuid, timestamptz) to authenticated, service_role;

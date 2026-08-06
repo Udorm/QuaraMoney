@@ -381,7 +381,7 @@ struct DebtDetailView: View {
                 predicate: #Predicate<Wallet> { $0.deletedAt == nil },
                 sortBy: [SortDescriptor(\Wallet.name)]
             )
-        ))?.filter { !$0.isArchived } ?? []
+        ))?.filter { !$0.isArchived && !$0.isSavings } ?? []
         let wallet = wallets.first(where: { $0.currencyCode == debt.currencyCode }) ?? wallets.first
         paymentContext = DebtPaymentContext(debt: debt, category: category, wallet: wallet, amount: amount)
     }

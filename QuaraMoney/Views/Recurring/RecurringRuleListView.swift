@@ -203,10 +203,19 @@ struct RecurringRuleListView: View {
     }
     
     private func togglePause(_ rule: RecurringRule) {
+        if !rule.isActive, rule.wallet?.isSavings == true {
+            rule.pauseReason = .invalidSavingsWallet
+            rule.updatedAt = Date()
+            rule.needsSync = true
+            try? modelContext.save()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            return
+        }
         rule.isActive.toggle()
         // On resume, skip forward past any occurrences that elapsed while paused
         // rather than resurfacing them as a backlog in the review inbox.
         if rule.isActive {
+            rule.pauseReason = nil
             rule.nextDueDate = RecurringRuleService.resumedNextDueDate(for: rule)
         }
         rule.updatedAt = Date()
@@ -286,7 +295,9 @@ private struct RecurringRuleRow: View {
                         .appFont(.headline)
                         .lineLimit(1)
                     if !rule.isActive {
-                        Text(L10n.Recurring.paused)
+                        Text(rule.pauseReason == .invalidSavingsWallet
+                             ? "recurring.pausedForSavings".localized
+                             : L10n.Recurring.paused)
                             .appFont(.caption2, weight: .bold)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

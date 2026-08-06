@@ -819,4 +819,50 @@ final class SyncEngineHardeningTests: XCTestCase {
         SyncImageDownloadQueue.enqueue(entry)
         XCTAssertEqual(SyncImageDownloadQueue.all(), [entry])
     }
+
+    func testTransactionApplyFailsClosedForIncomeAgainstSavingsWallet() throws {
+        let owner = UUID()
+        let savings = Wallet(name: "Goal", currencyCode: "USD", icon: "target", colorHex: "#10B981")
+        savings.kind = .savings
+        savings.targetAmount = 100
+        savings.syncUserID = owner
+        savings.needsSync = false
+        context.insert(savings)
+        try SyncEngine.shared.withSyncWriteGuard { try context.save() }
+
+        let rowID = UUID()
+        let timestamp = Date.distantFuture.addingTimeInterval(-1)
+        let row = SyncTransactionRow(
+            id: rowID,
+            user_id: owner,
+            type: TransactionType.income.rawValue,
+            date: Date(),
+            note: nil,
+            tags: [],
+            exclude_from_reports: false,
+            amount: 25,
+            currency_code: "USD",
+            exchange_rate: 1,
+            stored_rate: 1,
+            photo_path: nil,
+            category_id: nil,
+            event_id: nil,
+            source_wallet_id: savings.id,
+            destination_wallet_id: nil,
+            recurring_rule_id: nil,
+            debt_id: nil,
+            savings_goal_id: nil,
+            savings_is_withdrawal: false,
+            created_at: timestamp,
+            updated_at: timestamp,
+            deleted_at: nil
+        )
+
+        try SyncEngine.shared.applyTransactionRows([row], context: context, ownerID: owner)
+
+        XCTAssertNil(try context.fetch(FetchDescriptor<Transaction>()).first { $0.id == rowID })
+        XCTAssertTrue(SyncIntegrityStore.unacknowledged(ownerID: owner).contains {
+            $0.table == "transactions" && $0.rowID == rowID
+        })
+    }
 }

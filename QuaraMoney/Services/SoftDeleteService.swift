@@ -29,17 +29,16 @@ enum SoftDeleteService {
     /// Soft-deletes a transaction and its owned location, refreshing affected
     /// wallet balances.
     static func deleteTransaction(_ transaction: Transaction) {
-        let goal = transaction.savingsGoal
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()
         transaction.location?.markSoftDeleted()
         transaction.markSoftDeleted()
-        if let goal { SavingsGoalReconciler.reconcile(goal) }
     }
 
     /// Reverses `deleteTransaction` (Undo): clears the tombstones and re-stamps
     /// sync metadata so the restore replicates like an ordinary edit.
-    static func restoreTransaction(_ transaction: Transaction) {
+    static func restoreTransaction(_ transaction: Transaction) throws {
+        try WalletLedgerRules.validate(transaction: transaction)
         let now = Date()
         transaction.deletedAt = nil
         transaction.updatedAt = now
@@ -51,7 +50,6 @@ enum SoftDeleteService {
         }
         transaction.sourceWallet?.invalidateBalanceCache()
         transaction.destinationWallet?.invalidateBalanceCache()
-        if let goal = transaction.savingsGoal { SavingsGoalReconciler.reconcile(goal) }
     }
 
     // MARK: - Category
@@ -71,19 +69,22 @@ enum SoftDeleteService {
 
     /// Soft-deletes a wallet, either moving its transactions to another wallet
     /// or soft-deleting them too.
-    static func deleteWallet(_ wallet: Wallet, strategy: WalletDeletionStrategy) {
+    static func deleteWallet(_ wallet: Wallet, strategy: WalletDeletionStrategy) throws {
+        try WalletLedgerRules.validateWalletDeletion(wallet)
+        if wallet.isSavings {
+            wallet.invalidateBalanceCache()
+            wallet.markSoftDeleted()
+            return
+        }
         switch strategy {
         case .move(let target):
-            moveOutgoingTransactions(from: wallet, to: target)
-            moveIncomingTransfers(from: wallet, to: target)
+            try moveOutgoingTransactions(from: wallet, to: target)
+            try moveIncomingTransfers(from: wallet, to: target)
             target.invalidateBalanceCache()
         case .deleteTransactions:
             wallet.outgoingTransactions?.forEach { deleteTransaction($0) }
-            // Incoming transfers are `.nullify` — just detach the destination.
-            wallet.incomingTransactions?.forEach { txn in
-                txn.destinationWallet = nil
-                txn.updatedAt = Date(); txn.needsSync = true
-            }
+            // Keep incoming transfer relationships: the tombstoned wallet row
+            // remains syncable, and transfers must always retain a destination.
         }
         wallet.invalidateBalanceCache()
         wallet.markSoftDeleted()
@@ -131,8 +132,12 @@ enum SoftDeleteService {
 
     // MARK: - Wallet-move helpers
 
-    private static func moveOutgoingTransactions(from wallet: Wallet, to target: Wallet) {
-        wallet.outgoingTransactions?.forEach { txn in
+    private static func moveOutgoingTransactions(from wallet: Wallet, to target: Wallet) throws {
+        let transactions = wallet.outgoingTransactions ?? []
+        for transaction in transactions {
+            try WalletLedgerRules.validateRehome(transaction, to: target)
+        }
+        transactions.forEach { txn in
             if txn.type == .transfer {
                 recomputeTransferRate(txn, newSourceCurrency: target.currencyCode)
             }
@@ -141,9 +146,17 @@ enum SoftDeleteService {
         }
     }
 
-    private static func moveIncomingTransfers(from wallet: Wallet, to target: Wallet) {
-        wallet.incomingTransactions?.forEach { txn in
-            guard txn.type == .transfer else { return }
+    private static func moveIncomingTransfers(from wallet: Wallet, to target: Wallet) throws {
+        let transfers = (wallet.incomingTransactions ?? []).filter { $0.type == .transfer }
+        for transaction in transfers {
+            try WalletLedgerRules.validate(
+                type: transaction.type,
+                amount: transaction.amount,
+                sourceWallet: transaction.sourceWallet,
+                destinationWallet: target
+            )
+        }
+        transfers.forEach { txn in
             recomputeIncomingTransferRate(txn, newDestCurrency: target.currencyCode)
             txn.destinationWallet = target
             txn.updatedAt = Date(); txn.needsSync = true

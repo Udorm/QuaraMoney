@@ -1,6 +1,10 @@
 import SwiftData
 import Foundation
 
+enum RecurringRulePauseReason: String, Codable, CaseIterable {
+    case invalidSavingsWallet
+}
+
 @Model
 final class RecurringRule {
     var id: UUID
@@ -36,6 +40,13 @@ final class RecurringRule {
     /// When false the rule is paused: no occurrences are generated and no
     /// due-date reminders fire. Existing posted transactions are unaffected.
     var isActive: Bool = true
+
+    private var pauseReasonRaw: String?
+
+    var pauseReason: RecurringRulePauseReason? {
+        get { pauseReasonRaw.flatMap(RecurringRulePauseReason.init(rawValue:)) }
+        set { pauseReasonRaw = newValue?.rawValue }
+    }
 
     /// Whether to schedule a local notification on each `nextDueDate`.
     var remindersEnabled: Bool = true

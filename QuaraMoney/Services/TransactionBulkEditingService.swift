@@ -24,11 +24,11 @@ struct TransactionBulkMutation: Identifiable {
     /// How many selected transactions were ineligible and left untouched.
     let skippedCount: Int
 
-    fileprivate let reverts: [() -> Void]
+    fileprivate let reverts: [() throws -> Void]
 
     /// Reapplies the pre-mutation state and commits it as one save.
     func revert(in modelContext: ModelContext) throws {
-        for revert in reverts { revert() }
+        for revert in reverts { try revert() }
         try modelContext.save()
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
@@ -82,7 +82,7 @@ enum TransactionBulkEditingService {
         }
 
         let timestamp = Date()
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
         for transaction in transactions {
             let previousCategory = transaction.category
             let previousUpdatedAt = transaction.updatedAt
@@ -141,7 +141,7 @@ enum TransactionBulkEditingService {
         guard !eligible.isEmpty else { throw BulkEditError.noEligibleTransactions }
 
         let timestamp = Date()
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
         for transaction in eligible {
             let previousNote = transaction.note
             let previousTags = transaction.tags
@@ -185,7 +185,7 @@ enum TransactionBulkEditingService {
         guard !eligible.isEmpty else { throw BulkEditError.noEligibleTransactions }
 
         let timestamp = Date()
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
         for transaction in eligible {
             let previousValue = transaction.excludeFromReports
             let previousUpdatedAt = transaction.updatedAt
@@ -238,8 +238,12 @@ enum TransactionBulkEditingService {
         let eligible = transactions.filter(isWalletMoveEligible)
         guard !eligible.isEmpty else { throw BulkEditError.noEligibleTransactions }
 
+        for transaction in eligible {
+            try WalletLedgerRules.validateRehome(transaction, to: wallet)
+        }
+
         let timestamp = Date()
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
         var touchedWallets = Set<PersistentIdentifier>()
 
         for transaction in eligible {
@@ -248,6 +252,12 @@ enum TransactionBulkEditingService {
             let previousStoredRate = transaction.storedRate
             let previousUpdatedAt = transaction.updatedAt
             reverts.append {
+                try WalletLedgerRules.validate(
+                    type: transaction.type,
+                    amount: transaction.amount,
+                    sourceWallet: previousWallet,
+                    destinationWallet: transaction.destinationWallet
+                )
                 transaction.sourceWallet = previousWallet
                 transaction.exchangeRate = previousExchangeRate
                 transaction.storedRate = previousStoredRate
@@ -299,7 +309,7 @@ enum TransactionBulkEditingService {
         guard !eligible.isEmpty else { throw BulkEditError.noEligibleTransactions }
 
         let timestamp = Date()
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
 
         for transaction in eligible {
             let previousUpdatedAt = transaction.updatedAt
@@ -378,10 +388,10 @@ enum TransactionBulkEditingService {
         let eligible = transactions.filter { $0.deletedAt == nil && !$0.isDebtAnchor }
         guard !eligible.isEmpty else { throw BulkEditError.noEligibleTransactions }
 
-        var reverts: [() -> Void] = []
+        var reverts: [() throws -> Void] = []
         for transaction in eligible {
             reverts.append {
-                SoftDeleteService.restoreTransaction(transaction)
+                try SoftDeleteService.restoreTransaction(transaction)
             }
             SoftDeleteService.deleteTransaction(transaction)
         }

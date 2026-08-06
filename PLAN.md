@@ -1,454 +1,135 @@
-# Plan: Fix the perpetual sync loop (SyncEngine / SyncRealtime)
+# Plan: Savings-as-Wallet — replace the SavingsGoal ledger with a first-class savings wallet type
+_Locked via grill — by Claude + Udorm. Revised after Codex Round 1._
 
-_Locked via grill — by Claude + Udorm_
+_Revised again after Codex Rounds 2–5 (5-round adversarial review complete)._
 
-> Note: the previous contents of this file (Plan tab v2 redesign, shipped in PR #21) are preserved
-> in git history — recover with `git show HEAD:PLAN.md`.
+> Note: the previous contents of this file (perpetual sync-loop fix, grilled + 5-round Codex review)
+> are preserved in git history — recover with `git show HEAD:PLAN.md`.
+
 
 ## Goal
-
-QuaraMoney's cloud sync runs in a permanent self-sustaining loop: with the app foregrounded and
-completely idle, `syncNow` fires roughly every 1.5–2 s forever. Each cycle pulls one budget, sees
-`parentLocalWins=true`, pushes it back to Supabase, and that push echoes over Realtime to the same
-device, which schedules another sync. The echo also **cancels the sync that is still running**,
-so syncs routinely abort part-way — in the worst observed cycle, six pulls, one push and the
-profile step all failed with `CancellationError`. Because the failure list is non-empty,
-`lastSyncDate` never advances and `hasCompletedInitialSync` never latches, so a red
-`profile: The operation couldn't be completed. (Swift.CancellationError error 1.)` is stuck on the
-Account screen. This is a data-integrity problem, not just wasted battery: a sync cancelled early
-can push nothing, so genuine local edits may never reach the cloud.
-
-Goal: the device must reach a quiet steady state — an idle app performs **zero** syncs — while still
-reacting within ~1.5 s to genuine changes from other devices, and never aborting an in-flight sync.
-
-## Evidence (already established — do not re-litigate)
-
-- Live DB confirms the loop: budget `405eda91-9dc4-42a9-be13-cbec9d537263` `updated_at` moved
-  `05:22:57` → `06:16:07` across two queries while the app sat idle.
-- That budget's *data* is valid and benign: `period_type_raw=monthly`, `is_recurring=true`,
-  `amount_type={"type":"fixed","value":1700}`, `target_kind=total`, `week_start_day=null`.
-  Every `PlanDataMaintenance` normalization branch correctly skips it.
-- Cloud budget↔category state is consistent (every `target_kind=categories` budget has ≥1
-  `budget_categories` row), so the `.emptyRepaired` repair branch is **not** the driver.
-- `profiles` is not written per-sync (oldest row 4+ days old) and is not in the watched table list.
-- `[SyncRealtime] subscribed; watching 16 tables` appears exactly once — there is **no**
-  resubscribe/reconnect storm.
-- Some cycles complete with **no** `CancellationError` at all, `finishBudgetPush` runs, and the very
-  next pull is *still* `parentLocalWins=true`. So cancellation alone does not explain the latch;
-  there is a second, independent re-dirty mechanism (defect 3).
-
-## Defects to fix
-
-| # | Defect | Location |
-|---|---|---|
-| 1 | Realtime debounce `cancel()` kills the **in-flight** `syncNow` | `SyncRealtime.scheduleSync()` |
-| 2 | `runStep` swallows `CancellationError` and keeps going, marking every later step "failed" | `SyncEngine.syncNow` |
-| 3 | An unguarded main-context save after each sync re-stamps `needsSync`/`updatedAt` | `SyncMutationTracker.stampPendingChanges` + a `.dataDidUpdate` observer |
-| 4 | No echo suppression — the device resyncs on its own writes | `SyncRealtime` |
-| 5 | Push never advances the pull cursor, so `didApplyRemoteChanges` is always true on the echo | `SyncEngine.fetchChanged` / `writeBackServerTimestamps` |
-| 6 | A realtime event arriving mid-sync is dropped (`already syncing`) with no re-arm | `SyncRealtime` / `SyncEngine.syncNow` |
-
-Defects 1–3 are what actually stop the loop. 4–6 are correctness/efficiency hardening that prevent
-the next variant of this bug.
+The current savings feature is a virtual tag-based ledger layered on top of transactions. Its total (`starting balance + tagged transfers in − tagged transfers out`) is decoupled from any real wallet balance, so spending from the wallet that "holds" a goal does not reduce the goal — the app can show money saved that isn't there. We are replacing it with a **savings wallet type**: a savings goal *is* a wallet whose balance is the existing wallet balance engine's output. Money enters/leaves only by transfer (or an explicit balance adjustment). The "saved amount" is just the wallet's computed balance, so the drift bug is structurally impossible and no second ledger exists. Savings wallets are created/tracked primarily from the Plan tab (as "Goals") and also appear in the Wallets screen (as a grouped "Savings" section); they are included in net worth.
 
 ## Approach
 
-### Step 1 — A single-flight sync coordinator in `SyncEngine` (defects 1 and 6)
+### 1. Data model — fold savings onto `Wallet`, staged schema migration
+- Add to `Wallet` (`Models/Wallet.swift`):
+  - `kind: WalletKind` — new enum `{ normal, savings }`, stored via raw String (mirror `autoContributePeriodRaw`), default `.normal`.
+  - `targetAmount: Decimal?`, `targetDate: Date?`, `priority: Int = 0`.
+  - `hasCelebrated: Bool = false` — one-time "reached 🎉" latch (completion itself is computed, see §7).
+  - `legacySavingsGoalID: UUID?` — **synced**, the migration dedupe key (see §5), unique-per-user in cloud.
+  - `legacyMigrationCompletedAt: Date?` — **synced** per-goal completion marker (finding #1 R4). A wallet with `legacySavingsGoalID` set but this `nil` is an *in-progress* migration to be resumed/repaired; set (with its DTO, SQL column, push/pull) only after all migration transactions + tombstone have landed.
+- **Completion is COMPUTED**, not stored: `isSavingsReached { balance >= targetAmount }` (finding #12). Target currency == wallet currency by construction.
+- **Schema strategy — corrected after R2 (#1, #2).** Migration runs at *container open*, before auth/sync/rates (`QuaraMoneyApp.makeModelContainer`), and the repo explicitly rejects a second `VersionedSchema` over live types (duplicate checksums). Therefore:
+  - **This release is ADDITIVE only.** The new `Wallet` fields are optional/defaulted, so they migrate automatically via lightweight inference **under the existing `SchemaV1`** — *no* new `VersionedSchema`, *no* `MigrationStage`, matching the codebase's documented constraint. `SavingsGoal` + `Transaction.savingsGoal`/`savingsIsWithdrawal` are **retained** unchanged.
+  - **The goal→wallet DATA conversion does NOT run in a schema stage.** It runs entirely in `StartupMaintenanceGuard`, **after** initial sync and rate loading have settled (§5) — the only place account-scoped, rate-dependent work is safe.
+  - **Removal is a later release** (call it `SchemaV2`, non-additive): introduces a real frozen **snapshot** of the pre-removal models (copied definitions, not live types) + an explicit `MigrationStage` that drops `SavingsGoal` and the two `Transaction` fields, plus the deprecated cloud columns/table. Nothing legacy is deleted until the deprecation window has passed.
+- Convenience on `Wallet`: `isSavings`, `savingsProgress` (clamped 0…1 for display only), `savingsRemaining`, `suggestedMonthlyContribution` — pure functions of `balance` + `targetAmount` + `targetDate`. **No `max(0,…)` floor**: balance is reported honestly (may be negative); only the progress *bar* clamps.
 
-Today `syncNow` executes *inside* `SyncRealtime`'s cancellable debounce task, so the next
-`debounceTask?.cancel()` tears down the running sync. Fixing this only inside `SyncRealtime` is not
-enough: **every** trigger (local-save debounce, foreground, pull-to-refresh, sign-in) hits
-`syncNow`'s `guard !isSyncing` and is silently dropped. Ownership therefore belongs in the engine.
+### 2. Enforcement — centralized validation across every write path (finding #8)
+- **Single validator** `WalletLedgerRules.validate(transaction:) `/ `Wallet.canReceiveSpendingTransaction(of:)` returning `false` for `income`/`expense` when `kind == .savings`.
+- Called from **every** mutation path, not just manual entry: `AddTransactionViewModel.save()`, `CompactAddTransactionView` save, `CSVImportService`, `DebtService`, `EventLedgerService`, `TransactionBulkEditingService`, receipt-scan wallet resolution, recurring-rule generation, **`SoftDeleteService.restoreTransaction`/undo, wallet deletion + wallet-rehome, and every relationship reassignment** (finding #10 R3 — restore/rehome were previously omitted), **and the sync-apply path**.
+- **Defense-in-depth — DB layer (findings #8, #9):**
+  - **`transactions` trigger (INSERT + UPDATE — findings #5, #8 R4):** rejects income/expense whose source wallet `kind = 'savings'`. Ownership/reference checks follow a **per-type source/destination matrix** (findings #8 R4, #2 R5): **income/expense** require a source wallet and have **no** destination (do not reject the null destination); **transfers** require **both**; **`adjustment`** requires a source wallet, **no** destination, and a **non-zero signed amount** (migration depends heavily on adjustments — omitting them would leave the migration's own writes unvalidated). Ownership is checked **only for non-null references** — each present wallet must belong to the row's `user_id`. Fires on **UPDATE too**, so an old client can't edit `savings_goal_id`/wallet refs into a violating state.
+  - **`wallets` guard (findings #4, #5, #6, #7 R4):**
+    - `kind` column declared **NOT NULL with a default (finding #3 R5)**: `kind text NOT NULL DEFAULT 'normal' CHECK (kind IN ('normal','savings'))` — a bare `CHECK (kind IN (...))` accepts NULL, which would bypass the savings rules and break non-optional DTO decoding.
+    - **target CHECK written NULL-safe (#4 R4):** `kind <> 'savings' OR (target_amount IS NOT NULL AND target_amount > 0)` — a bare `... OR target_amount > 0` passes when the expression is NULL and would *not* enforce a target.
+    - UPDATE trigger: **currency lock scoped to savings only (#7 R4)** — a savings wallet's currency is immutable once it has any transaction, and normal→savings is allowed once (validate target + no spending transactions). **Normal wallets are untouched** (their currency stays freely editable — else we'd change out-of-scope normal-wallet behavior). `kind` locked only when `OLD.kind = 'savings'` (savings terminal).
+    - **Balance-dependent checks (funded-archive, delete-until-zero) stay CLIENT-side (#11 R3):** replicating `Wallet.computeBalance` in SQL would disagree with the client engine; remote balance-rule violations fail **visibly**.
+  - **Trigger concurrency (#6 R4):** both triggers `SELECT … FOR UPDATE` every referenced wallet row (acquired in deterministic UUID order to avoid deadlock) so a transaction-insert and a concurrent normal→savings flip can't each observe stale state and both commit a violation.
+- **Sync-apply durable behavior — fail closed (finding #3 R3; reverses R2's apply-then-correct).** Codex is right that single-device use does not protect against partial deployment, preexisting cloud corruption, or administrative writes, and that an income/expense violation has **no "savings linkage" to strip** (the offending fact is the source wallet's kind). So the apply path **never mutates the ledger to "fix" a row**: it **skips applying** the offending row, records a **durable sync-integrity error** (row ID + specific repair action), **advances the cursor past that recorded row** (so sync progresses without an infinite retry loop), and **surfaces it to the user** for repair. The DB triggers remain the primary guard; this is the fail-closed fallback.
+- **Allowed on savings:** transfer in (contribute), transfer out (withdraw), savings→savings, and `adjustment` (explicit Adjust Balance flow only).
+- **Edit safety (finding #9):** validate the *proposed* values **before** mutating an existing `Transaction`; `context.rollback()` on any failed commit so autosave can't persist an invalid intermediate.
+- **Recurring rules (finding #10):** add a **synced typed pause reason** to `RecurringRule` (e.g. `pauseReason: .invalidSavingsWallet`) set atomically with `isActive = false`; a rule may not target a savings wallet, and one whose wallet becomes savings is paused + surfaced with that reason (never deleted, never silently skipped).
+- **Currency invariance (finding #11):** a savings wallet's `currencyCode` is **locked once it has any transaction** (UI + validation), so `targetAmount` and historical balances can't be silently reinterpreted.
 
-- Add a coordinator to `SyncEngine` that owns single-flight execution: one `syncRunTask` plus one
-  **pending-run latch**. All triggers go through `enqueueSync(reason:)` / `requestSyncAndWait(reason:)`
-  (defined below); none of them call `syncNow` directly and none may cancel a run in progress.
-- Cancellability is split: callers may cancel a *pending wait*, never work in progress. The executor
-  is a **stored unstructured `Task { @MainActor in … }`**, independent of any debounce task so a
-  debounce `cancel()` cannot reach it. **Do not use `Task.detached`** — `SyncEngine` and
-  `ModelContext` are main-actor-bound, and detaching would carry the context across an actor
-  boundary and break isolation.
-- Re-arm (defect 6): a request arriving while a run is in flight sets the latch instead of being
-  dropped; when the run finishes with the latch set, exactly one more pass is scheduled.
-- **The latch has two parts**, because Realtime identities alone cannot represent every trigger:
-  ```
-  pendingRun = (forceRun: Bool, eventIdentities: Set<EventIdentity>)
-  ```
-  `forceRun` covers identity-less triggers — local edits, `PlanDataMaintenance` follow-ups,
-  foreground, manual refresh, sign-in. `eventIdentities` covers Realtime events pending
-  reclassification (Step 4). A follow-up pass runs if `forceRun` is set **or** any identity is still
-  unmatched. Without `forceRun`, a local edit arriving mid-run would be silently lost.
+### 3. Display — two figures, one total (on the real net-worth surface)
+- **Net worth includes savings** (headline = spendable + savings).
+- **Correction (finding #15):** the net-worth surface is the **Wallets screen's `NetWorthCard`**, *not* Home (Home's hero is `FinancialSummaryCards`, a period income/expense chart — mixing a stock balance into it would be wrong). So the **spendable / savings breakdown lives on `NetWorthCard`**, and the Wallets list splits into **Spendable** and **Savings** groups with subtotals that sum to net worth. Home hero is left unchanged.
+- **Add Transaction:** income/expense picker shows spendable only; transfer shows all wallets.
 
-- **Two distinct entry points — never one awaitable API.** A single awaitable `requestSync` would
-  deadlock: `PlanDataMaintenance` (Step 1b) requesting *and awaiting* its own follow-up from inside
-  the executor would block the very run that must finish first, and `SyncRealtime` awaiting tickets
-  would stall event consumption. So:
-  - `enqueueSync(reason:)` — **nonblocking**, fire-and-forget. Used by Realtime, the local-save
-    debounce, and maintenance follow-ups. **The executor must only ever use this**; nothing inside a
-    run may await a follow-up.
-  - `requestSyncAndWait(reason:) async -> SyncOutcome` — awaitable, for callers that need the work
-    to have actually happened: pull-to-refresh, sign-in settlement, conflict resolution, sign-out.
-- **Every ticket must terminate.** A ticket resolves `.success` / `.failed(Error)` / `.cancelled`,
-  and **all** associated continuations are resumed on **every** terminal path — normal completion,
-  real failure, abort, and generation clear. An abandoned continuation hangs a refresh or sign-in
-  task forever; ticket bookkeeping is `defer`-based so no exit path can skip it.
-- **Sign-out is a barrier, not a request — and it must absorb the debounce.** Draining the
-  coordinator is not sufficient: `handleLocalSave` holds edits in a **2-second debounce** that has
-  not yet reached the coordinator, so an edit made moments before sign-out is invisible to a drain.
-  `flushBeforeSignOut` must:
-  1. cancel/absorb the pending local-save debounce so its edits are claimed immediately;
-  2. loop — while `hasPendingLocalChanges()` is true, `requestSyncAndWait` and re-check;
-  3. proceed to wipe **only** when clean; on a terminal failure, **refuse to wipe** and surface the
-     error rather than destroying un-pushed edits.
-  Bound the loop so a permanently failing push cannot spin; a bounded failure blocks the wipe. This
-  is the single most safety-critical seam in the change and gets a dedicated test.
+### 4. UI flow — Plan is primary; Wallets is a second lens
+- **A savings wallet requires a positive `targetAmount` (finding #12).** `targetAmount` is optional on the model (normal wallets have none), but for `kind == .savings` a positive target is **required at creation** — completion/progress are defined against it, and both entry points (Plan "New Goal" *and* the Wallets-screen savings toggle) must collect target + date. No untargeted savings pots in this scope.
+- **Plan tab** keeps the Savings section; "New Goal" creates a `kind == .savings` wallet — the word "wallet" never appears in the Plan path (labeled "Goal"). Templates, target, date, currency, icon/color, priority live here.
+- **Dual-read pending legacy goals (finding #11).** The Plan Savings UI queries savings *wallets*, but a goal that was **deferred** (indeterminate rates) or **failed** its invariant still exists only as a `SavingsGoal` row. The Plan list must **dual-read** those as explicit **"migration pending / needs attention"** items until conversion succeeds, so no goal silently disappears.
+- Goal card exposes **"Add money"** / **"Withdraw"**, each opening a pre-filled transfer sheet (reuse the `SavingsContributionSheet` pattern, re-pointed at a wallet).
+- **Wallets screen** shows the same wallets under a **Savings** group (labeled "Savings wallet"); the `kind` toggle appears only in the Wallets-screen creation flow.
+- **Chart (findings #17):** the Plan progress chart is rebuilt, but its **window/aggregation/future-dated behavior are defined explicitly** (match the prior 12-month + upcoming-target semantics, not a raw daily series). Migrated wallets keep real history because Case B preserves the original transfer dates (§5); only the phantom `currentAmount` becomes a dated adjustment at `goal.createdDate` — so prior progress does not collapse onto migration day.
 
-- **Refusing the wipe is not sufficient — a failed flush must abort the sign-out itself.**
-  `SupabaseAuthManager.signOut()` currently calls `try await client.auth.signOut()` **regardless** of
-  whether the flush succeeded; only the *wipe* is gated on `safeToWipe`. So a failed flush leaves the
-  user signed out with dirty local rows, and the next sign-in with a different account hits
-  `reconcileAccountIfNeeded`, which wipes the store — destroying un-pushed edits that never reached
-  the cloud. Required change: **a failed flush aborts authentication sign-out entirely**, leaving the
-  user signed in with their data intact and a surfaced, retryable error.
-- **Close the sign-out TOCTOU — with an enforceable mechanism, not a notional "lock".** `safeToWipe`
-  is computed *before* the `auth.signOut()` await, so a save landing during that suspension is wiped
-  without ever syncing. Note that a state flag alone **cannot** block writes: the repo has dozens of
-  direct `ModelContext.save()` call sites (several asynchronous), and a `willSave` observer can
-  observe but **not veto** a save. So instead of pretending to block writes, make the **wipe** the
-  guarded operation:
-  1. **Mutation revision counter** — `SyncMutationTracker.stampPendingChanges` (already on
-     `willSave`) increments a monotonic `localMutationRevision` whenever it stamps anything.
-  2. **Post-auth recheck** — capture the revision at the clean check; after `auth.signOut()` returns,
-     re-read it *and* re-run `hasPendingLocalChanges()`. If either shows movement, **do not wipe**.
-  3. **Account-switch backstop** — `reconcileAccountIfNeeded` must refuse to wipe whenever retained
-     dirty rows belong to the *previous* account, surfacing/retaining them instead. This is the
-     durable guarantee: even if every earlier gate is bypassed, un-pushed edits are never destroyed
-     by an account switch.
+### 5. Migration — staged, determinate, idempotent, invariant-checked
+Runs **entirely in the one-time `StartupMaintenanceGuard` gate** (NOT a schema stage — see §1), **after initial cloud sync + rate load** so cloud-only data and rates are present.
 
-- **Lifecycle generation token — must also stop stale *side effects*, not just stale bookkeeping.**
-  `SyncRealtime.stop()` (background / sign-out / account switch) increments a generation counter and
-  clears context + pending state. But a token alone does not prevent an old run from continuing to
-  save models, advance cursors, or issue new requests mid-flight. Therefore:
-  - `reconcileAccountIfNeeded` / any wipe must **cancel and `await`** the old executor before
-    touching the store — not merely mark it stale.
-  - The run captures `uid` + generation at entry and **re-validates both after every network
-    suspension**, before applying results or advancing a cursor. A mismatch aborts immediately
-    (via the Step 2 abort path) rather than writing another account's data into the store.
+**Single-device migration scope (findings #2, #4 R3).** Migration is authoritative on the **first** device to run it; a second device (after sign-out/in or reinstall) sees already-migrated cloud state and **adopts, never re-migrates**. Concurrent two-device migration is explicitly unsupported (matches the user's usage). To make this safe and resumable:
+- **Every generated migration transaction (adjustments, compensations) uses a deterministic ID** derived from `(goal.id, purpose, original-delta-id)`. Re-running on the same account produces identical rows, so a partial/interrupted push **resumes/repairs** instead of duplicating.
+- **An existing replacement wallet means "resume/repair," not "skip"** — the guard re-derives and upserts any missing deterministic migration transactions before considering the goal done.
+- **Ordering:** push the replacement wallet + its migration transactions + physical-wallet compensations **before** the goal tombstone, and only then write a **synced completion marker** (per-goal). A goal is "migrated" only once its marker is set; a wallet bearing `legacy_savings_goal_id` **without** the marker is treated as in-progress and repaired.
 
-### Step 1b — Maintenance must not strand dirty rows (defect 8)
+- **Cloud-first recovery (findings #2, #3):** the new client does **NOT** ignore `savings_goals` during the deprecation window. It **pulls active legacy goals + their tagged transactions**, migrates locally, then **pushes** the replacement savings wallets, the goal **tombstones**, and **explicit `savings_goal_id = null`** on un-tagged transactions. Only *tombstoned* legacy rows are ignored thereafter. This protects fresh installs and post-sign-out cache rebuilds.
+- **Determinacy gate (finding #7):** migration proceeds for a goal only when its total is determinate — rates loaded and `hasUnconvertedRows == false`. Otherwise it **defers and retries** (does not seed a partial total). Unresolved rows are preserved until an exact conversion exists.
+- **Dedupe key (finding #5 R1; reconciled #3 R4):** every migrated wallet (flipped or created) carries `legacySavingsGoalID = goal.id`, **synced**, with a **per-user unique constraint** in cloud. A device that finds a wallet already bearing a goal's id **skips only if that wallet's `legacyMigrationCompletedAt` is set**; if the marker is `nil` the migration is **resumed/repaired** (re-derive + upsert missing deterministic migration transactions), never skipped. (Replaces the earlier deterministic-UUID scheme, which Case A broke.)
+- **Case A — flip the linked wallet** (lossless), permitted **only** when ALL hold (finding #4): linked wallet is dedicated (only this goal's transfers; no income/expense/unrelated transfers) **AND** its `currencyCode == goal.currencyCode` **AND** its balance **exactly equals** the authoritative raw goal total (i.e. no phantom `currentAmount` and determinate). Set `kind`, target/date/priority, and `legacySavingsGoalID`.
+- **Case B — create a new savings wallet** (all other goals): currency = goal currency; carry `legacySavingsGoalID`.
+  - **Seed the authoritative `rawTotal`, not the floored display total (finding #3).** The old floor hid negatives; e.g. `currentAmount=100`, transfers net `−150` → `rawTotal=−50`. Seeding the floored `0` and compensating `+150` would fabricate a `+150` bump instead of the allowed `+100`. We seed `rawTotal` and **disclose any newly-visible negative balance** in the summary.
+  - **Reconstruct history on the NEW wallet (finding #4).** Un-tagging leaves the old transfers on their old physical wallets, contributing nothing to the new savings wallet's balance series — so "keep original dates" alone does nothing. Instead: for each legacy ledger delta, create **one adjustment on the new savings wallet dated at that delta's original date**, plus the phantom `currentAmount` adjustment dated at `goal.createdDate`. Sum of these adjustments == `rawTotal`, and `Wallet.dailyBalanceSeries` now reflects real progression. **Every migration-generated adjustment is marked `excludeFromReports = true` with deterministic migration provenance (finding #8 R3)** — adjustments otherwise feed cash-flow reporting (`TransactionProcessor`), and Case B can emit many, which would corrupt income/expense analytics.
+  - **Signed per-wallet compensation (finding #6, R1).** For every tagged transfer, compute its signed goal-side delta against the *actual physical wallet it touched* and post the **exact inverse adjustment on that same physical wallet** (net withdrawal → positive compensation, net contribution → negative), then un-tag the transfer. Net effect: physical money is neither created nor destroyed; it's relocated into the savings wallet.
+- **Net-worth invariant — single-currency (finding #5).** "Sum of wallet balances" is dimensionally invalid across USD/KHR. Assert **both** per-wallet expected deltas **and** total net worth **converted into one currency using the same immutable rate snapshot** the migration used. Abort + record that goal if the invariant fails (beyond the disclosed phantom delta).
+- **Dedupe / no false convergence claim (finding #4 R3).** Tombstoning a losing wallet would **not** undo its already-created adjustments + physical-wallet compensation, so true two-device convergence isn't achievable cheaply — and we don't claim it. Migration is **single-device-authoritative** (above): the first device migrates and writes the completion marker; a later device **adopts** the completed cloud state and never re-migrates. If a `legacy_savings_goal_id` unique-violation is ever hit (genuinely concurrent migration — unsupported), the client fails closed with a surfaced sync-integrity error rather than attempting an unsound automatic merge. The two-device *convergence* test is **removed** and replaced by an **adopt-don't-remigrate** test.
+- **Old-client resurrection guard (finding #7).** Rather than a full incremental legacy→wallet bridge (out of scope — user signs out/in, doesn't run concurrent old clients), a **server-side guard makes a migrated goal's tombstone authoritative**: once a wallet carries `legacy_savings_goal_id = X`, the DB rejects un-tombstoning goal `X` and rejects new `savings_goal_id = X` transfer inserts. An offline old client's stale write is refused rather than silently lost-in-place.
+- **Map legacy completion (finding #12 R3).** For a goal already at/above target, set the migrated wallet's `hasCelebrated = true` so the one-time celebration does **not** replay post-migration. (Completion itself is computed; only the celebration latch needs seeding.)
+- **Durable migration report (finding #13).** Persist an account-scoped report (converted / deferred / failed / net-worth-delta / newly-negative wallets) that survives a crash and is shown until the user acknowledges it — not an ephemeral in-memory summary.
 
-`PlanDataMaintenance.run` executes at the sync tail, **after** every push step, and deliberately
-creates dirty rows (`budget.needsSync = true`). The completion broadcast is tagged `object: self`
-precisely so auto-sync ignores it — so those rows are stranded until some unrelated trigger fires.
+### 6. Cloud sync — additive now, drops deferred
+- **Add columns** to `wallets` (Supabase migration + `SyncWalletRow` in `SyncDTOs.swift` + push/pull in `SyncEngine.swift`): `kind`, `target_amount`, `target_date`, `priority`, `has_celebrated`, `legacy_savings_goal_id` (**unique per `user_id`, partial**), and `legacy_migration_completed_at` (the completion marker, finding #1 R4). Mirror into `supabase/schema.sql` + `rls.sql`; apply to the live project before shipping the client. Backward-safe defaults so a not-yet-upgraded client round-trips wallet rows without loss.
+- **Migration push ordering — atomic RPC is MANDATORY (findings #2 R4, #1 R5).** The current engine pushes wallets → savings_goals → transactions in separate steps, which cannot guarantee the required ordering. A non-atomic sequence has an **unrecoverable crash window**: if the goal tombstone lands but the marker does not, a reinstall ignores the tombstoned goal and can never reconstruct the migration. Therefore the migration **must** use a single **server RPC** that applies wallet + migration-transactions + compensations, *then* the goal tombstone, *then* the `legacy_migration_completed_at` marker — **atomically, in one transaction**. (Fallback if an RPC is ever unavailable: write the **marker before** the tombstone and define marker-present/live-goal recovery that finishes the tombstone — never tombstone-first.)
+- **Add `pause_reason` to `recurring_rules` (finding #7 R3):** the synced typed pause reason (§2) needs a real cloud column + `SyncRecurringRuleRow` field + push/pull matching + `schema.sql`/`rls.sql` mirror + old-client compatibility, not just a local model field.
+- **Keep** `savings_goals` + `Transaction.savings_goal_id`/`savings_is_withdrawal` through the deprecation window; the new client keeps **pulling** them (for recovery) and **pushing** tombstones + null-outs, then stops referencing them once tombstoned. Drop the table/columns in the SchemaV2 removal release.
+- **Postgres triggers** (from §2) added in the same migration: the `transactions` savings-rule + wallet-ownership trigger, the `wallets` kind/currency/archive UPDATE trigger + `kind` CHECK, and the **resurrection guard on INSERT *and* UPDATE (finding #5 R4)** — once a replacement wallet carries a goal's `legacy_savings_goal_id`, reject un-tombstoning that goal and reject any transaction whose `NEW.savings_goal_id` references it, whether inserted or **edited** from `NULL` by a stale old client.
 
-- Either run sync-producing maintenance **before** the push phase, or have it report `changed` and
-  make the engine explicitly `enqueueSync(reason: .maintenance)` a follow-up pass.
-- Preference: report-and-request, so maintenance keeps running against freshly pulled data.
-- The follow-up **must** use the nonblocking `enqueueSync(reason: .maintenance)` — never the
-  awaitable form. Maintenance runs inside the executor, and awaiting its own follow-up there would
-  deadlock the run that must finish first (see Step 1). It routes through the Step 1 coordinator's
-  latch (`forceRun`) so it cannot itself become a loop.
+### 7. Lifecycle
+- **(a) Completion:** computed `balance >= targetAmount`; show "reached 🎉" state, never lock, keep accepting transfers; `hasCelebrated` latches the one-time celebration so it doesn't re-fire on every re-cross.
+- **(b) Balance honesty:** behaves like any wallet; may go negative if forced; **`max(0,…)` floor removed**; progress bar clamps 0–100% for display only.
+- **(c) Delete a savings wallet — only at exactly zero balance (finding #9 R3).** Tombstoning a wallet removes its balance from net worth, so a non-zero savings wallet may **not** be deleted: **positive** balance → offer **withdraw** to zero first; **negative** balance → offer **top-up** to zero first (the earlier "withdraw first?" ignored negatives). Once at zero, deletion **retains transaction relationships** (tombstone the wallet record but do **not** cascade-soft-delete its outgoing transfers), so counterpart wallets keep their historical inflows intact.
+- **(d) Archiving (finding #14):** **prohibit archiving a funded (non-zero) savings wallet** — archive is allowed only at zero balance. This resolves the `WalletBalanceStore` archived-exclusion contradiction (a funded savings wallet can never be both archived and counted in net worth).
 
-### Step 2 — Treat cancellation as an abort, not a step failure (defect 2)
+### 8. Tests (expanded — findings #18 R1, #14 R2)
+**Two tiers, because in-memory containers can't exercise the riskiest changes (finding #14):**
+- **Tier 1 — logic (in-memory `TestModelContainer`, `EventSettlementEngineTests` pattern):** everything below.
+- **Tier 2 — integration:** a **file-backed store** upgrade fixture (seed a real on-disk pre-migration store, open it, assert the `StartupMaintenanceGuard` conversion + the eventual `SchemaV2` removal migration), and **Supabase-preview-branch tests** for the triggers, the `legacy_savings_goal_id` partial-unique conflict, old-client writes, and the resurrection guard. These cannot be asserted by unit tests alone.
 
-In `syncNow`:
-
-- Check `Task.isCancelled` before each step and bail out of the remaining pipeline immediately.
-- In `runStep`, catch `CancellationError` **and** the `URLError.cancelled` equivalent that
-  URLSession surfaces instead, distinctly from a real failure: mark the sync **aborted** and stop,
-  rather than appending to `failures`.
-- **Cancellation is also swallowed *outside* `runStep` — fix those paths too.** Verified:
-  `downloadAndStoreImage` wraps its work in a blanket `catch` that treats `CancellationError` as a
-  download failure and **re-enqueues the image for retry**, and `drainImageDownloads` is called
-  outside `runStep` entirely, so a cancelled run proceeds to successful finalization. Fix by:
-  - rethrowing cancellation from broad `catch` blocks instead of classifying it as a failure;
-  - making image draining throwing / cancellation-aware and routing it through `runStep`;
-  - re-checking cancellation immediately **before** any success metadata is committed
-    (`lastSyncDate`, `hasCompletedInitialSync`, deletion-queue removal, marker commits), so a
-    cancelled run can never latch "succeeded".
-- An aborted sync must **not** set `lastError` to a wall of cancellation noise (that is the red text
-  on the Account screen), must not set `lastSyncDate`, and must not latch `hasCompletedInitialSync`.
-- **Correction — an abort does *not* leave state untouched.** Every pull that completed before the
-  cancellation already saved locally and advanced its own cursor inside `applyLocal`. So on abort we
-  must still broadcast committed remote changes and invalidate affected wallet balance caches.
-  Skipping the broadcast would strand already-committed rows with no view-model refresh — data on
-  screen would silently disagree with the store.
-- **Do not blindly re-arm on abort — that is how this fix grows its own loop.** An unconditional
-  retry-after-cancel spins forever if URLSession keeps returning cancellation without any generation
-  change. Retry policy:
-  - **Stale / lifecycle generation** (background, sign-out, account switch): **no retry.** The run
-    is obsolete by definition; the next legitimate trigger starts a fresh one.
-  - **Unexpected same-generation cancellation**: retry with **bounded exponential backoff** and a
-    hard attempt cap, after which the sync stays idle until a genuine trigger arrives.
-- Decision: an aborted sync is *silent* in the UI. A cancellation is a normal lifecycle event
-  (backgrounding, sign-out), not something to alarm the user about.
-
-### Step 3 — Find and close the unguarded re-dirty (defect 3) — **root latch**
-
-Ordering proves the engine is not the direct culprit: `syncNow finished` prints from the `defer`,
-which runs *after* the `PlanDataMaintenance`/reconciler tail — yet `Core Data willSave` prints
-*after* that line. So the unguarded save comes from an **observer reacting to the `.dataDidUpdate`
-broadcast** the sync posts, which then saves the main context with `isApplyingSyncChanges == false`,
-causing `stampPendingChanges()` to re-stamp every changed model with `updatedAt = Date()` and
-`needsSync = true`.
-
-Because `parentLocalWins == true` makes the pull *skip* applying the remote row, the local
-`updatedAt` can only ever be corrected by the push write-back — so a single unguarded re-stamp
-permanently pins the row as "locally newer", which is exactly the observed latch.
-
-**The culprit is confirmed — it is `BudgetNotificationService`.** No further diagnosis needed:
-
-```swift
-NotificationCenter.default.publisher(for: .dataDidUpdate)      // NOT filtered by object
-    .debounce(for: .milliseconds(400), scheduler: DispatchQueue.main)
-    .sink { [weak self] _ in self?.evaluateStore() }
-...
-func evaluateStore() {
-    checkBudgetsAndTriggerAlerts(budgets: budgets, spending: spending)
-    if modelContext.hasChanges { try modelContext.save() }     // UNGUARDED
-}
-```
-
-The closed loop, fully accounted for:
-
-1. The sync posts `.dataDidUpdate` with `object: self`. The auto-sync observer filters engine
-   broadcasts; **this Combine publisher does not**, so the engine's own completion wakes it.
-2. The 400 ms debounce fires *after* `syncNow finished` — matching the log ordering exactly
-   (`syncNow finished` → `Core Data willSave`), and 400 ms + 1.5 s ≈ the observed ~2 s cycle.
-3. `checkBudgetsAndTriggerAlerts` assigns `budget.lastAlertThreshold = 0` whenever
-   `lastAlertPeriodKey != periodKey` — and a **same-value assignment still marks the SwiftData
-   object dirty**, so `hasChanges` is true even when nothing semantically changed.
-4. The unguarded `save()` triggers `stampPendingChanges()`, stamping `updatedAt = Date()` and
-   `needsSync = true` on every changed model.
-5. The budget is now locally-newer → next pull is `parentLocalWins=true` → push → echo → repeat.
-
-Fixes, in order:
-
-1. **Eliminate same-value mutations.** In `checkBudgetsAndTriggerAlerts`, only assign
-   `lastAlertThreshold`/`lastAlertPeriodKey` when the new value actually differs. This is the real
-   fix: an evaluation that changes nothing must leave `hasChanges == false` and never save.
-2. **Do not wrap `evaluateStore` in `withSyncWriteGuard`.** These are genuine local writes when an
-   alert really fires and must sync normally; suppressing the stamp would lose real alert state.
-   The guard is the wrong tool here — same-value elimination is the correct one.
-3. **Harden `PlanDataMaintenance.run`** — it is called unguarded at the sync tail while the
-   `SavingsGoalReconciler` call beside it *is* guarded. Wrap the derived/normalization writes for
-   symmetry, and pair with Step 1b so its intentional dirty rows are not stranded.
-4. **Add a regression guard with a source tag.** Logging model type + id alone identifies the
-   *victim*, not the *writer*. Instrument DEBUG saves with a caller/source tag (e.g. a lightweight
-   `#function`/`#file` breadcrumb set by the engine and by known writers) so the next occurrence
-   names the writer directly.
-
-### Step 4 — Suppress the device's own Realtime echoes (defect 4)
-
-Supabase `postgres_changes` carries no originating-client identity, and RLS means every delivered
-row already has our `user_id` — so origin must be inferred at the app level. Use **fingerprints,
-not a timer**:
-
-- **Registration point (corrected).** `writeBackServerTimestamps` is **test-only** — its sole
-  callers are in `QuaraMoneyTests/SyncEngineHardeningTests.swift`; production pushes settle in
-  `finishPush` (which inlines the timestamp write) and `finishBudgetPush`. Register fingerprints in
-  **`finishPush`, `finishBudgetPush`, and the server tombstone-update completion in
-  `pushDeletions`** — registering in `writeBackServerTimestamps` would be dead code.
-- **`pushDeletions` needs a schema change to its request before it can fingerprint at all.**
-  Verified: it currently issues `.update(patch).eq("id", …).execute()` with no `.select()`, so no
-  representation comes back and there is no trigger-assigned `updated_at` to key on. It must request
-  and decode `id, updated_at` from each tombstone update, register the fingerprint, and only then
-  remove the deletion-queue entry — in that order, so a failure or cancellation cannot drop the
-  entry without having recorded the write.
-- `SyncEngine` keeps `recentlyPushed` keyed by `(table, id, updated_at)`, built from the
-  server-returned rows (the values the DB trigger stamped — identical to what Realtime delivers for
-  that write). Entries expire on a TTL (~60 s) and are cleared on sign-out/account switch and on
-  generation change.
-- **Decoding is settled, not an open question.** The pinned dependency is **supabase-swift 2.48.0**
-  (verified in `Package.resolved`), where `AnyAction` itself exposes **no** `record` — only its
-  associated `InsertAction` / `UpdateAction` values do. So: pattern-match the associated action and
-  decode its `record` with the **Supabase decoder** (not a hand-rolled `JSONDecoder`).
-- **Compare timestamps canonically, never as strings.** Postgres and PostgREST can render the same
-  instant with differing fractional-second precision, so a string-keyed comparison would miss every
-  match and silently defeat suppression entirely. Key on a normalized `Date` value.
-- `SyncRealtime` then asks `SyncEngine.shared.isOwnEcho(table:id:updatedAt:)`. A match does **not**
-  schedule a resync; anything else — including `DeleteAction`, which carries no new record —
-  schedules normally.
-- **Do not consume a fingerprint on first match.** Realtime can duplicate or replay a delivery; a
-  consumed fingerprint would make the duplicate look like a genuine remote event and restart the
-  loop. Retain matched fingerprints until TTL expiry (idempotent matching).
-- **Close the pre-response race.** Realtime may deliver the change event *before* the HTTP upsert
-  response returns, so the fingerprint may not be registered yet when the event arrives — a naive
-  check would classify our own write as remote and schedule a false resync. Therefore: events
-  arriving **while a sync run is in flight** are buffered as identities rather than acted on
-  immediately, and are **reclassified against the fingerprints registered by that run when it
-  finishes**. Only identities still unmatched schedule a follow-up pass (via the Step 1 latch).
-- This is why the pending-run latch carries identities, not a boolean: a bare flag cannot tell a
-  pre-response own-echo apart from a genuine concurrent remote update, and would either loop
-  forever or drop real changes.
-- Fallback: events we cannot fingerprint (notably `budget_categories`, which has no `updated_at`,
-  and any payload we fail to decode) schedule a resync as they do today. Correctness is preserved;
-  we only lose suppression on those, which are rare.
-
-Rejected alternative: a blind "ignore Realtime for N seconds after a push" window. It silently
-drops other devices' changes that land inside the window, degrading the very feature this
-subscription exists to provide.
-
-### Step 5 — Make `didApplyRemoteChanges` mean "we actually changed something" (defect 5)
-
-`fetchChanged` sets the flag from `!all.isEmpty` — i.e. "we fetched rows", even when those rows are
-byte-identical to what we already hold (our own echo, re-fetched because the push never advanced the
-cursor). Move the signal into the apply step.
-
-**The predicate must not be `local.updatedAt != row.updated_at || local.needsSync`.** `needsSync ==
-true` describes a *local-newer* row that LWW deliberately **skips** — that proves a local edit, not a
-remote mutation, so that predicate would keep the flag true on exactly the rows we are trying to
-quiet.
-
-**Two outcomes, not one.** "Nothing visible changed" and "nothing needs persisting" are different
-questions, and collapsing them would introduce a fresh bug: a byte-identical remote row may still
-legitimately require a metadata correction (clearing `needsSync`, adopting the server `updatedAt`,
-assigning `syncUserID` ownership). Refusing to save those would strand rows as permanently dirty —
-re-creating the very loop we are fixing. So each apply closure returns both:
-
-- `didPersistLocalState` — metadata or data was written; the span **must** be saved.
-- `didChangeVisibleData` — LWW accepted the remote row *and* a user-visible field actually changed.
-
-`didApplyRemoteChanges` (which gates the `.dataDidUpdate` broadcast, `PlanDataMaintenance`, and the
-reconciler) is driven **only** by `didChangeVisibleData`. Saving is driven by `didPersistLocalState`.
-
-Effect: a stray echo becomes a silent no-op instead of re-running `PlanDataMaintenance` +
-`SavingsGoalReconciler` and re-broadcasting `.dataDidUpdate` — which is what feeds defect 3.
-
-**Explicitly rejected:** advancing the pull cursor on push. Pull runs before push, so a concurrent
-row written by another device between our pull and our push gets a server timestamp below ours;
-bumping the cursor past it would skip that row permanently. That is silent cross-device data loss.
-The current "don't advance on push" behaviour is deliberate and must stay.
-
-### Step 6 — Verify convergence and self-heal the stuck row
-
-- The stuck budget's *data* is valid; only its sync metadata churns. Expect the first clean sync
-  after the fix to push it once, write back the server timestamp, clear `needsSync`, and settle.
-- Verify by observation, not by a destructive migration: confirm the cloud `updated_at` for
-  `405eda91-…` stops advancing while the app sits idle.
-- If it does **not** settle, the remaining local latch is a genuine bug still unfixed — investigate
-  rather than papering over it with a one-shot reset.
-
-### Step 7 — Automated regression coverage (required, not optional)
-
-The manual 60-second checks below prove the symptom is gone on one device; they cannot pin the
-behaviour down. This is the most safety-critical code in the app, so the fix ships with
-deterministic tests. Follow the existing pattern (`TestModelContainer.create()`, in-memory
-container, `SyncEngineHardeningTests.swift`). Seams to introduce:
-
-- **Injected sync runner** — assert single-flight: concurrent `enqueueSync` calls produce exactly
-  one run plus one latched follow-up, never a dropped request and never two overlapping runs.
-  Include an identity-less trigger (local edit) arriving mid-run and assert `forceRun` re-arms it.
-- **Awaitable tickets** — `requestSyncAndWait` resolves only when a run satisfying it completes, not
-  on enqueue; `enqueueSync` never blocks its caller.
-- **Mutation-revision backstop** — a save landing between the clean check and the wipe bumps
-  `localMutationRevision`, and the post-auth recheck must abort the wipe; and an account switch with
-  retained dirty rows belonging to the previous account must refuse to wipe.
-- **Sign-out barrier (highest-value test)** — a local edit made while a sync is in flight must be
-  pushed before `flushBeforeSignOut` returns; the wipe must never observe
-  `hasPendingLocalChanges() == true`. Include the debounce case: an edit made **inside the 2-second
-  local-save debounce window**, never yet seen by the coordinator, must still be flushed. A terminal
-  push failure must **block both the wipe and the auth sign-out** — assert the user remains signed
-  in with data intact. Also assert the TOCTOU is closed: a save attempted between the final clean
-  check and the wipe cannot land. Guards against destroying un-pushed user data.
-- **No deadlock** — maintenance requesting a follow-up from inside the executor uses the
-  nonblocking `enqueueSync` and completes; assert the run finishes and the follow-up still happens.
-- **Stale-run side effects** — a run cancelled by an account switch must not save models, advance
-  cursors, or issue follow-up requests after the switch; uid/generation re-validation after a
-  simulated suspension aborts it.
-- **Cancellation outside `runStep`** — a cancelled image drain must not re-enqueue as a "failure"
-  and must not allow `lastSyncDate` / `hasCompletedInitialSync` to latch.
-  **Scope this correctly:** deletion-queue removals that already succeeded *before* a later
-  cancellation are intentional durable partial progress and must **not** be rolled back — asserting
-  otherwise would demand impossible transactionality across independent HTTP calls. Test only
-  cancellation *during* the tombstone request, or *between* its response and the queue removal.
-- **Ticket termination** — every terminal path (success, real failure, abort, generation clear)
-  resumes all associated continuations; no caller hangs. Assert no leaked continuations.
-- **Abort retry policy** — a stale/lifecycle-generation abort schedules **no** retry; a repeated
-  same-generation cancellation backs off and stops at the cap instead of spinning.
-- **Injected clock** — fingerprint TTL expiry and idempotent (non-consuming) matching, including a
-  duplicated/replayed delivery of the same event.
-- **Injected Realtime payloads** — own-echo suppression; an unfingerprintable payload still
-  schedules; a genuine remote identity still schedules.
-- **Controllable continuations** — the pre-response race: deliver the event *before* the upsert
-  response resolves and assert it is buffered, reclassified, and suppressed.
-- **Cancellation** — a run cancelled mid-pipeline records no `failures`, leaves `lastSyncDate` and
-  `hasCompletedInitialSync` untouched, and still broadcasts already-committed pulls. Re-arming is
-  **policy-dependent and must be split into two cases**: a lifecycle/stale-generation cancellation
-  must **not** re-arm; a same-generation cancellation follows the bounded-backoff retry policy and
-  stops at the cap.
-- **Account switch** — a run from an older generation completing after `stop()` must not clear newer
-  state or re-arm against the new account's context.
-- **Two-outcome apply** — an LWW-skipped row and a byte-identical row both leave
-  `didApplyRemoteChanges == false`; but a byte-identical row needing a metadata correction
-  (`needsSync` clear / ownership assignment) **is still saved** and does not stay dirty.
-- **`BudgetNotificationService`** — an `evaluateStore()` that crosses no threshold leaves
-  `modelContext.hasChanges == false` and performs no save (the defect-3 regression test).
-
-## Proof test (acceptance criteria)
-
-1. **Idle quiet:** app foregrounded, untouched for 60 s → zero `[SyncRealtime] remote … received`
-   entries attributable to our own writes, zero `syncNow called`, zero `CancellationError`.
-2. **Cloud quiet:** `select updated_at from budgets where id='405eda91-…'` unchanged across two
-   queries 60 s apart while idle.
-3. **Local edit still syncs:** add a transaction → exactly **one** sync cycle → row present in cloud
-   → returns to quiet. No echo-triggered second cycle.
-4. **Remote change still lands:** change a row from another client/SQL → the device pulls it within
-   ~2 s (proves suppression did not deafen us).
-5. **Cancellation is clean:** background the app mid-sync → no `lastError` shown, no wall of
-   per-step `CancellationError`, next foreground syncs normally.
-6. Existing suite green: `xcodebuild test -scheme QuaraMoney -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`.
+Cases:
+- Enforcement: income/expense against savings rejected at **each** mutation path incl. sync-apply and bulk-edit; transfers in/out + adjustments + savings→savings succeed; edit-then-reject rolls back cleanly.
+- Migration: Case A flip lossless + net-worth-flat; Case B seeds authoritative **`rawTotal` including negative totals** (not floored) with **per-wallet + single-currency net-worth-total assertions**; withdrawal-net goal compensates with correct sign; history adjustments dated at original deltas, phantom at goal creation, **all `excludeFromReports` (no cash-flow pollution)**; determinacy gate defers indeterminate goals; **resumable** (interrupted push repaired via deterministic migration-transaction IDs, second run no-ops); **adopt-don't-remigrate** on a second device (replaces the removed two-device convergence test); **cloud-only legacy goal recovered** on fresh install; migrated completed goal does **not** replay celebration (`hasCelebrated`).
+- Old-client compatibility: a not-yet-upgraded client's wallet round-trip and legacy pushes don't corrupt new columns.
+- Currency: savings-wallet currency locked once it has transactions.
+- Lifecycle: computed completion + one-time celebration; honest negative balance; delete retains counterpart history; funded savings wallet cannot be archived.
+- Recurring rule targeting savings → paused with `.invalidSavingsWallet` reason (synced).
+- Net worth: spendable + savings subtotals sum to net worth on `NetWorthCard`.
 
 ## Key decisions & tradeoffs
-
-1. **Fingerprint echo suppression over a timing window** — precise, and preserves multi-device
-   immediacy. Costs a small TTL map and decoding the Realtime payload.
-2. **Do not advance the pull cursor on push** — protects against cross-device data loss; accepted
-   cost is one redundant (now silent) pull per push, mitigated by Step 5.
-3. **Cancellation is silent in the UI** — it is a lifecycle event, not a user-facing error. Risk: a
-   genuinely stuck sync becomes less visible; mitigated because `lastSyncDate` still fails to
-   advance, which the UI can surface as staleness.
-4. **Defect 3 is fixed by eliminating same-value mutations, not by guarding the writer.**
-   `BudgetNotificationService`'s writes are legitimate when an alert really fires and must sync;
-   wrapping them in `withSyncWriteGuard` would silently lose real alert state. The bug is that an
-   evaluation which changes nothing still dirties the context.
-5. **No data migration for the stuck row** — its data is correct; only metadata churns. A migration
-   touching live user data is higher-risk than verifying convergence.
-6. **The re-arm latch carries event identities, not a boolean** — a boolean cannot distinguish a
-   pre-response own-echo from a genuine concurrent remote update, so it would either spin or drop
-   real changes. Identity sets are still bounded (deduplicated, TTL-scoped).
-7. **Single-flight ownership lives in `SyncEngine`, not `SyncRealtime`** — every trigger shares the
-   `already syncing` drop, so fixing it in one caller would leave the others broken.
-8. **Fingerprints are retained until TTL, not consumed on match** — Realtime can duplicate or replay
-   a delivery, and a consumed fingerprint would reclassify the duplicate as a genuine remote event.
+1. **Fold onto `Wallet`, delete `SavingsGoal` (additive release under `SchemaV1`; removal in a later `SchemaV2`).** One source of truth; drift impossible. Cost: staged schema + heavier migration.
+2. **Centralized validator across every mutation + sync-apply path, plus a Postgres trigger.** Correctness can't depend on remembering ~35 sites, and raw Data-API writes are closed at the DB.
+3. **Migration prefers a *strictly* lossless Case-A flip (currency-match + exact-total + dedicated), else signed per-wallet-compensated Case B.** Preserves displayed progress; discloses only the phantom-`currentAmount` net-worth delta; asserts the net-worth invariant per goal.
+4. **Synced `legacy_savings_goal_id` (unique per user) is the dedupe key** — survives Case A's wallet-UUID reuse, unlike deterministic UUIDs. Cloud schema additive now; drops deferred to the later `SchemaV2` removal release; new client pulls-and-migrates legacy goals rather than ignoring them.
+5. **Completion is computed, currency is locked-after-first-txn, `max(0,…)` floor removed** — three "stored state drifts" eliminated.
+6. **Net-worth breakdown lives on `NetWorthCard` (Wallets), not the Home cash-flow hero.**
 
 ## Risks / open questions
+- **Case-A dedicated-wallet detection** must be conservative (treat as shared when in doubt) to avoid wrongly freezing a shared wallet's spending; the tightened currency+exact-total gate makes false-positives safe (fall back to Case B).
+- **Schema mechanics (corrected R2):** additive phase needs *no* new `VersionedSchema` (lightweight inference under `SchemaV1`); data conversion lives in `StartupMaintenanceGuard`, not a stage. The frozen-snapshot `SchemaV2` + `MigrationStage` + file-backed test is the *removal* release's work.
+- **Per-user partial-unique on `legacy_savings_goal_id`**: a unique-violation (only possible under unsupported concurrent migration) **fails closed** with a surfaced sync-integrity error — no automatic loser-tombstone/merge. Bounded by single-device reality.
+- **Scope-bounded vs Codex (settled after R3):** Codex *agreed* the server-side resurrection guard can replace a full old-client bridge, and that full concurrent-device merging is out of scope. Codex *disagreed* with R2's apply-then-locally-correct sync fallback — **conceded in R3**: the apply path now fails closed (skip + durable integrity error + surface), never mutating the ledger. Two-device migration *convergence* is explicitly **unsupported**; migration is single-device-authoritative with adopt-don't-remigrate + deterministic-ID resume. All logged in `PLAN-REVIEW-LOG.md`.
+- **Postgres trigger** must read wallet `kind` at write time — ordering of wallet vs transaction sync must guarantee the wallet row exists first (it already pushes wallets before transactions).
 
-- **Defect 3's culprit is now named and confirmed** (`BudgetNotificationService`), so this is no
-  longer open. Residual risk: other `.dataDidUpdate` observers may contain the same same-value-write
-  pattern. The DEBUG source-tagged save instrumentation (Step 3.4) exists to surface them; a quick
-  audit of other `.dataDidUpdate` subscribers should accompany the fix.
-- **Behaviour change in alerting.** Suppressing same-value writes means `lastAlertThreshold` /
-  `lastAlertPeriodKey` are persisted only on real transitions. Verify this does not change when
-  50/80/100% alerts fire or re-fire across a period boundary — covered by the Step 7 test.
-- ~~**Realtime payload decoding**~~ — **resolved.** Pinned supabase-swift is 2.48.0
-  (`Package.resolved`): `AnyAction` has no `record`; its associated `InsertAction`/`UpdateAction`
-  do. Decode via the Supabase decoder and match timestamps canonically (not string-keyed). Payloads
-  that fail to decode fall back to scheduling a resync.
-- **A `budget_categories` echo cannot be fingerprinted** (no `updated_at`). Its delete+insert will
-  still trigger one resync per genuine join rebuild. Acceptable; join rebuilds are rare and now
-  converge.
-- **Multi-device correctness must not regress.** Test 4 exists specifically to catch over-suppression.
-- **`SyncMutationTracker.isApplyingSyncChanges` must never wrap an `await`** (existing project rule);
-  every new guard added here must wrap a synchronous span only.
-- **Ordering of Steps 4 and 5** — Step 5 alone leaves the redundant network round-trip; Step 4 alone
-  leaves the churn path intact for un-fingerprintable events. Both are needed.
+## RESOLVED — auto-contribute decision recorded (hard gate closed)
+**DECISION (user, recorded before build): option (a) — DROP the dead `autoContribute*` fields.** They are NOT migrated onto `Wallet`; they are retired with `SavingsGoal` in the later `SchemaV2` removal release. No reminder scheduler is in scope. This supersedes grill answer Q7, which kept them on the false premise that they functioned.
+
+_Original finding, for the record:_
+- **Auto-contribute reminders — DROP from scope (finding #16).** Grill Q7 kept them "as reminder-only," but the code shows the `autoContribute*` fields are **only synced — no scheduler ever consumes them** (verified: only `SyncEngine.swift` references them). "Keeping" them means carrying dead sync surface; making them real is a separate feature. Recommend **removing** the fields rather than migrating them onto `Wallet`. **This decision must be recorded before implementation** (Codex #15) — it is a hard gate, not an open question at build time. Options: **(a)** drop the dead fields now (retired in the `SchemaV2` removal release) [recommended]; **(b)** scope a real scheduler as separate follow-up work, fields untouched until then. Needs your explicit pick since it reverses a grill answer.
 
 ## Out of scope
-
-- Redesigning the sync architecture, the LWW scheme, or the budget↔category join model.
-- The cosmetic `nw_protocol_instance_set_output_handler` / `nw_path_necp_check_for_updates` OS log
-  noise — unrelated to this bug.
-- The one observed `[SyncRealtime] remote INSERT received` right after subscribe (a
-  backlog/other-device artifact, not part of the loop).
-- Offline queueing, conflict-resolution UX, and image upload/retry behaviour.
+- Monzo-style **locked-until-date** savings (declined — withdraw anytime).
+- **Multiple goals over one shared pot** (envelope model) — one savings wallet = one goal, accepted.
+- **Dropping** `savings_goals` / transaction columns — deferred to the later `SchemaV2` removal release.
+- A **real auto-contribute scheduler** (see flagged item) — separate follow-up if wanted.
+- Concurrent multi-device conflict resolution beyond `legacy_savings_goal_id` dedupe (single-device today).
+- Any change to income/expense/transfer semantics for **normal** wallets.

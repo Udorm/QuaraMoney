@@ -1,378 +1,314 @@
-# Plan Review Log: Fix the perpetual sync loop (SyncEngine / SyncRealtime)
-
+# Plan Review Log: Savings-as-Wallet
 Act 1 (grill) complete — plan locked with the user. MAX_ROUNDS=5.
 
-> The previous contents of this file (Plan tab v2 review log) are preserved in git history —
-> recover with `git show HEAD:PLAN-REVIEW-LOG.md`.
+> The previous contents of this file (perpetual sync-loop-fix review log) are preserved in git
+> history — recover with `git show HEAD:PLAN-REVIEW-LOG.md`.
 
-Reviewer model: `gpt-5.6-sol` (pinned in `~/.codex/config.toml`, `model_reasoning_effort = "high"`),
-codex-cli 0.144.4. Codex is read-only every round.
 
-## Act 1 summary — what the grill settled
+Grill resolved 8 decisions: (1) fold onto Wallet, delete SavingsGoal; (2) block income/expense, allow both transfer directions + adjustments; (3) hard write-path guard as contract + picker-filter polish + recurring-rule pause/flag; (4) migration flips dedicated linked wallets else create+seed, preserve displayed progress + disclose small net-worth bump (option a); (5) net worth includes savings, two-figures-one-total display; (6) deterministic goal-derived wallet IDs + additive-only cloud schema; (7) rebuild chart on wallet balance, keep templates/priority/suggested-contribution/auto-contribute-reminders; (8) soft completion never-lock, drop max(0,…) floor, warn+offer-transfer on delete-with-balance. Single-device today; cloud safety is the bar.
 
-- **Symptom reframed twice.** Initially assumed a damped "echo" (one redundant resync per push).
-  The live DB then showed zero writes for 44 min, suggesting no loop at all — until the user's full
-  idle log proved a true perpetual loop, and a re-query showed budget `405eda91-…` `updated_at`
-  advancing `05:22:57` → `06:16:07` while idle.
-- **Root cause identified:** `SyncRealtime.scheduleSync()` runs `syncNow` *inside* the cancellable
-  debounce task, so each echo's `debounceTask?.cancel()` kills the sync that is still running.
-  `push budgets: CancellationError()` in the log proves `finishBudgetPush` never ran, leaving
-  `needsSync` set — the latch.
-- **Second, independent latch found** by re-reading the full log at the user's request: cycles that
-  complete with *no* cancellation still show `parentLocalWins=true` on the next pull, and
-  `Core Data willSave` prints after `syncNow finished` — an unguarded post-sync save re-stamping
-  `needsSync`/`updatedAt` via `SyncMutationTracker`.
-- **Ruled out with evidence:** budget `.emptyRepaired` branch (cloud join state verified clean),
-  `PlanDataMaintenance` normalization branches (all skip this row), `profiles` per-sync writes,
-  and a Realtime resubscribe storm (`subscribed` logged exactly once).
-- **Scope:** user chose all six defects plus verification of the stuck row ("Do all").
-- **Rejected during the grill:** advancing the pull cursor on push (silent cross-device data loss),
-  and blind time-window echo suppression (drops other devices' changes).
+## Round 1 — Codex (gpt-5.6-sol, high effort)
 
-## Round 1 — Codex
+The plan is not safe to implement yet. The migration and compatibility strategy has several data-loss paths.
 
-Material problems remain:
+1. **The legacy data is deleted before it can be migrated.** Removing `SavingsGoal` and the transaction relationships is a non-additive SwiftData change, but the app currently has only `SchemaV1` and no migration stage ([SchemaVersioning.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Models/SchemaVersioning.swift:8)); startup maintenance cannot fetch types absent from the active schema.  
+Fix: Introduce a real `SchemaV2` retaining legacy fields long enough to migrate them, then remove them in a later schema version.
 
-1. Re-arm is scoped only to `SyncRealtime`, while local-save and foreground triggers still hit `syncNow`’s “already syncing” guard and are dropped ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:507)).  
-   Fix — Put single-flight ownership and one pending-run latch in `SyncEngine`, and route every trigger through it.
+2. **Cloud tombstoning contradicts “stop pushing savings goals.”** The migration promises to tombstone old goals and clear transaction tags, but stopping legacy pushes means neither `deleted_at` nor `savings_goal_id = null` reaches Supabase ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1461)).  
+Fix: Continue pulling and pushing legacy goal tombstones and explicit transaction nulls throughout the deprecation window.
 
-2. Echo fingerprints can arrive too late: Realtime may deliver the event before the HTTP upsert response registers its server timestamp, causing a false pending resync ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:117)).  
-   Fix — Buffer identifiable events received during a sync and reclassify them against returned fingerprints when the run finishes.
+3. **Fresh installs can lose every legacy cloud goal.** Sync currently pulls goals before transactions ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1053)); if the new client ignores that table, a new device or post-sign-out cache rebuild has nothing local to migrate.  
+Fix: Pull active legacy goals, migrate them locally after initial sync, push replacements and tombstones, and only then ignore tombstoned rows.
 
-3. The proposed registration path is wrong: production pushes use `finishPush`, while `writeBackServerTimestamps` is only called by tests ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1350)).  
-   Fix — Register fingerprints in `finishPush`, `finishBudgetPush`, and server tombstone-update completion.
+4. **Case A is not lossless.** A “dedicated” wallet balance contains only physical transfers, while the displayed goal also includes `currentAmount`; it may also use a different currency from the goal ([SavingsGoal.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Models/SavingsGoal.swift:78)).  
+Fix: Permit Case A only when currencies match and wallet balance exactly equals the authoritative raw goal total; otherwise use Case B.
 
-4. A single `pendingResync` boolean discards event identity, so it cannot distinguish a pre-response own echo from a genuine concurrent remote update.  
-   Fix — Queue or coalesce fingerprintable event identities, then schedule one rerun if any remain unmatched.
+5. **Case A breaks deterministic deduplication.** Keeping the linked wallet’s random UUID on one device while another creates the goal-derived UUID can produce two savings wallets; the promised migration mapping has no local or cloud field.  
+Fix: Always use one canonical goal-derived wallet ID, or add a synced `legacy_savings_goal_id` with a per-user unique constraint and conflict recovery.
 
-5. “Aborted sync leaves state untouched” is false: each completed pull saves locally and advances its cursor immediately ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:2453)). Cancellation afterward can suppress the only view-model refresh for those changes.  
-   Fix — On abort, still broadcast committed remote changes and invalidate affected caches, then re-arm a retry without reporting cancellation as failure.
+6. **Case B compensation is undefined and fails for withdrawals or changed linked wallets.** Tagged transactions can touch historical wallets other than the goal’s current `linkedWallet`, and a net withdrawal requires a positive compensation—not the stated “outflow.”  
+Fix: Compute signed goal-side deltas per physical wallet from every tagged transfer, apply exact inverse adjustments, and assert pre/post net-worth invariants before committing.
 
-6. `stop()` lacks a lifecycle generation boundary; a cancelled old run can finish after restart, clear newer task state, or re-arm against a new account/context ([SyncRealtime.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncRealtime.swift:88)).  
-   Fix — Clear context and pending state on stop, increment a generation token, and ignore completion/events from older generations.
+7. **Indeterminate goals will be silently under-migrated.** The reconciler skips rows lacking rates and exposes `hasUnconvertedRows`, so its `total` is only a partial displayed value ([SavingsLedgerCalculator.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/SavingsLedgerCalculator.swift:55)).  
+Fix: Refuse and retry migration while totals are indeterminate, or preserve each unresolved row until an exact stored conversion can be established.
 
-7. The suggested Step 5 predicate is incorrect: `local.needsSync == true` can describe a local-newer row that LWW deliberately skips, so it does not prove a remote mutation ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:132)).  
-   Fix — Make each apply closure return `didMutate`, set the flag only after LWW accepts an actual field change, and avoid saving byte-identical rows.
+8. **The proposed “hard guard” is not a hard contract.** Transactions are created directly by CSV import, debts, events, recurring rules, bulk wallet moves, sync pull, and other paths ([CSVImportService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/CSVImportService.swift:497), [DebtService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/DebtService.swift:68), [EventLedgerService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/EventLedgerService.swift:547), [TransactionBulkEditingService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/TransactionBulkEditingService.swift:232)); authenticated Data API writes also bypass client code.  
+Fix: Centralize ledger validation across every mutation and sync-apply path, plus add a database trigger enforcing wallet ownership and savings-kind transaction rules.
 
-8. Guarding tail maintenance does not ensure convergence: `PlanDataMaintenance.run` explicitly creates dirty rows after all push steps, while the engine-tagged completion notification is ignored by auto-sync ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:738)).  
-   Fix — Run sync-producing maintenance before pushes or request a central follow-up run whenever maintenance reports `changed`.
+9. **Editing can leave an invalid transaction pending after rejection.** `AddTransactionViewModel` mutates an existing model before saving ([AddTransactionViewModel.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/ViewModels/AddTransactionViewModel.swift:201)); rejecting after mutation without rollback risks autosave persisting it.  
+Fix: Validate the proposed immutable values before touching the model, and rollback the context on every failed commit.
 
-9. Logging only model type and ID cannot “name” the observer; it identifies the victim, not the writer. `BudgetNotificationService` is already a concrete suspect because its `.dataDidUpdate` handler conditionally assigns and saves budgets ([BudgetNotificationService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/BudgetNotificationService.swift:24)).  
-   Fix — Add a call stack/source tag to DEBUG save instrumentation and eliminate same-value mutations before saving.
+10. **“Pause + flag” has nowhere to store the flag.** `RecurringRule` contains only `isActive`; there is no reason/status field to explain an automatic pause or synchronize it ([RecurringRule.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Models/RecurringRule.swift:36)).  
+Fix: Add and sync a typed pause reason, or derive and display an invalid-wallet state while atomically setting `isActive = false`.
 
-10. Consuming a fingerprint on first match is fragile under duplicate/replayed Realtime delivery; the duplicate becomes a false remote event.  
-    Fix — Retain matched fingerprints until TTL expiry or track an explicit expected-delivery count.
+11. **Target currency is not invariant.** Wallet currency remains freely editable ([AddWalletViewModel.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/ViewModels/AddWalletViewModel.swift:41)), so changing it reinterprets `targetAmount` and historical balance data.  
+Fix: Lock currency once a savings wallet has transactions, or atomically convert the target and all relevant historical rates.
 
-11. The proof section adds no automated regression coverage for the coordinator, cancellation, parsing, account switching, or the pre-response echo race ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:156)).  
-    Fix — Add deterministic tests with injected sync runners, clocks, event payloads, and controllable continuations before relying on the manual 60-second checks.
+12. **Persisted completion state will drift.** Transfers, adjustments, deletions, restores, sync pulls, and migration compensation can change balance without any specified completion reconciliation.  
+Fix: Make completion computed from `balance >= targetAmount`, or define one mandatory post-ledger-mutation reconciler covering every write and pull path.
 
-VERDICT: REVISE
-### Claude's response
+13. **Existing wallet deletion semantics corrupt savings history.** Deletion currently soft-deletes outgoing transactions and detaches incoming transfers ([SoftDeleteService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/SoftDeleteService.swift:74)); after withdrawing a savings wallet to zero, deleting it can still remove the counterpart wallet’s historical inflows.  
+Fix: For emptied savings wallets, tombstone only the wallet while retaining transaction relationships to the tombstoned record.
 
-**All 11 findings accepted.** Two were verified against the codebase before acceptance, and both
-were correct — they materially changed the plan:
+14. **Archiving a funded savings wallet drops it from net worth.** The balance store explicitly excludes archived wallets ([WalletBalanceStore.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/WalletBalanceStore.swift:141)), contradicting the promise that savings remain in net worth.  
+Fix: Either prohibit archiving funded savings wallets or include archived savings balances in net worth while hiding them from active lists.
 
-- **#3 (registration point) — verified true.** `grep` confirms `writeBackServerTimestamps`'s only
-  callers are in `QuaraMoneyTests/SyncEngineHardeningTests.swift`. Production settles pushes in
-  `finishPush` (inlining the timestamp write at SyncEngine.swift:1362) and `finishBudgetPush`.
-  Registering fingerprints where the plan originally said would have been dead code. Plan now
-  registers in `finishPush`, `finishBudgetPush`, and `pushDeletions` tombstone completion.
-- **#9 (defect 3 culprit) — verified true, and upgraded from suspicion to confirmed root cause.**
-  `BudgetNotificationService.configure` subscribes to `.dataDidUpdate` via a Combine publisher that,
-  unlike the auto-sync observer, does **not** filter `object is SyncEngine` — so the engine's own
-  completion broadcast wakes it. Its 400 ms debounce fires after `syncNow finished` (matching the
-  log ordering, and 400 ms + 1.5 s ≈ the observed ~2 s cycle), `checkBudgetsAndTriggerAlerts`
-  assigns `lastAlertThreshold = 0` even when unchanged (a same-value assignment still dirties the
-  SwiftData object), and the unguarded `save()` triggers `stampPendingChanges()`. That is the latch.
-  The plan's "diagnose first" step is replaced with the concrete fix.
+15. **The Home UI assumption is false.** Home’s hero is a period income/expense chart, not net worth ([HomeView.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Views/Home/HomeView.swift:663)); adding a spendable/savings subline there mixes stock balances with period cash flow.  
+Fix: Specify and build a separate net-worth balance section/data source, or move the breakdown exclusively to Wallets.
 
-Other notable changes:
+16. **The claimed auto-contribution reminders do not exist.** The fields are only modeled and synced; no scheduler consumes them.  
+Fix: Either add a concrete reminder scheduling/rescheduling design and tests or remove “keep auto-contribute reminders” from scope.
 
-- **#1 + #4 + #2/#10 (coordinator + echo race)** — single-flight ownership moved from `SyncRealtime`
-  into `SyncEngine` so all triggers share it; the pending latch now carries **event identities**
-  rather than a boolean; events arriving mid-run are buffered and reclassified against fingerprints
-  registered by that run; fingerprints are retained until TTL rather than consumed on match.
-- **#5** — corrected an outright false claim in the plan. An aborted sync does *not* leave state
-  untouched: completed pulls have already saved and advanced their cursors, so abort must still
-  broadcast committed changes and invalidate caches, or on-screen data silently diverges.
-- **#7** — the proposed `didApplyRemoteChanges` predicate was wrong for the stated reason
-  (`needsSync == true` marks a local-newer row that LWW *skips*). Replaced with apply closures
-  returning `didMutate`, set only after LWW accepts a real field change.
-- **#8** — accepted as a genuine latent bug: `PlanDataMaintenance` creates dirty rows after all push
-  steps while the completion broadcast is `object: self` (ignored by auto-sync), stranding them.
-  Added Step 1b (report-and-request a follow-up through the coordinator latch).
-- **#6** — added a lifecycle generation token so a stale run cannot clear newer state or re-arm
-  against a different account's context.
-- **#11** — added Step 7 with concrete seams (injected runner, clock, payloads, controllable
-  continuations) and named cases, including a defect-3 regression test asserting that a
-  no-threshold-crossing `evaluateStore()` leaves `hasChanges == false`.
+17. **The chart migration discards history.** A single seed adjustment dated at migration makes prior progress appear to happen today, while `dailyBalanceSeries` lacks the existing 12-month monthly/upcoming semantics.  
+Fix: Preserve historical goal-side movements or persist migration history points, and explicitly define chart window, aggregation, and future-dated behavior.
 
-Nothing was rejected this round.
-
-## Round 2 — Codex
-
-The prior findings are substantially addressed, but six material implementation gaps remain:
-
-1. The pending latch only carries Realtime identities; local edits, maintenance, foreground, and manual refresh requests have no identity and could still be lost.  
-   Fix — Model pending state as `forceRun: Bool` plus `eventIdentities: Set<EventIdentity>`.
-
-2. `requestSync` completion semantics are unspecified; pull-to-refresh, sign-in settlement, conflict resolution, and especially `flushBeforeSignOut` must await the run satisfying their request, not merely enqueue it.  
-   Fix — Return an awaitable request ticket/result and make sign-out use a barrier that drains the coordinator and verifies no pending local changes.
-
-3. A generation token prevents stale bookkeeping but not stale side effects: an old run can continue saving models, advancing cursors, or issuing requests after an account switch.  
-   Fix — Cancel and await the old executor before account reconciliation/wipe, and validate captured user ID plus generation after every network suspension before applying results.
-
-4. Cancellation can still be swallowed outside `runStep`: `downloadAndStoreImage` catches every error, including cancellation, and `drainImageDownloads` can let a cancelled run reach successful finalization ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:2541)).  
-   Fix — Rethrow cancellation from broad catches, make image draining throwing/cancellation-aware, and check cancellation immediately before success metadata is committed.
-
-5. Step 5 conflates visible changes with required metadata writes: a byte-identical remote row may still need `needsSync`, `updatedAt`, or ownership corrected and therefore must be saved.  
-   Fix — Return separate `didPersistLocalState` and `didChangeVisibleData` outcomes; save for either metadata or data changes, but broadcast/maintenance only for visible changes.
-
-6. `pushDeletions` currently receives no server row, so it has no trigger-assigned `updated_at` with which to construct the promised fingerprint ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1306)).  
-   Fix — Request and decode `id, updated_at` from each tombstone update before removing its deletion-queue entry and registering the fingerprint.
+18. **The test plan misses the dangerous cases.** It omits cloud-only legacy recovery, old-client writes, indeterminate rates, starting balances, currency mismatches, divergent Case A/B devices, delete/archive behavior, bulk moves, restores, and sync-injected violations.  
+Fix: Add those cases plus exact per-wallet and total net-worth assertions before treating migration as releasable.
 
 VERDICT: REVISE
-### Claude's response
+### Claude's response (Round 1)
 
-**All 6 findings accepted.** Two concrete code claims were verified first; both were correct.
+Accepted essentially all 18 findings — the review was strong and several are genuinely material. Verified two scope-changing claims against the code before acting: #15 (Home hero is FinancialSummaryCards / period cash-flow, net worth lives in Wallets/NetWorthCard — CONFIRMED) and #16 (autoContribute fields are only synced, no scheduler consumes them — CONFIRMED dead). Revisions applied to PLAN.md:
+- #1 Staged schema: added SchemaV2 (retains legacy SavingsGoal + Transaction savings fields) → migrate → SchemaV3 (removes them). No legacy deletion before migration.
+- #2/#3 Deprecation-window sync: new client does NOT ignore savings_goals — it pulls active legacy goals, migrates locally AFTER initial sync, pushes replacement wallets + goal tombstones + explicit transaction savings_goal_id=null, then ignores tombstoned rows. Legacy pushes continue through the window.
+- #5 Dedup mechanism replaced: deterministic-UUID dropped in favor of a synced legacy_savings_goal_id column on wallets (unique per user), carried by BOTH flipped (Case A) and created (Case B) wallets; migration keys idempotency on it.
+- #4 Case A tightened: flip only when currency matches AND wallet balance == authoritative raw goal total (i.e. no phantom currentAmount, determinate). Else Case B.
+- #6 Case B compensation defined: per-physical-wallet signed goal-side deltas from every tagged transfer, exact inverse adjustment per wallet, pre/post net-worth invariant assertion; withdrawals handled with correct sign.
+- #7 Determinacy gate: migration refuses/retries while hasUnconvertedRows or rates unloaded; never seeds a partial total.
+- #8 Contract widened: centralized ledger validation across ALL mutation + sync-apply paths (CSV, debts, events, recurring, bulk, sync pull) + a Postgres trigger as defense-in-depth.
+- #9 Edit safety: validate proposed immutable values BEFORE mutating the model; rollback context on every failed commit.
+- #10 RecurringRule gains a synced typed pause-reason (e.g. .invalidSavingsWallet) alongside isActive=false.
+- #11 Currency locked once a savings wallet has any transaction.
+- #12 Completion becomes COMPUTED (balance >= targetAmount); separate persisted hasCelebrated for one-time celebration only.
+- #13 Savings-wallet deletion retains transaction relationships (tombstone the wallet, keep the counterpart wallets' historical inflows intact) instead of cascade-soft-deleting outgoing transfers.
+- #14 Prohibit archiving a funded savings wallet (allow archive only at zero balance); resolves the net-worth exclusion contradiction.
+- #15 Breakdown moved to Wallets/NetWorthCard (the real net-worth surface); Home hero untouched.
+- #16 Auto-contribute reminders DROPPED from scope (non-functional today). NOTE: contradicts the user's grill answer (Q7 kept them believing they worked) — flagged for user sign-off.
+- #17 Chart/history: Case B preserves un-tagged transfers with original dates; phantom currentAmount adjustment dated at goal.createdDate (not migration day); new chart window/aggregation defined explicitly.
+- #18 Test matrix expanded to cover cloud-only recovery, old-client writes, indeterminate rates, currency mismatch, divergent Case A/B, delete/archive, bulk moves, restores, sync-injected violations, per-wallet + net-worth-total assertions.
 
-- **#6 (pushDeletions fingerprint) — verified true.** `pushDeletions` issues
-  `.update(patch).eq("id", …).execute()` with no `.select()`, so nothing is returned and there is no
-  trigger-assigned `updated_at` to key a fingerprint on. The Round-1 promise to register there was
-  unimplementable as written. Plan now requires requesting/decoding `id, updated_at` and registering
-  the fingerprint **before** removing the deletion-queue entry.
-- **#4 (cancellation swallowed outside runStep) — verified true.** `downloadAndStoreImage` wraps its
-  work in a blanket `catch` that treats `CancellationError` as a download failure and re-enqueues
-  the image; `drainImageDownloads` is called outside `runStep` entirely, so a cancelled run reaches
-  successful finalization. Plan now rethrows cancellation from broad catches, routes image draining
-  through `runStep`, and re-checks cancellation before any success metadata commits.
+Nothing rejected. One item (#16) changes a grill decision on new factual grounds and will be surfaced to the user.
 
-Accepted without further verification (all sound on reading):
+## Round 2 — Codex (gpt-5.6-sol, high effort)
 
-- **#1** — latch split into `forceRun: Bool` + `eventIdentities: Set<EventIdentity>`. Realtime
-  identities alone cannot represent local edits, maintenance follow-ups, foreground or manual
-  refresh; without `forceRun` a local edit arriving mid-run would be silently lost.
-- **#2** — the most important finding this round. `requestSync` now returns an awaitable ticket that
-  resolves when a run *satisfying* it completes, and `flushBeforeSignOut` becomes a barrier that
-  drains the coordinator and re-verifies `hasPendingLocalChanges() == false` before the wipe.
-  Enqueue-and-forget here would destroy un-pushed user edits on sign-out; promoted to the
-  highest-value test case.
-- **#3** — a generation token stops stale *bookkeeping* but not stale *side effects*. Account
-  reconciliation/wipe must cancel **and await** the old executor, and the run must re-validate
-  captured uid + generation after every network suspension before applying results or advancing a
-  cursor.
-- **#5** — good catch that my Round-1 revision would have introduced a new bug. "Nothing visible
-  changed" ≠ "nothing needs persisting": a byte-identical row may still need `needsSync` cleared or
-  ownership assigned, and refusing to save it would strand it permanently dirty — re-creating this
-  very loop. Split into `didPersistLocalState` (drives saving) and `didChangeVisibleData` (drives
-  the broadcast/maintenance).
+The revision addresses many prior findings: legacy retention, cloud-first recovery, strict Case A gating, centralized validation, computed completion, currency locking, correct net-worth placement, safe deletion/archive semantics, and broader tests. Material problems remain.
 
-Nothing was rejected this round.
+1. **Schema migration timing is contradictory.** The plan says conversion runs inside `MigrationStage.custom` and after initial cloud sync ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:43)), but schema migration occurs while the container opens, before authentication, sync, and rate loading ([QuaraMoneyApp.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/QuaraMoneyApp.swift:78)).  
+Fix: Make V1→V2 structural-only, then run the account-scoped data conversion exclusively through `StartupMaintenanceGuard` after sync and rates settle.
 
-## Round 3 — Codex
+2. **`SchemaV1` is not a frozen snapshot.** It references live `Wallet.self` and other live types, and the repository explicitly warns that a real V2 needs copied model definitions ([SchemaVersioning.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Models/SchemaVersioning.swift:46)).  
+Fix: Define distinct frozen V1 and V2 model snapshots before adding fields, then test migration from a real file-backed V1 store.
 
-All six prior findings are addressed. New material issues remain:
+3. **Case B still uses the wrong total for negative goals.** It seeds the floored “displayed total” while the new design promises raw negative balances; for `currentAmount = 100` and transfer net `-150`, seeding zero and compensating `+150` creates a `+150` net-worth bump instead of the allowed `+100`.  
+Fix: Seed the authoritative `rawTotal`, not the legacy floored display total, and disclose any newly visible negative balance.
 
-1. The ticket API can deadlock: maintenance requesting and awaiting its own follow-up prevents the current run from finishing, while Realtime awaiting tickets can stall event consumption ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:79)).  
-   Fix — Separate nonblocking `enqueueSync` from `requestSyncAndWait`, and never await a follow-up from inside the executor.
+4. **Historical chart preservation is not actually implemented.** Keeping original transfer dates does nothing for the new savings wallet because those transfers remain attached to their old physical wallets after untagging ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:49)).  
+Fix: Create one migration adjustment on the new savings wallet for each legacy ledger delta at its original date, plus the phantom starting-balance adjustment at `createdDate`.
 
-2. Ticket termination is undefined when a generation is cleared, a run aborts, or a real failure occurs; abandoned continuations could hang refresh/sign-in tasks permanently.  
-   Fix — Give every ticket a `success/failed/cancelled` result and resume all associated continuations on every terminal path.
+5. **The net-worth invariant is dimensionally invalid.** “Sum of all wallet balances” directly adds USD, KHR, and other currencies.  
+Fix: Assert both per-wallet expected deltas and total net worth converted into one currency using the same immutable rate snapshot used by migration.
 
-3. The sign-out barrier misses edits whose two-second local-save debounce has not yet entered the coordinator; draining an empty coordinator can still leave dirty rows ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:483)).  
-   Fix — Cancel/absorb the debounce, explicitly request a final sync whenever pending local changes exist, and repeat until clean or a terminal failure prevents wiping.
+6. **The unique dedupe key does not resolve concurrent inserts.** Two devices with different wallet UUIDs will hit the partial unique constraint; “skip if existing” only works when one device pulled the winner before migrating, while a race produces an upsert failure and retry loop.  
+Fix: Define explicit unique-violation recovery that fetches the canonical server wallet, merges or reverses the losing local migration, and tombstones the loser.
 
-4. Every abort currently re-arms a retry, which can create another permanent loop if URLSession repeatedly returns cancellation without a generation change ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:128)).  
-   Fix — Suppress retries for stale/lifecycle generations and use bounded backoff for unexpected same-generation cancellations.
+7. **Old clients can mutate a migrated legacy ledger.** An offline old client can resurrect a tombstoned goal or upload a new transfer referencing it; the revised client then skips the goal because a wallet already has `legacySavingsGoalID`, leaving the new contribution unreflected.  
+Fix: Make migrated goal tombstones irreversible server-side and reject new `savings_goal_id` references once a replacement wallet exists, or implement an incremental legacy-to-wallet bridge.
 
-5. The image-drain cancellation test incorrectly requires prior deletion-queue removals not to commit; successful earlier steps are intentionally durable partial progress and cannot be rolled back ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:290)).  
-   Fix — Test only cancellation during the tombstone request or between its response and queue removal; preserve removals completed before later cancellation.
+8. **Database enforcement protects transactions but not wallet mutations.** Raw or old clients can change a funded savings wallet’s currency, archive it, assign an invalid `kind`, or convert a wallet containing spending transactions.  
+Fix: Add a `kind` check constraint and wallet-update trigger enforcing kind transitions, currency locks, target validity, and funded-archive restrictions.
 
-6. The Realtime API question is already resolvable: in pinned supabase-swift 2.48.0, `AnyAction` itself has no `record`; only its associated `InsertAction` and `UpdateAction` values do.  
-   Fix — Pattern-match the associated action, decode its record with the Supabase decoder, and test canonical timestamp equality against PostgREST-returned dates.
+9. **The transaction trigger must validate ownership too.** Current RLS checks only each transaction row’s `user_id`; foreign keys do not ensure referenced wallets belong to that user ([rls.sql](/Users/udormphon/Developer/QuaraMoney/supabase/rls.sql:34)).  
+Fix: Have the trigger reject missing/cross-owner source and destination wallets as well as forbidden savings transaction types.
 
-VERDICT: REVISE
-### Claude's response
+10. **“Reject/quarantine” has no durable behavior.** Returning no-op from the current apply loop still advances the table cursor, while throwing prevents cursor advancement and retries forever ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:3180)).  
+Fix: Define a persisted quarantine/conflict record and cursor policy, surface it to the user, and provide a deterministic repair or server-delete path.
 
-**All 6 findings accepted.** Codex confirmed all Round-2 findings were addressed.
+11. **Deferred migrations can make goals disappear.** The new Plan UI queries savings wallets, but indeterminate or invariant-failed legacy goals remain only as `SavingsGoal` rows.  
+Fix: Dual-read unmigrated legacy goals as explicit “migration pending/needs attention” items until conversion succeeds.
 
-Two of these caught flaws that my *own Round-2 revisions* introduced — exactly what the cross-model
-check is for:
+12. **Savings wallets with no target remain undefined.** `targetAmount` is optional, yet completion compares against it and the Wallets creation flow exposes only a kind toggle.  
+Fix: Require a positive target whenever `kind == .savings`, or explicitly design untargeted savings pots with separate progress/completion semantics.
 
-- **#1 (ticket deadlock)** — the awaitable `requestSync` I added in Round 2 would deadlock:
-  `PlanDataMaintenance` (Step 1b) requesting *and awaiting* its follow-up from inside the executor
-  blocks the run that must finish first, and Realtime awaiting tickets stalls event consumption.
-  Split into nonblocking `enqueueSync` (the only form the executor may use) and
-  `requestSyncAndWait` for callers that genuinely need completion.
-- **#4 (retry loop)** — "abort re-arms a retry" would spin forever if URLSession repeatedly returns
-  cancellation with no generation change, i.e. my fix could have grown a *new* permanent loop.
-  Now: no retry for stale/lifecycle generations; bounded exponential backoff with a hard cap for
-  unexpected same-generation cancellation.
+13. **The migration summary is not durable.** A background conversion followed by a crash before presentation can permanently lose the promised disclosure and failure details.  
+Fix: Persist an account-scoped migration report containing converted, deferred, failed, and net-worth-delta details until the user acknowledges it.
 
-Also accepted:
+14. **The proposed test mechanism cannot verify the riskiest changes.** In-memory containers do not exercise an on-disk V1→V2 migration, and unit tests do not validate Supabase triggers or partial unique conflicts.  
+Fix: Add file-backed schema-upgrade fixtures plus database integration tests for triggers, constraints, old-client writes, and unique-conflict recovery.
 
-- **#2** — tickets need `.success/.failed/.cancelled` with all continuations resumed on every
-  terminal path (`defer`-based), or an abandoned continuation hangs refresh/sign-in permanently.
-- **#3** — important data-loss gap: `handleLocalSave` holds edits in a **2-second debounce** that has
-  not yet reached the coordinator, so draining an empty coordinator can still leave dirty rows.
-  Sign-out must cancel/absorb the debounce, then loop request-until-clean, and **refuse to wipe** on
-  terminal failure. Added to the sign-out test as an explicit case.
-- **#5** — my Round-2 test spec was wrong: it demanded that deletion-queue removals completed before
-  a later cancellation be rolled back. Those are intentional durable partial progress and cannot be
-  transactional across independent HTTP calls. Test narrowed to cancellation *during* the tombstone
-  request or *between* its response and the queue removal.
-- **#6 — verified true.** `Package.resolved` confirms **supabase-swift 2.48.0**. `AnyAction` exposes
-  no `record`; only its associated `InsertAction`/`UpdateAction` do. Plan now pattern-matches the
-  associated action, decodes with the Supabase decoder, and — importantly — compares timestamps
-  **canonically rather than as strings**, since differing fractional-second rendering between
-  Postgres and PostgREST would otherwise miss every match and silently defeat suppression. The
-  corresponding open risk is now closed.
-
-Nothing was rejected this round.
-
-## Round 4 — Codex
-
-The six prior findings are addressed. One material data-loss path and two consistency issues remain:
-
-1. A failed flush only “blocks the wipe,” but current `signOut()` still signs out of Supabase regardless ([SupabaseAuthManager.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SupabaseAuthManager.swift:214)); dirty old-account data can then be destroyed by a later account-switch wipe.  
-   Fix — Make flush failure abort authentication sign-out entirely, and run successful sign-out inside an exclusive account-transition state that prevents new saves between the final clean check and wipe.
-
-2. The cancellation requirements still conflict: Step 2 retries only bounded same-generation cancellations, while the generic cancellation test says every cancelled run “re-arms.”  
-   Fix — Split the test explicitly: lifecycle/stale cancellation must not re-arm; same-generation cancellation follows the bounded retry policy.
-
-3. Step 1b still says maintenance calls `requestSync`, despite the new API forbidding awaitable requests inside the executor.  
-   Fix — Name `enqueueSync(reason: .maintenance)` explicitly throughout Step 1b and update the stale `requestSync` test terminology.
+15. **Auto-contribution handling is still unresolved.** The plan explicitly awaits user sign-off, so implementation scope is not final.  
+Fix: Record the decision before implementation—either drop the dead fields in V3 or specify a separate scheduler feature without migrating them onto Wallet now.
 
 VERDICT: REVISE
-### Claude's response
+### Claude's response (Round 2)
 
-**All 3 findings accepted.** Codex confirmed all Round-3 findings addressed. Converging: 11 → 6 → 6
-→ 3 findings, and this round was one substantive issue plus two internal-consistency defects.
+Codex acknowledged the R1 fixes and found a deeper layer. Verified the two schema-mechanic claims against code (#1 migration runs at container-open pre-sync/rates — CONFIRMED; #2 SchemaVersioning explicitly rejects a 2nd VersionedSchema over live types and documents additive fields migrate lightweight under V1 — CONFIRMED). This vindicated a simplification. Revisions:
+- #1/#2 Schema corrected: additive phase needs NO new VersionedSchema (lightweight under SchemaV1); goal->wallet DATA conversion moved entirely into StartupMaintenanceGuard after sync+rates; frozen-snapshot SchemaV2 + MigrationStage deferred to the REMOVAL release. (Removed the wrong 'MigrationStage.custom runs the data migration' mechanic.)
+- #3 Case B seeds authoritative rawTotal (not floored display total); newly-visible negatives disclosed.
+- #4 History reconstructed on the NEW wallet: one dated adjustment per legacy ledger delta at its original date + phantom at goal.createdDate (un-tag alone did nothing since transfers stay on old wallets).
+- #5 Net-worth invariant made single-currency via the immutable migration rate snapshot; per-wallet + total assertions.
+- #6 (R2 race) Bounded unique-violation recovery: adopt canonical server wallet by legacy_savings_goal_id, tombstone the local loser; no upsert retry loop.
+- #7 Old-client resurrection: server-side guard makes migrated tombstones authoritative (reject un-tombstone / new savings_goal_id inserts once a wallet carries that legacy id). Full incremental bridge REJECTED as out-of-scope given single-device sign-out/in usage — logged.
+- #8 DB wallets guard added: kind CHECK + UPDATE trigger (currency-lock, kind-immutable, funded-archive block once wallet has txns).
+- #9 transactions trigger extended to reject missing/cross-owner source/dest wallets (pre-existing RLS gap).
+- #10 Sync-apply durable behavior simplified + trigger-backed: no throw (cursor stall) / no silent no-op; apply-then-locally-correct. No separate quarantine store — arbitration call, logged.
+- #11 Plan UI dual-reads deferred/failed legacy goals as 'migration pending / needs attention' items.
+- #12 Savings wallets REQUIRE a positive target at creation (both entry points); no untargeted pots in scope.
+- #13 Durable, account-scoped migration report persisted until acknowledged.
+- #14 Tests split into Tier 1 (in-memory logic) + Tier 2 (file-backed store upgrade fixture + Supabase-preview-branch trigger/unique-conflict/old-client/resurrection tests).
+- #15 Auto-contribute elevated to a HARD GATE (decision recorded before build); recommend drop (a).
 
-- **#1 — verified true, and a real data-loss path.** Read `SupabaseAuthManager.signOut()`:
-  ```swift
-  await SyncEngine.shared.flushBeforeSignOut()
-  let safeToWipe = lastError == nil && hasCompletedInitialSync && !hasPendingLocalChanges()
-  do { try await client.auth.signOut() } catch { … }   // runs regardless
-  if safeToWipe { wipeForSignOut() }
-  ```
-  Only the *wipe* is gated. A failed flush therefore leaves the user signed out with dirty local
-  rows; signing in with a different account then hits `reconcileAccountIfNeeded`, which wipes the
-  store and destroys un-pushed edits that never reached the cloud. Plan now requires a failed flush
-  to **abort authentication sign-out entirely**.
-  I also found a **TOCTOU Codex only implied**: `safeToWipe` is computed *before* the
-  `auth.signOut()` await, so a save landing during that suspension is wiped without ever syncing.
-  Addressed by the exclusive account-transition state Codex proposed, now stated explicitly.
-- **#2** — genuine self-contradiction introduced by my Round-3 edit: Step 2 says lifecycle
-  cancellations must not retry, while the test bullet still said every cancelled run "re-arms".
-  Test split into the two cases.
-- **#3** — stale terminology: Step 1b still said `requestSync` after Round 3 split the API. Now
-  names `enqueueSync(reason: .maintenance)` explicitly, with the reason (awaiting inside the
-  executor would deadlock) stated inline.
+Scope-bounded (not gold-plated) with logged rationale: #7 (resurrection guard vs full bridge) and #10 (trigger-backed correction vs durable quarantine store), both justified by single-device sign-out/in usage. Nothing else rejected.
 
-Nothing was rejected this round.
+## Round 3 — Codex (gpt-5.6-sol, high effort)
 
-## Round 5 — Codex (MAX_ROUNDS)
+The Round 2 fixes are substantially better, especially schema timing, raw-total migration, history reconstruction, currency-normalized invariants, deferred-goal visibility, and integration testing.
 
-The prior findings are addressed conceptually. Two material implementation gaps remain:
+On deliberate scope bounds:
 
-1. The “exclusive account-transition state blocks new local saves” has no enforceable mechanism: the repository has dozens of direct `ModelContext.save()` calls, including asynchronous writers, and `willSave` observation cannot veto a save.  
-   Fix — Define a concrete mutation barrier used by every write entry point, or use a `willSave` mutation revision plus a post-auth recheck and prohibit account-switch wiping whenever retained dirty rows belong to the previous account.
+- I agree that a server-side resurrection guard can replace a full old-client bridge for a genuinely single-device model, provided rejected stale-client writes surface as sync errors.
+- I agree that full concurrent-device merging can be out of scope.
+- I disagree with applying and locally rewriting an invalid pulled financial row. Single-device use does not protect against partial deployment, preexisting cloud corruption, or administrative writes.
 
-2. “Executor task is created detached” is unsafe if implemented as `Task.detached`: `SyncEngine` and `ModelContext` are main-actor-bound, so capturing the context across that boundary risks Swift concurrency errors.  
-   Fix — Use a stored unstructured `Task { @MainActor in … }`; it remains independent of the debounce task without leaving the main actor.
+Material findings remain:
 
-Minor cleanup: replace the remaining stale `requestSync` references in Step 1 and Step 7 with `enqueueSync` or `requestSyncAndWait` so tests target the correct API.
+1. **The schema strategy still contradicts itself.** Section 1 correctly says no migration stage this release, but §5 still says conversion runs inside a SchemaV2 stage; removal is variously called SchemaV2 and SchemaV3 ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:18), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:50), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:67)).  
+Fix: State consistently: additive release remains V1 with startup conversion; the later removal release is SchemaV2 everywhere.
+
+2. **Cloud migration is not resumable across partial sync.** Current sync pushes wallets, goals, then transactions in separate steps ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1083)); a wallet can reach cloud before its adjustments/null-outs, after which `legacySavingsGoalID` causes another client or reinstall to “skip” the incomplete goal.  
+Fix: Treat an existing replacement wallet as “resume/repair,” use deterministic IDs for every generated migration transaction, push transaction changes before the goal tombstone, and record a synced completion marker.
+
+3. **The sync fallback guesses how to alter financial data.** An income/expense violation has no “savings linkage” to strip—the offending fact is its source wallet’s kind—so correction requires detaching the wallet, changing the type, or changing the wallet kind.  
+Fix: Fail closed without mutating the ledger, preserve the cursor, and surface a durable sync-integrity error containing the row ID and repair action.
+
+4. **The bounded dedupe recovery still overclaims convergence.** Tombstoning the losing wallet does not undo its new-wallet adjustments and physical-wallet compensation; both devices can otherwise contribute duplicate migration transactions.  
+Fix: Either specify exact loser rollback using deterministic migration transaction IDs, or remove the two-device convergence claim/test and surface the unsupported conflict under the single-device scope.
+
+5. **The wallet trigger can reject Case A as written.** “Kind immutable once a savings wallet has any transaction” can block the required normal→savings flip of a dedicated wallet that already contains transfers.  
+Fix: Lock kind only when `OLD.kind = 'savings'`; separately allow normal→savings only after validating target and absence of spending transactions.
+
+6. **Positive target validity is not enforced at the database layer.** Client creation requires it, but the proposed wallet constraints only validate `kind`, currency, and archive behavior.  
+Fix: Add a database constraint equivalent to `kind != 'savings' OR target_amount > 0`.
+
+7. **The synced recurring pause reason is missing from the cloud schema plan.** `SyncRecurringRuleRow` currently has no pause field ([SyncDTOs.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncDTOs.swift:141)), and §6 only lists new wallet columns.  
+Fix: Add `pause_reason` to `recurring_rules`, its DTO, push/pull matching, canonical schema, migration, and compatibility tests.
+
+8. **Migration adjustments can corrupt cash-flow reporting.** Adjustments affect flow unless excluded ([TransactionProcessor.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/TransactionProcessor.swift:76)); Case B creates many historical positive and negative adjustments.  
+Fix: Mark every migration-generated adjustment `excludeFromReports = true` and give it deterministic migration provenance.
+
+9. **Deleting a non-zero savings wallet still destroys net worth.** Retaining transaction relationships preserves counterpart history, but tombstoning the wallet removes its positive or negative balance from net worth; “withdraw first?” does not handle negative balances.  
+Fix: Prohibit savings-wallet deletion until balance is exactly zero, offering withdraw for positive balances and top-up for negative balances.
+
+10. **“Every mutation path” still omits restore and wallet-rehoming operations.** `SoftDeleteService.restoreTransaction` and wallet movement directly change relationships without validation ([SoftDeleteService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/SoftDeleteService.swift:42), [SoftDeleteService.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Services/SoftDeleteService.swift:134)).  
+Fix: Route restore, undo, wallet deletion/rehome, and every relationship reassignment through `WalletLedgerRules`.
+
+11. **The server funded-balance check has no defined parity with the client engine.** The trigger must reproduce tombstone, event exclusion, source/destination, and stored-rate semantics or it will disagree with `Wallet.balance`.  
+Fix: Specify one tested SQL balance function matching `Wallet.computeBalance`, or keep balance-dependent archive enforcement client-side and fail remote violations visibly.
+
+12. **Migrated completed goals will replay celebrations.** `hasCelebrated` defaults false, but migration never maps the legacy completion state.  
+Fix: Set `hasCelebrated` for migrated goals already at or above target and add a no-replayed-celebration test.
+
+13. **Several tests retain obsolete expectations.** Case B still says it reproduces “displayed total” rather than `rawTotal`, and the migration fixture/version references remain inconsistent ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:79), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:83)).  
+Fix: Test raw negative totals, partial cross-table sync/resume, deterministic migration IDs, reporting exclusion, and the consistently named removal schema.
+
+14. **Auto-contribution remains an explicit hard gate.** The plan is not implementation-ready until the user records option (a) or (b).  
+Fix: Resolve and record that choice before beginning the build.
 
 VERDICT: REVISE
-### Claude's response
+### Claude's response (Round 3)
 
-**All 3 findings accepted and applied.** This was Round 5 of MAX_ROUNDS=5, so the loop terminates
-here; the applied fixes were **not** re-reviewed by Codex.
+Codex AGREED with 2 of my 3 scope bounds (resurrection guard replaces full bridge; concurrent-merge out of scope) and DISAGREED with the 3rd (R2 apply-then-locally-correct). Conceded the disagreement — Codex is right that single-device doesn't protect against partial deployment / preexisting corruption / admin writes. Accepted essentially all 14 findings; several were real bugs I'd have shipped. Revisions:
+- #1/#13 Schema naming made consistent: additive release stays SchemaV1 + StartupMaintenanceGuard conversion; removal release is 'SchemaV2' everywhere (SchemaV3 eliminated). Removed stale 'runs inside SchemaV2 stage' language in §5.
+- #2 Resumability: migration is single-device-authoritative; every generated migration transaction uses a DETERMINISTIC id (goal.id,purpose,delta-id) so interrupted pushes resume/repair not duplicate; existing replacement wallet = resume/repair (not skip); push wallet+txns+compensations BEFORE goal tombstone; per-goal synced completion marker gates 'migrated'.
+- #3 (R3, REVERSAL) Sync-apply now FAILS CLOSED: skip offending row, record durable sync-integrity error (row id + repair action), advance cursor past it (no infinite loop), surface to user. No ledger mutation. Reverses R2.
+- #4 Dropped the two-device convergence claim (tombstoning loser doesn't undo its adjustments/compensation). Single-device adopt-don't-remigrate; unique-violation = fail closed, not unsound auto-merge. Convergence test replaced by adopt test.
+- #5 Wallet kind-lock only when OLD.kind='savings' (savings terminal) so the required normal->savings Case-A flip stays legal; normal->savings allowed once after validating target + no spending txns.
+- #6 DB target CHECK: kind<>'savings' OR target_amount>0.
+- #7 recurring_rules.pause_reason added to cloud schema plan (column + DTO + push/pull + mirror + compat).
+- #8 ALL migration adjustments marked excludeFromReports=true + deterministic provenance (were polluting TransactionProcessor cash-flow).
+- #9 Savings-wallet deletion allowed only at exactly zero: positive->withdraw, negative->top-up (old 'withdraw first' ignored negatives).
+- #10 Enforcement list extended to SoftDeleteService.restoreTransaction/undo, wallet deletion + rehome, every relationship reassignment.
+- #11 Balance-dependent checks (funded-archive, delete-until-zero) kept CLIENT-side; SQL would disagree with computeBalance's stored-rate/event/tombstone semantics. DB trigger keeps only non-balance guards.
+- #12 Migration sets hasCelebrated=true for goals already >= target (no replayed celebration).
+- #13 Test list updated: rawTotal incl. negatives, resumability/deterministic ids, reporting exclusion, adopt-don't-remigrate, consistent schema naming.
+- #14 Auto-contribute remains a hard gate (user must record a/b before build).
 
-- **#1 — accepted; my wording was genuinely unimplementable.** The plan said the account-transition
-  state "blocks new local saves". It cannot: the repo has dozens of direct `ModelContext.save()`
-  call sites (several asynchronous), and a `willSave` observer can *observe* but not *veto* a save.
-  Replaced with an enforceable design that guards the **wipe** rather than pretending to block
-  writes: (1) a monotonic `localMutationRevision` bumped by the existing `stampPendingChanges`
-  `willSave` hook; (2) a post-auth recheck of both the revision and `hasPendingLocalChanges()` that
-  aborts the wipe on any movement; (3) an account-switch backstop where `reconcileAccountIfNeeded`
-  refuses to wipe retained dirty rows belonging to the previous account. (3) is the durable
-  guarantee — even if every earlier gate is bypassed, un-pushed edits survive.
-- **#2 — accepted.** "Executor task is created detached" was ambiguous and would be wrong if read as
-  `Task.detached`: `SyncEngine` and `ModelContext` are main-actor-bound, so detaching carries the
-  context across an actor boundary. Now specifies a stored unstructured `Task { @MainActor in … }`,
-  which is independent of the debounce task without leaving the main actor.
-- **#3 — accepted.** Remaining stale `requestSync` references in Step 1 and Step 7 renamed to
-  `enqueueSync` / `requestSyncAndWait` so the tests target the real API.
+Severity trend across rounds: R1 data-loss architecture -> R2 mechanics -> R3 precise refinements + 1 reversal. Converging. Nothing rejected in R3.
 
-## Resolution — MAX_ROUNDS reached without APPROVED
+## Round 4 — Codex (gpt-5.6-sol, high effort)
 
-Per the skill, convergence is **not** faked. Status at termination:
+The Round 3 findings are largely addressed, including the fail-closed sync reversal. I accept the deliberate single-device bounds: no concurrent-migration convergence and a resurrection guard instead of a full old-client bridge. However, several material implementation gaps remain.
 
-- Rounds ran: 5/5. Finding counts: 11 → 6 → 6 → 3 → 3 (+1 cleanup). Every finding across all five
-  rounds was accepted; none were rejected.
-- Codex confirmed at each round that all prior findings were addressed.
-- The Round-5 fixes are applied but unverified by a sixth review.
-- No unresolved disagreement exists between Claude and Codex — the deadlock is procedural (the round
-  cap), not substantive.
+1. **The synced completion marker has no model or cloud representation.** Migration correctness depends on it, but it is absent from the wallet fields and cloud columns ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:55), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:72)).  
+   Fix: Add an explicit synced field such as `legacyMigrationCompletedAt` to `Wallet`, its DTO, SQL schema, and push/pull logic.
 
-## Act 3 — Build
+2. **The required migration push order conflicts with the current sync engine.** The plan requires adjustments before the goal tombstone, but sync currently pushes wallets, then savings goals, then transactions ([SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:1084)).  
+   Fix: Specify a dedicated acknowledged migration-sync sequence—or atomic server RPC—that pushes wallet and transaction changes before tombstone and completion marker.
 
-### Round 1 — Codex build (thread 019f896e-a50f-7be3-9f9f-cde9261015b9)
+3. **Contradictory stale instructions remain.** “Resume/repair” conflicts with “skip that goal”; fail-closed unique conflicts conflict with “adopt canonical/tombstone loser”; removal is still called V3 once ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:54), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:59), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:108)).  
+   Fix: Delete the stale skip, loser-tombstoning, and V3 language so only marker-gated repair, fail-closed conflict handling, and SchemaV2 remain.
 
-Codex implemented all 7 plan steps with full write access on branch `fix/sync-perpetual-loop`
-(~48 min). 16 files changed, +1801/-271. Its own report claimed 266 tests green and flagged three
-deviations honestly (see below).
+4. **The target constraint permits `NULL`.** PostgreSQL considers a CHECK successful when its expression is `NULL`, so `kind <> 'savings' OR target_amount > 0` does not enforce a target ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:29)).  
+   Fix: Use `kind <> 'savings' OR (target_amount IS NOT NULL AND target_amount > 0)`.
 
-### Claude's verdict — ACCEPTED, no fix rounds needed
+5. **The resurrection guard covers inserts but not edits.** An old client can update an existing transaction from `savings_goal_id = NULL` to a migrated goal ID ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:67)).  
+   Fix: Enforce the guard on both INSERT and UPDATE whenever `NEW.savings_goal_id` references a migrated goal.
 
-Verified independently rather than trusting the report:
+6. **The two DB triggers have a check-then-write race.** A transaction insert can observe a normal wallet while a concurrent normal→savings update observes no spending transaction, allowing both to commit and violate the invariant.  
+   Fix: Lock every referenced wallet row with `SELECT … FOR UPDATE` in both triggers, acquiring multiple locks in deterministic UUID order.
 
-- **Proof re-run by Claude**, not taken from Codex's paste:
-  `xcodebuild test -scheme QuaraMoney -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
-  → `Executed 266 tests, with 0 failures (0 unexpected)` · `** TEST SUCCEEDED **`. 47 of those are new.
-- **Localization parity** — `Scripts/check_missing_keys.py` passes; EN/KM both gained the new
-  sync-safety keys.
-- **`PLAN.md` / `PLAN-REVIEW-LOG.md` untouched**, as instructed.
+7. **The wallet trigger can unintentionally change normal-wallet behavior.** Section 2 says currency becomes immutable for any wallet with transactions, contradicting both §2’s savings-only rule and the explicit normal-wallet out-of-scope boundary ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:29), [PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:122)).  
+   Fix: Scope the SQL currency lock explicitly to savings wallets and the normal→savings transition.
 
-Hard project rules all hold:
+8. **Nullable wallet-reference semantics are underspecified.** Both wallet IDs are nullable in the existing schema, so “reject missing source/destination wallet” could reject valid income/expense rows with no destination.  
+   Fix: Define the required source/destination matrix per transaction type and perform ownership checks only for non-null references.
 
-- **No `Task.detached` in the executor** — it is `Task { @MainActor [weak self] in }` (SyncEngine.swift:258).
-  The remaining `Task.detached` hits in the repo are all pre-existing files this change did not touch.
-- **Cursor still never advances on push** — `setCursor` has exactly one call site, inside the pull's
-  `applyLocal`.
-- **`isApplyingSyncChanges` never wraps an `await`** — both spans (656–659 manual, 1813–1814
-  `withSyncWriteGuard`) are synchronous; the `await requestSyncAndWait` at 757 sits *after* the guard
-  block closes.
-- **Every trigger routes through the coordinator** — zero direct `syncIfOperational` / `syncNow`
-  callers remain outside `SyncEngine`.
+The unresolved auto-contribution choice remains a procedural hard gate rather than a technical design defect, but it still must be recorded before implementation as the plan itself requires.
 
-Spot-checks on the highest-risk logic:
+VERDICT: REVISE
+### Claude's response (Round 4)
 
-- **Root cause genuinely fixed** — `SyncRealtime.scheduleSync` no longer runs `syncNow` inside the
-  debounce task; it calls the nonblocking `enqueueSync`, so `debounceTask?.cancel()` can only abort a
-  sleep, never in-flight work.
-- **Timestamp matching is canonical** — `EventIdentity` normalizes to microseconds
-  (`Int64((timeIntervalSince1970 * 1_000_000).rounded())`) and compares on that integer, so
-  fractional-second rendering differences between PostgREST and Realtime cannot silently defeat
-  suppression (the Round-3 risk). Fingerprints are non-consuming; `reclassifyPendingEvents()`
-  implements the pre-response race fix.
-- **Sign-out barrier is correct** — `performProtectedSignOut` throws on flush failure *before*
-  `authenticationSignOut()`, and re-validates `cleanRevision` after it via `canWipe`, then again in
-  `wipe`. The TOCTOU is closed and the whole thing is injectable, hence deterministically testable.
-- **Latch fix is correct** — `lastAlertThreshold = 0` now assigns only when the value differs. The
-  still-unconditional `needsSync = true` in `triggerAlert` sits behind the `lastAlertThreshold <
-  threshold` gate, so it is a bounded one-shot alert transition, not a loop.
-- **Step 5** implemented as `ApplyOutcome(didPersistLocalState:didChangeVisibleData:)` across all
-  12 pull appliers.
+Verdict shrank 6.3k->3.9k; Codex explicitly ACCEPTED the single-device bounds. Remaining items are all SQL-precision + doc-consistency, no architecture. Accepted all 8:
+- #1 Added synced legacyMigrationCompletedAt completion marker to Wallet + DTO + SQL column + push/pull; wallet with legacy id but nil marker = in-progress, resume/repair.
+- #2 Dedicated ordered acknowledged migration push (prefer a single server RPC): wallet+txns+compensation -> tombstone -> marker atomically; marker written last.
+- #3 Deleted stale contradictions: 'skip that goal' now gated on marker (else resume/repair); loser-tombstone/adopt-canonical recovery removed in favor of fail-closed; last stray 'V3' -> 'SchemaV2'.
+- #4 target CHECK made NULL-safe: kind<>'savings' OR (target_amount IS NOT NULL AND target_amount>0).
+- #5 Resurrection guard now fires on INSERT AND UPDATE (old client editing savings_goal_id NULL->migrated id).
+- #6 Both triggers SELECT ... FOR UPDATE referenced wallets in deterministic UUID order (check-then-write race).
+- #7 SQL currency lock scoped to savings-only + normal->savings transition; normal wallets untouched (was contradicting out-of-scope normal-wallet boundary).
+- #8 Per-type source/destination matrix: income/expense need source and no destination (don't reject null dest); transfers need both; ownership checked only on non-null refs.
+- Auto-contribute: still the procedural hard gate (user records a/b before build) - not a technical defect.
 
-Deviations accepted (all disclosed by Codex, none silent):
+All accepted; nothing rejected. Remaining verdict content is implementation-precision, architecture stable since R2.
 
-1. `QuaraMoney.xcscheme` — test parallelization `YES` → `NO`, working around iOS 26.5 simulator clone
-   crashes. Test-infra only; no app behaviour change. Matches the known-bad 26.5 runtime.
-2. `Models/Category.swift` — added the explicit `inverse: \Transaction.category` to an existing
-   relationship. Out of scope, but low risk: it declares what SwiftData was already inferring and
-   matches the sibling relationships in the same file. Needed to get the pre-existing suite green.
-3. Live 60-second device observation (acceptance criteria 1 & 2) not performed — requires an
-   authenticated running app. Deferred to the user.
+## Round 5 — Codex (gpt-5.6-sol, high effort) — FINAL (MAX_ROUNDS cap)
+
+Round 4’s prior findings are addressed, and the single-device scope bounds are acceptable. Three material correctness gaps remain.
+
+1. **The non-atomic migration option still has an unrecoverable crash window.** If the goal tombstone lands but the completion marker does not, a reinstall cannot reconstruct the migration because tombstoned goals are ignored and missing locally ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:61), [SyncEngine.swift](/Users/udormphon/Developer/QuaraMoney/QuaraMoney/Supabase/SyncEngine.swift:2375)).  
+   Fix: Make the atomic server RPC mandatory, or place the marker before tombstoning and define marker-present/live-goal recovery that finishes the tombstone.
+
+2. **The transaction-type matrix omits `adjustment`.** Migration depends heavily on adjustments, but the SQL rules define shapes only for income, expense, and transfer ([PLAN.md](/Users/udormphon/Developer/QuaraMoney/PLAN.md:29)).  
+   Fix: Explicitly require adjustments to have a source wallet, no destination, valid ownership, and a non-zero signed amount.
+
+3. **The cloud `kind` constraint remains NULL-permissive unless the column is explicitly non-null.** A CHECK such as `kind IN ('normal','savings')` accepts NULL, potentially bypassing savings rules and breaking non-optional DTO decoding.  
+   Fix: Define `kind text NOT NULL DEFAULT 'normal' CHECK (kind IN ('normal','savings'))`.
+
+The auto-contribution sign-off remains a product-scope decision, but under this round’s correctness-only criterion it does not affect the verdict.
+
+VERDICT: REVISE
+### Claude's response (Round 5) — loop terminated at cap
+
+Verdict shrank again (3.9k->1.6k). Codex confirmed R4 findings addressed and the single-device scope bounds acceptable. Three remaining findings, all narrow, all ACCEPTED AND APPLIED:
+- #1 R5 Atomic server RPC is now MANDATORY (was 'ideally'). Non-atomic ordering had an unrecoverable crash window: tombstone lands + marker doesn't => reinstall ignores the tombstoned goal and can never reconstruct. Documented fallback: marker BEFORE tombstone + finish-the-tombstone recovery; never tombstone-first.
+- #2 R5 Transaction-type matrix extended to 'adjustment': requires source wallet, no destination, valid ownership, non-zero signed amount (migration's own writes are adjustments and were unvalidated).
+- #3 R5 kind column declared 'text NOT NULL DEFAULT ''normal'' CHECK (kind IN (''normal'',''savings''))' — bare CHECK accepts NULL, bypassing savings rules and breaking non-optional DTO decoding.
+
+OUTCOME: MAX_ROUNDS=5 reached without a formal APPROVED line, but there is NO outstanding disagreement — every R5 finding was accepted and applied verbatim, and Codex explicitly confirmed the scope bounds are acceptable and that auto-contribution is a product decision not affecting correctness. Severity decayed monotonically across rounds: R1 data-loss architecture (18) -> R2 mechanics (15) -> R3 refinements + 1 conceded reversal (14) -> R4 SQL precision (8) -> R5 three narrow SQL/atomicity items (3). Claude's assessment: converged in substance; the only true open item is the USER-GATED auto-contribute decision (a or b), which is a product choice, not a defect.
+
+### Act 2 resolution — user sign-off
+
+Loop terminated at MAX_ROUNDS=5. No formal VERDICT: APPROVED was emitted, but no disagreement remains outstanding — all Round 5 findings were accepted and applied, and Codex confirmed the single-device scope bounds acceptable.
+
+USER DECISIONS (recorded before build):
+- Auto-contribute hard gate: option (a) — DROP the dead autoContribute* fields; not migrated onto Wallet; retired in the later SchemaV2 removal release. Supersedes grill Q7.
+- Implementation: Codex builds it (Act 3, /codex-build) with SPEC_FILE=PLAN.md; Claude reviews the diff and runs the proof.

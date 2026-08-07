@@ -52,11 +52,13 @@ struct OnboardingWelcomeIllustration: View {
                 .shadow(color: Color.accentColor.opacity(0.35), radius: 20, y: 10)
         }
         .frame(maxWidth: .infinity)
+        // Bound to this subtree, not started with `withAnimation` — that would
+        // put a *forever repeating* animation on the whole update transaction,
+        // and anything else still settling in that pass inherits it.
+        .animation(reduceMotion ? nil : .easeInOut(duration: 2.4).repeatForever(autoreverses: true), value: floating)
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
-                floating = true
-            }
+            floating = true
         }
         .accessibilityHidden(true)
     }
@@ -383,6 +385,10 @@ struct OnboardingWalletsIllustration: View {
             .padding(.vertical, 8)
             .background(Capsule().fill(Color(.secondarySystemBackground)))
             .offset(x: hintSway ? 7 : -7)
+            // See `OnboardingWelcomeIllustration`: a repeating animation has to
+            // stay bound to the view it belongs to, never handed to a shared
+            // transaction that other pending changes can pick up.
+            .animation(reduceMotion ? nil : .easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: hintSway)
         }
         .task { await runLoop() }
         .accessibilityElement(children: .ignore)
@@ -431,9 +437,7 @@ struct OnboardingWalletsIllustration: View {
     @MainActor
     private func runLoop() async {
         guard !reduceMotion else { return }
-        withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-            hintSway = true
-        }
+        hintSway = true
         while !Task.isCancelled {
             guard (try? await Task.sleep(for: .seconds(2.4))) != nil else { return }
             withAnimation(.spring(duration: 0.7, bounce: 0.25)) {

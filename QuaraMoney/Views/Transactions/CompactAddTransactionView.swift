@@ -54,15 +54,15 @@ struct CompactAddTransactionView: View {
 
     private let maxQuickWallets = 4
 
-    /// Free text on the detail chips (note, place name, goal name) is truncated
-    /// at this width instead of stretching its pill across the row — the full
-    /// value stays one tap away in the note bar / location picker.
-    @ScaledMetric(relativeTo: .subheadline) private var chipTextMaxWidth: CGFloat = 180
-    /// Real rendered width of the current date label (character counts badly
-    /// mis-measure Khmer, which stacks combining marks and uses wider glyphs).
-    @State private var measuredDateLabelWidth: CGFloat = 0
-    @ScaledMetric(relativeTo: .subheadline) private var minDateLabelWidth: CGFloat = 70
-    @ScaledMetric(relativeTo: .subheadline) private var maxDateLabelWidth: CGFloat = 170
+    /// Drives the detail row's two-up ⇄ stacked switch: at accessibility sizes
+    /// side-by-side controls truncate to uselessness.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// An unset note/place is a 36pt button; setting one promotes it to a
+    /// full-width row. Same field either way, so the two forms morph.
+    @Namespace private var detailMorph
+    /// Square side of the compact note/place buttons — also the detail row's
+    /// height, so the whole strip lines up.
+    @ScaledMetric(relativeTo: .subheadline) private var detailControlHeight: CGFloat = 36
 
     init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
         self._viewModel = State(wrappedValue: viewModel)
@@ -549,6 +549,7 @@ struct CompactAddTransactionView: View {
                     }
                     .padding(.horizontal, 2)
                 }
+                .chipRail()
             }
         }
     }
@@ -593,6 +594,7 @@ struct CompactAddTransactionView: View {
                     }
                     .padding(.horizontal, 2)
                 }
+                .chipRail()
             }
 
             if let source = viewModel.selectedWallet,
@@ -684,54 +686,131 @@ struct CompactAddTransactionView: View {
                     }
                     .padding(.horizontal, 2)
                 }
+                .chipRail()
             }
         }
     }
 
-    // MARK: - Detail chips (date · time · note · location · goal)
+    // MARK: - Detail row (when · note · location)
 
+    /// Accessibility text sizes get one full-width control per line — two-up
+    /// columns truncate to uselessness once the type scales.
+    private var isTwoUpLayout: Bool { !dynamicTypeSize.isAccessibilitySize }
+
+    /// The note keeps its compact button while its editor is open: the bar
+    /// below already shows the text in full, and promoting the row on the
+    /// first keystroke would shift the form under the user's thumb.
+    private var isNoteRowVisible: Bool {
+        !isTwoUpLayout || (!viewModel.note.isEmpty && !isNoteBarVisible)
+    }
+
+    private var isLocationRowVisible: Bool {
+        !isTwoUpLayout || viewModel.selectedLocation != nil
+    }
+
+    /// Space follows the value: date and time always sit on the lead line
+    /// (they're pre-filled on every entry), while an unset note or place is
+    /// only a button there. Setting one promotes it to its own full-width row,
+    /// where the value gets the whole sheet width before it has to truncate.
     private var detailChipRows: some View {
-        FlowLayout(spacing: 8) {
-            dateChip
-            timeChip
-            noteChip
-            locationChip
+        VStack(alignment: .leading, spacing: 6) {
+            sectionLabel("common.details".localized)
+
+            VStack(spacing: 8) {
+                if isTwoUpLayout {
+                    HStack(spacing: 8) {
+                        dateChip
+                        timeChip
+                        if !isNoteRowVisible { noteButton }
+                        if !isLocationRowVisible { locationButton }
+                    }
+                } else {
+                    dateChip
+                    timeChip
+                }
+
+                if isNoteRowVisible { noteRow }
+                if isLocationRowVisible { locationRow }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isNoteRowVisible)
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isLocationRowVisible)
         }
     }
 
-    /// Shared pill container for the detail chips. `isActive` marks the chip
-    /// whose editor is currently open on the bottom bar.
-    private func detailChip(
+    /// Shared container for every detail control. A rounded rect rather than a
+    /// capsule: these are sized by their column, not by their content, and a
+    /// stretched capsule reads as a pill that failed to hug. `isActive` marks
+    /// the control whose editor is currently open on the bottom bar.
+    private func detailSurface<Content: View>(
+        isActive: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minHeight: detailControlHeight)
+            .background(isActive ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                    .stroke(isActive ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
+    }
+
+    /// Compact form of an optional field: icon only, square, no value to show.
+    private func detailButton(
+        icon: String,
+        iconColor: Color,
+        morphID: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            detailSurface {
+                Image(systemName: icon)
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(iconColor)
+                    .frame(width: detailControlHeight - 24)
+            }
+        }
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: morphID, in: detailMorph)
+    }
+
+    /// Expanded form of an optional field: full width, so a note or place name
+    /// gets the entire sheet before it truncates.
+    private func detailRow<Trailing: View>(
         icon: String,
         iconColor: Color,
         text: String,
         isSet: Bool,
-        isActive: Bool = false
+        morphID: String,
+        action: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .appFont(.footnote, weight: .semibold)
-                .foregroundStyle(isActive ? Color.accentColor : iconColor)
-            Text(text)
-                .appFont(.subheadline, weight: .medium)
-                .foregroundStyle(isActive ? Color.accentColor : (isSet ? Color.primary : Color.secondary))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: chipTextMaxWidth, alignment: .leading)
-                // The note pill swaps its text for "Note" as the editor opens;
-                // crossfade it instead of cutting.
-                .contentTransition(.opacity)
+        detailSurface {
+            HStack(spacing: 0) {
+                Button(action: action) {
+                    HStack(spacing: 8) {
+                        Image(systemName: icon)
+                            .appFont(.subheadline, weight: .semibold)
+                            .foregroundStyle(iconColor)
+                            .frame(width: detailControlHeight - 24)
+                        Text(text)
+                            .appFont(.subheadline, weight: .medium)
+                            .foregroundStyle(isSet ? Color.primary : Color.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                trailing()
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(minHeight: 36)
-        .background(isActive ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .stroke(isActive ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
-        )
-        .contentShape(Capsule())
+        .matchedGeometryEffect(id: morphID, in: detailMorph)
     }
 
     private func daysBetween(_ start: Date, _ end: Date) -> Int {
@@ -742,33 +821,31 @@ struct CompactAddTransactionView: View {
         return components.day ?? 0
     }
 
+    /// Kept deliberately short: this label shares its line with the time and,
+    /// while no note or place is set, two buttons as well. Yesterday→tomorrow
+    /// stay words (they cover most entries and read fastest), and the year is
+    /// dropped inside the current year — it's the longest component of the
+    /// string and it's redundant for the dates people actually log.
     private func dateLabel(forOffset offset: Int) -> String {
         guard let targetDate = Calendar.current.date(byAdding: .day, value: offset, to: referenceDate) else { return "" }
-        let formatter = AppDateFormatterCache.formatter(
-            dateStyle: .medium,
-            timeStyle: .none,
-            doesRelativeDateFormatting: true,
-            locale: LanguageManager.shared.selectedLanguage.locale
-        )
-        return formatter.string(from: targetDate)
-    }
+        let locale = LanguageManager.shared.selectedLanguage.locale
 
-    private var dateTextWidth: CGFloat {
-        min(max(minDateLabelWidth, measuredDateLabelWidth), maxDateLabelWidth)
-    }
+        if (-1...1).contains(offset) {
+            return AppDateFormatterCache.formatter(
+                dateStyle: .medium,
+                timeStyle: .none,
+                doesRelativeDateFormatting: true,
+                locale: locale
+            ).string(from: targetDate)
+        }
 
-    /// Layout-neutral probe (backgrounds don't size their parent): renders the
-    /// current label at its natural size so the paged strip can be framed to the
-    /// width the text actually needs, in any language or Dynamic Type size.
-    private var dateLabelMeasurer: some View {
-        Text(dateLabel(forOffset: relativeDayOffset))
-            .appFont(.subheadline, weight: .medium)
-            .lineLimit(1)
-            .fixedSize()
-            .hidden()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                measuredDateLabelWidth = width + 6
-            }
+        let calendar = Calendar.current
+        let isCurrentYear = calendar.component(.year, from: targetDate)
+            == calendar.component(.year, from: referenceDate)
+        return AppDateFormatterCache.formatter(
+            dateTemplate: isCurrentYear ? "MMMd" : "MMMdyyyy",
+            locale: locale
+        ).string(from: targetDate)
     }
 
     private func adjustDate(by days: Int) {
@@ -794,24 +871,26 @@ struct CompactAddTransactionView: View {
             }
             .buttonStyle(.plain)
             
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                    .appFont(.footnote, weight: .semibold)
-                    .foregroundStyle(.red)
-                
+            // No leading glyph: date and time are the only always-populated
+            // fields here, so their values identify them on sight. The icons
+            // were costing this row ~18pt each that the date label needs.
+            Group {
+                // Fills the column rather than being measured to its content:
+                // the date owns the slack on this line, which is what keeps a
+                // Khmer date (or a scaled-up Latin one) off the ellipsis.
                 TabView(selection: $relativeDayOffset) {
                     ForEach(-365...365, id: \.self) { offset in
                         Text(dateLabel(forOffset: offset))
                             .appFont(.subheadline, weight: .medium)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             .tag(offset)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(width: dateTextWidth, height: 24)
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: dateTextWidth)
-                .background(alignment: .leading) { dateLabelMeasurer }
+                .frame(maxWidth: .infinity)
+                .frame(height: 24)
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 4)
@@ -827,7 +906,13 @@ struct CompactAddTransactionView: View {
                 )
                 .datePickerStyle(.compact)
                 .labelsHidden()
-                .opacity(0.02)
+                // A compact DatePicker draws its own filled background, and now
+                // that the control fills its column that fill spreads across the
+                // whole chip — the old 2% opacity was only inconspicuous while
+                // the pill hugged its label. `colorMultiply(.clear)` erases it
+                // at render time; `.opacity(0)` would instead take the backing
+                // UIKit control's alpha to zero, which stops it receiving taps.
+                .colorMultiply(.clear)
                 .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
             }
 
@@ -843,23 +928,28 @@ struct CompactAddTransactionView: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(minHeight: 36)
+        .frame(minHeight: detailControlHeight)
         .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(Capsule())
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
         .overlay(
-            Capsule()
+            RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
                 .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         )
         .accessibilityLabel("transaction.date".localized)
     }
 
+    /// Hugs its content on the lead line — a wall-clock time is a bounded,
+    /// near-constant width, so reserving a share of the row for it would only
+    /// take room away from the date.
     private var timeChip: some View {
-        detailChip(
-            icon: "clock",
-            iconColor: .orange,
-            text: viewModel.date.appFormatted(date: .omitted, time: .shortened),
-            isSet: true
-        )
+        detailSurface {
+            // Glyph-free for the same reason as the date — see `dateChip`.
+            Text(viewModel.date.appFormatted(date: .omitted, time: .shortened))
+                .appFont(.subheadline, weight: .medium)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(maxWidth: isTwoUpLayout ? nil : .infinity, alignment: .leading)
+        }
         .overlay {
             // Invisible native control — see dateChip's overlay for why.
             DatePicker(
@@ -869,92 +959,103 @@ struct CompactAddTransactionView: View {
             )
             .datePickerStyle(.compact)
             .labelsHidden()
-            .opacity(0.02)
+            .colorMultiply(.clear)
             .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
         }
         .accessibilityLabel("transaction.time".localized)
     }
 
-    private var noteChip: some View {
-        Button {
-            beginNoteEditing()
-        } label: {
-            // While the note bar is open it owns the text — mirroring it here
-            // only duplicates the editor until the pill truncates, and then
-            // silently contradicts it (the pill holds the head, the field
-            // follows the caret). The chip marks the destination instead.
-            detailChip(
-                icon: "note.text",
-                iconColor: .gray,
-                text: isNoteBarVisible
-                    ? "transaction.noteLabel".localized
-                    : (viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note),
-                isSet: !viewModel.note.isEmpty,
-                isActive: isNoteBarVisible
-            )
-        }
-        .buttonStyle(.plain)
-        // The pill truncates; VoiceOver still reads the whole note.
+    // MARK: Note — button until set, then a full-width row
+
+    /// Note and place share one neutral tint. Blue in particular is this app's
+    /// accent — a blue pin on an empty field reads as "a place is already
+    /// chosen". Set vs. unset is carried by the label instead: the value in
+    /// primary, the placeholder in secondary.
+    private static let optionalFieldIconColor = Color.gray
+    /// One glyph in both states, for the same reason: swapping in the `.fill`
+    /// variant once a place is picked is a second, redundant selected-signal.
+    private static let locationIcon = "mappin.and.ellipse"
+
+    private var noteButton: some View {
+        detailButton(
+            icon: "note.text",
+            iconColor: isNoteBarVisible ? Color.accentColor : Self.optionalFieldIconColor,
+            morphID: "detail.note",
+            action: beginNoteEditing
+        )
         .accessibilityLabel(viewModel.note.isEmpty
             ? L10n.Transaction.note
             : "\(L10n.Transaction.note): \(viewModel.note)")
     }
 
-    private var locationChip: some View {
+    private var noteRow: some View {
+        detailRow(
+            icon: "note.text",
+            iconColor: Self.optionalFieldIconColor,
+            // Empty text only ever reaches here at accessibility sizes, where
+            // the row is the permanent form of the field.
+            text: viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note,
+            isSet: !viewModel.note.isEmpty,
+            morphID: "detail.note",
+            action: beginNoteEditing
+        ) {
+            EmptyView()
+        }
+        // The row truncates; VoiceOver still reads the whole note.
+        .accessibilityLabel(viewModel.note.isEmpty
+            ? L10n.Transaction.note
+            : "\(L10n.Transaction.note): \(viewModel.note)")
+    }
+
+    // MARK: Location — button until set, then a full-width row
+
+    private func openLocationPicker() {
+        endNoteEditing()
+        showLocationPicker = true
+    }
+
+    private var locationButton: some View {
         Group {
             if isFetchingCurrentLocation {
-                HStack(spacing: 6) {
+                detailSurface {
                     ProgressView()
                         .controlSize(.small)
-                    Text("transaction.location".localized)
-                        .appFont(.subheadline, weight: .medium)
-                        .foregroundStyle(.secondary)
+                        .frame(width: detailControlHeight - 24)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minHeight: 36)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
             } else {
-                HStack(spacing: 6) {
-                    Button {
-                        endNoteEditing()
-                        showLocationPicker = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: viewModel.selectedLocation == nil ? "mappin.and.ellipse" : "mappin.circle.fill")
-                                .appFont(.footnote, weight: .semibold)
-                                .foregroundStyle(.blue)
-                            Text(viewModel.selectedLocation?.title ?? "transaction.location".localized)
-                                .appFont(.subheadline, weight: .medium)
-                                .foregroundStyle(viewModel.selectedLocation != nil ? .primary : .secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(maxWidth: chipTextMaxWidth, alignment: .leading)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                detailButton(
+                    icon: Self.locationIcon,
+                    iconColor: Self.optionalFieldIconColor,
+                    morphID: "detail.location",
+                    action: openLocationPicker
+                )
+            }
+        }
+        .accessibilityLabel("transaction.location".localized)
+    }
 
-                    if viewModel.selectedLocation != nil {
-                        Button {
-                            viewModel.selectedLocation = nil
-                            HapticManager.shared.selection()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                                .appFont(.footnote)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.leading, 2)
-                    }
+    private var locationRow: some View {
+        detailRow(
+            icon: Self.locationIcon,
+            iconColor: Self.optionalFieldIconColor,
+            text: viewModel.selectedLocation?.title ?? "transaction.location".localized,
+            isSet: viewModel.selectedLocation != nil,
+            morphID: "detail.location",
+            action: openLocationPicker
+        ) {
+            if viewModel.selectedLocation != nil {
+                Button {
+                    viewModel.selectedLocation = nil
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .appFont(.footnote)
+                        .padding(.leading, 8)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(minHeight: 36)
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                .buttonStyle(.plain)
+                .accessibilityLabel("transaction.location.clear".localized)
             }
         }
         .accessibilityLabel(viewModel.selectedLocation.map {

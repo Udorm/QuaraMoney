@@ -91,6 +91,21 @@ enum AppDateFormatterCache {
         return formatter
     }
 
+    /// A cached `DateFormatter` for a localized field *template* (e.g. `"MMMd"`),
+    /// which each locale reorders and punctuates for itself. Use this over the
+    /// fixed-`dateFormat` variant above whenever the string is user-facing —
+    /// a literal format string would impose en-US field order everywhere.
+    nonisolated static func formatter(dateTemplate: String, locale: Locale) -> DateFormatter {
+        let key = "template|\(dateTemplate)|\(locale.identifier)"
+        lock.lock(); defer { lock.unlock() }
+        if let cached = formatters[key] { return cached }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.setLocalizedDateFormatFromTemplate(dateTemplate)
+        formatters[key] = formatter
+        return formatter
+    }
+
     nonisolated static func formatter(
         dateStyle: DateFormatter.Style,
         timeStyle: DateFormatter.Style,

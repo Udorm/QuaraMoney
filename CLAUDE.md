@@ -36,27 +36,10 @@ Requirements: Xcode 26+, iOS 26 simulator. Dependencies via SPM (supabase-swift)
 
 ### MVVM Pattern
 
-```
-View (SwiftUI @Query / @State)
-  └── ViewModel (@MainActor @Published, inherits BaseViewModel)
-        └── Service / DataService protocol
-              └── SwiftData Model (@Model)
-```
-
 - **Models** — `@Model` classes in `Models/`. All money amounts use `Decimal`; event ledger uses `Int64` minor units via `MoneyMinorUnitConverter`.
 - **ViewModels** — `@MainActor` classes in `ViewModels/`. All inherit `BaseViewModel` (provides `dataService`, `isLoading`, `errorMessage`). Use `Task.detached` with `PersistentIdentifier` for background work.
 - **Services** — Pure logic in `Services/`. `DataService` protocol abstracts persistence; `SwiftDataService` is the production impl.
 - **Views** — In `Views/` organized by feature. Stateless where possible. Use `@Query` for live SwiftData queries.
-
-### Global Singletons
-
-| Singleton | Purpose |
-|-----------|---------|
-| `CurrencyManager.shared` | Exchange rates (24h cache), currency conversion |
-| `LanguageManager.shared` | Runtime language switching, `fontRefreshID` forces view rebuild |
-| `HapticManager.shared` | Haptic feedback |
-| `NotificationManager.shared` | Local push notifications |
-| `SecurityManager.shared` | Biometric auth / encryption |
 
 ### Data Flow
 
@@ -100,10 +83,7 @@ The deployment target is iOS 26, so iOS 26 Liquid Glass APIs (`.glassEffect`, `.
 ### Naming
 | Category | Convention | Example |
 |----------|-----------|---------|
-| Types | PascalCase | `TransactionType`, `BudgetPeriodType` |
-| Properties/functions | camelCase | `isLoading`, `fetchRates()` |
 | Private backing stores | `_` prefix | `_cachedBalance` |
-| Localization keys | `dot.namespaced` | `"common.save"` |
 
 ### Categories (canonical keys)
 - App-defined categories (defaults + system) are identified by a language-independent `Category.canonicalKey` (e.g. `"salary"`, `"sys_debt"`); user-created categories have `nil`
@@ -126,11 +106,6 @@ The deployment target is iOS 26, so iOS 26 Liquid Glass APIs (`.glassEffect`, `.
 - `EventSettlementSnapshot`: persisted settlement state
 - **`EventDetailViewV2`** is the active view — `EventDetailView`/`EventDetailViewV3` are deleted
 - Mode: `Event.EventLedgerMode` — `.legacyLinked` (older) vs `.isolatedV1` (current)
-
-### Budget System
-- `Budget` → `Category` with `periodType` (weekly/monthly/yearly/custom)
-- `BudgetRolloverService` handles period transitions
-- `BudgetNotificationService` fires alerts at 50%/80% of limit
 
 ### Transaction Suggestion Engine
 - `TransactionSuggestionEngine` (`Services/TransactionSuggestionEngine.swift`) — pure `@MainActor enum` that ranks wallets and categories for the Add Transaction quick-pickers.

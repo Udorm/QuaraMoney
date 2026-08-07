@@ -30,6 +30,8 @@ struct EventSettlementView: View {
     @State private var errorMessage: String?
     @State private var useSingleCoordinator = false
     @State private var selectedCoordinatorMemberId: UUID?
+
+    private var spendableWallets: [Wallet] { wallets.filter { !$0.isSavings } }
     
     private var service: EventLedgerService {
         EventLedgerService(modelContext: modelContext)
@@ -207,10 +209,10 @@ struct EventSettlementView: View {
                         Picker(L10n.EventSettlement.wallet, selection: Binding(
                             get: { selectedWallet?.id },
                             set: { newId in
-                                selectedWallet = wallets.first(where: { $0.id == newId })
+                                selectedWallet = spendableWallets.first(where: { $0.id == newId })
                             }
                         )) {
-                            ForEach(wallets) { wallet in
+                            ForEach(spendableWallets) { wallet in
                                 Text(wallet.name).tag(Optional(wallet.id))
                             }
                         }
@@ -296,7 +298,7 @@ struct EventSettlementView: View {
             }
             .onAppear {
                 if selectedWallet == nil {
-                    selectedWallet = wallets.first
+                    selectedWallet = spendableWallets.first
                 }
                 if selectedCoordinatorMemberId == nil {
                     selectedCoordinatorMemberId = localMember?.id ?? coordinatorCandidates.first?.id

@@ -556,6 +556,7 @@ final class EventLedgerService {
         transaction.excludeFromReports = excludeFromReports
         transaction.category = try fetchOrCreateSettlementCategory(type: direction == .income ? .income : .expense)
         transaction.event = nil
+        try WalletLedgerRules.validate(transaction: transaction)
         modelContext.insert(transaction)
         
         let record = EventWalletExportRecord(
@@ -628,6 +629,7 @@ final class EventLedgerService {
         walletTransaction.excludeFromReports = false
         walletTransaction.category = try fetchOrCreateEventExpenseCategory()
         walletTransaction.event = nil
+        try WalletLedgerRules.validate(transaction: walletTransaction)
         modelContext.insert(walletTransaction)
         
         let record = EventWalletExportRecord(

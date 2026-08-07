@@ -3,6 +3,7 @@ import SwiftData
 
 protocol DataService {
     func save() throws
+    func rollback()
     func insert<T: PersistentModel>(_ model: T)
     func delete<T: PersistentModel>(_ model: T)
 }
@@ -18,6 +19,10 @@ final class SwiftDataService: DataService {
     func save() throws {
         try modelContext.save()
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+    }
+
+    func rollback() {
+        modelContext.rollback()
     }
     
     func insert<T: PersistentModel>(_ model: T) {

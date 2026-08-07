@@ -5,10 +5,12 @@ import SwiftData
 struct ReceiptWalletSnapshot: Sendable {
     let persistentID: PersistentIdentifier
     let name: String
+    let isSavings: Bool
 
     init(_ wallet: Wallet) {
         persistentID = wallet.persistentModelID
         name = wallet.name
+        isSavings = wallet.isSavings
     }
 }
 
@@ -126,11 +128,12 @@ class AddTransactionViewModel: BaseViewModel {
     var isValid: Bool {
         // Amount must be positive and within bounds
         guard evaluatedAmount > 0, evaluatedAmount <= Self.maxTransactionAmount else { return false }
-        guard selectedWallet != nil else { return false }
+        guard let selectedWallet else { return false }
+        if !selectedWallet.canReceiveSpendingTransaction(of: type) { return false }
         
         if type == .transfer {
             guard let dest = destinationWallet else { return false }
-            if dest.id == selectedWallet?.id { return false }
+            if dest.id == selectedWallet.id { return false }
         } else {
             // Debt-linked transactions use a managed system category (hidden in
             // the editor), so a manual category selection isn't required.
@@ -196,8 +199,18 @@ class AddTransactionViewModel: BaseViewModel {
     @discardableResult
     func saveTransaction() -> Bool {
         guard evaluatedAmount > 0, let wallet = selectedWallet else { return false }
-        let previousGoal = existingTransaction?.savingsGoal
-        
+        do {
+            try WalletLedgerRules.validate(
+                type: type,
+                amount: evaluatedAmount,
+                sourceWallet: wallet,
+                destinationWallet: type == .transfer ? destinationWallet : nil
+            )
+        } catch {
+            HapticManager.shared.notification(type: .error)
+            ErrorService.shared.handlePersistenceError(error, context: "AddTransactionViewModel.walletRules")
+            return false
+        }
         let transaction: Transaction
         if let existing = existingTransaction {
             transaction = existing
@@ -223,8 +236,10 @@ class AddTransactionViewModel: BaseViewModel {
             transaction.destinationWallet = destinationWallet
             transaction.exchangeRate = Decimal(exchangeRate)
             transaction.category = nil
-            transaction.savingsGoal = selectedSavingsGoal
-            transaction.savingsIsWithdrawal = savingsIsWithdrawal
+            transaction.savingsGoal = isEditing ? selectedSavingsGoal : nil
+            transaction.savingsIsWithdrawal = isEditing && selectedSavingsGoal != nil
+                ? savingsIsWithdrawal
+                : false
         } else {
             transaction.category = selectedCategory
             transaction.destinationWallet = nil
@@ -266,11 +281,6 @@ class AddTransactionViewModel: BaseViewModel {
         if existingTransaction == nil {
             dataService.insert(transaction)
         }
-        if let previousGoal { SavingsGoalReconciler.reconcile(previousGoal) }
-        if let selectedSavingsGoal, selectedSavingsGoal.id != previousGoal?.id {
-            SavingsGoalReconciler.reconcile(selectedSavingsGoal)
-        }
-        
         do {
             try dataService.save()
             HapticManager.shared.notification(type: .success)
@@ -284,6 +294,7 @@ class AddTransactionViewModel: BaseViewModel {
             }
             return true
         } catch {
+            dataService.rollback()
             HapticManager.shared.notification(type: .error)
             ErrorService.shared.handlePersistenceError(error, context: "AddTransactionViewModel.saveTransaction")
             return false
@@ -326,7 +337,9 @@ class AddTransactionViewModel: BaseViewModel {
             
             // Handle Wallet Suggestion
             if let suggestedName = parsedData.suggestedWalletName {
-                if let snapshot = availableWallets.first(where: { $0.name.localizedCaseInsensitiveContains(suggestedName) }),
+                if let snapshot = availableWallets.first(where: {
+                    !$0.isSavings && $0.name.localizedCaseInsensitiveContains(suggestedName)
+                }),
                    let match = modelContext.model(for: snapshot.persistentID) as? Wallet {
                     self.selectedWallet = match
                     

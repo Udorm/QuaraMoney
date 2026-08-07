@@ -101,11 +101,13 @@ struct CSVImportWalletSnapshot: Sendable {
     let persistentID: PersistentIdentifier
     let name: String
     let currencyCode: String
+    let isSavings: Bool
 
     init(_ wallet: Wallet) {
         persistentID = wallet.persistentModelID
         name = wallet.name
         currencyCode = wallet.currencyCode
+        isSavings = wallet.isSavings
     }
 }
 
@@ -493,6 +495,9 @@ final class CSVImportService {
         }
 
         let resolvedWalletSnapshot = walletSnapshot ?? defaultWallet
+        if (type == .income || type == .expense), resolvedWalletSnapshot?.isSavings == true {
+            return false
+        }
         let note = mapping.noteColumn.flatMap { $0 < values.count ? sanitizeNote(values[$0]) : nil }
         let transaction = Transaction(
             amount: abs(amount),
@@ -506,6 +511,7 @@ final class CSVImportService {
         if let resolvedWalletSnapshot {
             transaction.sourceWallet = modelContext.model(for: resolvedWalletSnapshot.persistentID) as? Wallet
         }
+        guard (try? WalletLedgerRules.validate(transaction: transaction)) != nil else { return false }
         transaction.note = note
         transaction.tags = TransactionTagParser.tags(in: note)
         modelContext.insert(transaction)

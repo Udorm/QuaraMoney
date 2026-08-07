@@ -75,6 +75,7 @@ final class DebtService {
             transaction.category = category
             transaction.sourceWallet = sourceWallet
             transaction.debt = debt
+            try WalletLedgerRules.validate(transaction: transaction)
 
             modelContext.insert(debt)
             modelContext.insert(transaction)
@@ -123,6 +124,7 @@ final class DebtService {
             transaction.category = category
             transaction.sourceWallet = destinationWallet
             transaction.debt = debt
+            try WalletLedgerRules.validate(transaction: transaction)
 
             modelContext.insert(debt)
             modelContext.insert(transaction)
@@ -174,6 +176,7 @@ final class DebtService {
             transaction.category = category
             transaction.sourceWallet = sourceWallet
             transaction.debt = debt
+            try WalletLedgerRules.validate(transaction: transaction)
             modelContext.insert(transaction)
 
             debt.isCompleted = debt.remainingAmount <= tolerance

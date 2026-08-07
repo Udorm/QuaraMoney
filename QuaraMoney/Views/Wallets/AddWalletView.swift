@@ -14,6 +14,23 @@ struct AddWalletView: View {
         Color(hex: viewModel.colorHex) ?? .blue
     }
 
+    private var isSavingsBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.kind == .savings },
+            set: { viewModel.kind = $0 ? .savings : .normal }
+        )
+    }
+
+    private var isArchivedBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isArchived },
+            set: { newValue in
+                if newValue { viewModel.archiveWallet() }
+                else { viewModel.unarchiveWallet() }
+            }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -48,6 +65,36 @@ struct AddWalletView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(!viewModel.canEditCurrency)
+
+                    if !viewModel.isEditing {
+                        Toggle("wallet.savingsToggle".localized, isOn: isSavingsBinding)
+                    }
+                }
+
+                if viewModel.kind == .savings {
+                    Section {
+                        HStack {
+                            Text(viewModel.currencyCode)
+                                .appFont(.subheadline, weight: .semibold)
+                                .foregroundStyle(.secondary)
+                            TextField("savings.targetAmount".localized, text: $viewModel.targetAmountText)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        Toggle("savings.targetDate".localized, isOn: $viewModel.hasTargetDate)
+                        if viewModel.hasTargetDate {
+                            DatePicker(
+                                "savings.targetDate".localized,
+                                selection: $viewModel.targetDate,
+                                displayedComponents: .date
+                            )
+                        }
+                    } header: {
+                        Text("savings.goalDetails".localized)
+                    } footer: {
+                        Text("wallet.savingsDescription".localized)
+                    }
                 }
 
                 Section(L10n.Wallet.appearance) {
@@ -74,16 +121,7 @@ struct AddWalletView: View {
                 // MARK: - Actions (only when editing)
                 if viewModel.isEditing {
                     Section {
-                        Toggle(isOn: Binding(
-                            get: { viewModel.isArchived },
-                            set: { newValue in
-                                if newValue {
-                                    viewModel.archiveWallet()
-                                } else {
-                                    viewModel.unarchiveWallet()
-                                }
-                            }
-                        )) {
+                        Toggle(isOn: isArchivedBinding) {
                             Label(L10n.Wallet.archive, systemImage: "archivebox")
                         }
 
@@ -107,8 +145,7 @@ struct AddWalletView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        viewModel.saveWallet()
-                        dismiss()
+                        if viewModel.saveWallet() { dismiss() }
                     } label: {
                         Image(systemName: "checkmark")
                     }
@@ -124,8 +161,7 @@ struct AddWalletView: View {
             .alert(L10n.Common.delete, isPresented: $showingDeleteAlert) {
                 Button(L10n.Common.cancel, role: .cancel) {}
                 Button(L10n.Common.delete, role: .destructive) {
-                    viewModel.deleteWallet()
-                    dismiss()
+                    if viewModel.deleteWallet() { dismiss() }
                 }
             } message: {
                 Text(L10n.Wallet.deleteRelatedTransactionsWarning((viewModel.walletToEdit?.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
@@ -151,6 +187,17 @@ struct AddWalletView: View {
                             }
                         }
                 }
+            }
+            .alert(
+                "common.error".localized,
+                isPresented: Binding(
+                    get: { viewModel.errorMessage != nil },
+                    set: { if !$0 { viewModel.errorMessage = nil } }
+                )
+            ) {
+                Button("common.ok".localized) { viewModel.errorMessage = nil }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
             }
         }
     }

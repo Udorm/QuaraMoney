@@ -160,8 +160,17 @@ struct RecurringRuleDetailView: View {
     /// Pauses (or resumes) the rule. Mirrors `RecurringRuleListView.togglePause`:
     /// on resume, fast-forward past elapsed occurrences and re-arm the reminder.
     private func togglePause(_ rule: RecurringRule) {
+        if !rule.isActive, rule.wallet?.isSavings == true {
+            rule.pauseReason = .invalidSavingsWallet
+            rule.updatedAt = Date()
+            rule.needsSync = true
+            try? modelContext.save()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            return
+        }
         rule.isActive.toggle()
         if rule.isActive {
+            rule.pauseReason = nil
             rule.nextDueDate = RecurringRuleService.resumedNextDueDate(for: rule)
         }
         rule.updatedAt = Date()
@@ -281,7 +290,12 @@ private struct RecurringHeroCard: View {
     @ViewBuilder
     private var statusPill: some View {
         if !rule.isActive {
-            pill(text: L10n.Recurring.paused, systemImage: "pause.fill")
+            pill(
+                text: rule.pauseReason == .invalidSavingsWallet
+                    ? "recurring.pausedForSavings".localized
+                    : L10n.Recurring.paused,
+                systemImage: "pause.fill"
+            )
         } else if RecurringRuleService.isDue(rule) {
             pill(text: L10n.Recurring.dueToday, systemImage: "bell.fill")
         }

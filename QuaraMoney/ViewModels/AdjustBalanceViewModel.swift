@@ -71,12 +71,15 @@ class AdjustBalanceViewModel {
         // Adjustment is denominated in the wallet's own currency.
         transaction.storedRate = 1
 
+        guard (try? WalletLedgerRules.validate(transaction: transaction)) != nil else { return }
+
         dataService.insert(transaction)
 
         do {
             try dataService.save()
             wallet.invalidateBalanceCache()
         } catch {
+            dataService.rollback()
             #if DEBUG
             print("Error saving adjustment: \(error)")
             #endif

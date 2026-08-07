@@ -81,7 +81,8 @@ final class SampleDataService {
                 transaction.sourceWallet = bankWallet
                 transaction.note = "Balance Adjustment"
             }
-            
+
+            try WalletLedgerRules.validate(transaction: transaction)
             modelContext.insert(transaction)
             insertCount += 1
             

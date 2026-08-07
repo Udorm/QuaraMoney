@@ -1,6 +1,13 @@
 import SwiftData
 import Foundation
 
+enum WalletKind: String, Codable, CaseIterable, Identifiable {
+    case normal
+    case savings
+
+    var id: String { rawValue }
+}
+
 @Model
 final class Wallet {
     var id: UUID
@@ -15,6 +22,21 @@ final class Wallet {
     var icon: String // SF Symbol name
     var colorHex: String
     var isArchived: Bool = false
+
+    /// Stored as a raw string because SwiftData predicates/indexes only support
+    /// primitive columns reliably. `kind` is the typed public surface.
+    var kindRaw: String = WalletKind.normal.rawValue
+    var targetAmount: Decimal?
+    var targetDate: Date?
+    var priority: Int = 0
+    var hasCelebrated: Bool = false
+    var legacySavingsGoalID: UUID?
+    var legacyMigrationCompletedAt: Date?
+
+    var kind: WalletKind {
+        get { WalletKind(rawValue: kindRaw) ?? .normal }
+        set { kindRaw = newValue.rawValue }
+    }
 
     // Timestamps (for future sync readiness)
     var createdAt: Date = Date()
@@ -52,6 +74,9 @@ final class Wallet {
             errors.append(.emptyName(field: "Wallet name"))
         }
         if currencyCode.count != 3 { errors.append(.invalidCurrencyCode) }
+        if kind == .savings, (targetAmount ?? 0) <= 0 {
+            errors.append(.negativeOrZeroAmount(field: "Savings target"))
+        }
         return errors
     }
 }

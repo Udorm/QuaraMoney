@@ -25,6 +25,8 @@ final class WalletBalanceStore {
     private(set) var figures: [UUID: WalletFigures] = [:]
     private(set) var netWorthSeries: [Wallet.BalancePoint] = []
     private(set) var netWorthTotal: Decimal = 0
+    private(set) var spendableTotal: Decimal = 0
+    private(set) var savingsTotal: Decimal = 0
     /// False until the first computation lands, so views can render a quiet
     /// placeholder instead of flashing $0.
     private(set) var hasLoaded = false
@@ -102,6 +104,8 @@ final class WalletBalanceStore {
         figures = result.figures
         netWorthSeries = result.netWorthSeries
         netWorthTotal = result.netWorthTotal
+        spendableTotal = result.spendableTotal
+        savingsTotal = result.savingsTotal
         hasLoaded = true
     }
 
@@ -111,6 +115,8 @@ final class WalletBalanceStore {
         let figures: [UUID: WalletFigures]
         let netWorthSeries: [Wallet.BalancePoint]
         let netWorthTotal: Decimal
+        let spendableTotal: Decimal
+        let savingsTotal: Decimal
     }
 
     nonisolated private static func compute(
@@ -121,7 +127,10 @@ final class WalletBalanceStore {
     ) -> Computation {
         let descriptor = FetchDescriptor<Wallet>(predicate: #Predicate { $0.deletedAt == nil })
         guard let wallets = try? context.fetch(descriptor) else {
-            return Computation(figures: [:], netWorthSeries: [], netWorthTotal: 0)
+            return Computation(
+                figures: [:], netWorthSeries: [], netWorthTotal: 0,
+                spendableTotal: 0, savingsTotal: 0
+            )
         }
 
         var figures: [UUID: WalletFigures] = [:]
@@ -129,6 +138,8 @@ final class WalletBalanceStore {
         // Net worth covers active wallets only (matches the list's hero card).
         var netWorthByDay: [Date: Decimal] = [:]
         var netWorthTotal: Decimal = 0
+        var spendableTotal: Decimal = 0
+        var savingsTotal: Decimal = 0
 
         for wallet in wallets {
             // Fresh background context → the @Transient cache is empty, so this
@@ -139,12 +150,15 @@ final class WalletBalanceStore {
             figures[wallet.id] = WalletFigures(balance: balance, series: series)
 
             guard !wallet.isArchived else { continue }
-            netWorthTotal += CurrencyManager.convert(
+            let convertedBalance = CurrencyManager.convert(
                 amount: balance,
                 from: wallet.currencyCode,
                 to: netWorthCurrency,
                 rates: rates
             )
+            netWorthTotal += convertedBalance
+            if wallet.isSavings { savingsTotal += convertedBalance }
+            else { spendableTotal += convertedBalance }
             for point in series {
                 let converted = CurrencyManager.convert(
                     amount: point.balance,
@@ -163,7 +177,9 @@ final class WalletBalanceStore {
         return Computation(
             figures: figures,
             netWorthSeries: netWorthSeries,
-            netWorthTotal: netWorthTotal
+            netWorthTotal: netWorthTotal,
+            spendableTotal: spendableTotal,
+            savingsTotal: savingsTotal
         )
     }
 }

@@ -29,6 +29,9 @@ final class TransactionBulkEditingServiceTests: XCTestCase {
         transaction.note = note
         transaction.tags = TransactionTagParser.tags(in: note)
         transaction.category = category
+        let source = Wallet(name: "Source", currencyCode: "USD", icon: "wallet.pass", colorHex: "#000000")
+        context.insert(source)
+        transaction.sourceWallet = source
         transaction.needsSync = false
         transaction.updatedAt = Date(timeIntervalSince1970: 1)
         context.insert(transaction)

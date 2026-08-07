@@ -172,6 +172,10 @@ enum RecurringRuleService {
     @discardableResult
     static func post(rule: RecurringRule, amount: Decimal? = nil, date: Date? = nil, in context: ModelContext) -> RecurringMutation? {
         guard let wallet = rule.wallet else { return nil }
+        guard !wallet.isSavings else {
+            pauseForInvalidSavingsWallet(rule, in: context)
+            return nil
+        }
         let previousDue = rule.nextDueDate
         let txn = makeTransaction(for: rule, wallet: wallet,
                                   amount: amount ?? rule.amount,
@@ -211,6 +215,10 @@ enum RecurringRuleService {
     @discardableResult
     static func postAllDue(rule: RecurringRule, asOf now: Date = Date(), in context: ModelContext) -> RecurringMutation? {
         guard let wallet = rule.wallet else { return nil }
+        guard !wallet.isSavings else {
+            pauseForInvalidSavingsWallet(rule, in: context)
+            return nil
+        }
         let previousDue = rule.nextDueDate
         var created: [Transaction] = []
         var guardN = 0
@@ -289,8 +297,17 @@ enum RecurringRuleService {
         // wallet balances is deterministic and never recomputed at live rates.
         txn.storedRate = rate
         txn.updatedAt = Date()
+        precondition((try? WalletLedgerRules.validate(transaction: txn)) != nil)
         context.insert(txn)
         return txn
+    }
+
+    @MainActor
+    static func pauseForInvalidSavingsWallet(_ rule: RecurringRule, in context: ModelContext) {
+        rule.isActive = false
+        rule.pauseReason = .invalidSavingsWallet
+        touchForSync(rule)
+        _ = commit(context, invalidating: nil)
     }
 
     /// Rate convention matches `AddTransactionViewModel`: wallet currency units

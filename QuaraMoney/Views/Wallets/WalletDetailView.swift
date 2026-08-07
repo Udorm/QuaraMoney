@@ -10,6 +10,8 @@ struct WalletDetailView: View {
     @State private var transactionToEdit: Transaction?
     @State private var showingEditWallet = false
     @State private var showingAdjustBalance = false
+    @State private var showingContribution = false
+    @State private var showingWithdrawal = false
 
     init(wallet: Wallet, modelContext: ModelContext) {
         _viewModel = State(wrappedValue: WalletDetailViewModel(modelContext: modelContext, wallet: wallet))
@@ -161,6 +163,12 @@ struct WalletDetailView: View {
                 dataService: SwiftDataService(modelContext: modelContext)
             )
         }
+        .sheet(isPresented: $showingContribution) {
+            SavingsContributionSheet(wallet: viewModel.wallet, isWithdrawal: false)
+        }
+        .sheet(isPresented: $showingWithdrawal) {
+            SavingsContributionSheet(wallet: viewModel.wallet, isWithdrawal: true)
+        }
         .sheet(item: $transactionToEdit) { txn in
             AddTransactionContainer(transaction: txn, isNewTransaction: false, initialWallet: viewModel.wallet)
         }
@@ -220,21 +228,29 @@ struct WalletDetailView: View {
                     .minimumScaleFactor(0.6)
 
                 HStack(spacing: 14) {
-                    heroStat(
-                        icon: "arrow.down.left",
-                        label: "transaction.type.income".localized,
-                        amount: periodIncome
-                    )
+                    if viewModel.wallet.isSavings {
+                        heroStat(
+                            icon: "target",
+                            label: "plan.target".localized,
+                            amount: viewModel.wallet.targetAmount ?? 0
+                        )
+                    } else {
+                        heroStat(
+                            icon: "arrow.down.left",
+                            label: "transaction.type.income".localized,
+                            amount: periodIncome
+                        )
 
-                    Rectangle()
-                        .fill(.white.opacity(0.25))
-                        .frame(width: 1, height: 26)
+                        Rectangle()
+                            .fill(.white.opacity(0.25))
+                            .frame(width: 1, height: 26)
 
-                    heroStat(
-                        icon: "arrow.up.right",
-                        label: "transaction.type.expense".localized,
-                        amount: periodExpense
-                    )
+                        heroStat(
+                            icon: "arrow.up.right",
+                            label: "transaction.type.expense".localized,
+                            amount: periodExpense
+                        )
+                    }
 
                     Spacer(minLength: 0)
                 }
@@ -286,19 +302,20 @@ struct WalletDetailView: View {
 
     private var quickActionsRow: some View {
         HStack(spacing: 12) {
-            // Icons mirror the hero card's in/out stat glyphs so the actions
-            // read as "money out" / "money in" at a glance.
-            quickActionButton(
-                icon: "arrow.up.right",
-                title: "wallet.action.addExpense".localized
-            ) {
-                showingAddExpense = true
-            }
-            quickActionButton(
-                icon: "arrow.down.left",
-                title: "wallet.action.addIncome".localized
-            ) {
-                showingAddIncome = true
+            if viewModel.wallet.isSavings {
+                quickActionButton(icon: "plus.circle", title: "plan.add_money".localized) {
+                    showingContribution = true
+                }
+                quickActionButton(icon: "arrow.up.right", title: "plan.withdraw".localized) {
+                    showingWithdrawal = true
+                }
+            } else {
+                quickActionButton(icon: "arrow.up.right", title: "wallet.action.addExpense".localized) {
+                    showingAddExpense = true
+                }
+                quickActionButton(icon: "arrow.down.left", title: "wallet.action.addIncome".localized) {
+                    showingAddIncome = true
+                }
             }
             quickActionButton(
                 icon: "slider.horizontal.3",

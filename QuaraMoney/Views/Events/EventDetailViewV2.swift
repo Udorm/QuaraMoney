@@ -289,7 +289,7 @@ struct EventDetailViewV2: View {
         .sheet(isPresented: $showingExportSpending) {
             ExportSpendingSheet(
                 event: event,
-                wallets: wallets,
+                wallets: wallets.filter { !$0.isSavings },
                 localMember: state.localMember,
                 service: service,
                 onSuccess: { message in

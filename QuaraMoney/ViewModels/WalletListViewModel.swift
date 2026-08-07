@@ -22,7 +22,7 @@ class WalletListViewModel: BaseViewModel {
         for index in offsets {
             let wallet = currentWallets[index]
             // Soft-delete (tombstone) so the deletion replicates to other devices.
-            SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
+            try? SoftDeleteService.deleteWallet(wallet, strategy: .deleteTransactions)
         }
     }
 }

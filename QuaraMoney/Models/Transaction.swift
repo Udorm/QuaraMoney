@@ -75,6 +75,10 @@ final class Transaction {
     var savingsGoal: SavingsGoal? // If this transfer contributes to a savings goal
     /// Authoritative savings-ledger direction; legacy rows default to contribution.
     var savingsIsWithdrawal: Bool = false
+
+    /// Stable purpose key for deterministic legacy-savings migration rows.
+    /// Nil for every user-created transaction.
+    var migrationProvenance: String?
     
     init(amount: Decimal, currencyCode: String, date: Date, type: TransactionType, exchangeRate: Decimal = 1.0) {
         self.id = UUID()

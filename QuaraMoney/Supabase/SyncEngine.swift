@@ -148,7 +148,9 @@ final class SyncEngine: ObservableObject {
     /// every view-model observer.
     private var didApplyRemoteChanges = false
 
-    private init() {}
+    private init() {
+        lastError = SyncIntegrityStore.latestMessage()
+    }
 
     // MARK: - Single-flight coordinator
 
@@ -1081,6 +1083,7 @@ final class SyncEngine: ObservableObject {
         await runStep("pull transaction locations") { try await self.pullTransactionLocations(context, client, uid) }
 
         // Push parents → children. Rows the pull just reconciled are no longer dirty.
+        await runStep("push savings migrations") { try await self.pushSavingsMigrations(context, client, uid) }
         await runStep("push wallets") { try await self.pushWallets(context, client, uid) }
         await runStep("push categories") { try await self.pushCategories(context, client, uid) }
         await runStep("push events") { try await self.pushEvents(context, client, uid) }
@@ -1172,9 +1175,6 @@ final class SyncEngine: ObservableObject {
             let maintenanceRates = CurrencyManager.shared.rates
             let maintenanceResult = withSyncWriteGuard {
                 try? PlanDataMaintenance.run(in: context, ownerID: uid, rates: maintenanceRates)
-            }
-            withSyncWriteGuard {
-                _ = try? SavingsGoalReconciler.reconcileAll(in: context, markNeedsSync: false)
             }
             NotificationCenter.default.post(name: .dataDidUpdate, object: self)
             if maintenanceResult?.changed == true {
@@ -1416,11 +1416,26 @@ final class SyncEngine: ObservableObject {
 
     private func pushWallets(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<Wallet>(predicate: #Predicate { $0.needsSync }))
+            .filter { $0.legacySavingsGoalID == nil || $0.legacyMigrationCompletedAt != nil }
         guard !pending.isEmpty else { return }
+        for wallet in pending {
+            try WalletLedgerRules.validateWalletUpdate(
+                wallet: wallet,
+                proposedKind: wallet.kind,
+                proposedCurrencyCode: wallet.currencyCode,
+                proposedTargetAmount: wallet.targetAmount,
+                proposedArchived: wallet.isArchived
+            )
+        }
         let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { w in
             SyncWalletRow(id: w.id, user_id: uid, name: w.name, currency_code: w.currencyCode,
                       icon: w.icon, color_hex: w.colorHex, is_archived: w.isArchived,
+                      kind: w.kind.rawValue, target_amount: w.targetAmount,
+                      target_date: w.targetDate, priority: w.priority,
+                      has_celebrated: w.hasCelebrated,
+                      legacy_savings_goal_id: w.legacySavingsGoalID,
+                      legacy_migration_completed_at: w.legacyMigrationCompletedAt,
                       created_at: w.createdAt, updated_at: w.updatedAt, deleted_at: w.deletedAt)
         }
         let returned = try await upsertInChunks(rows, to: "wallets", client)
@@ -1441,12 +1456,20 @@ final class SyncEngine: ObservableObject {
     }
 
     private func pushTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let incompleteGoalIDs = Set(try context.fetch(FetchDescriptor<Wallet>()).compactMap {
+            $0.legacyMigrationCompletedAt == nil ? $0.legacySavingsGoalID : nil
+        })
         let pending = try context.fetch(FetchDescriptor<Transaction>(predicate: #Predicate { $0.needsSync }))
+            .filter {
+                guard let goalID = SavingsWalletMigrationService.goalID(from: $0.migrationProvenance) else { return true }
+                return !incompleteGoalIDs.contains(goalID)
+            }
         guard !pending.isEmpty else { return }
         let snapshot = updatedAtSnapshot(pending)
         var rows: [SyncTransactionRow] = []
         rows.reserveCapacity(pending.count)
         for t in pending {
+            try WalletLedgerRules.validate(transaction: t)
             var photoPath: String?
             if let data = t.photoData {
                 photoPath = imagePath(uid, "transactions", t.id)
@@ -1471,6 +1494,7 @@ final class SyncEngine: ObservableObject {
                 debt_id: t.debt?.id,
                 savings_goal_id: t.savingsGoal?.id,
                 savings_is_withdrawal: t.savingsIsWithdrawal,
+                migration_provenance: t.migrationProvenance,
                 created_at: t.createdAt, updated_at: t.updatedAt, deleted_at: t.deletedAt))
         }
         let returned = try await upsertInChunks(rows, to: "transactions", client)
@@ -1522,7 +1546,11 @@ final class SyncEngine: ObservableObject {
     }
 
     private func pushSavingsGoals(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
+        let incompleteGoalIDs = Set(try context.fetch(FetchDescriptor<Wallet>()).compactMap {
+            $0.legacyMigrationCompletedAt == nil ? $0.legacySavingsGoalID : nil
+        })
         let pending = try context.fetch(FetchDescriptor<SavingsGoal>(predicate: #Predicate { $0.needsSync }))
+            .filter { !incompleteGoalIDs.contains($0.id) }
         guard !pending.isEmpty else { return }
         let snapshot = updatedAtSnapshot(pending)
         let rows = pending.map { g in
@@ -1541,6 +1569,94 @@ final class SyncEngine: ObservableObject {
         finishPush(returned, table: "savings_goals", pending: pending, snapshot: snapshot, uid: uid, context: context)
     }
 
+    /// Sends each legacy conversion through one Postgres function call. The
+    /// function upserts wallet + migration rows, nulls legacy links, tombstones
+    /// the goal, and writes the completion marker in one database transaction.
+    private func pushSavingsMigrations(
+        _ context: ModelContext,
+        _ client: SupabaseClient,
+        _ uid: UUID
+    ) async throws {
+        let wallets = try context.fetch(FetchDescriptor<Wallet>()).filter {
+            $0.deletedAt == nil && $0.legacySavingsGoalID != nil && $0.legacyMigrationCompletedAt == nil
+        }
+        guard !wallets.isEmpty else { return }
+        let transactions = try context.fetch(FetchDescriptor<Transaction>())
+        let goals = try context.fetch(FetchDescriptor<SavingsGoal>())
+
+        for wallet in wallets.sorted(by: { $0.id.uuidString < $1.id.uuidString }) {
+            try validateActiveRunIfNeeded()
+            guard let goalID = wallet.legacySavingsGoalID,
+                  let goal = goals.first(where: { $0.id == goalID }),
+                  let deletedAt = goal.deletedAt else { continue }
+
+            let bundle = transactions.filter {
+                SavingsWalletMigrationService.goalID(from: $0.migrationProvenance) == goalID
+            }
+            for transaction in bundle { try WalletLedgerRules.validate(transaction: transaction) }
+
+            let walletRow = SyncWalletRow(
+                id: wallet.id, user_id: uid, name: wallet.name,
+                currency_code: wallet.currencyCode, icon: wallet.icon,
+                color_hex: wallet.colorHex, is_archived: wallet.isArchived,
+                kind: wallet.kind.rawValue, target_amount: wallet.targetAmount,
+                target_date: wallet.targetDate, priority: wallet.priority,
+                has_celebrated: wallet.hasCelebrated,
+                legacy_savings_goal_id: goalID,
+                legacy_migration_completed_at: nil,
+                created_at: wallet.createdAt, updated_at: wallet.updatedAt,
+                deleted_at: wallet.deletedAt
+            )
+            let transactionRows = bundle.map { transaction in
+                SyncTransactionRow(
+                    id: transaction.id, user_id: uid, type: transaction.type.rawValue,
+                    date: transaction.date, note: transaction.note, tags: transaction.tags,
+                    exclude_from_reports: transaction.excludeFromReports,
+                    amount: transaction.amount, currency_code: transaction.currencyCode,
+                    exchange_rate: transaction.exchangeRate, stored_rate: transaction.storedRate,
+                    photo_path: transaction.photoData == nil ? nil : imagePath(uid, "transactions", transaction.id),
+                    category_id: transaction.category?.id, event_id: transaction.event?.id,
+                    source_wallet_id: transaction.sourceWallet?.id,
+                    destination_wallet_id: transaction.destinationWallet?.id,
+                    recurring_rule_id: transaction.recurringRule?.id,
+                    debt_id: transaction.debt?.id, savings_goal_id: nil,
+                    savings_is_withdrawal: false,
+                    migration_provenance: transaction.migrationProvenance,
+                    created_at: transaction.createdAt, updated_at: transaction.updatedAt,
+                    deleted_at: transaction.deletedAt
+                )
+            }
+            let params = SyncSavingsMigrationRPCParams(
+                p_wallet: walletRow,
+                p_transactions: transactionRows,
+                p_goal_id: goalID,
+                p_goal_deleted_at: deletedAt
+            )
+            let response: [SyncSavingsMigrationRPCResult] = try await client
+                .rpc("apply_savings_wallet_migration", params: params)
+                .execute()
+                .value
+            try validateActiveRunIfNeeded()
+            guard let completedAt = response.first?.completed_at else {
+                throw SyncFailure(message: "sync.error.savingsMigrationNoMarker".localized)
+            }
+
+            try withSyncWriteGuard {
+                wallet.legacyMigrationCompletedAt = completedAt
+                wallet.updatedAt = completedAt
+                wallet.syncUserID = uid
+                wallet.needsSync = false
+                goal.syncUserID = uid
+                goal.needsSync = false
+                for transaction in bundle {
+                    transaction.syncUserID = uid
+                    transaction.needsSync = false
+                }
+                try context.save()
+            }
+        }
+    }
+
     private func pushRecurringRules(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let pending = try context.fetch(FetchDescriptor<RecurringRule>(predicate: #Predicate { $0.needsSync }))
         guard !pending.isEmpty else { return }
@@ -1551,6 +1667,7 @@ final class SyncEngine: ObservableObject {
                                  interval: r.interval,
                                  start_date: r.startDate, next_due_date: r.nextDueDate, end_date: r.endDate,
                                  is_active: r.isActive, reminders_enabled: r.remindersEnabled,
+                                 pause_reason: r.pauseReason?.rawValue,
                                  wallet_id: r.wallet?.id, category_id: r.category?.id,
                                  updated_at: r.updatedAt, deleted_at: r.deletedAt)
         }
@@ -2134,6 +2251,20 @@ final class SyncEngine: ObservableObject {
                 if row.deleted_at != nil {
                     if let existing = try fetchByID(Wallet.self, id: row.id, in: context) {
                         if Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }  // newer un-pushed local edit wins over a remote delete
+                        do {
+                            try WalletLedgerRules.validateWalletDeletion(existing)
+                        } catch {
+                            let repair = "sync.integrity.repairSavingsWallet".localized(with: row.id.uuidString)
+                            SyncIntegrityStore.record(
+                                ownerID: row.user_id,
+                                table: "wallets",
+                                rowID: row.id,
+                                message: error.localizedDescription,
+                                repairAction: repair
+                            )
+                            lastError = "\(error.localizedDescription) \(repair)"
+                            return .none
+                        }
                         let visibleChanged = existing.deletedAt != row.deleted_at
                         let persist = visibleChanged || Self.metadataNeedsApply(existing, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                         guard persist else { return .none }
@@ -2144,6 +2275,34 @@ final class SyncEngine: ObservableObject {
                     return .none
                 }
                 let existing = try fetchByID(Wallet.self, id: row.id, in: context)
+                let proposedKind = WalletKind(rawValue: row.kind) ?? .normal
+                do {
+                    if let existing {
+                        try WalletLedgerRules.validateWalletUpdate(
+                            wallet: existing,
+                            proposedKind: proposedKind,
+                            proposedCurrencyCode: row.currency_code,
+                            proposedTargetAmount: row.target_amount,
+                            proposedArchived: row.is_archived
+                        )
+                    } else {
+                        try WalletLedgerRules.validateSavingsConfiguration(
+                            kind: proposedKind,
+                            targetAmount: row.target_amount
+                        )
+                    }
+                } catch {
+                    let repair = "sync.integrity.repairSavingsWallet".localized(with: row.id.uuidString)
+                    SyncIntegrityStore.record(
+                        ownerID: row.user_id,
+                        table: "wallets",
+                        rowID: row.id,
+                        message: error.localizedDescription,
+                        repairAction: repair
+                    )
+                    lastError = "\(error.localizedDescription) \(repair)"
+                    return .none
+                }
                 let w = existing ?? {
                     let new = Wallet(name: row.name, currencyCode: row.currency_code, icon: row.icon, colorHex: row.color_hex)
                     new.id = row.id
@@ -2156,12 +2315,22 @@ final class SyncEngine: ObservableObject {
                 let visibleChanged = existing == nil || !Self.fieldsMatch([
                     (w.name, row.name), (w.currencyCode, row.currency_code),
                     (w.icon, row.icon), (w.colorHex, row.color_hex),
-                    (w.isArchived, row.is_archived), (w.createdAt, row.created_at)
+                    (w.isArchived, row.is_archived), (w.kind.rawValue, row.kind),
+                    (w.targetAmount, row.target_amount), (w.targetDate, row.target_date),
+                    (w.priority, row.priority), (w.hasCelebrated, row.has_celebrated),
+                    (w.legacySavingsGoalID, row.legacy_savings_goal_id),
+                    (w.legacyMigrationCompletedAt, row.legacy_migration_completed_at),
+                    (w.createdAt, row.created_at)
                 ])
                 let persist = visibleChanged || Self.metadataNeedsApply(w, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
                 guard persist else { return .none }
                 w.name = row.name; w.currencyCode = row.currency_code; w.icon = row.icon
                 w.colorHex = row.color_hex; w.isArchived = row.is_archived
+                w.kind = proposedKind
+                w.targetAmount = row.target_amount; w.targetDate = row.target_date
+                w.priority = row.priority; w.hasCelebrated = row.has_celebrated
+                w.legacySavingsGoalID = row.legacy_savings_goal_id
+                w.legacyMigrationCompletedAt = row.legacy_migration_completed_at
                 w.createdAt = row.created_at; w.updatedAt = row.updated_at
                 w.deletedAt = row.deleted_at; w.syncUserID = row.user_id; w.needsSync = false
                 return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
@@ -2218,7 +2387,22 @@ final class SyncEngine: ObservableObject {
 
     private func pullTransactions(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
         let rows: [SyncTransactionRow] = try await fetchChanged("transactions", client, uid)
-        guard !rows.isEmpty else { return }
+        let pendingPhotoDownloads = try applyTransactionRows(rows, context: context, ownerID: uid)
+        // Download receipt images for rows that have a path but no local data.
+        for (id, path) in pendingPhotoDownloads {
+            guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
+            try await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
+        }
+        if !pendingPhotoDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
+    }
+
+    @discardableResult
+    func applyTransactionRows(
+        _ rows: [SyncTransactionRow],
+        context: ModelContext,
+        ownerID: UUID
+    ) throws -> [(UUID, String)] {
+        guard !rows.isEmpty else { return [] }
         var pendingPhotoDownloads: [(UUID, String)] = []
         try withSyncWriteGuard {
             try applyLocal(table: "transactions", rows: rows, context: context, rowDate: \.updated_at, rowID: \.id) { row in
@@ -2228,8 +2412,34 @@ final class SyncEngine: ObservableObject {
                         ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at
                     )
                 }
-                if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
                 let existing = try fetchByID(Transaction.self, id: row.id, in: context)
+                if let existing,
+                   Self.localChangeWins(localNeedsSync: existing.needsSync, localUpdatedAt: existing.updatedAt, remoteUpdatedAt: row.updated_at) {
+                    return .none
+                }
+                let category = try resolveRef(Category.self, id: row.category_id, current: existing?.category, in: context)
+                let sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: existing?.sourceWallet, in: context)
+                let destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: existing?.destinationWallet, in: context)
+                do {
+                    try WalletLedgerRules.validate(
+                        type: TransactionType(rawValue: row.type) ?? .expense,
+                        amount: row.amount,
+                        sourceWallet: sourceWallet,
+                        destinationWallet: destinationWallet
+                    )
+                } catch {
+                    let repair = "sync.integrity.repairSavingsTransaction".localized(with: row.id.uuidString)
+                    SyncIntegrityStore.record(
+                        ownerID: ownerID,
+                        table: "transactions",
+                        rowID: row.id,
+                        message: error.localizedDescription,
+                        repairAction: repair
+                    )
+                    lastError = "\(error.localizedDescription) \(repair)"
+                    return .none
+                }
+                if let path = row.photo_path { pendingPhotoDownloads.append((row.id, path)) }
                 let t = existing ?? {
                     let new = Transaction(amount: row.amount, currencyCode: row.currency_code,
                                           date: row.date, type: TransactionType(rawValue: row.type) ?? .expense,
@@ -2239,10 +2449,6 @@ final class SyncEngine: ObservableObject {
                     context.insert(new)
                     return new
                 }()
-                if Self.localChangeWins(localNeedsSync: t.needsSync, localUpdatedAt: t.updatedAt, remoteUpdatedAt: row.updated_at) { return .none }
-                let category = try resolveRef(Category.self, id: row.category_id, current: t.category, in: context)
-                let sourceWallet = try resolveRef(Wallet.self, id: row.source_wallet_id, current: t.sourceWallet, in: context)
-                let destinationWallet = try resolveRef(Wallet.self, id: row.destination_wallet_id, current: t.destinationWallet, in: context)
                 let event = try resolveRef(Event.self, id: row.event_id, current: t.event, in: context)
                 let recurringRule = try resolveRef(RecurringRule.self, id: row.recurring_rule_id, current: t.recurringRule, in: context)
                 let debt = try resolveRef(Debt.self, id: row.debt_id, current: t.debt, in: context)
@@ -2256,6 +2462,7 @@ final class SyncEngine: ObservableObject {
                     (t.destinationWallet?.id, destinationWallet?.id), (t.event?.id, event?.id),
                     (t.recurringRule?.id, recurringRule?.id), (t.debt?.id, debt?.id),
                     (t.savingsGoal?.id, savingsGoal?.id), (t.savingsIsWithdrawal, row.savings_is_withdrawal),
+                    (t.migrationProvenance, row.migration_provenance),
                     (t.createdAt, row.created_at)
                 ])
                 let persist = visibleChanged || Self.metadataNeedsApply(t, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
@@ -2268,17 +2475,13 @@ final class SyncEngine: ObservableObject {
                 t.category = category; t.sourceWallet = sourceWallet; t.destinationWallet = destinationWallet
                 t.event = event; t.recurringRule = recurringRule; t.debt = debt; t.savingsGoal = savingsGoal
                 t.savingsIsWithdrawal = row.savings_is_withdrawal
+                t.migrationProvenance = row.migration_provenance
                 t.createdAt = row.created_at; t.updatedAt = row.updated_at
                 t.deletedAt = row.deleted_at; t.syncUserID = row.user_id; t.needsSync = false
                 return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
         }
-        // Download receipt images for rows that have a path but no local data.
-        for (id, path) in pendingPhotoDownloads {
-            guard let t = try fetchByID(Transaction.self, id: id, in: context), t.photoData == nil else { continue }
-            try await downloadAndStoreImage(path, kind: .transactionPhoto, id: id, client, context)
-        }
-        if !pendingPhotoDownloads.isEmpty { try withSyncWriteGuard { try context.save() } }
+        return pendingPhotoDownloads
     }
 
     private func pullEvents(_ context: ModelContext, _ client: SupabaseClient, _ uid: UUID) async throws {
@@ -2446,6 +2649,7 @@ final class SyncEngine: ObservableObject {
                     (r.interval, row.interval), (r.startDate, row.start_date),
                     (r.nextDueDate, row.next_due_date), (r.endDate, row.end_date),
                     (r.isActive, row.is_active), (r.remindersEnabled, row.reminders_enabled),
+                    (r.pauseReason?.rawValue, row.pause_reason),
                     (r.wallet?.id, wallet?.id), (r.category?.id, category?.id)
                 ])
                 let persist = visibleChanged || Self.metadataNeedsApply(r, ownerID: row.user_id, updatedAt: row.updated_at, deletedAt: row.deleted_at)
@@ -2456,9 +2660,16 @@ final class SyncEngine: ObservableObject {
                 r.interval = row.interval
                 r.startDate = row.start_date; r.nextDueDate = row.next_due_date; r.endDate = row.end_date
                 r.isActive = row.is_active; r.remindersEnabled = row.reminders_enabled
+                r.pauseReason = row.pause_reason.flatMap(RecurringRulePauseReason.init(rawValue:))
                 r.wallet = wallet; r.category = category
+                let mustPauseForSavings = wallet?.isSavings == true
+                if mustPauseForSavings {
+                    r.isActive = false
+                    r.pauseReason = .invalidSavingsWallet
+                }
                 r.updatedAt = row.updated_at; r.deletedAt = row.deleted_at
-                r.syncUserID = row.user_id; r.needsSync = false
+                r.syncUserID = row.user_id; r.needsSync = mustPauseForSavings
+                if mustPauseForSavings { r.updatedAt = Date() }
                 return ApplyOutcome(didPersistLocalState: true, didChangeVisibleData: visibleChanged)
             }
         }

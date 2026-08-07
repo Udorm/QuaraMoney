@@ -6,11 +6,12 @@ private enum WalletQuickAction: Identifiable {
     case addExpense(Wallet)
     case addIncome(Wallet)
     case transfer(Wallet)
+    case contribute(Wallet)
     case adjustBalance(Wallet)
 
     var wallet: Wallet {
         switch self {
-        case .addExpense(let w), .addIncome(let w), .transfer(let w), .adjustBalance(let w):
+        case .addExpense(let w), .addIncome(let w), .transfer(let w), .contribute(let w), .adjustBalance(let w):
             return w
         }
     }
@@ -20,6 +21,7 @@ private enum WalletQuickAction: Identifiable {
         case .addExpense(let w): return "expense-\(w.id)"
         case .addIncome(let w): return "income-\(w.id)"
         case .transfer(let w): return "transfer-\(w.id)"
+        case .contribute(let w): return "contribute-\(w.id)"
         case .adjustBalance(let w): return "adjust-\(w.id)"
         }
     }
@@ -72,6 +74,7 @@ private struct WalletListContent: View {
     @State private var walletToDelete: Wallet?
     @State private var showingDeleteAlert = false
     @State private var walletToReassign: Wallet?
+    @State private var errorMessage: String?
     /// Balances + sparkline series computed off-main; rows read it as plain data.
     @State private var balanceStore = WalletBalanceStore()
 
@@ -87,6 +90,8 @@ private struct WalletListContent: View {
     }
 
     private var activeWallets: [Wallet] { wallets.filter { !$0.isArchived } }
+    private var spendableWallets: [Wallet] { activeWallets.filter { !$0.isSavings } }
+    private var savingsWallets: [Wallet] { activeWallets.filter(\.isSavings) }
     private var archivedWallets: [Wallet] { wallets.filter { $0.isArchived } }
 
     var body: some View {
@@ -95,6 +100,8 @@ private struct WalletListContent: View {
                 Section {
                     NetWorthCard(
                         total: balanceStore.netWorthTotal,
+                        spendable: balanceStore.spendableTotal,
+                        savings: balanceStore.savingsTotal,
                         series: balanceStore.netWorthSeries,
                         currencyCode: CurrencyManager.shared.preferredCurrencyCode,
                         hasLoaded: balanceStore.hasLoaded
@@ -102,11 +109,23 @@ private struct WalletListContent: View {
                 }
             }
 
-            if !activeWallets.isEmpty {
-                Section(header: Text(L10n.Wallet.Status.activeWallets)) {
-                    ForEach(activeWallets) { wallet in
+            if !spendableWallets.isEmpty {
+                Section {
+                    ForEach(spendableWallets) { wallet in
                         walletRow(wallet, isArchived: false)
                     }
+                } header: {
+                    sectionHeader("wallet.spendable".localized, subtotal: subtotal(for: spendableWallets))
+                }
+            }
+
+            if !savingsWallets.isEmpty {
+                Section {
+                    ForEach(savingsWallets) { wallet in
+                        walletRow(wallet, isArchived: false)
+                    }
+                } header: {
+                    sectionHeader("wallet.savings".localized, subtotal: subtotal(for: savingsWallets))
                 }
             }
 
@@ -137,33 +156,53 @@ private struct WalletListContent: View {
         }
         .alert(L10n.Common.delete, isPresented: $showingDeleteAlert, presenting: walletToDelete) { wallet in
             Button(L10n.Common.cancel, role: .cancel) {}
-            if !wallet.isArchived {
+            if wallet.isSavings, wallet.balance > 0 {
+                Button("plan.withdraw".localized) { quickAction = .transfer(wallet) }
+            } else if wallet.isSavings, wallet.balance < 0 {
+                Button("savings.topUp".localized) { quickAction = .contribute(wallet) }
+            } else if !wallet.isArchived {
                 Button(L10n.Wallet.archiveInstead) {
                     archiveWallet(wallet)
                 }
             }
             // Offer to move transactions when the wallet has any and another
             // active wallet exists to receive them.
-            if (wallet.outgoingTransactions?.contains(where: { $0.deletedAt == nil }) ?? false),
+            if !wallet.isSavings,
+               (wallet.outgoingTransactions?.contains(where: { $0.deletedAt == nil }) ?? false),
                activeWallets.contains(where: { $0.id != wallet.id }) {
                 Button("wallet.moveTransactions".localized) {
                     walletToReassign = wallet
                 }
             }
-            Button(L10n.Wallet.deleteAnyway, role: .destructive) {
-                deleteWallet(wallet, strategy: .deleteTransactions)
+            if !wallet.isSavings || wallet.balance == 0 {
+                Button(L10n.Wallet.deleteAnyway, role: .destructive) {
+                    deleteWallet(wallet, strategy: .deleteTransactions)
+                }
             }
         } message: { wallet in
-            Text(L10n.Wallet.deleteRelatedTransactionsWarning((wallet.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
+            Text(wallet.isSavings && wallet.balance != 0
+                 ? "savings.deleteBalanceFirst".localized
+                 : L10n.Wallet.deleteRelatedTransactionsWarning((wallet.outgoingTransactions ?? []).filter { $0.deletedAt == nil }.count))
         }
         .sheet(item: $walletToReassign) { wallet in
             MoveTransactionsSheet(
                 sourceWallet: wallet,
-                candidates: activeWallets.filter { $0.id != wallet.id }
+                candidates: activeWallets.filter { $0.id != wallet.id && !$0.isSavings }
             ) { target in
                 deleteWallet(wallet, strategy: .move(to: target))
                 walletToReassign = nil
             }
+        }
+        .alert(
+            "common.error".localized,
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("common.ok".localized) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
 
@@ -198,6 +237,27 @@ private struct WalletListContent: View {
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.Wallet.Status.archivedWallets)
             .accessibilityValue(isArchivedExpanded ? "common.expanded".localized : "common.collapsed".localized)
+        }
+    }
+
+    private func subtotal(for wallets: [Wallet]) -> Decimal {
+        wallets.reduce(Decimal.zero) { total, wallet in
+            let balance = balanceStore.figures[wallet.id]?.balance ?? 0
+            return total + CurrencyManager.shared.convert(
+                amount: balance,
+                from: wallet.currencyCode,
+                to: CurrencyManager.shared.preferredCurrencyCode
+            )
+        }
+    }
+
+    private func sectionHeader(_ title: String, subtotal: Decimal) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(subtotal.formattedAmount(for: CurrencyManager.shared.preferredCurrencyCode))
+                .appFont(.caption, weight: .semibold)
+                .monospacedDigit()
         }
     }
 
@@ -245,9 +305,12 @@ private struct WalletListContent: View {
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             if !isArchived {
                 Button {
-                    quickAction = .addExpense(wallet)
+                    quickAction = wallet.isSavings ? .transfer(wallet) : .addExpense(wallet)
                 } label: {
-                    Label(L10n.Transaction.add, systemImage: "plus")
+                    Label(
+                        wallet.isSavings ? "plan.withdraw".localized : L10n.Transaction.add,
+                        systemImage: wallet.isSavings ? "arrow.up.right" : "plus"
+                    )
                 }
                 .tint(Color(hex: wallet.colorHex) ?? .blue)
             }
@@ -255,15 +318,28 @@ private struct WalletListContent: View {
         .contextMenu {
             if !isArchived {
                 Section {
-                    Button {
-                        quickAction = .addExpense(wallet)
-                    } label: {
-                        Label("wallet.action.addExpense".localized, systemImage: "minus.circle")
-                    }
-                    Button {
-                        quickAction = .addIncome(wallet)
-                    } label: {
-                        Label("wallet.action.addIncome".localized, systemImage: "plus.circle")
+                    if wallet.isSavings {
+                        Button {
+                            quickAction = .contribute(wallet)
+                        } label: {
+                            Label("plan.add_money".localized, systemImage: "plus.circle")
+                        }
+                        Button {
+                            quickAction = .transfer(wallet)
+                        } label: {
+                            Label("plan.withdraw".localized, systemImage: "arrow.up.right.circle")
+                        }
+                    } else {
+                        Button {
+                            quickAction = .addExpense(wallet)
+                        } label: {
+                            Label("wallet.action.addExpense".localized, systemImage: "minus.circle")
+                        }
+                        Button {
+                            quickAction = .addIncome(wallet)
+                        } label: {
+                            Label("wallet.action.addIncome".localized, systemImage: "plus.circle")
+                        }
                     }
                     Button {
                         quickAction = .transfer(wallet)
@@ -320,6 +396,8 @@ private struct WalletListContent: View {
             AddTransactionContainer(initialWallet: wallet, initialType: .income)
         case .transfer(let wallet):
             AddTransactionContainer(initialWallet: wallet, initialType: .transfer)
+        case .contribute(let wallet):
+            SavingsContributionSheet(wallet: wallet, isWithdrawal: false)
         case .adjustBalance(let wallet):
             AdjustBalanceView(
                 wallet: wallet,
@@ -331,11 +409,20 @@ private struct WalletListContent: View {
     // MARK: - Mutations
 
     private func archiveWallet(_ wallet: Wallet) {
-        wallet.isArchived = true
         do {
+            try WalletLedgerRules.validateWalletUpdate(
+                wallet: wallet,
+                proposedKind: wallet.kind,
+                proposedCurrencyCode: wallet.currencyCode,
+                proposedTargetAmount: wallet.targetAmount,
+                proposedArchived: true
+            )
+            wallet.isArchived = true
+            wallet.updatedAt = Date(); wallet.needsSync = true
             try modelContext.save()
         } catch {
-            ErrorService.shared.handlePersistenceError(error, context: "WalletListView.archiveWallet")
+            modelContext.rollback()
+            errorMessage = error.localizedDescription
         }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }
@@ -352,11 +439,12 @@ private struct WalletListContent: View {
 
     private func deleteWallet(_ wallet: Wallet, strategy: SoftDeleteService.WalletDeletionStrategy) {
         // Soft-delete (tombstone) so the deletion replicates to other devices.
-        SoftDeleteService.deleteWallet(wallet, strategy: strategy)
         do {
+            try SoftDeleteService.deleteWallet(wallet, strategy: strategy)
             try modelContext.save()
         } catch {
-            ErrorService.shared.handlePersistenceError(error, context: "WalletListView.deleteWallet")
+            modelContext.rollback()
+            errorMessage = error.localizedDescription
         }
         NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
     }

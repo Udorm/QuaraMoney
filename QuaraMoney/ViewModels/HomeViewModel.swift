@@ -292,12 +292,13 @@ class HomeViewModel {
 
     /// Undoes a just-performed swipe-delete by clearing the soft-delete tombstone.
     func undoDelete(_ token: DeletedTransactionToken) {
-        SoftDeleteService.restoreTransaction(token.transaction)
         do {
+            try SoftDeleteService.restoreTransaction(token.transaction)
             try modelContext.save()
             HapticManager.shared.selection()
             NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
         } catch {
+            modelContext.rollback()
             #if DEBUG
             print("Error restoring transaction: \(error)")
             #endif

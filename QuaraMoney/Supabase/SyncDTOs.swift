@@ -19,6 +19,13 @@ nonisolated struct SyncWalletRow: Codable, Sendable {
     var icon: String
     var color_hex: String
     var is_archived: Bool
+    var kind: String = WalletKind.normal.rawValue
+    @NullEncodable var target_amount: Decimal? = nil
+    @NullEncodable var target_date: Date? = nil
+    var priority: Int = 0
+    var has_celebrated: Bool = false
+    @NullEncodable var legacy_savings_goal_id: UUID? = nil
+    @NullEncodable var legacy_migration_completed_at: Date? = nil
     var created_at: Date
     var updated_at: Date
     @NullEncodable var deleted_at: Date?
@@ -70,6 +77,7 @@ nonisolated struct SyncTransactionRow: Codable, Sendable {
     @NullEncodable var debt_id: UUID?
     @NullEncodable var savings_goal_id: UUID?
     var savings_is_withdrawal: Bool
+    @NullEncodable var migration_provenance: String? = nil
     var created_at: Date
     var updated_at: Date
     @NullEncodable var deleted_at: Date?
@@ -152,6 +160,7 @@ nonisolated struct SyncRecurringRuleRow: Codable, Sendable {
     @NullEncodable var end_date: Date?
     var is_active: Bool
     var reminders_enabled: Bool
+    @NullEncodable var pause_reason: String? = nil
     @NullEncodable var wallet_id: UUID?
     @NullEncodable var category_id: UUID?
     var updated_at: Date
@@ -328,6 +337,17 @@ extension SyncEventRow: SyncServerRow {}
 extension SyncDebtRow: SyncServerRow {}
 extension SyncSavingsGoalRow: SyncServerRow {}
 extension SyncRecurringRuleRow: SyncServerRow {}
+
+nonisolated struct SyncSavingsMigrationRPCParams: Encodable, Sendable {
+    let p_wallet: SyncWalletRow
+    let p_transactions: [SyncTransactionRow]
+    let p_goal_id: UUID
+    let p_goal_deleted_at: Date
+}
+
+nonisolated struct SyncSavingsMigrationRPCResult: Decodable, Sendable {
+    let completed_at: Date
+}
 extension SyncEventMemberRow: SyncServerRow {}
 extension SyncEventLedgerTransactionRow: SyncServerRow {}
 extension SyncEventLedgerParticipantRow: SyncServerRow {}

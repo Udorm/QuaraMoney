@@ -1248,16 +1248,23 @@ private struct CompactAmountCard: View {
 
     /// Blinking insertion point, matching the system text caret. Capsule-capped
     /// and tinted to the transaction type; held solid under Reduce Motion.
+    ///
+    /// The blink is bound to this view with `.animation(_:value:)` rather than
+    /// started with `withAnimation` inside `onAppear`. `withAnimation` installs
+    /// its animation on the whole update transaction, so every *other* change
+    /// still settling in that same pass inherits it — and this one repeats
+    /// forever. Opening the sheet on an existing transaction settles the form's
+    /// scroll offset in exactly that pass, which is why the whole sheet then
+    /// drifted up and down without end.
     private var caret: some View {
         Capsule()
             .fill(typeTint)
             .frame(width: 2.5, height: 36)
             .opacity(caretDimmed ? 0 : 1)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.5).repeatForever(), value: caretDimmed)
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.5).repeatForever()) {
-                    caretDimmed = true
-                }
+                caretDimmed = true
             }
             .onDisappear { caretDimmed = false }
     }

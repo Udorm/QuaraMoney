@@ -109,14 +109,18 @@ struct CalculatorKeyboardView: View {
     /// in the function row and the bottom-right key becomes a prominent Save
     /// key (the keypad never dismisses, so save lives in the thumb zone).
     let onSave: (() -> Void)?
-    let isSaveDisabled: Bool
+    /// Deferred rather than a plain `Bool` so the validity read happens inside
+    /// `SaveKey`'s body instead of the caller's. Callers derive it from the
+    /// amount, so evaluating it up here made every keystroke rebuild all twenty
+    /// keys; now it only rebuilds the one key that can actually change.
+    let isSaveDisabled: () -> Bool
 
     init(
         expression: Binding<String>,
         evaluatedAmount: Binding<Decimal>,
         onDismiss: (() -> Void)? = nil,
         onSave: (() -> Void)? = nil,
-        isSaveDisabled: Bool = false
+        isSaveDisabled: @autoclosure @escaping () -> Bool = false
     ) {
         self._expression = expression
         self._evaluatedAmount = evaluatedAmount
@@ -179,20 +183,7 @@ struct CalculatorKeyboardView: View {
                 CalcButton(text: "0", color: CalcColors.numberButton) { handleNumber("0") }
                 CalcButton(text: ".", color: CalcColors.numberButton) { handleDecimal() }
                 if let onSave {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        onSave()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .appFont(.headline, weight: .semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.accentColor)
-                    .foregroundColor(.white)
-                    .disabled(isSaveDisabled)
-                    .accessibilityLabel("common.save".localized)
+                    SaveKey(isDisabled: isSaveDisabled, action: onSave)
                 } else {
                     CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
                 }
@@ -224,13 +215,13 @@ struct CalculatorKeyboardView: View {
     }
     
     private func handleNumber(_ num: String) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticManager.shared.impact(style: .light)
         expression += num
         updateEvaluation()
     }
     
     private func handleOperator(_ op: String) {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticManager.shared.impact(style: .light)
         if expression.isEmpty {
             if op == "-" { 
                 expression = "-" 
@@ -247,7 +238,7 @@ struct CalculatorKeyboardView: View {
     }
     
     private func handleDecimal() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticManager.shared.impact(style: .light)
         if expression.isEmpty {
             expression = "0."
             updateEvaluation()
@@ -268,13 +259,13 @@ struct CalculatorKeyboardView: View {
     }
     
     private func handleClear() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact(style: .medium)
         expression = ""
         evaluatedAmount = 0
     }
     
     private func handleBackspace() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        HapticManager.shared.impact(style: .light)
         if !expression.isEmpty {
             expression.removeLast()
             updateEvaluation()
@@ -282,7 +273,7 @@ struct CalculatorKeyboardView: View {
     }
     
     private func handleEquals() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact(style: .medium)
         if let result = ExpressionEvaluator.evaluate(expression) {
             evaluatedAmount = abs(result)
             expression = formatResult(abs(result))
@@ -290,7 +281,7 @@ struct CalculatorKeyboardView: View {
     }
     
     private func finalizeAndDismiss() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        HapticManager.shared.impact(style: .medium)
         if let result = ExpressionEvaluator.evaluate(expression) {
             evaluatedAmount = abs(result)
             expression = formatResult(abs(result))
@@ -305,6 +296,34 @@ struct CalculatorKeyboardView: View {
         } else {
             return String(format: "%.2f", doubleValue)
         }
+    }
+}
+
+// MARK: - Save Key (isolated validity reader)
+
+/// The prominent save key in persistent mode. Its own `View` purely so the
+/// `isDisabled` read — which depends on the amount the keypad is editing —
+/// lands here rather than in `CalculatorKeyboardView.body`, leaving the other
+/// nineteen keys untouched by a keystroke.
+private struct SaveKey: View {
+    let isDisabled: () -> Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            HapticManager.shared.impact(style: .medium)
+            action()
+        } label: {
+            Image(systemName: "checkmark")
+                .appFont(.headline, weight: .semibold)
+                .frame(maxWidth: .infinity)
+                .frame(height: 34)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.accentColor)
+        .foregroundColor(.white)
+        .disabled(isDisabled())
+        .accessibilityLabel("common.save".localized)
     }
 }
 

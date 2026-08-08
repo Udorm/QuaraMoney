@@ -26,8 +26,6 @@ struct CompactAddTransactionView: View {
     @State private var showScanner = false
     @State private var showLocationPicker = false
     @State private var isFetchingCurrentLocation = false
-    @State private var relativeDayOffset: Int = 0
-    private let referenceDate = Calendar.current.startOfDay(for: Date())
     // Inline creation of a first wallet/category when the user has none.
     @State private var showAddWallet = false
     @State private var showAddCategory = false
@@ -140,6 +138,16 @@ struct CompactAddTransactionView: View {
 
         suggestionTask?.cancel()
         suggestionTask = Task {
+            // Coalesce the burst. `onAppear` seeds a wallet and a category and
+            // then asks for a recompute, and each of those writes trips its own
+            // `onChange` — three requests for one screen, each a full-history
+            // scan. Sleeping first means the earlier ones are cancelled before
+            // they start any work, so only the last survives. The delay is
+            // invisible: the form is already usable on its provisional picks,
+            // and this only upgrades them.
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+
             let snapshot = await TransactionSuggestionEngine.computeSuggestions(
                 container: container,
                 type: type,
@@ -384,6 +392,10 @@ struct CompactAddTransactionView: View {
                 AddCategoryView(initialType: viewModel.type)
             }
             .onAppear {
+                // The keypad is always up on this screen, so a run of taps is
+                // imminent; warm the Taptic Engine rather than let the first
+                // digit pay for spinning it up.
+                HapticManager.shared.prepareForRapidInput()
                 // Provisional preselection (name order) so the form is instantly
                 // savable; upgraded to the ranked top picks when the background
                 // suggestion compute lands (see applySuggestions).
@@ -400,7 +412,6 @@ struct CompactAddTransactionView: View {
                     }
                 }
                 recomputeSuggestions()
-                relativeDayOffset = daysBetween(referenceDate, viewModel.date)
             }
             .onChange(of: viewModel.type) { _, _ in
                 if isNewTransaction {
@@ -421,24 +432,6 @@ struct CompactAddTransactionView: View {
             .onChange(of: viewModel.selectedCurrencyCode) { _, _ in
                 if viewModel.type != .transfer {
                     viewModel.updateTransactionCurrencyExchangeRate()
-                }
-            }
-            .onChange(of: relativeDayOffset) { _, newOffset in
-                if let newDate = Calendar.current.date(byAdding: .day, value: newOffset, to: referenceDate) {
-                    let calendar = Calendar.current
-                    let timeComponents = calendar.dateComponents([.hour, .minute, .second], from: viewModel.date)
-                    if let combinedDate = calendar.date(bySettingHour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0, second: timeComponents.second ?? 0, of: newDate) {
-                        if calendar.startOfDay(for: viewModel.date) != calendar.startOfDay(for: combinedDate) {
-                            viewModel.date = combinedDate
-                            HapticManager.shared.selection()
-                        }
-                    }
-                }
-            }
-            .onChange(of: viewModel.date) { _, newDate in
-                let offset = daysBetween(referenceDate, newDate)
-                if relativeDayOffset != offset {
-                    relativeDayOffset = offset
                 }
             }
             .onChange(of: noteFieldFocused) { _, focused in
@@ -813,129 +806,12 @@ struct CompactAddTransactionView: View {
         .matchedGeometryEffect(id: morphID, in: detailMorph)
     }
 
-    private func daysBetween(_ start: Date, _ end: Date) -> Int {
-        let calendar = Calendar.current
-        let startOfStart = calendar.startOfDay(for: start)
-        let startOfEnd = calendar.startOfDay(for: end)
-        let components = calendar.dateComponents([.day], from: startOfStart, to: startOfEnd)
-        return components.day ?? 0
-    }
-
-    /// Kept deliberately short: this label shares its line with the time and,
-    /// while no note or place is set, two buttons as well. Yesterday→tomorrow
-    /// stay words (they cover most entries and read fastest), and the year is
-    /// dropped inside the current year — it's the longest component of the
-    /// string and it's redundant for the dates people actually log.
-    private func dateLabel(forOffset offset: Int) -> String {
-        guard let targetDate = Calendar.current.date(byAdding: .day, value: offset, to: referenceDate) else { return "" }
-        let locale = LanguageManager.shared.selectedLanguage.locale
-
-        if (-1...1).contains(offset) {
-            return AppDateFormatterCache.formatter(
-                dateStyle: .medium,
-                timeStyle: .none,
-                doesRelativeDateFormatting: true,
-                locale: locale
-            ).string(from: targetDate)
-        }
-
-        let calendar = Calendar.current
-        let isCurrentYear = calendar.component(.year, from: targetDate)
-            == calendar.component(.year, from: referenceDate)
-        return AppDateFormatterCache.formatter(
-            dateTemplate: isCurrentYear ? "MMMd" : "MMMdyyyy",
-            locale: locale
-        ).string(from: targetDate)
-    }
-
-    private func adjustDate(by days: Int) {
-        let newOffset = relativeDayOffset + days
-        if (-365...365).contains(newOffset) {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                relativeDayOffset = newOffset
-            }
-        }
-    }
-
     private var dateChip: some View {
-        HStack(spacing: 0) {
-            Button {
-                adjustDate(by: -1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .appFont(.footnote, weight: .bold)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 8)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.plain)
-            
-            // No leading glyph: date and time are the only always-populated
-            // fields here, so their values identify them on sight. The icons
-            // were costing this row ~18pt each that the date label needs.
-            Group {
-                // Fills the column rather than being measured to its content:
-                // the date owns the slack on this line, which is what keeps a
-                // Khmer date (or a scaled-up Latin one) off the ellipsis.
-                TabView(selection: $relativeDayOffset) {
-                    ForEach(-365...365, id: \.self) { offset in
-                        Text(dateLabel(forOffset: offset))
-                            .appFont(.subheadline, weight: .medium)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .tag(offset)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(maxWidth: .infinity)
-                .frame(height: 24)
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 4)
-            .contentShape(Rectangle())
-            .overlay {
-                // Invisible native control: piggybacks on the system's own
-                // compact-DatePicker popup (fast, correctly anchored, never
-                // clipped) while the visible pill above stays fully custom.
-                DatePicker(
-                    "transaction.date".localized,
-                    selection: $viewModel.date,
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.compact)
-                .labelsHidden()
-                // A compact DatePicker draws its own filled background, and now
-                // that the control fills its column that fill spreads across the
-                // whole chip — the old 2% opacity was only inconspicuous while
-                // the pill hugged its label. `colorMultiply(.clear)` erases it
-                // at render time; `.opacity(0)` would instead take the backing
-                // UIKit control's alpha to zero, which stops it receiving taps.
-                .colorMultiply(.clear)
-                .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
-            }
-
-            Button {
-                adjustDate(by: 1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .appFont(.footnote, weight: .bold)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 12)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(minHeight: detailControlHeight)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        CompactDateChip(
+            date: $viewModel.date,
+            controlHeight: detailControlHeight,
+            onInteract: endNoteEditing
         )
-        .accessibilityLabel("transaction.date".localized)
     }
 
     /// Hugs its content on the lead line — a wall-clock time is a bounded,
@@ -1063,7 +939,7 @@ struct CompactAddTransactionView: View {
         } ?? "transaction.location".localized)
     }
 
-    private var calculatorSuggestionBar: some View {
+    private func calculatorSuggestionBar(tags: [ScoredTag]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 // Location suggestion chip (if location is not set)
@@ -1093,7 +969,7 @@ struct CompactAddTransactionView: View {
                 }
 
                 // Tag suggestion chips
-                ForEach(suggestedTagChips) { scored in
+                ForEach(tags) { scored in
                     TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
                 }
             }
@@ -1108,19 +984,24 @@ struct CompactAddTransactionView: View {
 
     @ViewBuilder
     private var bottomBar: some View {
+        // Ranked once per pass and handed down: computing it re-parses the note
+        // for an in-progress `#tag`, and it was previously evaluated twice on
+        // the keypad branch alone.
+        let tagChips = suggestedTagChips
+
         if isNoteBarVisible {
             // Blooms open from its top edge — the edge nearest the chip that
             // spawned it — while the keyboard supplies the upward motion. A
             // `.move(edge: .bottom)` here would double that rise and overshoot.
-            noteBar
+            noteBar(tags: tagChips)
                 .transition(.scale(scale: 0.94, anchor: .top).combined(with: .opacity))
         } else if rateFieldFocused {
             // The system decimal pad owns the bottom while the rate is edited.
             EmptyView()
         } else {
             VStack(spacing: 0) {
-                if viewModel.selectedLocation == nil || !suggestedTagChips.isEmpty {
-                    calculatorSuggestionBar
+                if viewModel.selectedLocation == nil || !tagChips.isEmpty {
+                    calculatorSuggestionBar(tags: tagChips)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 // Reads `isValid` (amount-dependent) inside its own body so a
@@ -1137,12 +1018,12 @@ struct CompactAddTransactionView: View {
 
     /// Floating editor panel: an elevated card so the field reads as the focused
     /// surface rather than another row blended into the form background.
-    private var noteBar: some View {
+    private func noteBar(tags: [ScoredTag]) -> some View {
         VStack(spacing: 10) {
-            if !suggestedTagChips.isEmpty {
+            if !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(suggestedTagChips) { scored in
+                        ForEach(tags) { scored in
                             TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
                         }
                     }
@@ -1201,6 +1082,218 @@ struct CompactAddTransactionView: View {
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
         .onAppear { noteFieldFocused = true }
+    }
+}
+
+// MARK: - Date chip
+
+/// The date pill: a swipeable day pager flanked by ±1-day chevrons, with the
+/// system's compact `DatePicker` layered on invisibly for the calendar popup.
+///
+/// Two things here are load-bearing for how responsive this screen feels.
+///
+/// **The pager is lazy.** It used to be a `TabView(.page)`, which is not a lazy
+/// container — `.tag()` alone forces the whole view list to resolve. Measured,
+/// that built every page in the range (each running a `DateFormatter` pass)
+/// *twice* on appear, and again on every rebuild. A paging `ScrollView` over a
+/// `LazyHStack` keeps the same swipe gesture while materialising only the pages
+/// actually on screen.
+///
+/// **It's its own `View`, not a computed property on the screen.** The screen's
+/// body reads `viewModel.note`, so with the pager inlined every note keystroke
+/// rebuilt it.
+///
+/// `dayRange` grows to fit any date that lands outside it — editing an old
+/// transaction, or picking a far-off day in the popup — so the pill can never
+/// be asked to show a page that doesn't exist.
+private struct CompactDateChip: View {
+    @Binding var date: Date
+    /// Matches the rest of the detail row, so the whole strip lines up.
+    let controlHeight: CGFloat
+    /// Closes the note editor: the calendar popup wants the bottom of the screen.
+    let onInteract: () -> Void
+
+    /// Today at midnight — every page offset is measured from here.
+    private let referenceDate: Date
+    @State private var dayRange: ClosedRange<Int>
+    /// The settled page. `nil` only while a scroll is in flight.
+    @State private var pagedOffset: Int?
+
+    init(date: Binding<Date>, controlHeight: CGFloat, onInteract: @escaping () -> Void) {
+        self._date = date
+        self.controlHeight = controlHeight
+        self.onInteract = onInteract
+
+        let reference = Calendar.current.startOfDay(for: Date())
+        let initialOffset = Self.daysBetween(reference, date.wrappedValue)
+        self.referenceDate = reference
+        self._dayRange = State(initialValue: Self.range(containing: initialOffset))
+        // Seeded before first layout so the pager opens on the right page
+        // rather than scrolling to it afterwards.
+        self._pagedOffset = State(initialValue: initialOffset)
+    }
+
+    /// A year either way, widened when needed to reach `offset`.
+    private static func range(containing offset: Int) -> ClosedRange<Int> {
+        min(-365, offset)...max(365, offset)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            stepButton(icon: "chevron.left", days: -1)
+
+            // No leading glyph: date and time are the only always-populated
+            // fields here, so their values identify them on sight. The icons
+            // were costing this row ~18pt each that the date label needs.
+            dayPager
+                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+                .overlay {
+                    // Invisible native control: piggybacks on the system's own
+                    // compact-DatePicker popup (fast, correctly anchored, never
+                    // clipped) while the visible pill above stays fully custom.
+                    DatePicker(
+                        "transaction.date".localized,
+                        selection: $date,
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    // A compact DatePicker draws its own filled background, and
+                    // now that the control fills its column that fill spreads
+                    // across the whole chip — the old 2% opacity was only
+                    // inconspicuous while the pill hugged its label.
+                    // `colorMultiply(.clear)` erases it at render time;
+                    // `.opacity(0)` would instead take the backing UIKit
+                    // control's alpha to zero, which stops it receiving taps.
+                    .colorMultiply(.clear)
+                    .simultaneousGesture(TapGesture().onEnded { onInteract() })
+                }
+
+            stepButton(icon: "chevron.right", days: 1)
+        }
+        .frame(minHeight: controlHeight)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        )
+        .accessibilityLabel("transaction.date".localized)
+        .onChange(of: pagedOffset) { _, newOffset in commit(pagedOffset: newOffset) }
+        .onChange(of: date) { _, newDate in syncPager(to: newDate) }
+    }
+
+    /// Fills the column rather than being measured to its content: the date owns
+    /// the slack on this line, which is what keeps a Khmer date (or a scaled-up
+    /// Latin one) off the ellipsis.
+    private var dayPager: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(dayRange, id: \.self) { offset in
+                    Text(dateLabel(forOffset: offset))
+                        .appFont(.subheadline, weight: .medium)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .containerRelativeFrame(.horizontal)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $pagedOffset)
+        .frame(maxWidth: .infinity)
+        .frame(height: 24)
+    }
+
+    private func stepButton(icon: String, days: Int) -> some View {
+        Button {
+            step(by: days)
+        } label: {
+            Image(systemName: icon)
+                .appFont(.footnote, weight: .bold)
+                .foregroundStyle(.secondary)
+                .padding(.leading, days < 0 ? 12 : 8)
+                .padding(.trailing, days < 0 ? 8 : 12)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func step(by days: Int) {
+        let target = (pagedOffset ?? Self.daysBetween(referenceDate, date)) + days
+        guard dayRange.contains(target) else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            pagedOffset = target
+        }
+    }
+
+    /// Writes a settled page back to the date, keeping the time of day.
+    private func commit(pagedOffset newOffset: Int?) {
+        let calendar = Calendar.current
+        guard let newOffset,
+              let newDay = calendar.date(byAdding: .day, value: newOffset, to: referenceDate)
+        else { return }
+
+        let time = calendar.dateComponents([.hour, .minute, .second], from: date)
+        guard let combined = calendar.date(
+            bySettingHour: time.hour ?? 0,
+            minute: time.minute ?? 0,
+            second: time.second ?? 0,
+            of: newDay
+        ), calendar.startOfDay(for: date) != calendar.startOfDay(for: combined) else { return }
+
+        date = combined
+        HapticManager.shared.selection()
+    }
+
+    /// Follows the date when something else moves it — the calendar popup, a
+    /// scanned receipt. Widens the range first so the target page exists.
+    private func syncPager(to newDate: Date) {
+        let offset = Self.daysBetween(referenceDate, newDate)
+        if !dayRange.contains(offset) {
+            dayRange = min(dayRange.lowerBound, offset)...max(dayRange.upperBound, offset)
+        }
+        if pagedOffset != offset { pagedOffset = offset }
+    }
+
+    private static func daysBetween(_ start: Date, _ end: Date) -> Int {
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: start),
+            to: calendar.startOfDay(for: end)
+        ).day ?? 0
+    }
+
+    /// Kept deliberately short: this label shares its line with the time and,
+    /// while no note or place is set, two buttons as well. Yesterday→tomorrow
+    /// stay words (they cover most entries and read fastest), and the year is
+    /// dropped inside the current year — it's the longest component of the
+    /// string and it's redundant for the dates people actually log.
+    private func dateLabel(forOffset offset: Int) -> String {
+        guard let targetDate = Calendar.current.date(byAdding: .day, value: offset, to: referenceDate) else { return "" }
+        let locale = LanguageManager.shared.selectedLanguage.locale
+
+        if (-1...1).contains(offset) {
+            return AppDateFormatterCache.formatter(
+                dateStyle: .medium,
+                timeStyle: .none,
+                doesRelativeDateFormatting: true,
+                locale: locale
+            ).string(from: targetDate)
+        }
+
+        let calendar = Calendar.current
+        let isCurrentYear = calendar.component(.year, from: targetDate)
+            == calendar.component(.year, from: referenceDate)
+        return AppDateFormatterCache.formatter(
+            dateTemplate: isCurrentYear ? "MMMd" : "MMMdyyyy",
+            locale: locale
+        ).string(from: targetDate)
     }
 }
 
@@ -1501,7 +1594,9 @@ private struct CompactSaveButton: View {
 }
 
 /// Wraps the shared `CalculatorKeyboardView` so the amount-dependent
-/// `isSaveDisabled` read happens here, not in the parent's body.
+/// `isSaveDisabled` read stays out of the parent's body. `isSaveDisabled` is an
+/// `@autoclosure`, so the `isValid` read isn't performed here either — it lands
+/// inside the keypad's save key, and a keystroke rebuilds only that one key.
 private struct CompactKeypad: View {
     @Bindable var viewModel: AddTransactionViewModel
     let onSave: () -> Void

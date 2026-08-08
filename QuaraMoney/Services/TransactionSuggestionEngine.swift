@@ -99,6 +99,13 @@ enum TransactionSuggestionEngine {
     /// relevant transaction of every wallet/category (bounded by the 365-day
     /// scoring window), which is far too much work for the main actor during
     /// sheet presentation.
+    /// Cancellation is real here, and it has to be wired by hand: `Task.detached`
+    /// inherits nothing from its caller — priority, task-locals, *or*
+    /// cancellation. Cancelling the caller's task used to only discard the
+    /// result while this scan ran to completion anyway, so a burst of recomputes
+    /// meant a burst of concurrent full-history walks. The cancellation handler
+    /// below forwards the cancel, and the checkpoints inside stop the work at
+    /// the next phase boundary.
     static func computeSuggestions(
         container: ModelContainer,
         type: TransactionType,
@@ -121,6 +128,7 @@ enum TransactionSuggestionEngine {
                   let categories = try? context.fetch(categoryDescriptor) else {
                 return .empty
             }
+            guard !Task.isCancelled else { return .empty }
 
             let selectedWallet = wallets.first { $0.id == selectedWalletID }
             let selectedCategory = categories.first { $0.id == selectedCategoryID }
@@ -135,13 +143,20 @@ enum TransactionSuggestionEngine {
             )
             tagDescriptor.fetchLimit = 1000
             let tagSource = (try? context.fetch(tagDescriptor)) ?? []
+            guard !Task.isCancelled else { return .empty }
 
+            // Each ranker walks every in-window transaction of every candidate,
+            // so a cancel between them saves real work.
             let rankedWallets = rankWallets(
                 wallets, type: type, selectedCategory: selectedCategory, location: location
             )
+            guard !Task.isCancelled else { return .empty }
+
             let rankedCategories = rankCategories(
                 categories, type: type, selectedWallet: selectedWallet, location: location
             )
+            guard !Task.isCancelled else { return .empty }
+
             let rankedTags = rankTags(
                 in: tagSource, type: type,
                 selectedWallet: selectedWallet, selectedCategory: selectedCategory,
@@ -158,7 +173,12 @@ enum TransactionSuggestionEngine {
                 tags: rankedTags
             )
         }
-        return await work.value
+
+        return await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
     // MARK: - Ranking primitives

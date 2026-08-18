@@ -1362,3 +1362,13 @@
 "wallet.savingsToggle" = "គោលដៅសន្សំ";
 "wallet.spendable" = "អាចចំណាយបាន";
 "recurring.pausedForSavings" = "បានផ្អាក៖ គោលដៅសន្សំ";
+
+// MARK: - Settings section merge (2026-08)
+"common.off" = "បិទ";
+"settings.section.entry" = "ការបញ្ចូលប្រតិបត្តិការ";
+"settings.section.dataPrivacy" = "ទិន្នន័យ និងឯកជនភាព";
+"settings.notifications.footer" = "ការរំលឹកប្រចាំថ្ងៃ ដើម្បីកត់ត្រាការចំណាយរបស់អ្នក។";
+"settings.notifications.blockedTitle" = "ការជូនដំណឹងត្រូវបានបិទ";
+"settings.notifications.blockedBody" = "QuaraMoney មិនអាចផ្ញើការរំលឹកបានទេ រហូតទាល់តែអ្នកអនុញ្ញាតការជូនដំណឹងនៅក្នុងការកំណត់ iOS។";
+"settings.notifications.openSettings" = "បើកការកំណត់ iOS";
+"settings.exchangeRate.footer" = "ប្រើសម្រាប់បម្លែងចំនួនទឹកប្រាក់ដែលអ្នកបញ្ចូលជារូបិយប័ណ្ណផ្សេង។ អត្រាត្រូវបានធ្វើបច្ចុប្បន្នភាពដោយស្វ័យប្រវត្តិ។";

@@ -70,6 +70,7 @@ struct AddDebtView: View {
                             Text(viewModel.type == .iOwe ? "debt.toWallet".localized : "debt.fromWallet".localized)
                         } footer: {
                             walletFooter
+                                .sectionFooter()
                         }
                     }
 

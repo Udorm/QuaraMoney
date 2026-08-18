@@ -6,7 +6,6 @@ struct SettingsView: View {
     @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted: Bool = false
     private var currencyManager = CurrencyManager.shared
     @ObservedObject private var languageManager = LanguageManager.shared
-    @AppStorage("useSidebarOniPad") private var useSidebarOniPad: Bool = true
     @AppStorage("appTheme") private var selectedTheme: QuaraMoneyApp.AppTheme = .system
     @AppStorage("useCompactTransactionEntry") private var useCompactTransactionEntry = false
     @StateObject private var notificationManager = NotificationManager.shared
@@ -23,6 +22,10 @@ struct SettingsView: View {
         @Bindable var securityManager = securityManager
 
         Form {
+            // MARK: - General
+            // Each row either edits in place (language) or opens a screen that
+            // shows its current value on the right, so the list stays one
+            // header tall instead of one header per setting.
             Section(L10n.Settings.general) {
                 Picker(selection: Binding(
                     get: { languageManager.selectedLanguage },
@@ -39,64 +42,6 @@ struct SettingsView: View {
                     }
                 }
 
-                if UIDevice.current.userInterfaceIdiom == .pad {
-                    Toggle(isOn: $useSidebarOniPad) {
-                        Label {
-                            Text(L10n.Settings.useSidebarOniPad)
-                        } icon: {
-                            ListIconView(systemImage: "sidebar.left", color: Color(.systemGray))
-                        }
-                    }
-                }
-            }
-
-            Section {
-                Toggle(isOn: $useCompactTransactionEntry) {
-                    Label {
-                        Text("settings.compactEntry".localized)
-                    } icon: {
-                        ListIconView(systemImage: "rectangle.compress.vertical", color: .mint)
-                    }
-                }
-            } footer: {
-                Text("settings.compactEntry.footer".localized)
-            }
-
-            Section("settings.appearance".localized) {
-                Picker(selection: $selectedTheme) {
-                    ForEach(QuaraMoneyApp.AppTheme.allCases) { theme in
-                        Label(theme.displayName, systemImage: theme.icon)
-                            .tag(theme)
-                    }
-                } label: {
-                    Label {
-                        Text("settings.appTheme".localized)
-                    } icon: {
-                        ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
-                    }
-                }
-
-                NavigationLink(destination: LazyView(ThemeSettingsView())) {
-                    Label {
-                        LabeledContent {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(ThemeManager.shared.incomeColor)
-                                    .frame(width: 10, height: 10)
-                                Circle()
-                                    .fill(ThemeManager.shared.expenseColor)
-                                    .frame(width: 10, height: 10)
-                            }
-                        } label: {
-                            Text(L10n.Settings.themeColors)
-                        }
-                    } icon: {
-                        ListIconView(systemImage: "paintpalette.fill", color: .pink)
-                    }
-                }
-            }
-
-            Section("settings.currency".localized) {
                 Button {
                     showCurrencyPicker = true
                 } label: {
@@ -120,62 +65,37 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
 
-                if currencyManager.preferredCurrencyCode != "USD" {
+                NavigationLink(destination: LazyView(AppearanceSettingsView())) {
                     Label {
                         LabeledContent {
-                            Group {
-                                if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
-                                    Text("settings.exchangeRateValue".localized(with: rate.formatted(.number.precision(.fractionLength(2))), currencyManager.preferredCurrencyCode))
-                                } else {
-                                    Text("settings.fetchingRate".localized)
-                                        .task { await currencyManager.fetchRates() }
-                                }
-                            }
-                            .foregroundStyle(.secondary)
+                            Text(selectedTheme.displayName)
+                                .foregroundStyle(.secondary)
                         } label: {
-                            Text("settings.exchangeRate".localized)
+                            Text("settings.appearance".localized)
                         }
                     } icon: {
-                        ListIconView(systemImage: "arrow.2.squarepath", color: .teal)
+                        ListIconView(systemImage: "circle.lefthalf.filled", color: Color(.systemIndigo))
                     }
                 }
-            }
 
-            Section("settings.notifications".localized) {
-                Toggle(isOn: $notificationManager.isDailyReminderEnabled) {
+                NavigationLink(destination: LazyView(NotificationSettingsView())) {
                     Label {
-                        Text("settings.dailyReminder".localized)
+                        LabeledContent {
+                            Text(reminderSummary)
+                                .foregroundStyle(.secondary)
+                        } label: {
+                            Text("settings.notifications".localized)
+                        }
                     } icon: {
                         ListIconView(systemImage: "bell.fill", color: .red)
                     }
                 }
-                .onChange(of: notificationManager.isDailyReminderEnabled) { _, newValue in
-                    if newValue { notificationManager.requestPermission() }
-                }
-
-                if notificationManager.isDailyReminderEnabled {
-                    DatePicker(selection: notificationManager.reminderDateBinding, displayedComponents: .hourAndMinute) {
-                        Label {
-                            Text("settings.reminderTime".localized)
-                        } icon: {
-                            ListIconView(systemImage: "clock.fill", color: .orange)
-                        }
-                    }
-                }
             }
 
-
-            Section("settings.security".localized) {
-                Toggle(isOn: $securityManager.isAppLockEnabled) {
-                    Label {
-                        Text("settings.appLock".localized)
-                    } icon: {
-                        ListIconView(systemImage: "lock.fill", color: Color(.systemGray2))
-                    }
-                }
-            }
-
-            Section("settings.aiScanning.title".localized) {
+            // MARK: - Adding transactions
+            // Compact entry sits last so the footer explaining it lands
+            // directly under its toggle.
+            Section {
                 NavigationLink(destination: LazyView(ReceiptScanningSettingsView())) {
                     Label {
                         LabeledContent {
@@ -190,9 +110,31 @@ struct SettingsView: View {
                         ListIconView(systemImage: "sparkles", color: .purple)
                     }
                 }
+
+                Toggle(isOn: $useCompactTransactionEntry) {
+                    Label {
+                        Text("settings.compactEntry".localized)
+                    } icon: {
+                        ListIconView(systemImage: "rectangle.compress.vertical", color: .mint)
+                    }
+                }
+            } header: {
+                Text("settings.section.entry".localized)
+            } footer: {
+                Text("settings.compactEntry.footer".localized)
+                    .sectionFooter()
             }
 
-            Section(L10n.Settings.dataManagement) {
+            // MARK: - Data & privacy
+            Section("settings.section.dataPrivacy".localized) {
+                Toggle(isOn: $securityManager.isAppLockEnabled) {
+                    Label {
+                        Text("settings.appLock".localized)
+                    } icon: {
+                        ListIconView(systemImage: "lock.fill", color: Color(.systemGray2))
+                    }
+                }
+
                 NavigationLink(destination: LazyView(ExportOptionsView())) {
                     Label {
                         Text("settings.exportTransactions".localized)
@@ -248,7 +190,8 @@ struct SettingsView: View {
             #endif
 
             // Destructive action isolated in its own section (HIG) so it isn't
-            // one mis-tap away from routine data tools.
+            // one mis-tap away from routine data tools. The version rides in
+            // this section's footer rather than claiming a section of its own.
             Section {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
@@ -268,13 +211,11 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(isPopulating || isDeleting)
-            }
-
-            Section {
+            } footer: {
                 Text(L10n.Settings.version)
+                    .sectionFooter()
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .foregroundStyle(.secondary)
-                    .appFont(.footnote)
+                    .padding(.top, 8)
             }
         }
         .navigationTitle(L10n.Settings.title)
@@ -349,5 +290,17 @@ struct SettingsView: View {
         } message: {
             Text(errorMessage)
         }
+    }
+
+    /// Trailing value for the Notifications row: the reminder time, or "Off".
+    /// Formatted through `appFormatted` so Khmer gets Khmer digits.
+    private var reminderSummary: String {
+        guard notificationManager.isDailyReminderEnabled else {
+            return "common.off".localized
+        }
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        return startOfDay
+            .addingTimeInterval(notificationManager.reminderTime)
+            .appFormatted(date: .omitted, time: .shortened)
     }
 }

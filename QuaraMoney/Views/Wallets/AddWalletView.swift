@@ -94,6 +94,7 @@ struct AddWalletView: View {
                         Text("savings.goalDetails".localized)
                     } footer: {
                         Text("wallet.savingsDescription".localized)
+                            .sectionFooter()
                     }
                 }
 

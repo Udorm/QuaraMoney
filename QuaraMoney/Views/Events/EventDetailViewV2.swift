@@ -416,6 +416,7 @@ private struct ExportSpendingSheet: View {
                     }
                 } footer: {
                     Text("event.detail.yourShareHint".localized)
+                        .sectionFooter()
                 }
 
                 if alreadyExported {
@@ -438,6 +439,7 @@ private struct ExportSpendingSheet: View {
                         .pickerStyle(.menu)
                     } footer: {
                         Text("event.detail.exportHint".localized)
+                            .sectionFooter()
                     }
                 } else {
                     Section {

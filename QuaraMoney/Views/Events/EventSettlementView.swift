@@ -201,6 +201,7 @@ struct EventSettlementView: View {
                     }
                 } footer: {
                     Text("event.settlement.settleThroughOneHint".localized)
+                        .sectionFooter()
                 }
 
                 Section {
@@ -221,6 +222,7 @@ struct EventSettlementView: View {
                 } footer: {
                     if exportToWallet {
                         Text("event.settlement.addShareToWalletHint".localized)
+                            .sectionFooter()
                     }
                 }
 

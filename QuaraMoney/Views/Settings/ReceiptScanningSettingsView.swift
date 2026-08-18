@@ -66,6 +66,7 @@ struct ReceiptScanningSettingsView: View {
                 Text("settings.aiScanning.keySection".localized)
             } footer: {
                 Text("settings.aiScanning.getKeyFooter".localized)
+                    .sectionFooter()
             }
         }
         .navigationTitle("settings.aiScanning.title".localized)

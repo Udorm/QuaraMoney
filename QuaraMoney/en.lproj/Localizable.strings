@@ -1362,3 +1362,13 @@
 "wallet.savingsToggle" = "Savings Goal";
 "wallet.spendable" = "Spendable";
 "recurring.pausedForSavings" = "Paused: savings goal";
+
+// MARK: - Settings section merge (2026-08)
+"common.off" = "Off";
+"settings.section.entry" = "Adding Transactions";
+"settings.section.dataPrivacy" = "Data & Privacy";
+"settings.notifications.footer" = "A daily nudge to log what you spent.";
+"settings.notifications.blockedTitle" = "Notifications Are Turned Off";
+"settings.notifications.blockedBody" = "QuaraMoney can't send reminders until you allow notifications for it in iOS Settings.";
+"settings.notifications.openSettings" = "Open iOS Settings";
+"settings.exchangeRate.footer" = "Used to convert amounts you enter in other currencies. Rates refresh automatically.";

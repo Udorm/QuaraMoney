@@ -24,8 +24,42 @@ struct CurrencySelectionView: View {
         }
     }
 
+    /// Settings mode (no external `selection`) with a non-USD default: the
+    /// live rate belongs here, next to the currency it describes, rather than
+    /// as a conditional row that made the Settings list change height.
+    private var showsExchangeRate: Bool {
+        selection == nil
+            && searchText.isEmpty
+            && currencyManager.preferredCurrencyCode != "USD"
+    }
+
     var body: some View {
         List {
+            if showsExchangeRate {
+                Section {
+                    Label {
+                        LabeledContent {
+                            Group {
+                                if let rate = currencyManager.rates[currencyManager.preferredCurrencyCode] {
+                                    Text("settings.exchangeRateValue".localized(with: rate.formatted(.number.precision(.fractionLength(2))), currencyManager.preferredCurrencyCode))
+                                } else {
+                                    Text("settings.fetchingRate".localized)
+                                        .task { await currencyManager.fetchRates() }
+                                }
+                            }
+                            .foregroundStyle(.secondary)
+                        } label: {
+                            Text("settings.exchangeRate".localized)
+                        }
+                    } icon: {
+                        ListIconView(systemImage: "arrow.2.squarepath", color: .teal)
+                    }
+                } footer: {
+                    Text("settings.exchangeRate.footer".localized)
+                        .sectionFooter()
+                }
+            }
+
             if searchText.isEmpty && !quickSelectCurrencies.isEmpty {
                 Section {
                     ForEach(quickSelectCurrencies, id: \.self) { code in

@@ -7,6 +7,10 @@ class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     
     @Published var isPermissionGranted = false
+    /// Raw iOS-level authorization, so the UI can tell "not asked yet" apart
+    /// from "denied" — a denied reminder toggle can never turn on and needs an
+    /// explanation rather than snapping back silently.
+    @Published var authorizationStatus: UNAuthorizationStatus = .notDetermined
     @AppStorage("isDailyReminderEnabled") var isDailyReminderEnabled = false {
         didSet {
             if isDailyReminderEnabled {
@@ -31,9 +35,11 @@ class NotificationManager: ObservableObject {
     
     func checkPermissionStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let isAuthorized = settings.authorizationStatus == .authorized
+            let status = settings.authorizationStatus
+            let isAuthorized = status == .authorized
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.authorizationStatus = status
                 self.isPermissionGranted = isAuthorized
                 // If permission revoked externally, update state
                 if !isAuthorized && self.isDailyReminderEnabled {
@@ -53,6 +59,9 @@ class NotificationManager: ObservableObject {
                 } else {
                     self.isDailyReminderEnabled = false
                 }
+                // Refresh the raw status too — a refusal here is what flips it
+                // to `.denied`, which is what the settings screen explains.
+                self.checkPermissionStatus()
             }
         }
     }

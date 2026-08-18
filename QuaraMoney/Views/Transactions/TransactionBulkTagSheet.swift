@@ -47,7 +47,7 @@ struct TransactionBulkTagSheet: View {
                             .autocorrectionDisabled()
                     } footer: {
                         Text("transaction.bulk.tagHelp".localized)
-                            .appFont(.footnote)
+                            .sectionFooter()
                     }
 
                 case .remove:
@@ -80,7 +80,7 @@ struct TransactionBulkTagSheet: View {
                         }
                     } footer: {
                         Text("transaction.bulk.removeTagHelp".localized)
-                            .appFont(.footnote)
+                            .sectionFooter()
                     }
                 }
             }

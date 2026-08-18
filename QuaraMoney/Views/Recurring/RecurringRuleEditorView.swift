@@ -156,6 +156,7 @@ struct RecurringRuleEditorView: View {
                         Toggle(L10n.Recurring.pause, isOn: Binding(get: { !isActive }, set: { isActive = !$0 }))
                     } footer: {
                         Text(L10n.Recurring.editFutureNote)
+                            .sectionFooter()
                     }
                 }
             }

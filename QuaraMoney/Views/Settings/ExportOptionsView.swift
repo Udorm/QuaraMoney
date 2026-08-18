@@ -91,7 +91,8 @@ struct ExportOptionsView: View {
                 }
                 .disabled(isExporting)
             } footer: {
-               Text("export.description".localized)
+                Text("export.description".localized)
+                    .sectionFooter()
             }
         }
         .navigationTitle("export.exportData".localized)

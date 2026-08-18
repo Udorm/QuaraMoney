@@ -104,6 +104,18 @@ extension View {
     func appFont(size: CGFloat, weight: Font.Weight = .regular) -> some View {
         modifier(AppFontModifier(size: size, weight: weight, referenceStyle: .body))
     }
+
+    /// Explanation text under a `Section`. **Apply this to every
+    /// `Section(footer:)`.**
+    ///
+    /// `QuaraMoneyApp` installs a fixed 17pt font in the `\.font` environment so
+    /// that a bare `Text` still gets the Khmer cascade. That also wins over the
+    /// footnote sizing SwiftUI would otherwise give a list footer, which left
+    /// every footer in the app rendering 4pt larger than the system Settings
+    /// app. This restores Apple's 13pt.
+    func sectionFooter() -> some View {
+        appFont(.footnote)
+    }
 }
 
 /// Fully-resolved `Font`s keyed by everything that can change one.

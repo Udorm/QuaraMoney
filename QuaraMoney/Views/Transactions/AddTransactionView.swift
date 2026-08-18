@@ -359,6 +359,7 @@ struct AddTransactionView: View {
                                 .buttonStyle(.plain)
                             } footer: {
                                 Text("transaction.debtLocked.message".localized(with: debt.personName))
+                                    .sectionFooter()
                             }
                         }
                         

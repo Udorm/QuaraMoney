@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var isPopulating = false
     @State private var isDeleting = false
+    @State private var showCurrencyPicker = false
     @State private var showError = false
     @State private var errorMessage = ""
 
@@ -96,18 +97,28 @@ struct SettingsView: View {
             }
 
             Section("settings.currency".localized) {
-                NavigationLink(destination: LazyView(CurrencySelectionView())) {
+                Button {
+                    showCurrencyPicker = true
+                } label: {
                     Label {
                         LabeledContent {
-                            Text(currencyManager.preferredCurrencyCode)
-                                .foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text(currencyManager.preferredCurrencyCode)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .appFont(.footnote, weight: .semibold)
+                                    .foregroundStyle(.tertiary)
+                            }
                         } label: {
                             Text(L10n.Settings.defaultCurrency)
+                                .foregroundStyle(.primary)
                         }
                     } icon: {
                         ListIconView(systemImage: "dollarsign.circle.fill", color: .green)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
                 if currencyManager.preferredCurrencyCode != "USD" {
                     Label {
@@ -267,6 +278,14 @@ struct SettingsView: View {
             }
         }
         .navigationTitle(L10n.Settings.title)
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencySelectionView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Color(.systemGroupedBackground))
+        }
         .disabled(isPopulating)
         .overlay {
             if isPopulating {

@@ -117,14 +117,7 @@ struct CurrencySelectionView: View {
             dismiss()
         } label: {
             HStack(spacing: 12) {
-                Text(currencyDisplaySymbol(for: code))
-                    .appFont(.subheadline, weight: .semibold)
-                    .foregroundColor(.white)
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                    .frame(width: 32, height: 32)
-                    .background(iconColor(for: code))
-                    .clipShape(Circle())
+                currencyIcon(for: code)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(code)
@@ -137,10 +130,6 @@ struct CurrencySelectionView: View {
 
                 Spacer()
 
-                Text(Double(100).formattedAmount(for: code))
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-
                 if isSelected(code) {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.blue)
@@ -150,7 +139,26 @@ struct CurrencySelectionView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 44 }
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 46 }
+    }
+
+    /// Flag for the currency's region; a neutral symbol badge when the code has no flag.
+    @ViewBuilder
+    private func currencyIcon(for code: String) -> some View {
+        if let flag = String.currencyFlag(for: code) {
+            Text(flag)
+                .font(.system(size: 28))
+                .frame(width: 34, height: 34)
+                .accessibilityHidden(true)
+        } else {
+            Text(currencyDisplaySymbol(for: code))
+                .appFont(.subheadline, weight: .semibold)
+                .foregroundStyle(.secondary)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .frame(width: 34, height: 34)
+                .background(Color(.tertiarySystemFill), in: Circle())
+        }
     }
 
     private func isSelected(_ code: String) -> Bool {
@@ -168,13 +176,4 @@ struct CurrencySelectionView: View {
         return symbol.count <= 2 ? symbol : String(code.prefix(2))
     }
 
-    /// Deterministic color derived from the currency code's hash.
-    private func iconColor(for code: String) -> Color {
-        var hash = 5381
-        for scalar in code.unicodeScalars {
-            hash = (hash << 5) &+ hash &+ Int(scalar.value)
-        }
-        let hue = Double(abs(hash) % 360) / 360.0
-        return Color(hue: hue, saturation: 0.60, brightness: 0.72)
-    }
 }

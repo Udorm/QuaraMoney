@@ -880,12 +880,12 @@
 "transaction.location" = "Location";
 "transaction.location.pick" = "Pick Location";
 "transaction.location.selected" = "Selected Location";
+"transaction.location.noneSelected" = "No Location Selected";
+"transaction.location.noneSelectedHint" = "Search, choose a nearby place, or tap the map to drop a pin.";
 "transaction.location.clear" = "Clear Location";
 "transaction.location.useCurrent" = "Use Current Location";
-"transaction.location.useCurrentSubtitle" = "Use your device location";
 "transaction.location.useSelected" = "Use This Location";
 "transaction.location.pinOnMap" = "Pin Location on Map";
-"transaction.location.pinOnMapSubtitle" = "Choose a point manually";
 "transaction.location.suggestions" = "Suggested Locations";
 "transaction.location.loadingNearby" = "Finding nearby places...";
 "transaction.location.noNearby" = "No nearby places found";

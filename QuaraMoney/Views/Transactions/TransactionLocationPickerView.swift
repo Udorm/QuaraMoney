@@ -18,13 +18,17 @@ struct TransactionLocationPickerView: View {
     @State private var showManualMapPicker = false
     @State private var errorMessage: String?
     @State private var scrollToSelectionToken = 0
+    @State private var headerCamera: MapCameraPosition
+    @State private var deviceCoordinate: CLLocationCoordinate2D?
     @FocusState private var isSearchFocused: Bool
 
     private static let selectedSectionID = "selectedLocationSection"
+    private static let mapPreviewHeight: CGFloat = 230
 
     init(selection: Binding<TransactionLocationSelection?>) {
         _selection = selection
         _draftSelection = State(initialValue: selection.wrappedValue)
+        _headerCamera = State(initialValue: .region(Self.headerRegion(for: selection.wrappedValue)))
     }
 
     private var trimmedQuery: String {
@@ -35,23 +39,24 @@ struct TransactionLocationPickerView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
-                List {
-                    if isSearchActive {
-                        searchResultsSection
-                    } else {
-                        if let draftSelection {
-                            selectedLocationSection(draftSelection)
+            VStack(spacing: 0) {
+                mapPreviewHeader
+
+                ScrollViewReader { proxy in
+                    List {
+                        if isSearchActive {
+                            searchResultsSection
+                        } else {
+                            selectedLocationSection
+                            suggestionsSection
                         }
-                        quickActionsSection
-                        suggestionsSection
                     }
-                }
-                .listStyle(.insetGrouped)
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: scrollToSelectionToken) { _, _ in
-                    withAnimation(.easeInOut) {
-                        proxy.scrollTo(Self.selectedSectionID, anchor: .top)
+                    .listStyle(.insetGrouped)
+                    .scrollDismissesKeyboard(.interactively)
+                    .onChange(of: scrollToSelectionToken) { _, _ in
+                        withAnimation(.easeInOut) {
+                            proxy.scrollTo(Self.selectedSectionID, anchor: .top)
+                        }
                     }
                 }
             }
@@ -92,56 +97,113 @@ struct TransactionLocationPickerView: View {
             .task {
                 await loadNearbySuggestionsIfNeeded()
             }
+            .onChange(of: draftSelection?.coordinateKey) { _, _ in
+                recenterHeaderCamera()
+            }
+            .onChange(of: currentLocationSelection?.coordinateKey) { _, _ in
+                // Only follow the device location while nothing is picked yet.
+                guard draftSelection == nil else { return }
+                recenterHeaderCamera()
+            }
+        }
+    }
+
+    // MARK: - Map preview header
+
+    private var mapPreviewHeader: some View {
+        Map(position: $headerCamera, interactionModes: []) {
+            if let draftSelection {
+                Marker(draftSelection.title, coordinate: draftSelection.coordinate)
+                    .tint(.blue)
+            }
+
+            UserAnnotation()
+        }
+        .frame(height: Self.mapPreviewHeight)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSearchFocused = false
+            showManualMapPicker = true
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel("transaction.location.pinOnMap".localized)
+        .overlay(alignment: .topTrailing) { mapPreviewActions }
+        .overlay(alignment: .bottomLeading) { mapPreviewHint }
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var mapPreviewActions: some View {
+        VStack(spacing: 10) {
+            Button {
+                Task { await useCurrentLocation() }
+            } label: {
+                mapActionIcon("location.fill", isLoading: isLoadingCurrentLocation)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .disabled(isLoadingCurrentLocation)
+            .accessibilityLabel("transaction.location.useCurrent".localized)
+
+            Button {
+                isSearchFocused = false
+                showManualMapPicker = true
+            } label: {
+                mapActionIcon("mappin.and.ellipse")
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("transaction.location.pinOnMap".localized)
+        }
+        .padding(12)
+    }
+
+    private func mapActionIcon(_ systemImage: String, isLoading: Bool = false) -> some View {
+        ZStack {
+            if isLoading {
+                ProgressView()
+            } else {
+                Image(systemName: systemImage)
+                    .appFont(.body, weight: .semibold)
+                    .foregroundStyle(.blue)
+            }
+        }
+        .frame(width: 24, height: 24)
+    }
+
+    @ViewBuilder
+    private var mapPreviewHint: some View {
+        if draftSelection == nil {
+            Text("transaction.location.tapMapTitle".localized)
+                .appFont(.caption, weight: .medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .glassEffect(.regular, in: Capsule())
+                .padding(12)
+                .allowsHitTesting(false)
         }
     }
 
     // MARK: - Sections
 
-    @ViewBuilder
-    private func selectedLocationSection(_ selection: TransactionLocationSelection) -> some View {
+    private var selectedLocationSection: some View {
         Section {
-            SelectedLocationMapPreview(selection: selection)
+            if let draftSelection {
+                SelectedLocationRow(selection: draftSelection)
 
-            SelectedLocationRow(selection: selection)
-
-            Button(role: .destructive) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    draftSelection = nil
+                Button(role: .destructive) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        self.draftSelection = nil
+                    }
+                } label: {
+                    Label("transaction.location.clear".localized, systemImage: "xmark.circle")
                 }
-            } label: {
-                Label("transaction.location.clear".localized, systemImage: "xmark.circle")
+            } else {
+                EmptySelectionRow()
             }
         } header: {
             Text("transaction.location.selected".localized)
         }
         .id(Self.selectedSectionID)
-    }
-
-    private var quickActionsSection: some View {
-        Section {
-            Button {
-                Task { await useCurrentLocation() }
-            } label: {
-                LocationActionRow(
-                    title: "transaction.location.useCurrent".localized,
-                    subtitle: currentLocationSelection?.subtitle ?? "transaction.location.useCurrentSubtitle".localized,
-                    systemImage: "location.fill",
-                    isLoading: isLoadingCurrentLocation,
-                    isSelected: isSelected(currentLocationSelection)
-                )
-            }
-            .disabled(isLoadingCurrentLocation)
-
-            Button {
-                showManualMapPicker = true
-            } label: {
-                LocationActionRow(
-                    title: "transaction.location.pinOnMap".localized,
-                    subtitle: "transaction.location.pinOnMapSubtitle".localized,
-                    systemImage: "map.fill"
-                )
-            }
-        }
     }
 
     @ViewBuilder
@@ -278,6 +340,10 @@ struct TransactionLocationPickerView: View {
 
         do {
             let location = try await locationService.requestCurrentLocation()
+            deviceCoordinate = location.coordinate
+            if draftSelection == nil {
+                recenterHeaderCamera()
+            }
             let currentSelection = try? await TransactionPlaceLookup.reverseGeocode(
                 location: location,
                 source: .currentLocation
@@ -309,8 +375,8 @@ struct TransactionLocationPickerView: View {
         searchModel.query = ""
         isSearchFocused = false
         HapticManager.shared.impact(style: .light)
-        // Reveal the "Selected Location" section (with its map) so the change is visible
-        // even when the user picked a row near the bottom of the list.
+        // Reveal the "Selected Location" section so the change is visible even when the
+        // user picked a row near the bottom of the list (the map header recenters too).
         scrollToSelectionToken += 1
     }
 
@@ -319,6 +385,38 @@ struct TransactionLocationPickerView: View {
         guard let candidate, let draftSelection else { return false }
         return draftSelection == candidate
     }
+
+    // MARK: - Header camera
+
+    /// Keeps the always-visible preview centred on the draft pin, falling back to the
+    /// device location (when known) and finally to a wide default region.
+    private func recenterHeaderCamera() {
+        let coordinate = draftSelection?.coordinate
+            ?? currentLocationSelection?.coordinate
+            ?? deviceCoordinate
+        withAnimation(.easeInOut) {
+            headerCamera = .region(Self.headerRegion(centeredAt: coordinate))
+        }
+    }
+
+    private static func headerRegion(for selection: TransactionLocationSelection?) -> MKCoordinateRegion {
+        headerRegion(centeredAt: selection.map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+        })
+    }
+
+    private static func headerRegion(centeredAt coordinate: CLLocationCoordinate2D?) -> MKCoordinateRegion {
+        guard let coordinate else { return defaultRegion }
+        return MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+    }
+
+    private static let defaultRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 11.5564, longitude: 104.9282),
+        span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
+    )
 }
 
 private struct TransactionManualMapPinView: View {
@@ -528,85 +626,25 @@ private struct TransactionManualMapPinView: View {
     }
 }
 
-private struct SelectedLocationMapPreview: View {
-    let selection: TransactionLocationSelection
-
-    @State private var position: MapCameraPosition
-
-    init(selection: TransactionLocationSelection) {
-        self.selection = selection
-        _position = State(initialValue: .region(Self.region(for: selection)))
-    }
-
-    var body: some View {
-        Map(position: $position) {
-            Marker(selection.title, coordinate: selection.coordinate)
-        }
-        .frame(height: 150)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .allowsHitTesting(false)
-        // initialPosition only applies once; re-center whenever the selection moves.
-        .onChange(of: selection.coordinateKey) { _, _ in
-            withAnimation(.easeInOut) {
-                position = .region(Self.region(for: selection))
-            }
-        }
-    }
-
-    private static func region(for selection: TransactionLocationSelection) -> MKCoordinateRegion {
-        MKCoordinateRegion(
-            center: selection.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        )
-    }
-}
-
-private struct LocationActionRow: View {
-    let title: String
-    let subtitle: String?
-    let systemImage: String
-    var isLoading = false
-    var isSelected = false
-
+/// Placeholder shown in the "Selected Location" section before the user picks anything,
+/// so the section (and the map above it) stays in place from the moment the sheet opens.
+private struct EmptySelectionRow: View {
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.blue.opacity(0.12))
-                    .frame(width: 32, height: 32)
+            Image(systemName: "mappin.slash")
+                .appFont(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
 
-                if isLoading {
-                    ProgressView()
-                } else {
-                    Image(systemName: systemImage)
-                        .appFont(.subheadline, weight: .semibold)
-                        .foregroundStyle(.blue)
-                }
-            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("transaction.location.noneSelected".localized)
+                    .appFont(.body, weight: .medium)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .appFont(.body, weight: isSelected ? .semibold : .regular)
-                    .foregroundStyle(.primary)
-
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            if isSelected {
-                Image(systemName: "checkmark")
-                    .appFont(.subheadline, weight: .bold)
-                    .foregroundStyle(.blue)
-                    .transition(.scale.combined(with: .opacity))
+                Text("transaction.location.noneSelectedHint".localized)
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .contentShape(Rectangle())
     }
 }
 

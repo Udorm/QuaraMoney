@@ -880,12 +880,12 @@
 "transaction.location" = "ទីតាំង";
 "transaction.location.pick" = "ជ្រើសរើសទីតាំង";
 "transaction.location.selected" = "ទីតាំងដែលបានជ្រើសរើស";
+"transaction.location.noneSelected" = "មិនទាន់ជ្រើសរើសទីតាំង";
+"transaction.location.noneSelectedHint" = "ស្វែងរក ជ្រើសរើសកន្លែងជិតៗ ឬចុចលើផែនទីដើម្បីដាក់ម្ជុល។";
 "transaction.location.clear" = "សម្អាតទីតាំង";
 "transaction.location.useCurrent" = "ប្រើទីតាំងបច្ចុប្បន្ន";
-"transaction.location.useCurrentSubtitle" = "ប្រើទីតាំងឧបករណ៍របស់អ្នក";
 "transaction.location.useSelected" = "ប្រើទីតាំងនេះ";
 "transaction.location.pinOnMap" = "ដាក់ម្ជុលលើផែនទី";
-"transaction.location.pinOnMapSubtitle" = "ជ្រើសរើសចំណុចដោយខ្លួនឯង";
 "transaction.location.suggestions" = "ទីតាំងដែលបានណែនាំ";
 "transaction.location.loadingNearby" = "កំពុងស្វែងរកកន្លែងជិតៗ...";
 "transaction.location.noNearby" = "រកមិនឃើញកន្លែងជិតៗ";

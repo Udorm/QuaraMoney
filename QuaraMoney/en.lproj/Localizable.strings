@@ -880,12 +880,14 @@
 "transaction.location" = "Location";
 "transaction.location.pick" = "Pick Location";
 "transaction.location.selected" = "Selected Location";
-"transaction.location.noneSelected" = "No Location Selected";
-"transaction.location.noneSelectedHint" = "Search, choose a nearby place, or tap the map to drop a pin.";
 "transaction.location.clear" = "Clear Location";
 "transaction.location.useCurrent" = "Use Current Location";
+"transaction.location.useCurrentSubtitle" = "Use your device location";
 "transaction.location.useSelected" = "Use This Location";
+"transaction.location.adjustOnMap" = "Adjust on Map";
+"transaction.location.distanceAway" = "%@ away";
 "transaction.location.pinOnMap" = "Pin Location on Map";
+"transaction.location.pinOnMapSubtitle" = "Tap a place on the map or drop a pin";
 "transaction.location.suggestions" = "Suggested Locations";
 "transaction.location.loadingNearby" = "Finding nearby places...";
 "transaction.location.noNearby" = "No nearby places found";
@@ -895,7 +897,7 @@
 "transaction.location.clearSearch" = "Clear Search";
 "transaction.location.noResults" = "No places found";
 "transaction.location.resolvingPin" = "Finding location details...";
-"transaction.location.moveMapToPin" = "Move the map so the pin is on the location you want.";
+"transaction.location.moveMapToPin" = "Tap a place name on the map, or move the map so the pin is where you want it.";
 "transaction.location.tapMapTitle" = "Tap the map";
 "transaction.location.tapMapDescription" = "Drop a pin to use that location.";
 "transaction.location.errorTitle" = "Location Unavailable";

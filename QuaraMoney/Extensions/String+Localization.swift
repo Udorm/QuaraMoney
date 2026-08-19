@@ -49,6 +49,7 @@ class LanguageManager: ObservableObject {
             AppLocaleCache.invalidate()
             CurrencyFormatterCache.invalidate()
             AppDateFormatterCache.invalidate()
+            PlaceDistanceFormatterCache.invalidate()
             // Update font refresh ID to trigger view updates
             fontRefreshID = UUID()
             // Refresh UIKit appearance proxies

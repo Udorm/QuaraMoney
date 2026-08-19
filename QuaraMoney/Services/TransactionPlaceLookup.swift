@@ -45,6 +45,48 @@ enum TransactionPlaceLookup {
         }
     }
 
+    /// Resolves a place *label the user tapped on the map* into a full selection.
+    ///
+    /// A tapped `MapFeature` only carries a name, a coordinate and a category — no
+    /// address and no place identifier. Searching for that exact name in a tight box
+    /// around the tap recovers the real `MKMapItem`, which is what keeps a tapped
+    /// "Dara Coffee" named "Dara Coffee" instead of degrading to the street it sits on.
+    ///
+    /// Returns `nil` when nothing close enough plausibly matches the label, so callers
+    /// can keep the name the map showed rather than substitute a neighbouring business.
+    static func place(
+        named name: String,
+        near coordinate: CLLocationCoordinate2D,
+        source: TransactionLocationSource,
+        searchRadius: CLLocationDistance = 250
+    ) async -> TransactionLocationSelection? {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = name
+        request.region = MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: searchRadius * 2,
+            longitudinalMeters: searchRadius * 2
+        )
+
+        guard let response = try? await run(MKLocalSearch(request: request)) else { return nil }
+
+        let origin = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let normalizedName = name.normalizedForPlaceMatching
+
+        let match = response.mapItems
+            .filter { origin.distance(to: $0.location.coordinate) <= searchRadius }
+            .filter { item in
+                guard let itemName = item.name?.normalizedForPlaceMatching, !itemName.isEmpty else { return false }
+                return itemName == normalizedName
+                    || itemName.hasPrefix(normalizedName)
+                    || normalizedName.hasPrefix(itemName)
+            }
+            .min { origin.distance(to: $0.location.coordinate) < origin.distance(to: $1.location.coordinate) }
+
+        guard let match else { return nil }
+        return selection(from: match, source: source, accuracy: nil)
+    }
+
     /// Maps an `MKMapItem` into a `TransactionLocationSelection`, including iOS 18 place identifiers.
     ///
     /// Sources address fields from the iOS 26 `location`/`address`/`addressRepresentations`
@@ -102,5 +144,14 @@ enum TransactionPlaceLookup {
 extension CLLocation {
     func distance(to coordinate: CLLocationCoordinate2D) -> CLLocationDistance {
         distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+    }
+}
+
+private extension String {
+    /// Case- and diacritic-insensitive form used to decide whether a search result is
+    /// the same business as the map label that was tapped.
+    var normalizedForPlaceMatching: String {
+        folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

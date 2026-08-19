@@ -880,12 +880,14 @@
 "transaction.location" = "ទីតាំង";
 "transaction.location.pick" = "ជ្រើសរើសទីតាំង";
 "transaction.location.selected" = "ទីតាំងដែលបានជ្រើសរើស";
-"transaction.location.noneSelected" = "មិនទាន់ជ្រើសរើសទីតាំង";
-"transaction.location.noneSelectedHint" = "ស្វែងរក ជ្រើសរើសកន្លែងជិតៗ ឬចុចលើផែនទីដើម្បីដាក់ម្ជុល។";
 "transaction.location.clear" = "សម្អាតទីតាំង";
 "transaction.location.useCurrent" = "ប្រើទីតាំងបច្ចុប្បន្ន";
+"transaction.location.useCurrentSubtitle" = "ប្រើទីតាំងឧបករណ៍របស់អ្នក";
 "transaction.location.useSelected" = "ប្រើទីតាំងនេះ";
+"transaction.location.adjustOnMap" = "កែលើផែនទី";
+"transaction.location.distanceAway" = "នៅចម្ងាយ %@";
 "transaction.location.pinOnMap" = "ដាក់ម្ជុលលើផែនទី";
+"transaction.location.pinOnMapSubtitle" = "ចុចលើកន្លែងលើផែនទី ឬ ដាក់ម្ជុលដោយខ្លួនឯង";
 "transaction.location.suggestions" = "ទីតាំងដែលបានណែនាំ";
 "transaction.location.loadingNearby" = "កំពុងស្វែងរកកន្លែងជិតៗ...";
 "transaction.location.noNearby" = "រកមិនឃើញកន្លែងជិតៗ";
@@ -895,7 +897,7 @@
 "transaction.location.clearSearch" = "សម្អាតការស្វែងរក";
 "transaction.location.noResults" = "រកមិនឃើញកន្លែង";
 "transaction.location.resolvingPin" = "កំពុងស្វែងរកព័ត៌មានទីតាំង...";
-"transaction.location.moveMapToPin" = "ផ្លាស់ទីផែនទីឱ្យម្ជុលនៅលើទីតាំងដែលអ្នកចង់បាន។";
+"transaction.location.moveMapToPin" = "ចុចលើឈ្មោះកន្លែងលើផែនទី ឬ ផ្លាស់ទីផែនទីឱ្យម្ជុលនៅលើទីតាំងដែលអ្នកចង់បាន។";
 "transaction.location.tapMapTitle" = "ចុចលើផែនទី";
 "transaction.location.tapMapDescription" = "ដាក់ម្ជុលដើម្បីប្រើទីតាំងនោះ។";
 "transaction.location.errorTitle" = "មិនអាចប្រើទីតាំងបាន";

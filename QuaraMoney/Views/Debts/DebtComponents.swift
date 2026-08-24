@@ -58,10 +58,11 @@ struct DebtCard<Content: View>: View {
 
 // MARK: - Avatar
 
-/// Monogram avatar tinted by debt direction, with a small directional badge.
+/// Monogram avatar tinted by debt direction, with a small directional badge or checkmark.
 struct DebtAvatar: View {
     let name: String
     let type: DebtType
+    var isCompleted: Bool = false
     var size: CGFloat = 44
 
     private var initials: String {
@@ -74,25 +75,31 @@ struct DebtAvatar: View {
         return joined.isEmpty ? "?" : joined
     }
 
+    private var avatarColor: Color {
+        isCompleted ? .secondary : type.accentColor
+    }
+
     var body: some View {
         Circle()
-            .fill(type.accentColor.opacity(0.15))
+            .fill(avatarColor.opacity(isCompleted ? 0.1 : 0.15))
             .frame(width: size, height: size)
             .overlay {
                 Text(initials)
                     .appFont(size: size * 0.38, weight: .semibold)
-                    .foregroundStyle(type.accentColor)
+                    .foregroundStyle(avatarColor)
             }
             .overlay(alignment: .bottomTrailing) {
-                Image(systemName: type.directionIcon)
-                    .appFont(size: size * 0.26, weight: .bold)
-                    .foregroundStyle(.white)
-                    .frame(width: size * 0.42, height: size * 0.42)
-                    .background(Circle().fill(type.accentColor))
-                    .overlay(
-                        Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 1.5)
-                    )
-                    .offset(x: 2, y: 2)
+                if !isCompleted {
+                    Image(systemName: type.directionIcon)
+                        .appFont(size: size * 0.26, weight: .bold)
+                        .foregroundStyle(.white)
+                        .frame(width: size * 0.42, height: size * 0.42)
+                        .background(Circle().fill(type.accentColor))
+                        .overlay(
+                            Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 1.5)
+                        )
+                        .offset(x: 2, y: 2)
+                }
             }
             .accessibilityHidden(true)
     }
@@ -149,6 +156,182 @@ struct DebtDueChip: View {
                 .appFont(.caption2, weight: .medium)
         }
         .foregroundStyle(color)
+    }
+}
+
+// MARK: - Debt Row (Redesigned for Active & Settled States)
+
+struct DebtRow: View {
+    let debt: Debt
+
+    private var isPartiallyPaid: Bool {
+        !debt.isCompleted && debt.amountPaid > 0 && debt.progress < 1
+    }
+
+    private var dateText: String {
+        let date = debt.dueDate ?? debt.principalTransaction?.date ?? debt.dateCreated
+        return date.appFormatted(date: .abbreviated, time: .omitted)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            DebtAvatar(name: debt.personName, type: debt.type, isCompleted: debt.isCompleted)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(debt.personName)
+                        .appFont(.body, weight: .semibold)
+                        .foregroundStyle(debt.isCompleted ? .secondary : .primary)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 8)
+
+                    // Total / original amount
+                    Text(debt.currentTotalAmount.formattedAmount(for: debt.currencyCode))
+                        .appFont(.body, weight: .bold)
+                        .foregroundStyle(debt.isCompleted ? .secondary : debt.type.accentColor)
+                        .lineLimit(1)
+                }
+
+                if isPartiallyPaid {
+                    DebtProgressBar(progress: debt.progress, tint: debt.type.accentColor, height: 5)
+                        .padding(.vertical, 1)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if debt.isCompleted {
+                        // Left (below main title): Date
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                                .appFont(size: 11, weight: .medium)
+                            Text(dateText)
+                                .appFont(.caption2, weight: .medium)
+                        }
+                        .foregroundStyle(.secondary)
+
+                        Spacer(minLength: 8)
+
+                        // Right (below amount): Settled status
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .appFont(size: 11, weight: .semibold)
+                            Text("debt.settled".localized)
+                                .appFont(.caption2, weight: .semibold)
+                        }
+                        .foregroundStyle(.green)
+                    } else {
+                        DebtDueChip(debt: debt)
+
+                        Spacer(minLength: 8)
+
+                        if isPartiallyPaid {
+                            Text("debt.row.partiallyPaid".localized(
+                                with: debt.amountPaid.formattedAmount(for: debt.currencyCode),
+                                debt.displayRemaining.formattedAmount(for: debt.currencyCode)
+                            ))
+                            .appFont(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        } else {
+                            // Show date under amount when no progress yet
+                            Text(dateText)
+                                .appFont(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        if debt.isCompleted {
+            return "\(debt.personName), \("debt.settled".localized), \(debt.currentTotalAmount.formattedAmount(for: debt.currencyCode)), \(dateText)"
+        } else {
+            return "\(debt.personName), \(debt.type.relationshipPhrase) \(debt.currentTotalAmount.formattedAmount(for: debt.currencyCode))"
+        }
+    }
+}
+
+// MARK: - Debt Transaction Row (Single Group with Date instead of Time)
+
+struct DebtTransactionRow: View {
+    let transaction: Transaction
+
+    private var isIncome: Bool {
+        transaction.type == .income
+    }
+
+    private var amountColor: Color {
+        isIncome ? ThemeManager.shared.incomeColor : ThemeManager.shared.expenseColor
+    }
+
+    private var amountPrefix: String {
+        isIncome ? "+" : "-"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill((Color(hex: transaction.category?.colorHex ?? "#8E8E93") ?? .gray).opacity(0.12))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: transaction.category?.icon ?? (isIncome ? "arrow.down.circle.fill" : "arrow.up.circle.fill"))
+                    .appFont(.subheadline)
+                    .foregroundStyle(Color(hex: transaction.category?.colorHex ?? "#8E8E93") ?? .gray)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(transaction.category?.displayName ?? transaction.note ?? "transaction.uncategorized".localized)
+                    .appFont(.subheadline, weight: .medium)
+                    .lineLimit(1)
+
+                if let note = transaction.note, !note.isEmpty, note != transaction.category?.displayName {
+                    Text(note)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if let wallet = transaction.sourceWallet {
+                    Text(wallet.name)
+                        .appFont(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(amountPrefix)\(transaction.amount.formattedAmount(for: transaction.currencyCode))")
+                    .appFont(.subheadline, weight: .semibold)
+                    .foregroundStyle(amountColor)
+                    .monospacedDigit()
+                    .lineLimit(1)
+
+                Text(transaction.date.appFormatted(date: .abbreviated, time: .omitted))
+                    .appFont(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Action button press style
+
+struct DebtQuickActionPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
     }
 }
 

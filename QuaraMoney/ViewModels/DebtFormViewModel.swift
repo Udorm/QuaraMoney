@@ -45,12 +45,15 @@ final class DebtFormViewModel {
         (isEditing || selectedWallet != nil)
     }
 
-    init(debt: Debt? = nil) {
+    init(debt: Debt? = nil, initialType: DebtType? = nil) {
         self.debtToEdit = debt
 
         guard let debt else {
             self.originalAmount = 0
             self.originalDate = Date()
+            if let initialType {
+                self.type = initialType
+            }
             return
         }
         personName = debt.personName

@@ -13,8 +13,8 @@ struct AddDebtView: View {
 
     private var spendableWallets: [Wallet] { wallets.filter { !$0.isSavings } }
 
-    init(debtToEdit: Debt? = nil) {
-        let vm = DebtFormViewModel(debt: debtToEdit)
+    init(debtToEdit: Debt? = nil, initialType: DebtType? = nil) {
+        let vm = DebtFormViewModel(debt: debtToEdit, initialType: initialType)
         _viewModel = State(wrappedValue: vm)
         // New entries open straight into the keypad; edits start collapsed.
         _showKeyboard = State(initialValue: debtToEdit == nil)
@@ -24,6 +24,17 @@ struct AddDebtView: View {
 
     private var amountEditable: Bool {
         !viewModel.isEditing || viewModel.canEditAmount
+    }
+
+    private var personSectionHeader: String {
+        viewModel.type == .iOwe ? "debt.form.borrowedFrom".localized : "debt.form.lentTo".localized
+    }
+
+    private var navigationTitleText: String {
+        if viewModel.isEditing {
+            return L10n.Common.edit
+        }
+        return viewModel.type == .iOwe ? "debt.form.borrowedTitle".localized : "debt.form.lentTitle".localized
     }
 
     var body: some View {
@@ -54,7 +65,7 @@ struct AddDebtView: View {
                     }
 
                     // MARK: Person
-                    Section("debt.who".localized) {
+                    Section(personSectionHeader) {
                         TextField(L10n.Debt.personName, text: $viewModel.personName)
                             .appFont(.body)
                             .focused($isNameFocused)
@@ -67,7 +78,7 @@ struct AddDebtView: View {
                             DebtWalletChips(wallets: spendableWallets, selectedWallet: $viewModel.selectedWallet, allowNone: false)
                                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                         } header: {
-                            Text(viewModel.type == .iOwe ? "debt.toWallet".localized : "debt.fromWallet".localized)
+                            Text(viewModel.type == .iOwe ? "debt.form.receiveInWallet".localized : "debt.form.payFromWallet".localized)
                         } footer: {
                             walletFooter
                                 .sectionFooter()
@@ -101,7 +112,7 @@ struct AddDebtView: View {
                 .listSectionSpacing(.compact)
                 .scrollDismissesKeyboard(.interactively)
             }
-            .navigationTitle(viewModel.isEditing ? L10n.Common.edit : L10n.Debt.add)
+            .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {
                 if showKeyboard && amountEditable && !isNameFocused {

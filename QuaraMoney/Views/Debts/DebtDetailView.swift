@@ -49,60 +49,52 @@ struct DebtDetailView: View {
             Section {
                 heroContent
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
 
-            if let note = debt.note, !note.isEmpty {
-                Section(L10n.Transaction.note) {
-                    Text(note)
-                        .appFont(.body)
+            if !debt.isCompleted || hasRemainingBalance {
+                Section {
+                    quickActionsRow
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
-            if debtTransactions.isEmpty {
-                Section(L10n.Debt.history) {
+            Section(L10n.Debt.history) {
+                if debtTransactions.isEmpty {
                     Text("debt.noTransactions".localized)
                         .appFont(.body)
                         .foregroundStyle(.secondary)
-                }
-            } else {
-                TransactionListView(
-                    transactions: debtTransactions,
-                    sortOption: sortOption,
-                    listHeader: L10n.Debt.history,
-                    onEdit: { transactionToEdit = $0 },
-                    onDelete: { deleteTransaction($0) }
-                )
-            }
+                } else {
+                    ForEach(debtTransactions) { txn in
+                        Button {
+                            transactionToEdit = txn
+                        } label: {
+                            DebtTransactionRow(transaction: txn)
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(L10n.Common.delete, role: .destructive) {
+                                deleteTransaction(txn)
+                            }
 
-            if debt.isCompleted && hasRemainingBalance {
-                Section {
-                    Button {
-                        setActive()
-                    } label: {
-                        Label("debt.markActive".localized, systemImage: "arrow.uturn.backward")
-                            .frame(maxWidth: .infinity)
+                            Button(L10n.Common.edit) {
+                                transactionToEdit = txn
+                            }
+                            .tint(.blue)
+                        }
                     }
-                    .tint(.orange)
-                }
-            } else if !debt.isCompleted && !hasRemainingBalance {
-                Section {
-                    Button {
-                        setCompleted()
-                    } label: {
-                        Label(L10n.Debt.markCompleted, systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .tint(ThemeManager.shared.incomeColor)
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(12)
         .navigationTitle(debt.personName)
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            if hasRemainingBalance {
-                paymentBar
-            }
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -123,10 +115,6 @@ struct DebtDetailView: View {
             }
         }
         .sheet(item: $paymentContext) { ctx in
-            // Recording a payment reuses the full transaction editor (amount,
-            // currency, wallet, date/time, location, note, exclude) preconfigured
-            // for this debt's repayment. Item-based so the resolved category/wallet
-            // are bound to the presentation (no stale-state race).
             AddTransactionContainer(
                 isNewTransaction: true,
                 initialWallet: ctx.wallet,
@@ -150,7 +138,7 @@ struct DebtDetailView: View {
         .onAppear { syncStatusIfNeeded() }
     }
 
-    // MARK: - Hero
+    // MARK: - Hero Content
 
     private var heroContent: some View {
         let total = debt.currentTotalAmount
@@ -158,9 +146,9 @@ struct DebtDetailView: View {
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                DebtAvatar(name: debt.personName, type: debt.type, size: 44)
+                DebtAvatar(name: debt.personName, type: debt.type, isCompleted: debt.isCompleted, size: 44)
 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(debt.personName)
                         .appFont(.headline, weight: .bold)
                         .lineLimit(1)
@@ -173,20 +161,22 @@ struct DebtDetailView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(debt.isCompleted ? "debt.settled".localized : L10n.Debt.remaining)
+                Text(debt.isCompleted ? L10n.Debt.total : L10n.Debt.remaining)
                     .appFont(.caption, weight: .semibold)
                     .foregroundStyle(.secondary)
-                Text(debt.displayRemaining.formattedAmount(for: debt.currencyCode))
+                Text(debt.isCompleted
+                    ? debt.currentTotalAmount.formattedAmount(for: debt.currencyCode)
+                    : debt.displayRemaining.formattedAmount(for: debt.currencyCode))
                     .appFont(size: 30, weight: .bold)
-                    .foregroundStyle(debt.isCompleted ? .green : accent)
+                    .foregroundStyle(debt.isCompleted ? .primary : accent)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
                     .contentTransition(.numericText())
             }
 
-            if total > 0 {
+            if !debt.isCompleted && total > 0 {
                 VStack(spacing: 6) {
-                    DebtProgressBar(progress: debt.progress, tint: debt.isCompleted ? .green : accent, height: 8)
+                    DebtProgressBar(progress: debt.progress, tint: accent, height: 8)
                     HStack {
                         Text("\(L10n.Debt.paid) \(debt.amountPaid.formattedAmount(for: debt.currencyCode))")
                         Spacer()
@@ -197,103 +187,107 @@ struct DebtDetailView: View {
                 }
             }
 
-            DebtDueChip(debt: debt)
-        }
-        .padding(.vertical, 2)
-    }
-
-    // MARK: - Payment bar
-
-    /// Bottom action bar: quick partial-amount presets and a one-tap "settle in
-    /// full" primary, with a path into the full editor for a custom amount. Each
-    /// preset opens the editor pre-filled so recording a repayment is one tap.
-    private var paymentBar: some View {
-        let remaining = debt.displayRemaining
-        let accent = debt.type.accentColor
-        let showPartials = roundedPreset(remaining, fraction: 0.25) > 0
-        return VStack(spacing: 10) {
+            // Dates metadata (Borrow/Lent date & Due date)
             HStack(spacing: 8) {
-                if showPartials {
-                    quickAmountChip(fraction: 0.25, label: "¼", remaining: remaining, accent: accent)
-                    quickAmountChip(fraction: 0.5, label: "½", remaining: remaining, accent: accent)
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .appFont(size: 11, weight: .semibold)
+                    Text(borrowOrLentDateLabel)
+                        .appFont(.caption2, weight: .medium)
                 }
-                customAmountChip
-            }
+                .foregroundStyle(.secondary)
 
-            Button {
-                HapticManager.shared.impact(style: .light)
-                startPayment(amount: remaining)
-            } label: {
-                Label(
-                    "\("debt.settleInFull".localized) · \(remaining.formattedAmount(for: debt.currencyCode))",
-                    systemImage: "checkmark.circle.fill"
-                )
-                .appFont(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                if let due = debt.dueDate {
+                    Text("•")
+                        .appFont(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .appFont(size: 11, weight: .semibold)
+                        Text("\("debt.due".localized) \(due.appFormatted(date: .abbreviated, time: .omitted))")
+                            .appFont(.caption2, weight: .medium)
+                    }
+                    .foregroundStyle(debt.isOverdue && !debt.isCompleted ? .red : .secondary)
+                }
             }
-            .buttonStyle(.borderedProminent)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
-        .background(.bar)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
     }
 
-    private func quickAmountChip(fraction: Double, label: String, remaining: Decimal, accent: Color) -> some View {
-        let amount = roundedPreset(remaining, fraction: fraction)
-        return Button {
-            HapticManager.shared.selection()
-            startPayment(amount: amount)
-        } label: {
-            VStack(spacing: 1) {
-                Text(label)
-                    .appFont(.subheadline, weight: .semibold)
-                Text(amount.formattedAmount(for: debt.currencyCode))
-                    .appFont(.caption2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .opacity(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .foregroundStyle(accent)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("debt.quickPayHint".localized(with: label))
+    private var borrowOrLentDate: Date {
+        debt.principalTransaction?.date ?? debt.dateCreated
     }
 
-    private var customAmountChip: some View {
-        Button {
+    private var borrowOrLentDateLabel: String {
+        let dateString = borrowOrLentDate.appFormatted(date: .abbreviated, time: .omitted)
+        if debt.type == .iOwe {
+            return "debt.detail.borrowedOn".localized(with: dateString)
+        } else {
+            return "debt.detail.lentOn".localized(with: dateString)
+        }
+    }
+
+    // MARK: - Quick Actions Row (Matching Wallet Detail style)
+
+    private var quickActionsRow: some View {
+        HStack(spacing: 12) {
+            if !debt.isCompleted {
+                quickActionButton(
+                    icon: debt.type == .iOwe ? "arrow.up.right" : "arrow.down.left",
+                    title: "debt.recordPayment".localized,
+                    color: debt.type.accentColor
+                ) {
+                    startPayment(amount: 0)
+                }
+
+                quickActionButton(
+                    icon: "checkmark.circle.fill",
+                    title: "debt.settleInFull".localized,
+                    color: ThemeManager.shared.incomeColor
+                ) {
+                    startPayment(amount: debt.displayRemaining)
+                }
+            } else if hasRemainingBalance {
+                quickActionButton(
+                    icon: "arrow.uturn.backward",
+                    title: "debt.markActive".localized,
+                    color: .orange
+                ) {
+                    setActive()
+                }
+            }
+        }
+    }
+
+    private func quickActionButton(icon: String, title: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: {
             HapticManager.shared.impact(style: .light)
-            startPayment(amount: 0)   // 0 → editor opens blank for a typed amount
-        } label: {
-            VStack(spacing: 1) {
-                Image(systemName: "square.and.pencil")
-                    .appFont(.subheadline, weight: .semibold)
-                Text("debt.customAmount".localized)
-                    .appFont(.caption2)
+            action()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .appFont(.footnote, weight: .semibold)
+                Text(title)
+                    .appFont(.footnote, weight: .semibold)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .opacity(0.85)
+                    .minimumScaleFactor(0.75)
             }
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .foregroundStyle(.primary)
+            .frame(height: 42)
+            .contentShape(Capsule())
+            .background(color, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DebtQuickActionPressStyle())
     }
 
-    /// Rounds a fraction of the remaining balance to 2 decimal places so presets
-    /// read as clean amounts (e.g. $25.00, not $24.9975).
-    private func roundedPreset(_ remaining: Decimal, fraction: Double) -> Decimal {
-        var raw = remaining * Decimal(fraction)
-        var result = Decimal()
-        NSDecimalRound(&result, &raw, 2, .plain)
-        return result
-    }
+    // MARK: - Badges
 
     private var typeBadge: some View {
         Text(debt.type.localizedTitle)
@@ -314,11 +308,9 @@ struct DebtDetailView: View {
             .foregroundStyle(settled ? ThemeManager.shared.incomeColor : .secondary)
     }
 
-    // MARK: - Actions
+    // MARK: - Actions & Persistence
 
     private func deleteTransaction(_ transaction: Transaction) {
-        // The advance that anchors this debt can't be deleted from the history —
-        // removing it would orphan the debt. Delete the whole debt instead.
         if transaction.isDebtAnchor {
             blockedDeletionMessage = "debt.cannotDeleteAnchor".localized(with: debt.personName)
             HapticManager.shared.warning()
@@ -346,16 +338,6 @@ struct DebtDetailView: View {
         }
     }
 
-    private func setCompleted() {
-        do {
-            try DebtService(modelContext: modelContext).setCompletion(for: debt, isCompleted: true)
-            HapticManager.shared.notification(type: .success)
-        } catch {
-            statusErrorMessage = error.localizedDescription
-            showStatusError = true
-        }
-    }
-
     private func setActive() {
         do {
             try DebtService(modelContext: modelContext).setCompletion(for: debt, isCompleted: false)
@@ -365,17 +347,8 @@ struct DebtDetailView: View {
         }
     }
 
-    /// Prepares and presents the shared transaction editor for a repayment:
-    /// ensures the managed repayment category exists and picks a default wallet
-    /// (preferring one in the debt's currency). Resolved up front and carried in
-    /// the sheet item so the editor always receives the correct category.
     private func startPayment(amount: Decimal?) {
         let category = try? DebtService(modelContext: modelContext).repaymentCategory(for: debt)
-        // Fetch wallets lazily here (only when a payment is actually started)
-        // rather than via an eager `@Query`. A compound `@Query` predicate
-        // (`!isArchived && deletedAt == nil`) evaluated while this view is being
-        // pushed from a NavigationLink hangs SwiftData and freezes the app, so we
-        // use a single-condition fetch and filter `isArchived` in memory.
         let wallets = (try? modelContext.fetch(
             FetchDescriptor<Wallet>(
                 predicate: #Predicate<Wallet> { $0.deletedAt == nil },
@@ -393,7 +366,5 @@ private struct DebtPaymentContext: Identifiable {
     let debt: Debt
     let category: Category?
     let wallet: Wallet?
-    /// Pre-fill amount for the editor: a preset amount, or 0 for a blank/custom
-    /// entry. `nil` falls back to the debt's full remaining balance.
     let amount: Decimal?
 }

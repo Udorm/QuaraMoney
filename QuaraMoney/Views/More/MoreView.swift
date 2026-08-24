@@ -68,7 +68,7 @@ struct MoreView: View {
                         }
                     }
 
-                    NavigationLink(destination: LazyView(DebtListView())) {
+                    NavigationLink(destination: LazyView(DebtOverviewView())) {
                         Label {
                             Text(L10n.Debt.title)
                         } icon: {

@@ -272,4 +272,43 @@ final class DebtServiceTests: XCTestCase {
         XCTAssertEqual(debt.remainingAmount, Decimal(100))
         XCTAssertFalse(debt.isCompleted)
     }
+
+    // MARK: - DebtFormViewModel tests
+
+    func testDebtFormViewModelInitialType() {
+        let vmOwed = DebtFormViewModel(initialType: .owedToMe)
+        XCTAssertEqual(vmOwed.type, .owedToMe)
+
+        let vmIOwe = DebtFormViewModel(initialType: .iOwe)
+        XCTAssertEqual(vmIOwe.type, .iOwe)
+    }
+
+    func testDebtListViewModelAggregation() throws {
+        let vm = DebtListViewModel()
+
+        _ = try service.createDebt(
+            person: "Alice",
+            amount: Decimal(100),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            sourceWallet: wallet
+        )
+
+        _ = try service.createLoan(
+            person: "Bob",
+            amount: Decimal(40),
+            currency: "USD",
+            dueDate: nil,
+            note: nil,
+            destinationWallet: wallet
+        )
+
+        let descriptor = FetchDescriptor<Debt>()
+        let debts = try context.fetch(descriptor)
+
+        XCTAssertEqual(vm.totalOwedToMe(debts), Decimal(100))
+        XCTAssertEqual(vm.totalIOwe(debts), Decimal(40))
+        XCTAssertEqual(vm.netPosition(debts), Decimal(60))
+    }
 }

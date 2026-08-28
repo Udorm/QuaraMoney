@@ -17,6 +17,8 @@ struct TransactionListView: View {
     let onEdit: (Transaction) -> Void
     let onDelete: (Transaction) -> Void
 
+    @State private var transactionToSplit: Transaction?
+
     /// Groups transactions by date using shared TransactionProcessor
     private var dailySections: [DailyTransactionSection] {
         if let precomputedSections { return precomputedSections }
@@ -29,148 +31,105 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        if transactions.isEmpty {
-            Text(L10n.Budget.noTransactions)
-                .foregroundStyle(.secondary)
-        } else if sortOption == .highestAmount || sortOption == .lowestAmount {
-            if let listHeader, !listHeader.isEmpty {
-                Section(header:
-                    Text(listHeader)
-                        .appFont(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 8)
-                ) {
+        Group {
+            if transactions.isEmpty {
+                Text(L10n.Budget.noTransactions)
+                    .foregroundStyle(.secondary)
+            } else if sortOption == .highestAmount || sortOption == .lowestAmount {
+                if let listHeader, !listHeader.isEmpty {
+                    Section(header:
+                        Text(listHeader)
+                            .appFont(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.bottom, 8)
+                    ) {
+                        ForEach(transactions) { txn in
+                            rowView(for: txn)
+                        }
+                    }
+                } else {
                     ForEach(transactions) { txn in
-                        Button {
-                            onEdit(txn)
-                        } label: {
-                            TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                HapticManager.shared.impact(style: .medium)
-                                onDelete(txn)
-                            } label: {
-                                Label(L10n.Common.delete, systemImage: "trash")
-                            }
-                            
-                            Button {
-                                onEdit(txn)
-                            } label: {
-                                Label(L10n.Common.edit, systemImage: "pencil")
-                            }
-                            .tint(.blue)
-                        }
-                        .contextMenu {
-                            Button {
-                                onEdit(txn)
-                            } label: {
-                                Label(L10n.Common.edit, systemImage: "pencil")
-                                    .appFont(.body)
-                            }
-                            Button(role: .destructive) {
-                                HapticManager.shared.impact(style: .medium)
-                                onDelete(txn)
-                            } label: {
-                                Label(L10n.Common.delete, systemImage: "trash")
-                                    .appFont(.body)
-                            }
-                        }
+                        rowView(for: txn)
                     }
                 }
             } else {
-                ForEach(transactions) { txn in
-                    Button {
-                        onEdit(txn)
-                    } label: {
-                        TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            HapticManager.shared.impact(style: .medium)
-                            onDelete(txn)
-                        } label: {
-                            Label(L10n.Common.delete, systemImage: "trash")
+                ForEach(Array(dailySections.enumerated()), id: \.element.id) { index, section in
+                    Section(header: 
+                        VStack(alignment: .leading, spacing: 4) {
+                            if index == 0, let listHeader, !listHeader.isEmpty {
+                                Text(listHeader)
+                                    .appFont(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.bottom, 4)
+                            }
+                            DailySectionHeader(section: section)
                         }
-                        
-                        Button {
-                            onEdit(txn)
-                        } label: {
-                            Label(L10n.Common.edit, systemImage: "pencil")
-                        }
-                        .tint(.blue)
-                    }
-                    .contextMenu {
-                        Button {
-                            onEdit(txn)
-                        } label: {
-                            Label(L10n.Common.edit, systemImage: "pencil")
-                                .appFont(.body)
-                        }
-                        Button(role: .destructive) {
-                            HapticManager.shared.impact(style: .medium)
-                            onDelete(txn)
-                        } label: {
-                            Label(L10n.Common.delete, systemImage: "trash")
-                                .appFont(.body)
+                    ) {
+                        ForEach(section.transactions) { txn in
+                            rowView(for: txn)
                         }
                     }
                 }
             }
-        } else {
-            ForEach(Array(dailySections.enumerated()), id: \.element.id) { index, section in
-                Section(header: 
-                    VStack(alignment: .leading, spacing: 4) {
-                        if index == 0, let listHeader, !listHeader.isEmpty {
-                            Text(listHeader)
-                                .appFont(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .padding(.bottom, 4)
-                        }
-                        DailySectionHeader(section: section)
-                    }
-                ) {
-                    ForEach(section.transactions) { txn in
-                        Button {
-                            onEdit(txn)
-                        } label: {
-                            TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                HapticManager.shared.impact(style: .medium)
-                                onDelete(txn)
-                            } label: {
-                                Label(L10n.Common.delete, systemImage: "trash")
-                            }
-                            
-                            Button {
-                                onEdit(txn)
-                            } label: {
-                                Label(L10n.Common.edit, systemImage: "pencil")
-                            }
-                            .tint(.blue)
-                        }
-                        .contextMenu {
-                            Button {
-                                onEdit(txn)
-                            } label: {
-                                Label(L10n.Common.edit, systemImage: "pencil")
-                                    .appFont(.body)
-                            }
-                            Button(role: .destructive) {
-                                HapticManager.shared.impact(style: .medium)
-                                onDelete(txn)
-                            } label: {
-                                Label(L10n.Common.delete, systemImage: "trash")
-                                    .appFont(.body)
-                            }
-                        }
-                    }
+        }
+        .sheet(item: $transactionToSplit) { txn in
+            SplitExpenseSheetView(transaction: txn)
+        }
+    }
+
+    @ViewBuilder
+    private func rowView(for txn: Transaction) -> some View {
+        Button {
+            onEdit(txn)
+        } label: {
+            TransactionRowView(transaction: txn, showsUnconvertedHint: unconvertedTransactionIDs.contains(txn.id))
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                HapticManager.shared.impact(style: .medium)
+                onDelete(txn)
+            } label: {
+                Label(L10n.Common.delete, systemImage: "trash")
+            }
+            
+            Button {
+                onEdit(txn)
+            } label: {
+                Label(L10n.Common.edit, systemImage: "pencil")
+            }
+            .tint(.blue)
+
+            if txn.type == .expense {
+                Button {
+                    transactionToSplit = txn
+                } label: {
+                    Label("transaction.splitBill".localized, systemImage: "person.2.slash")
                 }
+                .tint(.purple)
+            }
+        }
+        .contextMenu {
+            Button {
+                onEdit(txn)
+            } label: {
+                Label(L10n.Common.edit, systemImage: "pencil")
+                    .appFont(.body)
+            }
+            if txn.type == .expense {
+                Button {
+                    transactionToSplit = txn
+                } label: {
+                    Label("transaction.splitBill".localized, systemImage: "person.2.slash")
+                        .appFont(.body)
+                }
+            }
+            Button(role: .destructive) {
+                HapticManager.shared.impact(style: .medium)
+                onDelete(txn)
+            } label: {
+                Label(L10n.Common.delete, systemImage: "trash")
+                    .appFont(.body)
             }
         }
     }

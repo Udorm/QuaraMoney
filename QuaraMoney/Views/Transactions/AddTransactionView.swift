@@ -20,6 +20,7 @@ struct AddTransactionView: View {
     @State private var showLocationPicker = false
     @State private var isFetchingCurrentLocation = false
     @State private var showDebtSheet = false
+    @State private var showSplitSheet = false
     // Inline creation of a first wallet/category when the user has none.
     @State private var showAddWallet = false
     @State private var showAddCategory = false
@@ -408,6 +409,26 @@ struct AddTransactionView: View {
                             optionalFieldsSection
                         }
 
+                        if viewModel.isEditing, viewModel.type == .expense, viewModel.transaction != nil {
+                            Section {
+                                Button {
+                                    showSplitSheet = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        fieldIcon("person.2.slash", color: .purple)
+                                        Text("transaction.splitBill".localized)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .appFont(.caption2, weight: .semibold)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
                         reportingSection
                     }
                     .listStyle(.insetGrouped)
@@ -529,6 +550,11 @@ struct AddTransactionView: View {
                     NavigationStack {
                         DebtDetailView(debt: debt)
                     }
+                }
+            }
+            .sheet(isPresented: $showSplitSheet) {
+                if let txn = viewModel.transaction {
+                    SplitExpenseSheetView(transaction: txn)
                 }
             }
             .onAppear {

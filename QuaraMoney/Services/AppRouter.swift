@@ -19,4 +19,7 @@ final class AppRouter {
 
     /// Push the Recurring review screen as soon as the More tab is visible.
     var pendingRecurringReview = false
+
+    /// Present the pre-filled Add Transaction sheet from an incoming shared expense link.
+    var pendingSharedExpense: SharedExpensePayload?
 }

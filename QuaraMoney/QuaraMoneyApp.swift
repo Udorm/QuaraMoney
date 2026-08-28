@@ -194,10 +194,17 @@ struct QuaraMoneyApp: App {
             .environmentObject(languageManager)
             .environmentObject(authManager)
             .onOpenURL { url in
-                // Auth callbacks (magic link / email confirmation / password
-                // recovery) for the quaramoney:// scheme. No-op when sync is
-                // off / unconfigured.
-                authManager.handleCallback(url)
+                if SplitExpenseService.canHandle(url) {
+                    if let payload = SplitExpenseService.decodePayload(from: url) {
+                        AppRouter.shared.pendingSharedExpense = payload
+                        NotificationCenter.default.post(name: .openSharedExpense, object: payload)
+                    }
+                } else {
+                    // Auth callbacks (magic link / email confirmation / password
+                    // recovery) for the quaramoney:// scheme. No-op when sync is
+                    // off / unconfigured.
+                    authManager.handleCallback(url)
+                }
             }
             // Password-recovery links sign the user in and must land on the
             // "set new password" step, wherever the app was when the link opened.

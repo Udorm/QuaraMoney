@@ -51,7 +51,10 @@ struct HomeContentView: View {
     @State private var showingBulkDeleteConfirmation = false
     @State private var bulkEditErrorMessage: String?
     @State private var bulkMutation: TransactionBulkMutation?
+    @State private var transactionToSplit: Transaction?
+    @State private var incomingSharedPayload: SharedExpensePayload?
     private var router = AppRouter.shared
+
     @Query(filter: #Predicate<Wallet> { !$0.isArchived && $0.deletedAt == nil }, sort: \Wallet.name) private var wallets: [Wallet]
     @Query(filter: #Predicate<Category> { $0.deletedAt == nil }, sort: \Category.name) private var categories: [Category]
 
@@ -106,6 +109,7 @@ struct HomeContentView: View {
                 isVisible = true
                 viewModel.setVisible(true)
                 consumePendingAddTransaction()
+                consumePendingSharedExpense()
             }
             .onDisappear {
                 isVisible = false
@@ -116,6 +120,12 @@ struct HomeContentView: View {
             }
             .sheet(item: $transactionToEdit) { txn in
                 AddTransactionContainer(transaction: txn, isNewTransaction: false)
+            }
+            .sheet(item: $transactionToSplit) { txn in
+                SplitExpenseSheetView(transaction: txn)
+            }
+            .sheet(item: $incomingSharedPayload) { payload in
+                ImportSharedExpenseView(payload: payload)
             }
             .sheet(isPresented: $showingBulkCategoryPicker) {
                 if let type = bulkEditableCategoryType {
@@ -165,6 +175,12 @@ struct HomeContentView: View {
             // mid-animation tab switch — and never waits on an arbitrary timer.
             .onChange(of: router.pendingAddTransaction) { _, _ in
                 consumePendingAddTransaction()
+            }
+            .onChange(of: router.pendingSharedExpense) { _, _ in
+                consumePendingSharedExpense()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSharedExpense)) { _ in
+                consumePendingSharedExpense()
             }
             .onChange(of: Set(displayedTransactions.map(\.id))) { _, validIDs in
                 selectedTransactionIDs.formIntersection(validIDs)
@@ -311,6 +327,13 @@ struct HomeContentView: View {
         guard isVisible, router.pendingAddTransaction else { return }
         router.pendingAddTransaction = false
         showingAddTransaction = true
+    }
+
+    /// Consumes a staged incoming shared expense payload and presents the dedicated preview screen.
+    private func consumePendingSharedExpense() {
+        guard isVisible, let payload = router.pendingSharedExpense else { return }
+        router.pendingSharedExpense = nil
+        incomingSharedPayload = payload
     }
 
     /// Transactions currently visible in Home's custom flat/day-grouped list.
@@ -796,6 +819,7 @@ struct HomeContentView: View {
                             transaction: txn,
                             onBeginSelection: { beginTransactionSelection(with: txn) },
                             onEdit: { transactionToEdit = txn },
+                            onSplit: { transactionToSplit = txn },
                             onDelete: { viewModel.deleteTransaction(txn) }
                         )
                     }
@@ -819,6 +843,7 @@ struct HomeContentView: View {
                                     transaction: txn,
                                     onBeginSelection: { beginTransactionSelection(with: txn) },
                                     onEdit: { transactionToEdit = txn },
+                                    onSplit: { transactionToSplit = txn },
                                     onDelete: { viewModel.deleteTransaction(txn) }
                                 )
                             }
@@ -839,6 +864,7 @@ struct HomeTransactionRow: View {
     let transaction: Transaction
     let onBeginSelection: () -> Void
     let onEdit: () -> Void
+    let onSplit: () -> Void
     let onDelete: () -> Void
 
     @Environment(\.editMode) private var editMode
@@ -859,6 +885,13 @@ struct HomeTransactionRow: View {
                         Label(L10n.Common.edit, systemImage: "pencil")
                     }
                     .tint(.blue)
+
+                    if transaction.type == .expense {
+                        Button(action: onSplit) {
+                            Label("transaction.splitBill".localized, systemImage: "person.2.slash")
+                        }
+                        .tint(.purple)
+                    }
                 }
             }
             .contextMenu {
@@ -869,6 +902,12 @@ struct HomeTransactionRow: View {
                     Button(action: onEdit) {
                         Label(L10n.Common.edit, systemImage: "pencil")
                             .appFont(.body)
+                    }
+                    if transaction.type == .expense {
+                        Button(action: onSplit) {
+                            Label("transaction.splitBill".localized, systemImage: "person.2.slash")
+                                .appFont(.body)
+                        }
                     }
                     Button(role: .destructive, action: onDelete) {
                         Label(L10n.Common.delete, systemImage: "trash")

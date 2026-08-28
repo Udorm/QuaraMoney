@@ -46,9 +46,10 @@ class AddTransactionViewModel: BaseViewModel {
     }
     
     private var existingTransaction: Transaction?
+    var transaction: Transaction? { existingTransaction }
     var isEditing: Bool { existingTransaction != nil }
     
-    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil, initialAmount: Decimal? = nil, initialType: TransactionType? = nil) {
+    init(dataService: DataService, initialWallet: Wallet? = nil, initialEvent: Event? = nil, transaction: Transaction? = nil, initialDate: Date? = nil, initialDebt: Debt? = nil, initialCategory: Category? = nil, initialAmount: Decimal? = nil, initialType: TransactionType? = nil, initialNote: String? = nil, initialCurrencyCode: String? = nil) {
         self.selectedWallet = initialWallet
         self.selectedEvent = initialEvent
         self.existingTransaction = transaction
@@ -102,8 +103,23 @@ class AddTransactionViewModel: BaseViewModel {
                 self.expression = formatDecimalForExpression(prefill)
             }
             updateTransactionCurrencyExchangeRate()
-        } else if let wallet = initialWallet {
-            self.selectedCurrencyCode = wallet.currencyCode
+        } else {
+            if let wallet = initialWallet {
+                self.selectedCurrencyCode = wallet.currencyCode
+            }
+            if let initialCurrencyCode {
+                self.selectedCurrencyCode = initialCurrencyCode
+            }
+            if let initialAmount, initialAmount > 0 {
+                self.evaluatedAmount = initialAmount
+                self.expression = formatDecimalForExpression(initialAmount)
+            }
+            if let initialCategory {
+                self.selectedCategory = initialCategory
+            }
+            if let initialNote {
+                self.note = initialNote
+            }
         }
 
         // Caller-requested starting type (wallet quick actions) — only for new

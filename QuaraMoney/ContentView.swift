@@ -102,6 +102,9 @@ struct ContentView: View {
             selectedTab = 0
             AppRouter.shared.pendingAddTransaction = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openSharedExpense)) { _ in
+            selectedTab = 0
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openRecurringReview)) { _ in
             AppRouter.shared.pendingRecurringReview = true
             selectedTab = 3 // More tab — MoreView pushes the Recurring screen

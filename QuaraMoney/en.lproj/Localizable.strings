@@ -1455,3 +1455,31 @@
 "split.splitInHalf.help" = "Divide bill equally";
 "split.fullAmountInfo" = "Total Bill: %@ (Full amount)";
 "split.shareMessageFull" = "Expense for %1$@: %2$@. Open in QuaraMoney: %3$@";
+
+/* MARK: - Shared Expense Import (MitraTrip) */
+"split.import.fromTrip" = "From %@";
+"split.import.entries" = "Expenses";
+"split.import.entriesFooter" = "Tap to change category. Swipe to exclude.";
+"split.import.entrySummary" = "%1$d of %2$d expenses selected";
+"split.import.includeAll" = "Include All";
+"split.import.excludeAll" = "Exclude All";
+"split.import.include" = "Include";
+"split.import.exclude" = "Exclude";
+"split.import.included" = "Included";
+"split.import.excluded" = "Excluded";
+"split.import.duplicateWarning" = "%d may already be in your ledger. Excluded — include any that are new.";
+"split.import.duplicateBadge" = "Possible duplicate";
+"split.import.staleWarning" = "This link is over a week old. Check the amounts.";
+"split.import.rate" = "Exchange Rate";
+"split.import.rateFooter" = "1 %1$@ in %2$@. Blank uses today's rate.";
+"split.import.confirmTitle" = "Import %d transactions?";
+"split.import.confirmMessage" = "%1$@ will be added to %2$@.";
+"split.import.confirmAction" = "Import";
+"split.import.noneSelected" = "Select at least one expense to import.";
+
+/* MARK: - Cross-app handoff (MitraTrip ↔ QuaraMoney) */
+"split.handoff.sending" = "Sending your share to QuaraMoney";
+"split.handoff.receiving" = "Receiving your share from MitraTrip";
+"split.import.shareLabel" = "YOUR SHARE";
+"split.import.changeCategoryHint" = "Change category";
+"split.walletEquivalentLabel" = "In Wallet Currency";

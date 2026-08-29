@@ -1,15 +1,28 @@
 import SwiftUI
 import SwiftData
 
-/// Dedicated read-only preview screen for receiving and accepting a shared expense.
-/// Preserves the sender's currency, amount, date, category, and location.
-/// Features a clean hero amount card with non-truncating explanation footer,
-/// the Compact Add Transaction wallet chip selector with suggestion engine auto-selection,
-/// and native Apple inset grouped detail rows.
+/// Staging screen for an incoming shared expense — from QuaraMoney's own split
+/// sheet (v1) or from MitraTrip's "Export to QuaraMoney" (v2, per-expense).
+///
+/// Nothing here commits automatically. A custom URL scheme is an unauthenticated
+/// entry point — any app or web page can invoke `quaramoney://split` — so the
+/// user reviews and confirms every import, and the sender's claimed identity is
+/// never rendered as a trust signal.
+///
+/// Built on a native inset-grouped `List`: the previous version hand-rolled the
+/// grouped look with `VStack` + `Divider().padding(.leading, 56)` + a manual
+/// `secondarySystemGroupedBackground`, which was fine while every row was a
+/// read-only label but has to re-earn row metrics, Dynamic Type reflow and
+/// VoiceOver semantics the moment the rows become editable controls.
+///
+/// The header, the compact share summary and the entry-row anatomy mirror
+/// MitraTrip's export sheet, so the handoff reads as one flow across two apps.
+/// The rows themselves follow `TransactionRowView` — category leading, note
+/// beneath it, amount over date on the trailing edge — because that is what they
+/// are about to become.
 struct ImportSharedExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     let payload: SharedExpensePayload
 
@@ -18,422 +31,748 @@ struct ImportSharedExpenseView: View {
         sort: \Wallet.name
     ) private var wallets: [Wallet]
 
-    @State private var selectedWallet: Wallet?
-    @State private var isSaving: Bool = false
-    @State private var showNoWalletAlert: Bool = false
-    @State private var showAllWallets: Bool = false
-    @State private var showAddWallet: Bool = false
+    @Query(
+        filter: #Predicate<Category> { $0.deletedAt == nil },
+        sort: \Category.name
+    ) private var allCategories: [Category]
 
-    // Suggestion engine state
+    // Editable staging state
+    @State private var selectedWallet: Wallet?
+    @State private var selectedCategory: Category?
+    @State private var date = Date()
+    @State private var note = ""
+    @State private var rateText = ""
+    @State private var excludedEntryIDs: Set<String> = []
+    /// Per-entry category overrides, keyed by `SharedExpenseEntry.sourceId`.
+    @State private var entryCategoryOverrides: [String: UUID] = [:]
+
+    @State private var didPrepare = false
+    @State private var isSaving = false
+    @State private var duplicateEntryIDs: Set<String> = []
+    @State private var errorMessage: String?
+    @State private var showConfirm = false
+    @State private var showAllWallets = false
+    @State private var showAddWallet = false
+    @State private var categoryPickerTarget: CategoryPickerTarget?
+
+    // Suggestion engine
     @State private var scoredWallets: [ScoredWallet] = []
     @State private var suggestionTask: Task<Void, Never>?
     @State private var autoSelectedWalletID: UUID?
 
     private let maxQuickWallets = 4
 
-    /// Excludes savings goals / savings wallets that cannot receive direct expense transactions.
-    private var sourceWallets: [Wallet] {
-        wallets.filter { !$0.isSavings }
-    }
+    /// How far the gradient reaches: toolbar plus the handoff header, fading out
+    /// before the summary card. Scaled so it still covers the header when
+    /// Dynamic Type grows it.
+    @ScaledMetric(relativeTo: .body) private var backdropHeight: CGFloat = 250
 
-    private var resolvedCategory: Category? {
-        SplitExpenseService.resolveCategory(for: payload, in: modelContext)
-    }
+    /// Which category picker is open — the consolidated one, or one entry's.
+    private enum CategoryPickerTarget: Identifiable {
+        case consolidated
+        case entry(String)
 
-    private var effectiveNote: String {
-        if let raw = payload.note, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "split.importedNote".localized(with: raw)
+        var id: String {
+            switch self {
+            case .consolidated: "consolidated"
+            case .entry(let sourceID): "entry-\(sourceID)"
+            }
         }
-        return "split.importedDefaultNote".localized
     }
 
-    /// Contextually-ranked wallets for the horizontal quick chip rail, mirroring CompactAddTransactionView.
+    // MARK: - Derived
+
+    /// Savings wallets can't receive direct expense transactions.
+    private var sourceWallets: [Wallet] { wallets.filter { !$0.isSavings } }
+
+    private var expenseCategories: [Category] { allCategories.filter { $0.type == .expense } }
+
+    private var entries: [SharedExpenseEntry] { payload.entries ?? [] }
+
+    private var isDetailed: Bool { payload.isDetailed }
+
+    private var includedEntries: [SharedExpenseEntry] {
+        entries.filter { !excludedEntryIDs.contains($0.sourceId) }
+    }
+
+    private var currencyCode: String { payload.currencyCode }
+
+    /// The amount that will actually be committed, in minor units — the sum of
+    /// the included entries in Detailed mode, the payload total otherwise.
+    private var totalMinor: Int64 {
+        if isDetailed {
+            return includedEntries.reduce(into: Int64(0)) { $0 += $1.amountMinor }
+        }
+        if let source = payload.source { return source.totalMinor }
+        return MoneyMinorUnitConverter.toMinorUnits(payload.splitAmount, currencyCode: currencyCode)
+    }
+
+    private var totalAmount: Decimal {
+        MoneyMinorUnitConverter.fromMinorUnits(totalMinor, currencyCode: currencyCode)
+    }
+
+    private var transactionCount: Int { isDetailed ? includedEntries.count : 1 }
+
+    private var isCrossCurrency: Bool {
+        guard let wallet = selectedWallet else { return false }
+        return wallet.currencyCode.caseInsensitiveCompare(currencyCode) != .orderedSame
+    }
+
+    /// The rate actually applied: the user's override when it parses, otherwise
+    /// today's rate from `CurrencyManager`.
+    ///
+    /// `CurrencyManager` keeps only *current* rates, so a three-week-old expense
+    /// would silently be converted at today's rate. Surfacing it as an editable
+    /// field is the difference between an estimate the user accepted and one
+    /// applied behind their back.
+    private var effectiveRate: Decimal {
+        guard let wallet = selectedWallet else { return 1 }
+        guard isCrossCurrency else { return 1 }
+        if let override = Decimal(string: rateText.trimmingCharacters(in: .whitespaces)), override > 0 {
+            return override
+        }
+        return CurrencyManager.shared.convert(amount: 1, from: currencyCode, to: wallet.currencyCode)
+    }
+
+    private var canSave: Bool {
+        selectedWallet != nil && totalMinor > 0 && !isSaving
+    }
+
+    // MARK: - Body
+
+    var body: some View {
+        NavigationStack {
+            List {
+                handoffSection
+                summarySection
+                warningSection
+                walletSection
+                detailSection
+                rateSection
+                entriesSection
+            }
+            .listStyle(.insetGrouped)
+            // The backdrop has to reach the toolbar, so it goes behind the whole
+            // scroll view — which means hiding the list's own background and
+            // putting the grouped colour back underneath it.
+            .scrollContentBackground(.hidden)
+            .background(alignment: .top) {
+                AppHandoffBackdrop()
+                    .frame(height: backdropHeight)
+                    .ignoresSafeArea(edges: .top)
+            }
+            .background {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("split.receivedTitle".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.Common.cancel) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        if transactionCount > 1 { showConfirm = true } else { commit() }
+                    } label: {
+                        if isSaving {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text(L10n.Common.save).fontWeight(.semibold)
+                        }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+            .overlay {
+                if sourceWallets.isEmpty {
+                    ContentUnavailableView {
+                        Label("transaction.setup.wallet.title".localized, systemImage: "wallet.pass")
+                    } description: {
+                        Text("transaction.setup.wallet.message".localized)
+                    } actions: {
+                        Button("wallet.add".localized) { showAddWallet = true }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+            .task { prepareIfNeeded() }
+            .sheet(isPresented: $showAddWallet, onDismiss: autoSelectNewWalletIfNeeded) {
+                AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
+            }
+            .sheet(isPresented: $showAllWallets) {
+                TransactionWalletPickerSheet(
+                    wallets: sourceWallets,
+                    selectedWalletID: selectedWallet?.id,
+                    onSelect: { wallet in
+                        selectedWallet = wallet
+                        showAllWallets = false
+                        HapticManager.shared.selection()
+                    },
+                    onDismiss: { showAllWallets = false }
+                )
+            }
+            .sheet(item: $categoryPickerTarget) { target in
+                TransactionCategoryPickerSheet(
+                    allCategories: expenseCategories,
+                    rankedSuggestions: [],
+                    selectedCategoryID: selectedCategoryID(for: target),
+                    transactionType: .expense,
+                    onSelect: { category in
+                        apply(category, to: target)
+                        categoryPickerTarget = nil
+                    },
+                    onDismiss: { categoryPickerTarget = nil }
+                )
+            }
+            .confirmationDialog(
+                "split.import.confirmTitle".localized(with: transactionCount),
+                isPresented: $showConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("split.import.confirmAction".localized) { commit() }
+                Button(L10n.Common.cancel, role: .cancel) {}
+            } message: {
+                Text("split.import.confirmMessage".localized(
+                    with: totalAmount.formattedAmount(for: currencyCode),
+                    selectedWallet?.name ?? ""
+                ))
+            }
+            .alert(L10n.Common.error, isPresented: .constant(errorMessage != nil)) {
+                Button(L10n.Common.ok) { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    // MARK: - Handoff header
+
+    /// Sits outside the grouped cards so the two icons read as artwork rather
+    /// than as another settings row.
+    private var handoffSection: some View {
+        Section {
+            AppHandoffVisual(role: .destination)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        }
+    }
+
+    // MARK: - Summary
+
+    /// The amount, its currency and its provenance in a single row.
+    ///
+    /// This replaced a 40pt hero. The number still leads, but at a size that
+    /// leaves the screen's real work — choosing a wallet, checking the
+    /// categories — above the fold instead of below it. Identical in shape to
+    /// MitraTrip's summary so the figure you approved there is recognisably the
+    /// same figure here.
+    private var summarySection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("split.import.shareLabel".localized)
+                        .appFont(.caption2, weight: .semibold)
+                        .tracking(0.5)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 8)
+
+                    Text(currencyCode)
+                        .appFont(.caption2, weight: .medium)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                }
+
+                Text(totalAmount.formattedAmount(for: currencyCode))
+                    .appFont(.title, weight: .bold)
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: totalMinor)
+
+                Text(metadataLine)
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 2)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Trip name plus what the figure above is made of. `source.app` is a claim
+    /// made by the sender, not a verified fact, so the trip name is described
+    /// neutrally and never rendered as a trust badge.
+    private var metadataLine: String {
+        var parts: [String] = []
+        if let source = payload.source, !source.tripName.isEmpty {
+            parts.append(source.tripName)
+        }
+        parts.append(compositionText)
+        return parts.joined(separator: " · ")
+    }
+
+    private var compositionText: String {
+        if isDetailed {
+            return "split.import.entrySummary".localized(with: includedEntries.count, entries.count)
+        }
+        if payload.isCustomSplit {
+            return "split.customSplitInfo".localized(with: payload.originalAmount.formattedAmount(for: currencyCode))
+        }
+        if payload.splitCount <= 1 || payload.splitAmount == payload.originalAmount {
+            return "split.fullAmountInfo".localized(with: payload.originalAmount.formattedAmount(for: currencyCode))
+        }
+        return "split.originalBillInfo".localized(with: payload.originalAmount.formattedAmount(for: currencyCode), payload.splitCount)
+    }
+
+    // MARK: - Warnings
+
+    /// Duplicates lead: that warning has already acted on the user's behalf by
+    /// pre-excluding rows, so it is the one they must read to understand why the
+    /// total is lower than the link promised.
+    @ViewBuilder
+    private var warningSection: some View {
+        let hasDuplicates = !duplicateEntryIDs.isEmpty
+        if payload.isStale || hasDuplicates {
+            Section {
+                if hasDuplicates {
+                    warningRow(
+                        systemImage: "exclamationmark.triangle.fill",
+                        text: "split.import.duplicateWarning".localized(with: duplicateEntryIDs.count)
+                    )
+                }
+                if payload.isStale {
+                    warningRow(
+                        systemImage: "clock.badge.exclamationmark",
+                        text: "split.import.staleWarning".localized
+                    )
+                }
+            }
+        }
+    }
+
+    /// A tinted row rather than a grey `Label`.
+    ///
+    /// The previous version rendered as an ordinary list row and read as
+    /// incidental detail — a caution about money that may already be in the
+    /// ledger has to survive being scrolled past. The tint rides on
+    /// `listRowBackground`, which the grouped list clips to its own shape, so
+    /// there is no shape in this source to keep in sync.
+    private func warningRow(systemImage: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .appFont(.title3)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+
+            Text(text)
+                .appFont(.footnote, weight: .medium)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .listRowBackground(Color.orange.opacity(0.14))
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Wallet
+
+    @ViewBuilder
+    private var walletSection: some View {
+        if !sourceWallets.isEmpty {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(frequentWallets) { wallet in
+                            WalletChip(wallet: wallet, isSelected: selectedWallet?.id == wallet.id) {
+                                selectedWallet = wallet
+                                HapticManager.shared.selection()
+                            }
+                        }
+                        if sourceWallets.count > maxQuickWallets {
+                            Button("common.more".localized) { showAllWallets = true }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollClipDisabled()
+            } header: {
+                // No footer: the header already says "Save to Wallet", and the
+                // chips below it are self-evidently the choice.
+                Text("split.selectWallet".localized)
+            }
+        }
+    }
+
     private var frequentWallets: [Wallet] {
         let ordered = (scoredWallets.isEmpty ? sourceWallets : scoredWallets.map(\.wallet))
             .filter { wallet in sourceWallets.contains { $0.id == wallet.id } }
         return Array(ordered.prefix(maxQuickWallets))
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // MARK: - Amount Card & Explanation Footer
-                    amountHeroCard
+    // MARK: - Details
 
-                    // MARK: - Wallet Selection Section (CompactAddTransactionView Chip Rail)
-                    walletSection
-
-                    // MARK: - Native Apple Detail Rows
-                    detailSection
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("split.receivedTitle".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel(L10n.Common.cancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        acceptAndSave()
-                    } label: {
-                        if isSaving {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "checkmark")
-                                .fontWeight(.semibold)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isSaving || sourceWallets.isEmpty)
-                    .accessibilityLabel(L10n.Common.save)
-                }
-            }
-            .onAppear {
-                initialWalletPreselection()
-            }
-            .alert(L10n.Common.error, isPresented: $showNoWalletAlert) {
-                Button(L10n.Common.ok, role: .cancel) { }
-            } message: {
-                Text("wallet.emptyState".localized)
-            }
-        }
-    }
-
-    // MARK: - Amount Hero Card & Footer Explanation
-    private var amountHeroCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let shape = RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
-            let typeTint = ThemeManager.shared.expenseColor
-
-            let cardContent = VStack(alignment: .center, spacing: 6) {
-                HStack(alignment: .center, spacing: 6) {
-                    Text(String.currencySymbol(for: payload.currencyCode))
-                        .appFont(size: 28, weight: .semibold)
-                        .foregroundStyle(Color.secondary)
-
-                    Text(formatAmountValue(payload.splitAmount, currencyCode: payload.currencyCode))
-                        .appFont(size: 44, weight: .bold)
-                        .minimumScaleFactor(0.4)
-                        .lineLimit(1)
-                        .foregroundStyle(Color.primary)
-                }
-                .padding(.vertical, 16)
-                .padding(.horizontal, 16)
-            }
-            .frame(maxWidth: .infinity)
-
-            Group {
-                if reduceTransparency {
-                    cardContent
-                        .background(typeTint.opacity(0.15), in: shape)
-                } else if #available(iOS 26.0, *) {
-                    cardContent
-                        .glassEffect(.regular.tint(typeTint.opacity(0.18)), in: shape)
-                } else {
-                    cardContent
-                        .background(Color(.secondarySystemGroupedBackground), in: shape)
-                }
-            }
-            .clipShape(shape)
-            .contentShape(shape)
-
-            // Native Apple form footer explanation text under the card (no truncation)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("split.receivedSubtitle".localized)
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if payload.isCustomSplit {
-                    Text(String(format: "split.customSplitInfo".localized, payload.originalAmount.formattedAmount(for: payload.currencyCode)))
-                        .appFont(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if payload.splitCount <= 1 || payload.splitAmount == payload.originalAmount {
-                    Text(String(format: "split.fullAmountInfo".localized, payload.originalAmount.formattedAmount(for: payload.currencyCode)))
-                        .appFont(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text(String(format: "split.originalBillInfo".localized, payload.originalAmount.formattedAmount(for: payload.currencyCode), payload.splitCount))
-                        .appFont(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 2)
-        }
-    }
-
-    private func formatAmountValue(_ value: Decimal, currencyCode: String) -> String {
-        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
-        if currencyCode.uppercased() == "KHR" {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: doubleValue)) ?? "\(value)"
-        } else {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = 2
-            formatter.maximumFractionDigits = 2
-            return formatter.string(from: NSNumber(value: doubleValue)) ?? "\(value)"
-        }
-    }
-
-    // MARK: - Wallet Section (Matching CompactAddTransactionView)
+    /// Consolidated imports only.
+    ///
+    /// In Itemized mode every field here was either dead or duplicated: `commit`
+    /// takes the date from `entry.date` and the category from
+    /// `category(for: entry)`, so the pickers moved nothing, and the trip name
+    /// they described is already in the summary above. A control that appears
+    /// editable but changes nothing is worse than an absent one, so the whole
+    /// section is gone in that mode. For a consolidated import these are the only
+    /// place the single transaction's category, date and note can be set.
     @ViewBuilder
-    private var walletSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("transaction.fromWallet".localized)
+    private var detailSection: some View {
+        if !isDetailed {
+            Section("common.details".localized) {
+                categoryRow
 
-            if sourceWallets.isEmpty {
-                TransactionSetupPrompt(
-                    icon: "wallet.pass",
-                    tint: .accentColor,
-                    title: "transaction.setup.wallet.title".localized,
-                    message: "transaction.setup.wallet.message".localized,
-                    actionTitle: "wallet.add".localized
-                ) {
-                    showAddWallet = true
+                DatePicker("split.date".localized, selection: $date, displayedComponents: [.date, .hourAndMinute])
+
+                LabeledContent("split.note".localized) {
+                    TextField("split.note".localized, text: $note, axis: .vertical)
+                        .lineLimit(1...3)
+                        .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.sentences)
                 }
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
-                .sheet(isPresented: $showAddWallet, onDismiss: autoSelectNewWalletIfNeeded) {
-                    AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
-                }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(frequentWallets) { wallet in
-                            WalletChip(
-                                wallet: wallet,
-                                isSelected: selectedWallet?.id == wallet.id
-                            ) {
-                                selectedWallet = wallet
-                                HapticManager.shared.selection()
+
+                if let location = payload.location {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(location.primaryTitle).appFont(.body)
+                            if let secondary = location.secondaryTitle {
+                                Text(secondary).appFont(.caption).foregroundStyle(.secondary)
                             }
                         }
-
-                        if sourceWallets.count > maxQuickWallets {
-                            moreChip { showAllWallets = true }
-                        }
+                    } icon: {
+                        Image(systemName: "mappin.and.ellipse").foregroundStyle(.red)
                     }
-                    .padding(.horizontal, 2)
-                }
-                .chipRail()
-                .sheet(isPresented: $showAllWallets) {
-                    TransactionWalletPickerSheet(
-                        wallets: sourceWallets,
-                        selectedWalletID: selectedWallet?.id,
-                        onSelect: { wallet in
-                            selectedWallet = wallet
-                            showAllWallets = false
-                            HapticManager.shared.selection()
-                        },
-                        onDismiss: { showAllWallets = false }
-                    )
                 }
             }
         }
     }
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .appFont(.footnote, weight: .medium)
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .padding(.horizontal, 16)
-    }
+    /// A disclosure row, not a bare label.
+    ///
+    /// The category is the field most likely to need changing, and the previous
+    /// version gave no sign it could be: a right-aligned grey string reads as a
+    /// read-only value everywhere else in iOS. The category's own icon plus a
+    /// trailing chevron is the same affordance the rest of the app uses for a
+    /// row that opens a picker.
+    private var categoryRow: some View {
+        Button {
+            categoryPickerTarget = .consolidated
+        } label: {
+            HStack(spacing: 12) {
+                Text("split.category".localized)
+                    .foregroundStyle(.primary)
 
-    private func moreChip(action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: "ellipsis")
-                    .appFont(.caption2)
-                Text("common.more".localized)
-                    .appFont(.subheadline, weight: .medium)
+                Spacer(minLength: 8)
+
+                if let category = selectedCategory {
+                    Image(systemName: category.icon)
+                        .appFont(.caption)
+                        .foregroundStyle(Color(hex: category.colorHex) ?? .gray)
+                    Text(category.displayName)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text("common.none".localized)
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .appFont(.caption2, weight: .semibold)
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(.tertiarySystemGroupedBackground))
-            .foregroundColor(.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint("split.import.changeCategoryHint".localized)
     }
 
-    // MARK: - Detail Section (Native Apple Inset Grouped Rows)
-    private var detailSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("common.details".localized)
+    // MARK: - Exchange rate
 
-            VStack(spacing: 0) {
-                // Category
-                if let category = resolvedCategory {
-                    let iconColor = Color(hex: category.colorHex) ?? .orange
-                    let iconName = category.icon.isEmpty ? "fork.knife" : category.icon
-                    detailRow(
-                        icon: iconName,
-                        iconColor: iconColor,
-                        title: "split.category".localized,
-                        value: category.displayName
+    @ViewBuilder
+    private var rateSection: some View {
+        if isCrossCurrency, let wallet = selectedWallet {
+            let converted = totalAmount * effectiveRate
+            Section {
+                LabeledContent("split.import.rate".localized) {
+                    TextField(
+                        rateePlaceholder(wallet: wallet),
+                        text: $rateText
                     )
-                    Divider().padding(.leading, 56)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
                 }
-
-                // Date & Time
-                detailRow(
-                    icon: "calendar",
-                    iconColor: .blue,
-                    title: "split.date".localized,
-                    value: payload.date.appFormatted(date: .abbreviated, time: .shortened)
-                )
-
-                // Location (if present)
-                if let loc = payload.location {
-                    Divider().padding(.leading, 56)
-                    detailLocationRow(loc: loc)
+                LabeledContent("split.walletEquivalentLabel".localized) {
+                    Text(converted.formattedAmount(for: wallet.currencyCode))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
-
-                // Note
-                Divider().padding(.leading, 56)
-                detailRow(
-                    icon: "note.text",
-                    iconColor: .purple,
-                    title: "split.note".localized,
-                    value: effectiveNote
-                )
+            } header: {
+                Text("split.import.rate".localized)
+            } footer: {
+                Text("split.import.rateFooter".localized(with: currencyCode, wallet.currencyCode))
+                    .sectionFooter()
             }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
         }
     }
 
-    private func detailRow(
-        icon: String,
-        iconColor: Color,
-        title: String,
-        value: String
-    ) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .appFont(.body)
-                    .foregroundStyle(iconColor)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .appFont(.body, weight: .medium)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+    private func rateePlaceholder(wallet: Wallet) -> String {
+        let live = CurrencyManager.shared.convert(amount: 1, from: currencyCode, to: wallet.currencyCode)
+        return NSDecimalNumber(decimal: live).stringValue
     }
 
-    private func detailLocationRow(loc: SharedExpenseLocation) -> some View {
-        HStack(spacing: 12) {
+    // MARK: - Entries (Detailed mode)
+
+    @ViewBuilder
+    private var entriesSection: some View {
+        if isDetailed {
+            Section {
+                ForEach(entries) { entry in
+                    entryRow(entry)
+                }
+            } header: {
+                HStack {
+                    Text("split.import.entries".localized)
+                    Spacer()
+                    Button(excludedEntryIDs.isEmpty ? "split.import.excludeAll".localized
+                                                    : "split.import.includeAll".localized) {
+                        withAnimation {
+                            excludedEntryIDs = excludedEntryIDs.isEmpty
+                                ? Set(entries.map(\.sourceId))
+                                : []
+                        }
+                    }
+                    .appFont(.footnote)
+                    .textCase(nil)
+                }
+            } footer: {
+                Text("split.import.entriesFooter".localized)
+                    .sectionFooter()
+            }
+        }
+    }
+
+    /// `TransactionRowView`'s anatomy — category icon, category name, note
+    /// beneath, amount over date on the trailing edge — so a row here looks like
+    /// the transaction it becomes. The leading circle includes or excludes it;
+    /// the chevron after the category name marks the row as tappable to
+    /// recategorise, which nothing in the previous version did.
+    private func entryRow(_ entry: SharedExpenseEntry) -> some View {
+        let isIncluded = !excludedEntryIDs.contains(entry.sourceId)
+        let category = category(for: entry)
+        let isDuplicate = duplicateEntryIDs.contains(entry.sourceId)
+        let tint = category.flatMap { Color(hex: $0.colorHex) } ?? .gray
+
+        return HStack(spacing: 12) {
+            Button {
+                withAnimation(.snappy) { toggle(entry) }
+                HapticManager.shared.selection()
+            } label: {
+                Image(systemName: isIncluded ? "checkmark.circle.fill" : "circle")
+                    .appFont(.title3)
+                    .foregroundStyle(isIncluded ? Color.accentColor : Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isIncluded ? "split.import.included".localized : "split.import.excluded".localized)
+
             ZStack {
                 Circle()
-                    .fill(Color.red.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: "mappin.and.ellipse")
-                    .appFont(.body)
-                    .foregroundStyle(.red)
+                    .fill(tint.opacity(0.1))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: category?.icon ?? "questionmark")
+                    .appFont(.subheadline)
+                    .foregroundStyle(tint)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("split.location".localized)
-                    .appFont(.caption)
-                    .foregroundStyle(.secondary)
-                Text(loc.primaryTitle)
-                    .appFont(.body, weight: .medium)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let secondary = loc.secondaryTitle {
-                    Text(secondary)
+                HStack(spacing: 4) {
+                    Text(category?.displayName ?? "common.none".localized)
+                        .appFont(.subheadline, weight: .medium)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Image(systemName: "chevron.down")
+                        .appFont(.caption2, weight: .semibold)
+                        .foregroundStyle(.tertiary)
+                }
+
+                HStack(spacing: 4) {
+                    if isDuplicate {
+                        Text("split.import.duplicateBadge".localized)
+                            .appFont(.caption2, weight: .medium)
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.12), in: Capsule())
+                    }
+
+                    Text(entry.title.isEmpty ? "split.title".localized : entry.title)
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(MoneyMinorUnitConverter.fromMinorUnits(entry.amountMinor, currencyCode: currencyCode)
+                        .formattedAmount(for: currencyCode))
+                    .appFont(.subheadline, weight: .semibold)
+                    .monospacedDigit()
+                    .lineLimit(1)
+
+                Text(entry.date.appFormatted(date: .abbreviated, time: .omitted))
+                    .appFont(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .layoutPriority(1)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 6)
+        .frame(minHeight: 44)
+        .opacity(isIncluded ? 1 : 0.45)
+        .contentShape(Rectangle())
+        .onTapGesture { categoryPickerTarget = .entry(entry.sourceId) }
+        .accessibilityHint("split.import.changeCategoryHint".localized)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(isIncluded ? "split.import.exclude".localized : "split.import.include".localized) {
+                withAnimation(.snappy) { toggle(entry) }
+            }
+            .tint(isIncluded ? .orange : .accentColor)
+        }
     }
 
-    // MARK: - Suggestion Engine & Preselection
-    private func scoringLocation() -> SuggestionLocationContext? {
-        if let loc = payload.location {
-            return SuggestionLocationContext(
-                applePlaceID: nil,
-                spatialKey: TransactionLocation.spatialKey(
-                    latitude: loc.latitude,
-                    longitude: loc.longitude
-                )
-            )
+    private func toggle(_ entry: SharedExpenseEntry) {
+        if excludedEntryIDs.contains(entry.sourceId) {
+            excludedEntryIDs.remove(entry.sourceId)
+        } else {
+            excludedEntryIDs.insert(entry.sourceId)
         }
-        return nil
     }
 
-    private func initialWalletPreselection() {
+    // MARK: - Category resolution
+
+    private func category(for entry: SharedExpenseEntry) -> Category? {
+        if let overrideID = entryCategoryOverrides[entry.sourceId] {
+            return expenseCategories.first { $0.id == overrideID }
+        }
+        return SplitExpenseService.resolveCategory(key: entry.categoryKey, name: nil, in: modelContext)
+    }
+
+    private func selectedCategoryID(for target: CategoryPickerTarget) -> UUID? {
+        switch target {
+        case .consolidated: selectedCategory?.id
+        case .entry(let sourceID):
+            entryCategoryOverrides[sourceID]
+                ?? entries.first { $0.sourceId == sourceID }.flatMap { category(for: $0)?.id }
+        }
+    }
+
+    private func apply(_ category: Category, to target: CategoryPickerTarget) {
+        switch target {
+        case .consolidated: selectedCategory = category
+        case .entry(let sourceID): entryCategoryOverrides[sourceID] = category.id
+        }
+    }
+
+    // MARK: - Preparation
+
+    private func prepareIfNeeded() {
+        guard !didPrepare else { return }
+        didPrepare = true
+
+        date = payload.date
+        note = defaultNote
+        selectedCategory = SplitExpenseService.resolveCategory(for: payload, in: modelContext)
+
         if selectedWallet == nil {
-            // Provisional preselection: first try currency-matching wallet, then first available
-            if let matching = sourceWallets.first(where: { $0.currencyCode.uppercased() == payload.currencyCode.uppercased() }) {
+            if let matching = sourceWallets.first(where: {
+                $0.currencyCode.caseInsensitiveCompare(currencyCode) == .orderedSame
+            }) {
                 autoSelectedWalletID = matching.id
                 selectedWallet = matching
-            } else if let firstWallet = sourceWallets.first {
-                autoSelectedWalletID = firstWallet.id
-                selectedWallet = firstWallet
+            } else if let first = sourceWallets.first {
+                autoSelectedWalletID = first.id
+                selectedWallet = first
             }
         }
 
+        flagDuplicates()
         recomputeSuggestions()
     }
 
+    private var defaultNote: String {
+        if let source = payload.source, !source.tripName.isEmpty {
+            return "split.importedNote".localized(with: source.tripName)
+        }
+        if let raw = payload.note, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "split.importedNote".localized(with: raw)
+        }
+        return "split.importedDefaultNote".localized
+    }
+
+    /// Flags rows that look already-imported and **pre-excludes** them. A warning
+    /// the user must actively override beats one they can scroll past.
+    private func flagDuplicates() {
+        let candidates: [SharedExpenseImportGuard.Candidate]
+        if isDetailed {
+            candidates = entries.map {
+                .init(
+                    amount: MoneyMinorUnitConverter.fromMinorUnits($0.amountMinor, currencyCode: currencyCode),
+                    currencyCode: currencyCode,
+                    date: $0.date,
+                    searchHint: $0.title
+                )
+            }
+        } else {
+            candidates = [.init(amount: totalAmount, currencyCode: currencyCode, date: payload.date, searchHint: payload.note)]
+        }
+
+        let flagged = SharedExpenseImportGuard.likelyDuplicateIndices(among: candidates, in: modelContext)
+        guard !flagged.isEmpty else { return }
+
+        if isDetailed {
+            let ids = flagged.compactMap { index in entries.indices.contains(index) ? entries[index].sourceId : nil }
+            duplicateEntryIDs = Set(ids)
+            excludedEntryIDs.formUnion(ids)
+        } else {
+            duplicateEntryIDs = ["consolidated"]
+        }
+    }
+
+    // MARK: - Suggestions
+
     private func recomputeSuggestions() {
-        let location = scoringLocation()
-        let categoryID = resolvedCategory?.id
+        let location = payload.location.map {
+            SuggestionLocationContext(
+                applePlaceID: nil,
+                spatialKey: TransactionLocation.spatialKey(latitude: $0.latitude, longitude: $0.longitude)
+            )
+        }
         let container = modelContext.container
-        let initialWalletID = selectedWallet?.id
+        let walletID = selectedWallet?.id
+        let categoryID = selectedCategory?.id
 
         suggestionTask?.cancel()
         suggestionTask = Task {
             let snapshot = await TransactionSuggestionEngine.computeSuggestions(
                 container: container,
                 type: .expense,
-                selectedWalletID: initialWalletID,
+                selectedWalletID: walletID,
                 selectedCategoryID: categoryID,
                 location: location
             )
@@ -443,14 +782,12 @@ struct ImportSharedExpenseView: View {
     }
 
     private func applySuggestions(_ snapshot: SuggestionSnapshot) {
-        let walletsByID = Dictionary(sourceWallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let byID = Dictionary(sourceWallets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         scoredWallets = snapshot.wallets.compactMap { ranked in
-            walletsByID[ranked.id].map {
-                ScoredWallet(wallet: $0, score: ranked.score, lastUsed: ranked.lastUsed)
-            }
+            byID[ranked.id].map { ScoredWallet(wallet: $0, score: ranked.score, lastUsed: ranked.lastUsed) }
         }
-
-        // Upgrade provisional preselection to top suggestion if user hasn't manually picked another wallet
+        // Upgrade the provisional pick to the top suggestion only while the user
+        // hasn't chosen one themselves.
         if let current = selectedWallet,
            current.id == autoSelectedWalletID,
            let top = scoredWallets.first?.wallet,
@@ -466,44 +803,105 @@ struct ImportSharedExpenseView: View {
         recomputeSuggestions()
     }
 
-    // MARK: - Accept & Save Action
-    private func acceptAndSave() {
-        guard let wallet = selectedWallet else {
-            showNoWalletAlert = true
+    // MARK: - Commit
+
+    private func commit() {
+        guard let wallet = selectedWallet else { return }
+        isSaving = true
+
+        let rate = effectiveRate
+        var inserted: [Transaction] = []
+
+        do {
+            if isDetailed {
+                guard !includedEntries.isEmpty else {
+                    isSaving = false
+                    errorMessage = "split.import.noneSelected".localized
+                    return
+                }
+                for entry in includedEntries {
+                    let amount = MoneyMinorUnitConverter.fromMinorUnits(entry.amountMinor, currencyCode: currencyCode)
+                    let title = entry.title.isEmpty ? note : entry.title
+                    let transaction = try makeTransaction(
+                        amount: amount,
+                        date: entry.date,
+                        note: noteText(for: title),
+                        category: category(for: entry),
+                        wallet: wallet,
+                        rate: rate
+                    )
+                    inserted.append(transaction)
+                }
+            } else {
+                let transaction = try makeTransaction(
+                    amount: totalAmount,
+                    date: date,
+                    note: note,
+                    category: selectedCategory,
+                    wallet: wallet,
+                    rate: rate
+                )
+                inserted.append(transaction)
+            }
+        } catch {
+            isSaving = false
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return
         }
 
-        isSaving = true
+        // Every transaction validated before anything was inserted, so a partial
+        // import can't reach the store.
+        for transaction in inserted { modelContext.insert(transaction) }
 
+        do {
+            try modelContext.save()
+            wallet.invalidateBalanceCache()
+            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
+            HapticManager.shared.notification(type: .success)
+            dismiss()
+        } catch {
+            isSaving = false
+            ErrorService.shared.handlePersistenceError(error, context: "ImportSharedExpenseView.commit")
+        }
+    }
+
+    private func noteText(for title: String) -> String {
+        guard let source = payload.source, !source.tripName.isEmpty else { return title }
+        return "\(title) · \(source.tripName)"
+    }
+
+    /// Builds and **validates** a transaction without inserting it.
+    ///
+    /// `Transaction.validate()` and `WalletLedgerRules.validate(transaction:)`
+    /// both run here. The previous implementation called neither, so a payload
+    /// with a non-positive amount reached `insert` + `save` and corrupted the
+    /// wallet balance — `EventLedgerService` validates on the analogous internal
+    /// export path, and this path is fed by an unauthenticated URL.
+    private func makeTransaction(
+        amount: Decimal,
+        date: Date,
+        note: String,
+        category: Category?,
+        wallet: Wallet,
+        rate: Decimal
+    ) throws -> Transaction {
         let transaction = Transaction(
-            amount: payload.splitAmount,
-            currencyCode: payload.currencyCode,
-            date: payload.date,
+            amount: amount,
+            currencyCode: currencyCode,
+            date: date,
             type: .expense
         )
-
-        transaction.category = resolvedCategory
-        transaction.note = effectiveNote
-        transaction.tags = TransactionTagParser.tags(in: effectiveNote)
+        transaction.category = category
+        transaction.note = note
+        transaction.tags = TransactionTagParser.tags(in: note)
         transaction.sourceWallet = wallet
-
-        // Authoritative exchange rate relative to chosen wallet
-        let rate: Decimal
-        if payload.currencyCode.uppercased() == wallet.currencyCode.uppercased() {
-            rate = 1.0
-        } else {
-            rate = CurrencyManager.shared.convert(
-                amount: 1.0,
-                from: payload.currencyCode,
-                to: wallet.currencyCode
-            )
-        }
         transaction.exchangeRate = rate
         transaction.storedRate = rate
+        transaction.updatedAt = Date()
+        transaction.needsSync = true
 
-        // Location transfer
         if let loc = payload.location {
-            let persistentLocation = TransactionLocation(
+            transaction.location = TransactionLocation(
                 displayName: loc.displayName,
                 fullAddress: loc.fullAddress,
                 shortAddress: loc.shortAddress,
@@ -514,23 +912,11 @@ struct ImportSharedExpenseView: View {
                 administrativeArea: loc.administrativeArea,
                 countryCode: loc.countryCode
             )
-            transaction.location = persistentLocation
         }
 
-        transaction.updatedAt = Date()
-        transaction.needsSync = true
-
-        modelContext.insert(transaction)
-
-        do {
-            try modelContext.save()
-            wallet.invalidateBalanceCache()
-            NotificationCenter.default.post(name: .dataDidUpdate, object: nil)
-            HapticManager.shared.notification(type: .success)
-            dismiss()
-        } catch {
-            isSaving = false
-            ErrorService.shared.handlePersistenceError(error, context: "ImportSharedExpenseView.acceptAndSave")
-        }
+        let errors = transaction.validate()
+        if let first = errors.first { throw first }
+        try WalletLedgerRules.validate(transaction: transaction)
+        return transaction
     }
 }

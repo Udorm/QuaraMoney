@@ -2,5 +2,48 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  Universal Links — DISABLED until this app is on a PAID Apple Developer
+	  Program team. Free "Personal Team" accounts cannot provision the
+	  Associated Domains capability, so enabling it breaks signing.
+	  (MitraTrip.entitlements carries the same note for the same reason.)
+
+	  WHY THIS APP: shared expenses arrive over `quaramoney://split`, a custom
+	  URL scheme. Custom schemes carry no origin attestation — any app, web page
+	  or QR code can invoke one, and nothing guarantees THIS app is the one that
+	  receives a link another app sends. Universal Links are the authenticated
+	  alternative, and the entitlement belongs on the RECEIVING app: MitraTrip
+	  only opens an https URL, which needs no capability at all.
+
+	  Until then the mitigation is procedural and holds: ImportSharedExpenseView
+	  never auto-imports, every amount is shown before it is written, and the
+	  sender's claimed identity (`SharedExpenseSource.app`) is treated as an
+	  unverified claim rather than a trust badge.
+
+	  To turn Universal Links on once enrolled in the paid program:
+	    1. In the Apple Developer portal, enable "Associated Domains" on the
+	       App ID (uk.dormmy.QuaraMoney).
+	    2. Uncomment the entitlement below and rebuild (automatic signing will
+	       refresh the provisioning profile).
+	    3. Add this app to the apple-app-site-association file already planned
+	       for mitratrip.app — one AASA can claim several apps on different
+	       paths, so no second domain is needed:
+
+	         { "applinks": { "details": [
+	             { "appIDs": ["852VUPUNPH.mitratrip.app"],
+	               "components": [{ "/": "/trip/*" }, { "/": "/invite/*" }] },
+	             { "appIDs": ["852VUPUNPH.uk.dormmy.QuaraMoney"],
+	               "components": [{ "/": "/import/*" }] }
+	         ]}}
+
+	    4. Teach SplitExpenseService.canHandle to accept
+	       https://mitratrip.app/import/... alongside the existing scheme, and
+	       keep the scheme working for links already in the wild.
+
+	  <key>com.apple.developer.associated-domains</key>
+	  <array>
+	      <string>applinks:mitratrip.app</string>
+	  </array>
+	-->
 </dict>
 </plist>

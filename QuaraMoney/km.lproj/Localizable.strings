@@ -1455,3 +1455,31 @@
 "split.splitInHalf.help" = "ចែកវិក្កយបត្រស្មើគ្នា";
 "split.fullAmountInfo" = "វិក្កយបត្រសរុប៖ %@ (ចំនួនពេញ)";
 "split.shareMessageFull" = "ការចំណាយសម្រាប់ %1$@៖ %2$@។ បើកនៅក្នុង QuaraMoney៖ %3$@";
+
+/* MARK: - Shared Expense Import (MitraTrip) */
+"split.import.fromTrip" = "ពី %@";
+"split.import.entries" = "ការចំណាយ";
+"split.import.entriesFooter" = "ចុចដើម្បីប្តូរប្រភេទ។ អូសដើម្បីដកចេញ។";
+"split.import.entrySummary" = "បានជ្រើសរើស %1$d ក្នុងចំណោម %2$d";
+"split.import.includeAll" = "រួមបញ្ចូលទាំងអស់";
+"split.import.excludeAll" = "ដកចេញទាំងអស់";
+"split.import.include" = "រួមបញ្ចូល";
+"split.import.exclude" = "ដកចេញ";
+"split.import.included" = "បានរួមបញ្ចូល";
+"split.import.excluded" = "បានដកចេញ";
+"split.import.duplicateWarning" = "%d អាចមានក្នុងបញ្ជីរួចហើយ។ បានដកចេញ — រួមបញ្ចូលបើជាថ្មី។";
+"split.import.duplicateBadge" = "អាចស្ទួន";
+"split.import.staleWarning" = "តំណនេះចាស់ជាង ១ សប្តាហ៍។ សូមពិនិត្យចំនួនទឹកប្រាក់។";
+"split.import.rate" = "អត្រា​ប្តូរ​ប្រាក់";
+"split.import.rateFooter" = "១ %1$@ ជា %2$@។ ទុកទទេប្រើអត្រាថ្ងៃនេះ។";
+"split.import.confirmTitle" = "នាំចូល %d ប្រតិបត្តិការ?";
+"split.import.confirmMessage" = "%1$@ នឹងត្រូវបានបន្ថែមទៅ %2$@។";
+"split.import.confirmAction" = "នាំចូល";
+"split.import.noneSelected" = "សូមជ្រើសរើសយ៉ាងហោចណាស់មួយដើម្បីនាំចូល។";
+
+/* MARK: - Cross-app handoff (MitraTrip ↔ QuaraMoney) */
+"split.handoff.sending" = "កំពុងផ្ញើចំណែករបស់អ្នកទៅ QuaraMoney";
+"split.handoff.receiving" = "កំពុងទទួលចំណែករបស់អ្នកពី MitraTrip";
+"split.import.shareLabel" = "ចំណែករបស់អ្នក";
+"split.import.changeCategoryHint" = "ប្តូរប្រភេទ";
+"split.walletEquivalentLabel" = "ជា​រូបិយប័ណ្ណ​កាបូប";

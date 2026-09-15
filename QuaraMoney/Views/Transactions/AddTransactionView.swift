@@ -1050,10 +1050,18 @@ struct AddTransactionView: View {
 }
 
 // MARK: - Wallet Chip Component
-struct WalletChip: View {
+struct WalletChip: View, Equatable {
     let wallet: Wallet
     let isSelected: Bool
     let action: () -> Void
+
+    /// Object identity plus selection state. Name, icon and colour are read from
+    /// the model inside `body`, so an edited wallet still refreshes its chip
+    /// through observation; this only stops an unrelated pass on the containing
+    /// screen from rebuilding every chip. Applied via `.equatable()`.
+    static func == (lhs: WalletChip, rhs: WalletChip) -> Bool {
+        lhs.wallet === rhs.wallet && lhs.isSelected == rhs.isSelected
+    }
 
     /// Long wallet names truncate rather than stretching the pill wide enough to
     /// push its neighbours (and the "More" chip) out of reach.

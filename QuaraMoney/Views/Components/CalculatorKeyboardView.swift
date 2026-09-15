@@ -102,8 +102,17 @@ private enum CalcColors {
 
 // MARK: - Calculator Keyboard View
 struct CalculatorKeyboardView: View {
-    @Binding var expression: String
-    @Binding var evaluatedAmount: Decimal
+    /// Value access goes through closures, never `@Binding`.
+    ///
+    /// Installing a `@Binding` makes SwiftUI read the bound value while the
+    /// *caller's* body is being evaluated, which registers the caller as an
+    /// observer of the amount it edits. On the compact entry screen that meant
+    /// every digit invalidated the keypad wrapper, rebuilt this view, and with
+    /// it all twenty keys. Nothing below reads a value during `body`; the
+    /// handlers read and write at event time instead.
+    private let readExpression: () -> String
+    private let writeExpression: (String) -> Void
+    private let writeEvaluatedAmount: (Decimal) -> Void
     let onDismiss: (() -> Void)?
     /// When set, the keypad runs in persistent mode: "Done" is replaced by "="
     /// in the function row and the bottom-right key becomes a prominent Save
@@ -115,6 +124,9 @@ struct CalculatorKeyboardView: View {
     /// keys; now it only rebuilds the one key that can actually change.
     let isSaveDisabled: () -> Bool
 
+    /// Binding-based entry point, kept for callers whose amount lives in local
+    /// `@State`. Prefer the closure initializer below when the value lives on an
+    /// `@Observable` model — see the note on `readExpression`.
     init(
         expression: Binding<String>,
         evaluatedAmount: Binding<Decimal>,
@@ -122,8 +134,27 @@ struct CalculatorKeyboardView: View {
         onSave: (() -> Void)? = nil,
         isSaveDisabled: @autoclosure @escaping () -> Bool = false
     ) {
-        self._expression = expression
-        self._evaluatedAmount = evaluatedAmount
+        self.init(
+            readExpression: { expression.wrappedValue },
+            writeExpression: { expression.wrappedValue = $0 },
+            writeEvaluatedAmount: { evaluatedAmount.wrappedValue = $0 },
+            onDismiss: onDismiss,
+            onSave: onSave,
+            isSaveDisabled: isSaveDisabled
+        )
+    }
+
+    init(
+        readExpression: @escaping () -> String,
+        writeExpression: @escaping (String) -> Void,
+        writeEvaluatedAmount: @escaping (Decimal) -> Void,
+        onDismiss: (() -> Void)? = nil,
+        onSave: (() -> Void)? = nil,
+        isSaveDisabled: @escaping () -> Bool = { false }
+    ) {
+        self.readExpression = readExpression
+        self.writeExpression = writeExpression
+        self.writeEvaluatedAmount = writeEvaluatedAmount
         self.onDismiss = onDismiss
         self.onSave = onSave
         self.isSaveDisabled = isSaveDisabled
@@ -143,49 +174,49 @@ struct CalculatorKeyboardView: View {
         VStack(spacing: buttonSpacing) {
             // Row 1: ⌫, C, Done/=, ÷
             HStack(spacing: buttonSpacing) {
-                CalcButton(systemImage: "delete.backward", color: CalcColors.functionButton) { handleBackspace() }
-                CalcButton(text: "C", color: CalcColors.functionButton) { handleClear() }
+                CalcButton(systemImage: "delete.backward", color: CalcColors.functionButton) { handleBackspace() }.equatable()
+                CalcButton(text: "C", color: CalcColors.functionButton) { handleClear() }.equatable()
                 if onSave == nil {
-                    CalcButton(text: "common.done".localized, color: CalcColors.functionButton) { finalizeAndDismiss() }
+                    CalcButton(text: "common.done".localized, color: CalcColors.functionButton) { finalizeAndDismiss() }.equatable()
                 } else {
-                    CalcButton(text: "=", color: CalcColors.functionButton) { handleEquals() }
+                    CalcButton(text: "=", color: CalcColors.functionButton) { handleEquals() }.equatable()
                 }
-                CalcButton(text: "÷", color: CalcColors.operatorButton) { handleOperator("÷") }
+                CalcButton(text: "÷", color: CalcColors.operatorButton) { handleOperator("÷") }.equatable()
             }
             
             // Row 2: 7, 8, 9, ×
             HStack(spacing: buttonSpacing) {
-                CalcButton(text: "7", color: CalcColors.numberButton) { handleNumber("7") }
-                CalcButton(text: "8", color: CalcColors.numberButton) { handleNumber("8") }
-                CalcButton(text: "9", color: CalcColors.numberButton) { handleNumber("9") }
-                CalcButton(text: "×", color: CalcColors.operatorButton) { handleOperator("×") }
+                CalcButton(text: "7", color: CalcColors.numberButton) { handleNumber("7") }.equatable()
+                CalcButton(text: "8", color: CalcColors.numberButton) { handleNumber("8") }.equatable()
+                CalcButton(text: "9", color: CalcColors.numberButton) { handleNumber("9") }.equatable()
+                CalcButton(text: "×", color: CalcColors.operatorButton) { handleOperator("×") }.equatable()
             }
             
             // Row 3: 4, 5, 6, −
             HStack(spacing: buttonSpacing) {
-                CalcButton(text: "4", color: CalcColors.numberButton) { handleNumber("4") }
-                CalcButton(text: "5", color: CalcColors.numberButton) { handleNumber("5") }
-                CalcButton(text: "6", color: CalcColors.numberButton) { handleNumber("6") }
-                CalcButton(text: "−", color: CalcColors.operatorButton) { handleOperator("-") }
+                CalcButton(text: "4", color: CalcColors.numberButton) { handleNumber("4") }.equatable()
+                CalcButton(text: "5", color: CalcColors.numberButton) { handleNumber("5") }.equatable()
+                CalcButton(text: "6", color: CalcColors.numberButton) { handleNumber("6") }.equatable()
+                CalcButton(text: "−", color: CalcColors.operatorButton) { handleOperator("-") }.equatable()
             }
             
             // Row 4: 1, 2, 3, +
             HStack(spacing: buttonSpacing) {
-                CalcButton(text: "1", color: CalcColors.numberButton) { handleNumber("1") }
-                CalcButton(text: "2", color: CalcColors.numberButton) { handleNumber("2") }
-                CalcButton(text: "3", color: CalcColors.numberButton) { handleNumber("3") }
-                CalcButton(text: "+", color: CalcColors.operatorButton) { handleOperator("+") }
+                CalcButton(text: "1", color: CalcColors.numberButton) { handleNumber("1") }.equatable()
+                CalcButton(text: "2", color: CalcColors.numberButton) { handleNumber("2") }.equatable()
+                CalcButton(text: "3", color: CalcColors.numberButton) { handleNumber("3") }.equatable()
+                CalcButton(text: "+", color: CalcColors.operatorButton) { handleOperator("+") }.equatable()
             }
             
             // Row 5: 00, 0, ., = (or ✓ Save in persistent mode)
             HStack(spacing: buttonSpacing) {
-                CalcButton(text: "00", color: CalcColors.numberButton) { handleNumber("00") }
-                CalcButton(text: "0", color: CalcColors.numberButton) { handleNumber("0") }
-                CalcButton(text: ".", color: CalcColors.numberButton) { handleDecimal() }
+                CalcButton(text: "00", color: CalcColors.numberButton) { handleNumber("00") }.equatable()
+                CalcButton(text: "0", color: CalcColors.numberButton) { handleNumber("0") }.equatable()
+                CalcButton(text: ".", color: CalcColors.numberButton) { handleDecimal() }.equatable()
                 if let onSave {
                     SaveKey(isDisabled: isSaveDisabled, action: onSave)
                 } else {
-                    CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }
+                    CalcButton(text: "=", color: CalcColors.operatorButton) { handleEquals() }.equatable()
                 }
             }
         }
@@ -206,26 +237,33 @@ struct CalculatorKeyboardView: View {
 
     // MARK: - Button Handlers
     
-    private func updateEvaluation() {
+    private func updateEvaluation(_ expression: String) {
         if let result = ExpressionEvaluator.evaluate(expression) {
-            evaluatedAmount = abs(result)
+            writeEvaluatedAmount(abs(result))
         } else if expression.isEmpty {
-            evaluatedAmount = 0
+            writeEvaluatedAmount(0)
         }
     }
-    
+
+    /// Writes the new expression and re-evaluates it in one step. The handlers
+    /// below all follow read → transform → commit, because there is no stored
+    /// binding to mutate in place any more.
+    private func commit(_ expression: String) {
+        writeExpression(expression)
+        updateEvaluation(expression)
+    }
+
     private func handleNumber(_ num: String) {
         HapticManager.shared.impact(style: .light)
-        expression += num
-        updateEvaluation()
+        commit(readExpression() + num)
     }
-    
+
     private func handleOperator(_ op: String) {
         HapticManager.shared.impact(style: .light)
+        var expression = readExpression()
         if expression.isEmpty {
-            if op == "-" { 
-                expression = "-" 
-                updateEvaluation()
+            if op == "-" {
+                commit("-")
             }
             return
         }
@@ -233,62 +271,60 @@ struct CalculatorKeyboardView: View {
         if let lastChar = expression.last, "+-×÷".contains(lastChar) {
             expression.removeLast()
         }
-        expression += op
-        updateEvaluation()
+        commit(expression + op)
     }
-    
+
     private func handleDecimal() {
         HapticManager.shared.impact(style: .light)
+        let expression = readExpression()
         if expression.isEmpty {
-            expression = "0."
-            updateEvaluation()
+            commit("0.")
             return
         }
-        
+
         let operators = CharacterSet(charactersIn: "+-×÷")
         let components = expression.unicodeScalars.split { operators.contains($0) }
-        
+
         if let lastComponent = components.last {
             if !String(lastComponent).contains(".") {
-                expression += "."
+                commit(expression + ".")
             }
         } else {
-            expression += "0."
+            commit(expression + "0.")
         }
-        updateEvaluation()
     }
-    
+
     private func handleClear() {
         HapticManager.shared.impact(style: .medium)
-        expression = ""
-        evaluatedAmount = 0
+        writeExpression("")
+        writeEvaluatedAmount(0)
     }
-    
+
     private func handleBackspace() {
         HapticManager.shared.impact(style: .light)
+        var expression = readExpression()
         if !expression.isEmpty {
             expression.removeLast()
-            updateEvaluation()
+            commit(expression)
         }
     }
-    
+
     private func handleEquals() {
         HapticManager.shared.impact(style: .medium)
-        if let result = ExpressionEvaluator.evaluate(expression) {
-            evaluatedAmount = abs(result)
-            expression = formatResult(abs(result))
+        if let result = ExpressionEvaluator.evaluate(readExpression()) {
+            writeEvaluatedAmount(abs(result))
+            writeExpression(formatResult(abs(result)))
         }
     }
-    
+
     private func finalizeAndDismiss() {
         HapticManager.shared.impact(style: .medium)
-        if let result = ExpressionEvaluator.evaluate(expression) {
-            evaluatedAmount = abs(result)
-            expression = formatResult(abs(result))
+        if let result = ExpressionEvaluator.evaluate(readExpression()) {
+            writeEvaluatedAmount(abs(result))
+            writeExpression(formatResult(abs(result)))
         }
         onDismiss?()
     }
-    
     private func formatResult(_ value: Decimal) -> String {
         let doubleValue = NSDecimalNumber(decimal: value).doubleValue
         if doubleValue.truncatingRemainder(dividingBy: 1) == 0 {
@@ -328,11 +364,20 @@ private struct SaveKey: View {
 }
 
 // MARK: - Calculator Button (Native Style)
-struct CalcButton: View {
+
+/// `Equatable` so a re-evaluated keypad doesn't rebuild all twenty keys. A key's
+/// appearance is fully described by its label and colour, and its action is a
+/// pure function of that label, so the closure is deliberately excluded from the
+/// comparison. Applied through `.equatable()` at the use sites.
+struct CalcButton: View, Equatable {
     let text: String?
     let systemImage: String?
     let color: Color
     let action: () -> Void
+
+    static func == (lhs: CalcButton, rhs: CalcButton) -> Bool {
+        lhs.text == rhs.text && lhs.systemImage == rhs.systemImage && lhs.color == rhs.color
+    }
     
     init(text: String, color: Color, action: @escaping () -> Void) {
         self.text = text

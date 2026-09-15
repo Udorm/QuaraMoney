@@ -53,6 +53,7 @@ struct ImportSharedExpenseView: View {
     @State private var showConfirm = false
     @State private var showAllWallets = false
     @State private var showAddWallet = false
+    @State private var showScopeInfo = false
     @State private var categoryPickerTarget: CategoryPickerTarget?
 
     // Suggestion engine
@@ -63,7 +64,7 @@ struct ImportSharedExpenseView: View {
     private let maxQuickWallets = 4
 
     /// How far the gradient reaches: toolbar plus the handoff header, fading out
-    /// before the summary card. Scaled so it still covers the header when
+    /// before the first grouped card. Scaled so it still covers the header when
     /// Dynamic Type grows it.
     @ScaledMetric(relativeTo: .body) private var backdropHeight: CGFloat = 250
 
@@ -90,6 +91,18 @@ struct ImportSharedExpenseView: View {
     private var entries: [SharedExpenseEntry] { payload.entries ?? [] }
 
     private var isDetailed: Bool { payload.isDetailed }
+
+    /// Cross-app artwork only when the payload claims to be MitraTrip's.
+    ///
+    /// `source.app` is unverified, so this picks *artwork*, never trust — and it
+    /// fails to `.betweenUsers`, which claims nothing about where the link came
+    /// from. A v1 payload from QuaraMoney's own split sheet has no `source` at
+    /// all and lands there too, which is exactly right: that link really did come
+    /// from another user of this app.
+    private var handoffRoute: AppHandoffVisual.Route {
+        let claimedMitraTrip = payload.source?.app.caseInsensitiveCompare("mitratrip") == .orderedSame
+        return claimedMitraTrip ? .fromMitraTrip : .betweenUsers
+    }
 
     private var includedEntries: [SharedExpenseEntry] {
         entries.filter { !excludedEntryIDs.contains($0.sourceId) }
@@ -144,7 +157,6 @@ struct ImportSharedExpenseView: View {
         NavigationStack {
             List {
                 handoffSection
-                summarySection
                 warningSection
                 walletSection
                 detailSection
@@ -157,7 +169,7 @@ struct ImportSharedExpenseView: View {
             // putting the grouped colour back underneath it.
             .scrollContentBackground(.hidden)
             .background(alignment: .top) {
-                AppHandoffBackdrop()
+                AppHandoffBackdrop(route: handoffRoute)
                     .frame(height: backdropHeight)
                     .ignoresSafeArea(edges: .top)
             }
@@ -171,6 +183,10 @@ struct ImportSharedExpenseView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.Common.cancel) { dismiss() }
                 }
+                // Prominent, not the default plain bar button: this is a
+                // staging screen whose entire purpose is the one commit at the
+                // end of it, and a plain "Save" sat at the same visual weight as
+                // "Cancel" beside it.
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         if transactionCount > 1 { showConfirm = true } else { commit() }
@@ -178,9 +194,10 @@ struct ImportSharedExpenseView: View {
                         if isSaving {
                             ProgressView().controlSize(.small)
                         } else {
-                            Text(L10n.Common.save).fontWeight(.semibold)
+                            Text(L10n.Common.save)
                         }
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(!canSave)
                 }
             }
@@ -197,6 +214,9 @@ struct ImportSharedExpenseView: View {
                 }
             }
             .task { prepareIfNeeded() }
+            .sheet(isPresented: $showScopeInfo) {
+                HandoffScopeSheet(title: "split.scope.received".localized, points: scopePoints)
+            }
             .sheet(isPresented: $showAddWallet, onDismiss: autoSelectNewWalletIfNeeded) {
                 AddWalletView(viewModel: AddWalletViewModel(dataService: SwiftDataService(modelContext: modelContext)))
             }
@@ -250,73 +270,71 @@ struct ImportSharedExpenseView: View {
 
     /// Sits outside the grouped cards so the two icons read as artwork rather
     /// than as another settings row.
+    ///
+    /// It also carries the payload. The amount and the trip name used to sit in
+    /// a summary card directly beneath this, which said the same thing twice —
+    /// once as a picture of a transfer, once as a table of it. Hanging the
+    /// figure on the flow itself and the trip inside the caption removed the
+    /// card outright.
+    ///
+    /// The trip name is still a claim made by the sender, not a verified fact,
+    /// so the caption describes it and never renders it as a trust badge.
     private var handoffSection: some View {
         Section {
-            AppHandoffVisual(role: .destination)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            AppHandoffVisual(
+                role: .destination,
+                route: handoffRoute,
+                amount: totalAmount.formattedAmount(for: currencyCode),
+                tripName: payload.source?.tripName,
+                onInfo: { showScopeInfo = true }
+            )
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         }
+        // Losing the footer left a full section gap between the header and the
+        // first control. Compact spacing puts them back in the same breath.
+        .listSectionSpacing(.compact)
     }
 
-    // MARK: - Summary
-
-    /// The amount, its currency and its provenance in a single row.
+    /// What the figure above is made of, where it says it came from, and the
+    /// fact that none of it has been written down yet.
     ///
-    /// This replaced a 40pt hero. The number still leads, but at a size that
-    /// leaves the screen's real work — choosing a wallet, checking the
-    /// categories — above the fold instead of below it. Identical in shape to
-    /// MitraTrip's summary so the figure you approved there is recognisably the
-    /// same figure here.
-    private var summarySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("split.import.shareLabel".localized)
-                        .appFont(.caption2, weight: .semibold)
-                        .tracking(0.5)
-                        .foregroundStyle(.secondary)
+    /// The first of these used to be a permanent line of grey type under the
+    /// header. The other two were never stated anywhere, which is the argument
+    /// for the sheet: once the prose is a tap away it can afford to say the
+    /// things that actually matter on an unauthenticated entry point.
+    private var scopePoints: [HandoffScopeSheet.Point] {
+        var points: [HandoffScopeSheet.Point] = [
+            .init(icon: "doc.text", title: "split.scope.bill".localized, detail: compositionText)
+        ]
 
-                    Spacer(minLength: 8)
-
-                    Text(currencyCode)
-                        .appFont(.caption2, weight: .medium)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
-                }
-
-                Text(totalAmount.formattedAmount(for: currencyCode))
-                    .appFont(.title, weight: .bold)
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: totalMinor)
-
-                Text(metadataLine)
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 2)
-            .accessibilityElement(children: .combine)
+        // The claimed origin, described and never vouched for — a custom URL
+        // scheme carries no proof of who built the link.
+        if let tripName = payload.source?.tripName, !tripName.isEmpty, handoffRoute == .fromMitraTrip {
+            points.append(.init(
+                icon: "airplane",
+                title: "split.scope.source.trip".localized(with: tripName),
+                detail: "split.scope.source.trip.help".localized
+            ))
+        } else {
+            points.append(.init(
+                icon: "person.2",
+                title: "split.scope.source.peer".localized,
+                detail: "split.scope.source.peer.help".localized
+            ))
         }
+
+        points.append(.init(
+            icon: "tray.and.arrow.down",
+            title: "split.scope.notSaved".localized,
+            detail: "split.scope.notSaved.help".localized
+        ))
+
+        return points
     }
 
-    /// Trip name plus what the figure above is made of. `source.app` is a claim
-    /// made by the sender, not a verified fact, so the trip name is described
-    /// neutrally and never rendered as a trust badge.
-    private var metadataLine: String {
-        var parts: [String] = []
-        if let source = payload.source, !source.tripName.isEmpty {
-            parts.append(source.tripName)
-        }
-        parts.append(compositionText)
-        return parts.joined(separator: " · ")
-    }
-
+    /// Itemized imports describe themselves by their entry list, so they get the
+    /// selected count; everything else quotes the bill it was cut from.
     private var compositionText: String {
         if isDetailed {
             return "split.import.entrySummary".localized(with: includedEntries.count, entries.count)
@@ -424,7 +442,7 @@ struct ImportSharedExpenseView: View {
     /// In Itemized mode every field here was either dead or duplicated: `commit`
     /// takes the date from `entry.date` and the category from
     /// `category(for: entry)`, so the pickers moved nothing, and the trip name
-    /// they described is already in the summary above. A control that appears
+    /// they described is already in the header above. A control that appears
     /// editable but changes nothing is worse than an absent one, so the whole
     /// section is gone in that mode. For a consolidated import these are the only
     /// place the single transaction's category, date and note can be set.
@@ -543,7 +561,14 @@ struct ImportSharedExpenseView: View {
                 }
             } header: {
                 HStack {
-                    Text("split.import.entries".localized)
+                    // The plain title until something is excluded, then the
+                    // count — which is where the "n of m" line from the deleted
+                    // summary card belongs: next to the rows it is counting.
+                    Text(
+                        excludedEntryIDs.isEmpty
+                            ? "split.import.entries".localized
+                            : "split.import.entrySummary".localized(with: includedEntries.count, entries.count)
+                    )
                     Spacer()
                     Button(excludedEntryIDs.isEmpty ? "split.import.excludeAll".localized
                                                     : "split.import.includeAll".localized) {

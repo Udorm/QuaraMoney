@@ -54,7 +54,7 @@ struct ScoredCategory: Identifiable {
     var id: UUID { category.id }
 }
 
-struct ScoredTag: Identifiable, Sendable {
+struct ScoredTag: Identifiable, Sendable, Equatable {
     /// Display spelling (most recently used casing wins).
     let tag: String
     let score: Double

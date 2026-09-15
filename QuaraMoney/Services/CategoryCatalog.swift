@@ -48,12 +48,25 @@ nonisolated enum CategoryCatalog {
     /// `@MainActor` `LanguageManager` so seeding/maintenance can run on their
     /// background context. Mirrors `LanguageManager.updateBundle()`'s selection.
     private static var currentLanguageCode: String {
-        switch UserDefaults.standard.string(forKey: "selectedLanguage") {
-        case "en": return "en"
-        case "km": return "km"
-        default: // "system" or unset
-            return Locale.preferredLanguages.first?.starts(with: "km") == true ? "km" : "en"
+        localizationLock.lock()
+        if let cachedLanguageCode {
+            localizationLock.unlock()
+            return cachedLanguageCode
         }
+        localizationLock.unlock()
+
+        let resolved: String
+        switch UserDefaults.standard.string(forKey: "selectedLanguage") {
+        case "en": resolved = "en"
+        case "km": resolved = "km"
+        default: // "system" or unset
+            resolved = Locale.preferredLanguages.first?.starts(with: "km") == true ? "km" : "en"
+        }
+
+        localizationLock.lock()
+        cachedLanguageCode = resolved
+        localizationLock.unlock()
+        return resolved
     }
 
     /// A definition's display name in the store's current language. Equivalent to
@@ -101,8 +114,15 @@ nonisolated enum CategoryCatalog {
         .init(key: "sys_loan_repayment", l10nKey: "debt.systemCategory.loanRepayment", icon: "tray.and.arrow.up.fill", colorHex: "#007AFF", type: .expense, isSystem: true, seedOnFreshInstall: false, ensureOnLaunch: true),
     ]
 
+    /// Keyed once rather than scanned. `definition(forKey:)` is called from
+    /// `localizedName(for:)`, which runs for every category chip on every render
+    /// pass, so the linear scan over `all` sat directly in the entry screen's
+    /// body path.
+    private static let definitionsByKey: [String: Definition] =
+        Dictionary(all.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+
     static func definition(forKey key: String) -> Definition? {
-        all.first { $0.key == key }
+        definitionsByKey[key]
     }
 
     /// The category's display name in the store's current UI language. App-defined
@@ -126,13 +146,69 @@ nonisolated enum CategoryCatalog {
     /// (and vice versa).
     private static let shippedLanguages = ["en", "km"]
 
+    // MARK: - Localization cache
+    //
+    // `localizedName(for:)` is a render-path call (every category chip, every
+    // pass). Uncached it did a `UserDefaults` read for the language, a
+    // `Bundle.main.path` lookup, a `Bundle(path:)` construction and a strings
+    // lookup — filesystem work, per chip, per frame. Resolved values are cached
+    // and dropped when the in-app language changes (see
+    // `LanguageManager.selectedLanguage`), which is the only thing that can
+    // change an answer.
+
+    private static let localizationLock = NSLock()
+    nonisolated(unsafe) private static var cachedLanguageCode: String?
+    nonisolated(unsafe) private static var bundlesByLanguage: [String: Bundle?] = [:]
+    nonisolated(unsafe) private static var namesByLanguageAndKey: [String: String?] = [:]
+
+    /// Drops every language-derived cache. Call on in-app language change.
+    static func invalidateLocalizationCache() {
+        localizationLock.lock(); defer { localizationLock.unlock() }
+        cachedLanguageCode = nil
+        bundlesByLanguage.removeAll()
+        namesByLanguageAndKey.removeAll()
+    }
+
+    private static func bundle(for language: String) -> Bundle? {
+        localizationLock.lock()
+        if let cached = bundlesByLanguage[language] {
+            localizationLock.unlock()
+            return cached
+        }
+        localizationLock.unlock()
+
+        // Built outside the lock: `Bundle(path:)` touches the filesystem.
+        let resolved = Bundle.main.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:))
+
+        localizationLock.lock()
+        bundlesByLanguage[language] = resolved
+        localizationLock.unlock()
+        return resolved
+    }
+
     /// Resolves an l10n key in a specific shipped language, independent of the
     /// current app language.
     private static func name(of l10nKey: String, in language: String) -> String? {
-        guard let path = Bundle.main.path(forResource: language, ofType: "lproj"),
-              let bundle = Bundle(path: path) else { return nil }
-        let value = bundle.localizedString(forKey: l10nKey, value: l10nKey, table: nil)
-        return value == l10nKey ? nil : value
+        let cacheKey = "\(language)|\(l10nKey)"
+        localizationLock.lock()
+        if let cached = namesByLanguageAndKey[cacheKey] {
+            localizationLock.unlock()
+            return cached
+        }
+        localizationLock.unlock()
+
+        let resolved: String?
+        if let bundle = bundle(for: language) {
+            let value = bundle.localizedString(forKey: l10nKey, value: l10nKey, table: nil)
+            resolved = value == l10nKey ? nil : value
+        } else {
+            resolved = nil
+        }
+
+        localizationLock.lock()
+        namesByLanguageAndKey[cacheKey] = resolved
+        localizationLock.unlock()
+        return resolved
     }
 
     /// Every name a definition is (or ever was) displayed under: all shipped

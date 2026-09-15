@@ -50,6 +50,8 @@ class LanguageManager: ObservableObject {
             CurrencyFormatterCache.invalidate()
             AppDateFormatterCache.invalidate()
             PlaceDistanceFormatterCache.invalidate()
+            // Category display names are resolved through cached .lproj bundles.
+            CategoryCatalog.invalidateLocalizationCache()
             // Update font refresh ID to trigger view updates
             fontRefreshID = UUID()
             // Refresh UIKit appearance proxies

@@ -3,20 +3,29 @@ import SwiftData
 import UIKit
 
 /// Sheet for splitting an existing expense transaction and generating a shareable deep link.
-/// Equal-split design matching ImportSharedExpenseView:
-/// features the hero amount card with Liquid Glass, combined settings section (people stepper + update toggle),
+///
+/// The sending half of a user-to-user handoff, and it now opens with the same
+/// header its receiving half does — `AppHandoffVisual` in its `.betweenUsers`
+/// route, QuaraMoney's icon at both ends with "You" on the left. The screen used
+/// to lead with a 44pt glass amount card of its own, which meant the two sides of
+/// one transfer looked like two unrelated features; the figure is the same
+/// figure, so it is now drawn the same way.
+///
+/// Below the header: the split settings section (split toggle + people stepper),
 /// Apple native grouped detail rows, and native share sheet triggers.
 struct SplitExpenseSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     let transaction: Transaction
     let originalTotalAmount: Decimal
 
-    @State private var isSplitInHalf: Bool = true
+    @State private var isSplitInHalf: Bool = false
     @State private var peopleCount: Int = 2
-    @State private var updateOriginalTransaction: Bool = true
+    @State private var showScopeInfo = false
+
+    /// How far the wash reaches: toolbar plus the handoff header, fading out
+    /// before the first settings card.
+    @ScaledMetric(relativeTo: .body) private var backdropHeight: CGFloat = 250
 
     init(transaction: Transaction) {
         self.transaction = transaction
@@ -84,24 +93,29 @@ struct SplitExpenseSheetView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // MARK: - Amount Card & Explanation Footer
-                    amountHeroCard
+                    // MARK: - Handoff Header & Explanation Footer
+                    handoffHeader
 
                     // MARK: - Split Settings (People Stepper + Update Toggle)
                     splitSettingsSection
 
                     // MARK: - Native Apple Detail Rows
                     detailSection
-
-                    // MARK: - Primary Share Button
-                    shareButton
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .background(Color(.systemGroupedBackground))
+            // Same treatment as both handoff screens: the wash reaches up under
+            // the toolbar, so it goes behind the scroll view with the grouped
+            // colour restored underneath it.
+            .background(alignment: .top) {
+                AppHandoffBackdrop(route: .betweenUsers)
+                    .frame(height: backdropHeight)
+                    .ignoresSafeArea(edges: .top)
+            }
+            .background { Color(.systemGroupedBackground).ignoresSafeArea() }
             .navigationTitle("split.title".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -113,84 +127,81 @@ struct SplitExpenseSheetView: View {
                     }
                     .accessibilityLabel(L10n.Common.cancel)
                 }
-            }
-        }
-    }
 
-    // MARK: - Amount Hero Card & Footer Explanation
-    private var amountHeroCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            let shape = RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
-            let typeTint = ThemeManager.shared.expenseColor
-
-            let cardContent = VStack(alignment: .center, spacing: 6) {
-                HStack(alignment: .center, spacing: 6) {
-                    Text(String.currencySymbol(for: transaction.currencyCode))
-                        .appFont(size: 28, weight: .semibold)
-                        .foregroundStyle(Color.secondary)
-
-                    Text(formatAmountValue(sharedAmount, currencyCode: transaction.currencyCode))
-                        .appFont(size: 44, weight: .bold)
-                        .minimumScaleFactor(0.4)
-                        .lineLimit(1)
-                        .foregroundStyle(Color.primary)
-                }
-                .padding(.vertical, 16)
-                .padding(.horizontal, 16)
-            }
-            .frame(maxWidth: .infinity)
-
-            Group {
-                if reduceTransparency {
-                    cardContent
-                        .background(typeTint.opacity(0.15), in: shape)
-                } else if #available(iOS 26.0, *) {
-                    cardContent
-                        .glassEffect(.regular.tint(typeTint.opacity(0.18)), in: shape)
-                } else {
-                    cardContent
-                        .background(Color(.secondarySystemGroupedBackground), in: shape)
+                // The action was a full-width button under the detail rows,
+                // which put the screen's whole point below the fold as soon as
+                // the expense had a location or a long note. In the bar it is
+                // reachable from the moment the sheet opens.
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("split.shareVia".localized) { shareAction() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(generatedURL == nil || sharedAmount <= 0)
                 }
             }
-            .clipShape(shape)
-            .contentShape(shape)
-
-            // Native Apple form footer explanation text under the card (aligned with card content)
-            if isSplitInHalf {
-                Text(String(format: "split.originalBillInfo".localized, originalTotalAmount.formattedAmount(for: transaction.currencyCode), peopleCount))
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 2)
-            } else {
-                Text(String(format: "split.fullAmountInfo".localized, originalTotalAmount.formattedAmount(for: transaction.currencyCode)))
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 2)
+            .sheet(isPresented: $showScopeInfo) {
+                HandoffScopeSheet(title: "split.scope.title".localized, points: scopePoints)
             }
         }
     }
 
-    private func formatAmountValue(_ value: Decimal, currencyCode: String) -> String {
-        let doubleValue = NSDecimalNumber(decimal: value).doubleValue
-        if currencyCode.uppercased() == "KHR" {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 0
-            return formatter.string(from: NSNumber(value: doubleValue)) ?? "\(value)"
-        } else {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.minimumFractionDigits = 2
-            formatter.maximumFractionDigits = 2
-            return formatter.string(from: NSNumber(value: doubleValue)) ?? "\(value)"
-        }
+    // MARK: - Handoff Header & Footer Explanation
+
+    /// The header. What the figure is made of sits behind the badge on it — see
+    /// `scopePoints`.
+    private var handoffHeader: some View {
+        AppHandoffVisual(
+            role: .source,
+            route: .betweenUsers,
+            amount: sharedAmount.formattedAmount(for: transaction.currencyCode),
+            onInfo: { showScopeInfo = true }
+        )
     }
 
-    // MARK: - Split Settings Section (People Stepper + Update Toggle Combined)
+    /// Three facts the sender might want and only one of which was ever on
+    /// screen: where the number came from, what actually travels in the link, and
+    /// what happens to their own logged expense.
+    ///
+    /// That last one is the reason this is worth a sheet. Splitting now rewrites
+    /// the sender's own expense down to their share automatically, and that
+    /// effect is invisible until after you have shared; stating both figures
+    /// makes it checkable beforehand.
+    private var scopePoints: [HandoffScopeSheet.Point] {
+        let total = originalTotalAmount.formattedAmount(for: transaction.currencyCode)
+        let share = sharedAmount.formattedAmount(for: transaction.currencyCode)
+
+        return [
+            .init(
+                icon: "doc.text",
+                title: "split.scope.bill".localized,
+                detail: isSplitInHalf
+                    ? "split.originalBillInfo".localized(with: total, peopleCount)
+                    : "split.fullAmountInfo".localized(with: total)
+            ),
+            .init(
+                icon: "paperplane",
+                title: "split.scope.theyReceive".localized(with: share),
+                detail: "split.scope.theyReceive.help".localized
+            ),
+            .init(
+                icon: "pencil",
+                title: willAdjustOwnExpense
+                    ? "split.scope.yourExpenseChanges".localized(with: share)
+                    : "split.scope.yourExpenseStays".localized(with: total),
+                detail: willAdjustOwnExpense
+                    ? "split.scope.yourExpenseChanges.help".localized(with: total)
+                    : "split.scope.yourExpenseStays.help".localized
+            ),
+        ]
+    }
+
+    /// Mirrors `applyPayerAdjustmentIfNeeded`'s guard exactly, so the sheet can
+    /// never promise something the commit path won't do.
+    private var willAdjustOwnExpense: Bool {
+        isSplitInHalf && payerShareAmount > 0
+            && payerShareAmount != originalTotalAmount
+    }
+
+    // MARK: - Split Settings Section (Split Toggle + People Stepper)
     private var splitSettingsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionLabel("split.title".localized)
@@ -256,22 +267,6 @@ struct SplitExpenseSheetView: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(peopleCount >= 20)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    Divider()
-                        .padding(.leading, 16)
-
-                    // Update original transaction toggle row
-                    Toggle(isOn: $updateOriginalTransaction) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("split.updateOriginal".localized)
-                                .appFont(.subheadline, weight: .medium)
-                            Text("split.updateOriginal.help".localized)
-                                .appFont(.caption)
-                                .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -395,24 +390,6 @@ struct SplitExpenseSheetView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Primary Action Button
-    private var shareButton: some View {
-        Button {
-            shareAction()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "square.and.arrow.up")
-                Text("split.shareVia".localized)
-            }
-            .appFont(.headline, weight: .semibold)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .disabled(generatedURL == nil || sharedAmount <= 0)
-    }
-
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
             .appFont(.footnote, weight: .medium)
@@ -461,7 +438,7 @@ struct SplitExpenseSheetView: View {
 
     // MARK: - Apply Adjustment to Payer Transaction
     private func applyPayerAdjustmentIfNeeded() {
-        guard isSplitInHalf, updateOriginalTransaction else { return }
+        guard isSplitInHalf else { return }
         let newAmount = payerShareAmount
         guard newAmount > 0, newAmount != originalTotalAmount else { return }
 

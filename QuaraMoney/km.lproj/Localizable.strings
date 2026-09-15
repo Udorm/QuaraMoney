@@ -1430,8 +1430,6 @@
 "split.yourShare" = "ចំណែករបស់អ្នក";
 "split.friendShare" = "ចំណែកមិត្តភក្តិ";
 "split.perPerson" = "ក្នុងម្នាក់";
-"split.updateOriginal" = "កែប្រែចំនួនទឹកប្រាក់នៃប្រតិបត្តិការរបស់ខ្ញុំ";
-"split.updateOriginal.help" = "កែសម្រួលការចំណាយដែលបានកត់ត្រាទៅជាចំណែករបស់អ្នក";
 "split.shareVia" = "ចែករំលែក";
 "split.shareMessage" = "ចែករំលែកការចំណាយសម្រាប់ %1$@៖ %2$@។ បើកនៅក្នុង QuaraMoney៖ %3$@";
 "split.importedNote" = "%@ (បានចែក)";
@@ -1452,7 +1450,7 @@
 "split.category" = "ប្រភេទ";
 "split.note" = "កំណត់ចំណាំ";
 "split.splitInHalf" = "ចែកប្រាក់ពាក់កណ្តាល";
-"split.splitInHalf.help" = "ចែកវិក្កយបត្រស្មើគ្នា";
+"split.splitInHalf.help" = "ចែកវិក្កយបត្រស្មើគ្នា ហើយកាត់បន្ថយការចំណាយរបស់អ្នកមកត្រឹមចំណែករបស់អ្នក";
 "split.fullAmountInfo" = "វិក្កយបត្រសរុប៖ %@ (ចំនួនពេញ)";
 "split.shareMessageFull" = "ការចំណាយសម្រាប់ %1$@៖ %2$@។ បើកនៅក្នុង QuaraMoney៖ %3$@";
 
@@ -1480,6 +1478,28 @@
 /* MARK: - Cross-app handoff (MitraTrip ↔ QuaraMoney) */
 "split.handoff.sending" = "កំពុងផ្ញើចំណែករបស់អ្នកទៅ QuaraMoney";
 "split.handoff.receiving" = "កំពុងទទួលចំណែករបស់អ្នកពី MitraTrip";
-"split.import.shareLabel" = "ចំណែករបស់អ្នក";
+"split.handoff.sendingTrip" = "កំពុងផ្ញើចំណែករបស់អ្នកនៃ %@";
+"split.handoff.receivingTrip" = "កំពុងទទួលចំណែករបស់អ្នកនៃ %@";
+"split.handoff.sharingPeer" = "កំពុងផ្ញើការចែករំលែកនេះទៅអ្នកប្រើ QuaraMoney ផ្សេង";
+"split.handoff.you" = "អ្នក";
+"split.handoff.sender" = "អ្នកផ្ញើ";
+"split.handoff.recipient" = "អ្នកទទួល";
 "split.import.changeCategoryHint" = "ប្តូរប្រភេទ";
 "split.walletEquivalentLabel" = "ជា​រូបិយប័ណ្ណ​កាបូប";
+
+/* MARK: - Handoff scope sheet */
+"split.scope.title" = "អំពីការចែករំលែកនេះ";
+"split.scope.bill" = "វិក្កយបត្រសរុប";
+"split.scope.theyReceive" = "គេទទួលបាន %@";
+"split.scope.theyReceive.help" = "តំណភ្ជាប់នេះផ្ទុកចំនួនទឹកប្រាក់ ប្រភេទ កាលបរិច្ឆេទ និងកំណត់ចំណាំ — មិនមានព័ត៌មានអំពីការចំណាយផ្សេងទៀតរបស់អ្នកទេ។";
+"split.scope.yourExpenseChanges" = "ការចំណាយរបស់អ្នកនឹងក្លាយជា %@";
+"split.scope.yourExpenseChanges.help" = "ចំនួន %@ ដែលអ្នកបានកត់ត្រា នឹងត្រូវបានកាត់បន្ថយមកត្រឹមចំណែករបស់អ្នក នៅពេលអ្នកចែករំលែក។";
+"split.scope.yourExpenseStays" = "ការចំណាយរបស់អ្នកនៅតែ %@";
+"split.scope.yourExpenseStays.help" = "ការចែករំលែកនឹងមិនផ្លាស់ប្ដូរអ្វីដែលអ្នកបានកត់ត្រារួចទេ។";
+"split.scope.received" = "អំពីចំនួនទឹកប្រាក់នេះ";
+"split.scope.source.trip" = "ពីដំណើរកម្សាន្ត \"%@\"";
+"split.scope.source.trip.help" = "តំណភ្ជាប់នេះនិយាយថាមកពី MitraTrip។ គ្មានការផ្ទៀងផ្ទាត់ទេ ដូច្នេះសូមពិនិត្យមុននឹងរក្សាទុក។";
+"split.scope.source.peer" = "ចែករំលែកដោយអ្នកប្រើ QuaraMoney ផ្សេង";
+"split.scope.source.peer.help" = "តំណភ្ជាប់នេះគ្មានភស្តុតាងអំពីអ្នកផ្ញើទេ។ សូមពិនិត្យចំនួនទឹកប្រាក់មុននឹងរក្សាទុក។";
+"split.scope.notSaved" = "មិនទាន់បានរក្សាទុកនៅឡើយទេ";
+"split.scope.notSaved.help" = "ធាតុទាំងនេះកំពុងរង់ចាំ។ វានឹងចូលទៅក្នុងបញ្ជីរបស់អ្នក លុះត្រាតែអ្នកចុច រក្សាទុក។";

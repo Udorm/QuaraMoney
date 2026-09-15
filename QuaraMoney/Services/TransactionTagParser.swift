@@ -10,6 +10,10 @@ enum TransactionTagParser {
 
     private static let tagPattern = /#([\p{L}\p{M}\p{N}_]+)/
     private static let completeTagPattern = /^[\p{L}\p{M}\p{N}_]+$/
+    /// Hoisted out of `activeTagToken(in:)`: that runs on every keystroke while
+    /// the note field is focused, and a regex literal in the function body is
+    /// rebuilt on each call.
+    private static let trailingTagPattern = /#([\p{L}\p{M}\p{N}_]*)$/
 
     /// All complete tags in `text`, in order of first appearance, without the
     /// leading `#`, deduplicated case-insensitively (first spelling wins).
@@ -34,7 +38,7 @@ enum TransactionTagParser {
     /// only engages for a token at the end of the note — the common typing
     /// position.
     static func activeTagToken(in text: String) -> String? {
-        guard let match = text.firstMatch(of: /#([\p{L}\p{M}\p{N}_]*)$/) else { return nil }
+        guard let match = text.firstMatch(of: trailingTagPattern) else { return nil }
         return String(match.1)
     }
 

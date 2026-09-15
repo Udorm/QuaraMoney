@@ -52,16 +52,6 @@ struct CompactAddTransactionView: View {
 
     private let maxQuickWallets = 4
 
-    /// Drives the detail row's two-up ⇄ stacked switch: at accessibility sizes
-    /// side-by-side controls truncate to uselessness.
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// An unset note/place is a 36pt button; setting one promotes it to a
-    /// full-width row. Same field either way, so the two forms morph.
-    @Namespace private var detailMorph
-    /// Square side of the compact note/place buttons — also the detail row's
-    /// height, so the whole strip lines up.
-    @ScaledMetric(relativeTo: .subheadline) private var detailControlHeight: CGFloat = 36
-
     init(viewModel: AddTransactionViewModel, isNewTransaction: Bool = true) {
         self._viewModel = State(wrappedValue: viewModel)
         self.isNewTransaction = isNewTransaction
@@ -106,9 +96,12 @@ struct CompactAddTransactionView: View {
     }
 
     private var frequentWallets: [Wallet] {
-        let ordered = (scoredWallets.isEmpty ? sourceWallets : scoredWallets.map(\.wallet))
-            .filter { wallet in sourceWallets.contains { $0.id == wallet.id } }
-        return Array(ordered.prefix(maxQuickWallets))
+        let sourceWallets = self.sourceWallets
+        guard !scoredWallets.isEmpty else { return Array(sourceWallets.prefix(maxQuickWallets)) }
+        // Membership through a Set: the nested `contains` re-walked (and
+        // re-derived) the source list once per ranked wallet.
+        let sourceIDs = Set(sourceWallets.map(\.id))
+        return Array(scoredWallets.lazy.map(\.wallet).filter { sourceIDs.contains($0.id) }.prefix(maxQuickWallets))
     }
 
     // MARK: - Suggestion recompute
@@ -199,28 +192,6 @@ struct CompactAddTransactionView: View {
     }
 
     // MARK: - Tag suggestions
-
-    private var suggestedTagChips: [ScoredTag] {
-        guard !scoredTags.isEmpty else { return [] }
-
-        let activeToken = noteFieldFocused
-            ? TransactionTagParser.activeTagToken(in: viewModel.note)
-            : nil
-        var existing = Set(TransactionTagParser.tags(in: viewModel.note).map { $0.lowercased() })
-        if let activeToken, !activeToken.isEmpty {
-            existing.remove(activeToken.lowercased())
-        }
-
-        let candidates = scoredTags.filter { scored in
-            let key = scored.tag.lowercased()
-            guard !existing.contains(key) else { return false }
-            if let activeToken, !activeToken.isEmpty {
-                return key.hasPrefix(activeToken.lowercased())
-            }
-            return true
-        }
-        return Array(candidates.prefix(8))
-    }
 
     private func insertTag(_ tag: String) {
         var note = viewModel.note
@@ -448,13 +419,16 @@ struct CompactAddTransactionView: View {
 
     private var formContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Self-contained View so amount keystrokes only invalidate the card,
-            // leaving the wallet/category/detail sections below untouched.
+            // Self-contained Views so amount keystrokes only invalidate the
+            // card and note keystrokes only the detail rows. Both are
+            // `Equatable` on their inputs as well, so a pass caused by anything
+            // else — a chip tap, a suggestion landing — skips them entirely.
             CompactAmountCard(
                 viewModel: viewModel,
                 isNoteBarVisible: isNoteBarVisible,
                 onTap: { endNoteEditing() }
             )
+            .equatable()
 
             walletSection
 
@@ -464,9 +438,18 @@ struct CompactAddTransactionView: View {
                 categorySection
             }
 
-            detailChipRows
-
-
+            CompactDetailRows(
+                viewModel: viewModel,
+                isNoteBarVisible: isNoteBarVisible,
+                isFetchingCurrentLocation: isFetchingCurrentLocation,
+                onEditNote: beginNoteEditing,
+                onOpenLocation: {
+                    endNoteEditing()
+                    showLocationPicker = true
+                },
+                onInteract: endNoteEditing
+            )
+            .equatable()
         }
     }
 
@@ -489,14 +472,6 @@ struct CompactAddTransactionView: View {
 
     // MARK: - Wallet sections
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .appFont(.footnote, weight: .medium)
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .padding(.leading, 4)
-    }
-
     private func selectWallet(_ wallet: Wallet) {
         viewModel.selectedWallet = wallet
         viewModel.syncCurrencyToWallet()
@@ -510,7 +485,7 @@ struct CompactAddTransactionView: View {
     @ViewBuilder
     private var walletSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("transaction.fromWallet".localized)
+            compactSectionLabel("transaction.fromWallet".localized)
             if sourceWallets.isEmpty {
                 TransactionSetupPrompt(
                     icon: "wallet.pass",
@@ -534,6 +509,7 @@ struct CompactAddTransactionView: View {
                             ) {
                                 selectWallet(wallet)
                             }
+                            .equatable()
                         }
 
                         if sourceWallets.count > maxQuickWallets {
@@ -566,7 +542,7 @@ struct CompactAddTransactionView: View {
         let availableWallets = wallets.filter { $0.id != viewModel.selectedWallet?.id }
 
         return VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("transaction.toWallet".localized)
+            compactSectionLabel("transaction.toWallet".localized)
             if availableWallets.isEmpty {
                 Text("transaction.noOtherWallets".localized)
                     .appFont(.subheadline)
@@ -583,6 +559,7 @@ struct CompactAddTransactionView: View {
                                 viewModel.destinationWallet = wallet
                                 viewModel.updateExchangeRate()
                             }
+                            .equatable()
                         }
                     }
                     .padding(.horizontal, 2)
@@ -646,7 +623,7 @@ struct CompactAddTransactionView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            sectionLabel(L10n.Category.title)
+            compactSectionLabel(L10n.Category.title)
             if filteredCategories.isEmpty {
                 TransactionSetupPrompt(
                     icon: "square.grid.2x2",
@@ -671,6 +648,7 @@ struct CompactAddTransactionView: View {
                             ) {
                                 viewModel.selectedCategory = scored.category
                             }
+                            .equatable()
                         }
                         
                         if filteredCategories.count > 4 {
@@ -684,404 +662,51 @@ struct CompactAddTransactionView: View {
         }
     }
 
-    // MARK: - Detail row (when · note · location)
-
-    /// Accessibility text sizes get one full-width control per line — two-up
-    /// columns truncate to uselessness once the type scales.
-    private var isTwoUpLayout: Bool { !dynamicTypeSize.isAccessibilitySize }
-
-    /// The note keeps its compact button while its editor is open: the bar
-    /// below already shows the text in full, and promoting the row on the
-    /// first keystroke would shift the form under the user's thumb.
-    private var isNoteRowVisible: Bool {
-        !isTwoUpLayout || (!viewModel.note.isEmpty && !isNoteBarVisible)
-    }
-
-    private var isLocationRowVisible: Bool {
-        !isTwoUpLayout || viewModel.selectedLocation != nil
-    }
-
-    /// Space follows the value: date and time always sit on the lead line
-    /// (they're pre-filled on every entry), while an unset note or place is
-    /// only a button there. Setting one promotes it to its own full-width row,
-    /// where the value gets the whole sheet width before it has to truncate.
-    private var detailChipRows: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("common.details".localized)
-
-            VStack(spacing: 8) {
-                if isTwoUpLayout {
-                    HStack(spacing: 8) {
-                        dateChip
-                        timeChip
-                        if !isNoteRowVisible { noteButton }
-                        if !isLocationRowVisible { locationButton }
-                    }
-                } else {
-                    dateChip
-                    timeChip
-                }
-
-                if isNoteRowVisible { noteRow }
-                if isLocationRowVisible { locationRow }
-            }
-            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isNoteRowVisible)
-            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isLocationRowVisible)
-        }
-    }
-
-    /// Shared container for every detail control. A rounded rect rather than a
-    /// capsule: these are sized by their column, not by their content, and a
-    /// stretched capsule reads as a pill that failed to hug. `isActive` marks
-    /// the control whose editor is currently open on the bottom bar.
-    private func detailSurface<Content: View>(
-        isActive: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(minHeight: detailControlHeight)
-            .background(isActive ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
-                    .stroke(isActive ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
-    }
-
-    /// Compact form of an optional field: icon only, square, no value to show.
-    private func detailButton(
-        icon: String,
-        iconColor: Color,
-        morphID: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            detailSurface {
-                Image(systemName: icon)
-                    .appFont(.subheadline, weight: .semibold)
-                    .foregroundStyle(iconColor)
-                    .frame(width: detailControlHeight - 24)
-            }
-        }
-        .buttonStyle(.plain)
-        .matchedGeometryEffect(id: morphID, in: detailMorph)
-    }
-
-    /// Expanded form of an optional field: full width, so a note or place name
-    /// gets the entire sheet before it truncates.
-    private func detailRow<Trailing: View>(
-        icon: String,
-        iconColor: Color,
-        text: String,
-        isSet: Bool,
-        morphID: String,
-        action: @escaping () -> Void,
-        @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
-        detailSurface {
-            HStack(spacing: 0) {
-                Button(action: action) {
-                    HStack(spacing: 8) {
-                        Image(systemName: icon)
-                            .appFont(.subheadline, weight: .semibold)
-                            .foregroundStyle(iconColor)
-                            .frame(width: detailControlHeight - 24)
-                        Text(text)
-                            .appFont(.subheadline, weight: .medium)
-                            .foregroundStyle(isSet ? Color.primary : Color.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                trailing()
-            }
-        }
-        .matchedGeometryEffect(id: morphID, in: detailMorph)
-    }
-
-    private var dateChip: some View {
-        CompactDateChip(
-            date: $viewModel.date,
-            controlHeight: detailControlHeight,
-            onInteract: endNoteEditing
-        )
-    }
-
-    /// Hugs its content on the lead line — a wall-clock time is a bounded,
-    /// near-constant width, so reserving a share of the row for it would only
-    /// take room away from the date.
-    private var timeChip: some View {
-        detailSurface {
-            // Glyph-free for the same reason as the date — see `dateChip`.
-            Text(viewModel.date.appFormatted(date: .omitted, time: .shortened))
-                .appFont(.subheadline, weight: .medium)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(maxWidth: isTwoUpLayout ? nil : .infinity, alignment: .leading)
-        }
-        .overlay {
-            // Invisible native control — see dateChip's overlay for why.
-            DatePicker(
-                "transaction.time".localized,
-                selection: $viewModel.date,
-                displayedComponents: [.hourAndMinute]
-            )
-            .datePickerStyle(.compact)
-            .labelsHidden()
-            .colorMultiply(.clear)
-            .simultaneousGesture(TapGesture().onEnded { endNoteEditing() })
-        }
-        .accessibilityLabel("transaction.time".localized)
-    }
-
-    // MARK: Note — button until set, then a full-width row
-
-    /// Note and place share one neutral tint. Blue in particular is this app's
-    /// accent — a blue pin on an empty field reads as "a place is already
-    /// chosen". Set vs. unset is carried by the label instead: the value in
-    /// primary, the placeholder in secondary.
-    private static let optionalFieldIconColor = Color.gray
-    /// One glyph in both states, for the same reason: swapping in the `.fill`
-    /// variant once a place is picked is a second, redundant selected-signal.
-    private static let locationIcon = "mappin.and.ellipse"
-
-    private var noteButton: some View {
-        detailButton(
-            icon: "note.text",
-            iconColor: isNoteBarVisible ? Color.accentColor : Self.optionalFieldIconColor,
-            morphID: "detail.note",
-            action: beginNoteEditing
-        )
-        .accessibilityLabel(viewModel.note.isEmpty
-            ? L10n.Transaction.note
-            : "\(L10n.Transaction.note): \(viewModel.note)")
-    }
-
-    private var noteRow: some View {
-        detailRow(
-            icon: "note.text",
-            iconColor: Self.optionalFieldIconColor,
-            // Empty text only ever reaches here at accessibility sizes, where
-            // the row is the permanent form of the field.
-            text: viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note,
-            isSet: !viewModel.note.isEmpty,
-            morphID: "detail.note",
-            action: beginNoteEditing
-        ) {
-            EmptyView()
-        }
-        // The row truncates; VoiceOver still reads the whole note.
-        .accessibilityLabel(viewModel.note.isEmpty
-            ? L10n.Transaction.note
-            : "\(L10n.Transaction.note): \(viewModel.note)")
-    }
-
-    // MARK: Location — button until set, then a full-width row
-
-    private func openLocationPicker() {
-        endNoteEditing()
-        showLocationPicker = true
-    }
-
-    private var locationButton: some View {
-        Group {
-            if isFetchingCurrentLocation {
-                detailSurface {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: detailControlHeight - 24)
-                }
-            } else {
-                detailButton(
-                    icon: Self.locationIcon,
-                    iconColor: Self.optionalFieldIconColor,
-                    morphID: "detail.location",
-                    action: openLocationPicker
-                )
-            }
-        }
-        .accessibilityLabel("transaction.location".localized)
-    }
-
-    private var locationRow: some View {
-        detailRow(
-            icon: Self.locationIcon,
-            iconColor: Self.optionalFieldIconColor,
-            text: viewModel.selectedLocation?.title ?? "transaction.location".localized,
-            isSet: viewModel.selectedLocation != nil,
-            morphID: "detail.location",
-            action: openLocationPicker
-        ) {
-            if viewModel.selectedLocation != nil {
-                Button {
-                    viewModel.selectedLocation = nil
-                    HapticManager.shared.selection()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .appFont(.footnote)
-                        .padding(.leading, 8)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("transaction.location.clear".localized)
-            }
-        }
-        .accessibilityLabel(viewModel.selectedLocation.map {
-            "\("transaction.location".localized): \($0.title)"
-        } ?? "transaction.location".localized)
-    }
-
-    private func calculatorSuggestionBar(tags: [ScoredTag]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // Location suggestion chip (if location is not set)
-                if viewModel.selectedLocation == nil {
-                    Button {
-                        useCurrentLocationDirectly()
-                    } label: {
-                        HStack(spacing: 4) {
-                            if isFetchingCurrentLocation {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "location.fill")
-                                    .appFont(.caption2)
-                            }
-                            Text("transaction.location.useCurrent".localized)
-                                .appFont(.footnote, weight: .medium)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.12), in: Capsule())
-                        .foregroundColor(.blue)
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isFetchingCurrentLocation)
-                }
-
-                // Tag suggestion chips
-                ForEach(tags) { scored in
-                    TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .background(Color(.systemGroupedBackground))
-        .overlay(alignment: .top) { Divider() }
-    }
-
     // MARK: - Bottom bar (keypad ⇄ note bar)
 
     @ViewBuilder
     private var bottomBar: some View {
-        // Ranked once per pass and handed down: computing it re-parses the note
-        // for an in-progress `#tag`, and it was previously evaluated twice on
-        // the keypad branch alone.
-        let tagChips = suggestedTagChips
-
         if isNoteBarVisible {
             // Blooms open from its top edge — the edge nearest the chip that
             // spawned it — while the keyboard supplies the upward motion. A
             // `.move(edge: .bottom)` here would double that rise and overshoot.
-            noteBar(tags: tagChips)
-                .transition(.scale(scale: 0.94, anchor: .top).combined(with: .opacity))
+            CompactNoteBar(
+                viewModel: viewModel,
+                scoredTags: scoredTags,
+                focused: $noteFieldFocused,
+                onInsertTag: insertTag,
+                onDone: endNoteEditing
+            )
+            .transition(.scale(scale: 0.94, anchor: .top).combined(with: .opacity))
         } else if rateFieldFocused {
             // The system decimal pad owns the bottom while the rate is edited.
             EmptyView()
         } else {
             VStack(spacing: 0) {
-                if viewModel.selectedLocation == nil || !tagChips.isEmpty {
-                    calculatorSuggestionBar(tags: tagChips)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                // Reads `isValid` (amount-dependent) inside its own body so a
-                // keystroke re-renders only the keypad, not the form above it.
+                // Both of these are separate `View`s, and both decide their own
+                // contents. Ranking the tag chips re-reads the note and the
+                // keypad's save key reads the amount, so evaluating either here
+                // would put this whole body — the entire screen — on the path of
+                // every keystroke. The suggestion bar also owns its own
+                // show/hide test for the same reason.
+                CompactKeypadSuggestionBar(
+                    viewModel: viewModel,
+                    scoredTags: scoredTags,
+                    isFetchingCurrentLocation: isFetchingCurrentLocation,
+                    onUseCurrentLocation: useCurrentLocationDirectly,
+                    onInsertTag: insertTag
+                )
+                .equatable()
+
                 CompactKeypad(viewModel: viewModel) {
                     if viewModel.saveTransaction() {
                         dismiss()
                     }
                 }
+                .equatable()
             }
             .transition(.move(edge: .bottom))
         }
-    }
-
-    /// Floating editor panel: an elevated card so the field reads as the focused
-    /// surface rather than another row blended into the form background.
-    private func noteBar(tags: [ScoredTag]) -> some View {
-        VStack(spacing: 10) {
-            if !tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(tags) { scored in
-                            TagSuggestionChip(tag: scored.tag) { insertTag(scored.tag) }
-                        }
-                    }
-                    // Matches the field row below so the panel keeps one
-                    // left margin for everything inside it.
-                    .padding(.horizontal, 12)
-                }
-            }
-
-            HStack(alignment: .bottom, spacing: 10) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "note.text")
-                        .appFont(.footnote, weight: .semibold)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 3)
-
-                    // Grows with the note so the whole thing stays readable while
-                    // typing — a single-line field only ever shows a window around
-                    // the caret, which is also the only place a long note can be
-                    // read back in full. Return inserts a newline on a vertical
-                    // field, so "Done" is the way out.
-                    TextField(L10n.Transaction.note, text: $viewModel.note, axis: .vertical)
-                        .focused($noteFieldFocused)
-                        .lineLimit(1...4)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(
-                    Color(.tertiarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
-                        .stroke(Color.accentColor.opacity(0.45), lineWidth: 1)
-                )
-
-                Button("common.done".localized) {
-                    endNoteEditing()
-                }
-                .appFont(.subheadline, weight: .semibold)
-                .padding(.bottom, 10)
-            }
-            // 12 on both axes so the field's corner sits on the arc of the
-            // panel's — unequal insets can't be concentric on both edges.
-            .padding(.horizontal, 12)
-        }
-        .padding(.vertical, 12)
-        // `hero`, matching the amount card: both are the elevated focal surface
-        // of their moment. This also makes the field inside it exactly
-        // concentric — 24 minus its 12pt inset is the field's own 12.
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .shadow(color: .black.opacity(0.16), radius: 14, y: 3)
-        )
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
-        .onAppear { noteFieldFocused = true }
     }
 }
 
@@ -1099,14 +724,23 @@ struct CompactAddTransactionView: View {
 /// `LazyHStack` keeps the same swipe gesture while materialising only the pages
 /// actually on screen.
 ///
-/// **It's its own `View`, not a computed property on the screen.** The screen's
-/// body reads `viewModel.note`, so with the pager inlined every note keystroke
-/// rebuilt it.
+/// **It's its own `Equatable` `View`, not a computed property.** The strip that
+/// holds it re-renders on every note keystroke — the note's own layout depends
+/// on whether it's empty — so being skippable is what keeps a hidden UIKit date
+/// picker from being rebuilt on each one.
 ///
 /// `dayRange` grows to fit any date that lands outside it — editing an old
 /// transaction, or picking a far-off day in the popup — so the pill can never
 /// be asked to show a page that doesn't exist.
-private struct CompactDateChip: View {
+private struct CompactDateChip: View, Equatable {
+    /// Compared on layout inputs only. The date it shows is read through the
+    /// binding inside `body`, so observation refreshes it; excluding the binding
+    /// and the callback is what lets the surrounding strip re-render (on every
+    /// note keystroke) without rebuilding a hidden UIKit date picker each time.
+    static func == (lhs: CompactDateChip, rhs: CompactDateChip) -> Bool {
+        lhs.controlHeight == rhs.controlHeight
+    }
+
     @Binding var date: Date
     /// Matches the rest of the detail row, so the whole strip lines up.
     let controlHeight: CGFloat
@@ -1301,9 +935,15 @@ private struct CompactDateChip: View {
 
 /// One `#tag` pill in the keypad / note-bar suggestion rails. Long tags truncate
 /// so a single outlier can't monopolise the rail.
-private struct TagSuggestionChip: View {
+private struct TagSuggestionChip: View, Equatable {
     let tag: String
     let action: () -> Void
+
+    /// The label is the whole appearance, and the action is a pure function of
+    /// it — so a re-rendered rail reuses every chip it already had.
+    static func == (lhs: TagSuggestionChip, rhs: TagSuggestionChip) -> Bool {
+        lhs.tag == rhs.tag
+    }
 
     @ScaledMetric(relativeTo: .footnote) private var maxLabelWidth: CGFloat = 140
 
@@ -1332,18 +972,22 @@ private struct TagSuggestionChip: View {
 /// invalidates this subtree, leaving the wallet/category/detail sections of
 /// `CompactAddTransactionView` untouched (they don't read the amount, and the
 /// parent body no longer does either).
-private struct CompactAmountCard: View {
+private struct CompactAmountCard: View, Equatable {
     @Bindable var viewModel: AddTransactionViewModel
     let isNoteBarVisible: Bool
     let onTap: () -> Void
 
+    /// Everything shown here is read from `viewModel` inside `body`, so the
+    /// amount, currency and type all still update through observation. The
+    /// comparison exists to keep a pass caused by something else — a note
+    /// keystroke, a chip tap — from re-rendering a glass surface.
+    static func == (lhs: CompactAmountCard, rhs: CompactAmountCard) -> Bool {
+        lhs.viewModel === rhs.viewModel && lhs.isNoteBarVisible == rhs.isNoteBarVisible
+    }
+
     /// Glass is a translucent material; when the user has asked the system to
     /// reduce transparency we fall back to the opaque tinted fill.
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// Drives the caret blink. Started once on appear as a repeating animation.
-    @State private var caretDimmed = false
 
     /// The card's identity colour — also the caret and the glass tint, so the
     /// whole surface reads as "expense" / "income" / "transfer" at a glance.
@@ -1440,29 +1084,6 @@ private struct CompactAmountCard: View {
         return CurrencyFormatterCache.keypadAmount.string(from: NSNumber(value: doubleValue)) ?? "0"
     }
 
-    /// Blinking insertion point, matching the system text caret. Capsule-capped
-    /// and tinted to the transaction type; held solid under Reduce Motion.
-    ///
-    /// The blink is bound to this view with `.animation(_:value:)` rather than
-    /// started with `withAnimation` inside `onAppear`. `withAnimation` installs
-    /// its animation on the whole update transaction, so every *other* change
-    /// still settling in that same pass inherits it — and this one repeats
-    /// forever. Opening the sheet on an existing transaction settles the form's
-    /// scroll offset in exactly that pass, which is why the whole sheet then
-    /// drifted up and down without end.
-    private var caret: some View {
-        Capsule()
-            .fill(typeTint)
-            .frame(width: 2.5, height: 36)
-            .opacity(caretDimmed ? 0 : 1)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.5).repeatForever(), value: caretDimmed)
-            .onAppear {
-                guard !reduceMotion else { return }
-                caretDimmed = true
-            }
-            .onDisappear { caretDimmed = false }
-    }
-
     /// Secondary readouts under the amount. Both are trailing-aligned on one row
     /// so they hang off the amount's own edge instead of drifting centre.
     @ViewBuilder
@@ -1516,7 +1137,7 @@ private struct CompactAmountCard: View {
                         .animation(.easeInOut(duration: 0.1), value: amountDisplayText)
 
                     if !isNoteBarVisible {
-                        caret
+                        BlinkingCaret(tint: typeTint)
                             .accessibilityHidden(true)
                     }
                 }
@@ -1597,26 +1218,102 @@ private struct CompactSaveButton: View {
 /// `isSaveDisabled` read stays out of the parent's body. `isSaveDisabled` is an
 /// `@autoclosure`, so the `isValid` read isn't performed here either — it lands
 /// inside the keypad's save key, and a keystroke rebuilds only that one key.
-private struct CompactKeypad: View {
-    @Bindable var viewModel: AddTransactionViewModel
+private struct CompactKeypad: View, Equatable {
+    let viewModel: AddTransactionViewModel
     let onSave: () -> Void
 
+    static func == (lhs: CompactKeypad, rhs: CompactKeypad) -> Bool {
+        lhs.viewModel === rhs.viewModel
+    }
+
     var body: some View {
+        // Closures, not bindings. Handing the keypad `$viewModel.expression`
+        // made SwiftUI read the amount while *this* body was being evaluated,
+        // which registered this view as an observer of it — so every digit
+        // invalidated the wrapper and rebuilt all twenty keys. Nothing here
+        // reads the model; the closures run at event time instead.
         CalculatorKeyboardView(
-            expression: $viewModel.expression,
-            evaluatedAmount: $viewModel.evaluatedAmount,
+            readExpression: { viewModel.expression },
+            writeExpression: { viewModel.expression = $0 },
+            writeEvaluatedAmount: { viewModel.evaluatedAmount = $0 },
             onSave: onSave,
-            isSaveDisabled: !viewModel.isValid
+            isSaveDisabled: { !viewModel.isValid }
         )
     }
 }
 
+// MARK: - Caret
+
+/// Blinking insertion point, matching the system text caret. Capsule-capped and
+/// tinted to the transaction type; held solid under Reduce Motion.
+///
+/// Driven by a `TimelineView` tick rather than a `repeatForever` animation.
+/// A repeating opacity animation is interpolated every frame for as long as the
+/// sheet is open, and this caret sits inside the amount card's glass surface, so
+/// each of those frames re-rendered the material behind it: measured, the screen
+/// idled at ~11% CPU with the blink running and 0% with it held solid (Reduce
+/// Motion). Ticking twice a second and fading over 0.1s keeps the same soft
+/// blink while leaving the compositor idle the rest of the time.
+///
+/// It is also its own `View` so the blink invalidates a 2.5pt capsule rather
+/// than the whole amount card — as `@State` on the card, the toggle re-ran the
+/// card's entire body, glass and formatted amount included, twice a second.
+///
+/// Note for whoever revives the old approach: `withAnimation` in `onAppear` is
+/// worse still. It installs its animation on the whole update transaction, so
+/// every other change settling in that pass inherits it — and this one repeats
+/// forever. Opening the sheet on an existing transaction settles the form's
+/// scroll offset in exactly that pass, which is why the whole sheet once
+/// drifted up and down without end.
+private struct BlinkingCaret: View {
+    let tint: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Half a blink — the system caret's cadence.
+    private static let halfPeriod: TimeInterval = 0.53
+
+    var body: some View {
+        if reduceMotion {
+            capsule(isVisible: true)
+        } else {
+            TimelineView(.periodic(from: .now, by: Self.halfPeriod)) { context in
+                capsule(isVisible: Self.isVisible(at: context.date))
+            }
+        }
+    }
+
+    private func capsule(isVisible: Bool) -> some View {
+        Capsule()
+            .fill(tint)
+            .frame(width: 2.5, height: 36)
+            .opacity(isVisible ? 1 : 0)
+            .animation(.easeInOut(duration: 0.1), value: isVisible)
+    }
+
+    private static func isVisible(at date: Date) -> Bool {
+        Int(date.timeIntervalSinceReferenceDate / halfPeriod).isMultiple(of: 2)
+    }
+}
+
 // MARK: - Category Chip Component
-struct CategoryChip: View {
+struct CategoryChip: View, Equatable {
     let category: Category
     let isSelected: Bool
     let isHighlighted: Bool
     let action: () -> Void
+
+    /// Object identity plus selection state. The name, icon and colour are read
+    /// from the model inside `body`, so editing a category still refreshes its
+    /// chip through observation — this only stops an unrelated pass on the
+    /// screen from rebuilding every chip. Compared via `.equatable()`; the
+    /// comparison deliberately touches no model property, which would otherwise
+    /// register the *caller* as an observer of it.
+    static func == (lhs: CategoryChip, rhs: CategoryChip) -> Bool {
+        lhs.category === rhs.category
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isHighlighted == rhs.isHighlighted
+    }
 
     /// Long category names truncate rather than stretching the pill past the
     /// row (or, in a wrapping flow, past the screen edge).
@@ -1660,5 +1357,510 @@ struct CategoryChip: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(category.displayName) category\(isSelected ? ", selected" : "")")
+    }
+}
+
+// MARK: - Shared detail-strip chrome
+
+/// Section eyebrow above each group of controls. File scope so the screen and
+/// the detail strip — now separate `View`s — share one definition.
+private func compactSectionLabel(_ text: String) -> some View {
+    Text(text)
+        .appFont(.footnote, weight: .medium)
+        .foregroundStyle(.secondary)
+        .textCase(.uppercase)
+        .padding(.leading, 4)
+}
+
+/// Shared container for every detail control. A rounded rect rather than a
+/// capsule: these are sized by their column, not by their content, and a
+/// stretched capsule reads as a pill that failed to hug. `isActive` marks the
+/// control whose editor is currently open on the bottom bar.
+private struct DetailSurface: ViewModifier {
+    var isActive: Bool = false
+    var minHeight: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minHeight: minHeight)
+            .background(isActive ? Color.accentColor.opacity(0.12) : Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                    .stroke(isActive ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous))
+    }
+}
+
+private extension View {
+    func detailSurface(isActive: Bool = false, minHeight: CGFloat) -> some View {
+        modifier(DetailSurface(isActive: isActive, minHeight: minHeight))
+    }
+}
+
+// MARK: - Detail rows (when · note · location)
+
+/// The date / time / note / place strip.
+///
+/// Its own `View` because the layout here is a function of the *values*: an
+/// unset note or place is a 36pt button, a set one is promoted to a full-width
+/// row where the value gets the whole sheet width before it truncates. Deciding
+/// that reads `note` and `selectedLocation`, and the note's accessibility label
+/// reads the text itself — so while this lived in the screen's own body, every
+/// note keystroke rebuilt the amount card, both chip rails and the keypad along
+/// with it.
+///
+/// Space follows the value: date and time always sit on the lead line (they're
+/// pre-filled on every entry), while an unset note or place is only a button
+/// there.
+private struct CompactDetailRows: View, Equatable {
+    @Bindable var viewModel: AddTransactionViewModel
+    let isNoteBarVisible: Bool
+    let isFetchingCurrentLocation: Bool
+    let onEditNote: () -> Void
+    let onOpenLocation: () -> Void
+    /// Closes the note editor: these controls want the bottom of the screen.
+    let onInteract: () -> Void
+
+    /// Drives the two-up ⇄ stacked switch: at accessibility sizes side-by-side
+    /// controls truncate to uselessness.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// An unset note/place is a 36pt button; setting one promotes it to a
+    /// full-width row. Same field either way, so the two forms morph.
+    @Namespace private var detailMorph
+    /// Square side of the compact note/place buttons — also the strip's height,
+    /// so the whole row lines up.
+    @ScaledMetric(relativeTo: .subheadline) private var detailControlHeight: CGFloat = 36
+
+    /// The callbacks are stable for the life of the screen and everything drawn
+    /// here is read from `viewModel` inside `body`, so observation — not this
+    /// comparison — is what refreshes the contents. Excluding the closures is
+    /// what lets an unrelated pass on the parent skip this subtree.
+    static func == (lhs: CompactDetailRows, rhs: CompactDetailRows) -> Bool {
+        lhs.viewModel === rhs.viewModel
+            && lhs.isNoteBarVisible == rhs.isNoteBarVisible
+            && lhs.isFetchingCurrentLocation == rhs.isFetchingCurrentLocation
+    }
+
+    /// Accessibility text sizes get one full-width control per line — two-up
+    /// columns truncate to uselessness once the type scales.
+    private var isTwoUpLayout: Bool { !dynamicTypeSize.isAccessibilitySize }
+
+    /// The note keeps its compact button while its editor is open: the bar
+    /// below already shows the text in full, and promoting the row on the
+    /// first keystroke would shift the form under the user's thumb.
+    private var isNoteRowVisible: Bool {
+        !isTwoUpLayout || (!viewModel.note.isEmpty && !isNoteBarVisible)
+    }
+
+    private var isLocationRowVisible: Bool {
+        !isTwoUpLayout || viewModel.selectedLocation != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            compactSectionLabel("common.details".localized)
+
+            VStack(spacing: 8) {
+                if isTwoUpLayout {
+                    HStack(spacing: 8) {
+                        dateChip
+                        timeChip
+                        if !isNoteRowVisible { noteButton }
+                        if !isLocationRowVisible { locationButton }
+                    }
+                } else {
+                    dateChip
+                    timeChip
+                }
+
+                if isNoteRowVisible { noteRow }
+                if isLocationRowVisible { locationRow }
+            }
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isNoteRowVisible)
+            .animation(.spring(response: 0.34, dampingFraction: 0.85), value: isLocationRowVisible)
+        }
+    }
+
+    /// Compact form of an optional field: icon only, square, no value to show.
+    private func detailButton(
+        icon: String,
+        iconColor: Color,
+        morphID: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .appFont(.subheadline, weight: .semibold)
+                .foregroundStyle(iconColor)
+                .frame(width: detailControlHeight - 24)
+                .detailSurface(minHeight: detailControlHeight)
+        }
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: morphID, in: detailMorph)
+    }
+
+    /// Expanded form of an optional field: full width, so a note or place name
+    /// gets the entire sheet before it truncates.
+    private func detailRow<Trailing: View>(
+        icon: String,
+        iconColor: Color,
+        text: String,
+        isSet: Bool,
+        morphID: String,
+        action: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 0) {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .appFont(.subheadline, weight: .semibold)
+                        .foregroundStyle(iconColor)
+                        .frame(width: detailControlHeight - 24)
+                    Text(text)
+                        .appFont(.subheadline, weight: .medium)
+                        .foregroundStyle(isSet ? Color.primary : Color.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            trailing()
+        }
+        .detailSurface(minHeight: detailControlHeight)
+        .matchedGeometryEffect(id: morphID, in: detailMorph)
+    }
+
+    private var dateChip: some View {
+        CompactDateChip(
+            date: $viewModel.date,
+            controlHeight: detailControlHeight,
+            onInteract: onInteract
+        )
+        .equatable()
+    }
+
+    private var timeChip: some View {
+        CompactTimeChip(
+            date: $viewModel.date,
+            controlHeight: detailControlHeight,
+            fillsWidth: !isTwoUpLayout,
+            onInteract: onInteract
+        )
+        .equatable()
+    }
+
+    // MARK: Note — button until set, then a full-width row
+
+    /// Note and place share one neutral tint. Blue in particular is this app's
+    /// accent — a blue pin on an empty field reads as "a place is already
+    /// chosen". Set vs. unset is carried by the label instead: the value in
+    /// primary, the placeholder in secondary.
+    private static let optionalFieldIconColor = Color.gray
+    /// One glyph in both states, for the same reason: swapping in the `.fill`
+    /// variant once a place is picked is a second, redundant selected-signal.
+    private static let locationIcon = "mappin.and.ellipse"
+
+    private var noteButton: some View {
+        detailButton(
+            icon: "note.text",
+            iconColor: isNoteBarVisible ? Color.accentColor : Self.optionalFieldIconColor,
+            morphID: "detail.note",
+            action: onEditNote
+        )
+        .accessibilityLabel(viewModel.note.isEmpty
+            ? L10n.Transaction.note
+            : "\(L10n.Transaction.note): \(viewModel.note)")
+    }
+
+    private var noteRow: some View {
+        detailRow(
+            icon: "note.text",
+            iconColor: Self.optionalFieldIconColor,
+            // Empty text only ever reaches here at accessibility sizes, where
+            // the row is the permanent form of the field.
+            text: viewModel.note.isEmpty ? L10n.Transaction.note : viewModel.note,
+            isSet: !viewModel.note.isEmpty,
+            morphID: "detail.note",
+            action: onEditNote
+        ) {
+            EmptyView()
+        }
+        // The row truncates; VoiceOver still reads the whole note.
+        .accessibilityLabel(viewModel.note.isEmpty
+            ? L10n.Transaction.note
+            : "\(L10n.Transaction.note): \(viewModel.note)")
+    }
+
+    // MARK: Location — button until set, then a full-width row
+
+    private var locationButton: some View {
+        Group {
+            if isFetchingCurrentLocation {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: detailControlHeight - 24)
+                    .detailSurface(minHeight: detailControlHeight)
+            } else {
+                detailButton(
+                    icon: Self.locationIcon,
+                    iconColor: Self.optionalFieldIconColor,
+                    morphID: "detail.location",
+                    action: onOpenLocation
+                )
+            }
+        }
+        .accessibilityLabel("transaction.location".localized)
+    }
+
+    private var locationRow: some View {
+        detailRow(
+            icon: Self.locationIcon,
+            iconColor: Self.optionalFieldIconColor,
+            text: viewModel.selectedLocation?.title ?? "transaction.location".localized,
+            isSet: viewModel.selectedLocation != nil,
+            morphID: "detail.location",
+            action: onOpenLocation
+        ) {
+            if viewModel.selectedLocation != nil {
+                Button {
+                    viewModel.selectedLocation = nil
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .appFont(.footnote)
+                        .padding(.leading, 8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("transaction.location.clear".localized)
+            }
+        }
+        .accessibilityLabel(viewModel.selectedLocation.map {
+            "\("transaction.location".localized): \($0.title)"
+        } ?? "transaction.location".localized)
+    }
+}
+
+// MARK: - Time chip
+
+/// Wall-clock time, with the system's compact `DatePicker` layered on invisibly
+/// for the popup. Its own `Equatable` `View` for the same reason as the date
+/// pill: the strip around it re-renders on every note keystroke, and rebuilding
+/// a hidden UIKit date picker twice per keystroke is not free.
+private struct CompactTimeChip: View, Equatable {
+    @Binding var date: Date
+    let controlHeight: CGFloat
+    /// Hugs its content on the lead line — a wall-clock time is a bounded,
+    /// near-constant width, so reserving a share of the row for it would only
+    /// take room away from the date.
+    let fillsWidth: Bool
+    let onInteract: () -> Void
+
+    static func == (lhs: CompactTimeChip, rhs: CompactTimeChip) -> Bool {
+        lhs.controlHeight == rhs.controlHeight && lhs.fillsWidth == rhs.fillsWidth
+    }
+
+    var body: some View {
+        // Glyph-free for the same reason as the date — see `CompactDateChip`.
+        Text(date.appFormatted(date: .omitted, time: .shortened))
+            .appFont(.subheadline, weight: .medium)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
+            .detailSurface(minHeight: controlHeight)
+            .overlay {
+                // Invisible native control — see CompactDateChip's overlay.
+                DatePicker(
+                    "transaction.time".localized,
+                    selection: $date,
+                    displayedComponents: [.hourAndMinute]
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .colorMultiply(.clear)
+                .simultaneousGesture(TapGesture().onEnded { onInteract() })
+            }
+            .accessibilityLabel("transaction.time".localized)
+    }
+}
+
+// MARK: - Tag suggestion ranking
+
+/// Filters the ranked tags down to the chips worth offering right now.
+///
+/// Deliberately a free function rather than a computed property on the screen:
+/// it reads the note, so evaluating it inside the screen's body made every
+/// keystroke a full-screen pass. Each bar that shows chips calls it itself.
+private enum CompactTagSuggestions {
+    static func chips(from scored: [ScoredTag], note: String, isEditingNote: Bool) -> [ScoredTag] {
+        guard !scored.isEmpty else { return [] }
+
+        let activeToken = isEditingNote ? TransactionTagParser.activeTagToken(in: note) : nil
+        var existing = Set(TransactionTagParser.tags(in: note).map { $0.lowercased() })
+        if let activeToken, !activeToken.isEmpty {
+            existing.remove(activeToken.lowercased())
+        }
+
+        let candidates = scored.filter { scored in
+            let key = scored.tag.lowercased()
+            guard !existing.contains(key) else { return false }
+            if let activeToken, !activeToken.isEmpty {
+                return key.hasPrefix(activeToken.lowercased())
+            }
+            return true
+        }
+        return Array(candidates.prefix(8))
+    }
+}
+
+// MARK: - Keypad suggestion bar
+
+/// The rail above the keypad: "use current location" while no place is set, plus
+/// ranked tag chips. It decides its own visibility so that neither the note read
+/// (which ranks the chips) nor the empty case reaches the screen's body.
+private struct CompactKeypadSuggestionBar: View, Equatable {
+    let viewModel: AddTransactionViewModel
+    let scoredTags: [ScoredTag]
+    let isFetchingCurrentLocation: Bool
+    let onUseCurrentLocation: () -> Void
+    let onInsertTag: (String) -> Void
+
+    static func == (lhs: CompactKeypadSuggestionBar, rhs: CompactKeypadSuggestionBar) -> Bool {
+        lhs.viewModel === rhs.viewModel
+            && lhs.isFetchingCurrentLocation == rhs.isFetchingCurrentLocation
+            && lhs.scoredTags == rhs.scoredTags
+    }
+
+    var body: some View {
+        let tags = CompactTagSuggestions.chips(from: scoredTags, note: viewModel.note, isEditingNote: false)
+        let showsLocationChip = viewModel.selectedLocation == nil
+
+        if showsLocationChip || !tags.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if showsLocationChip {
+                        Button(action: onUseCurrentLocation) {
+                            HStack(spacing: 4) {
+                                if isFetchingCurrentLocation {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "location.fill")
+                                        .appFont(.caption2)
+                                }
+                                Text("transaction.location.useCurrent".localized)
+                                    .appFont(.footnote, weight: .medium)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.12), in: Capsule())
+                            .foregroundColor(.blue)
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isFetchingCurrentLocation)
+                    }
+
+                    ForEach(tags) { scored in
+                        TagSuggestionChip(tag: scored.tag) { onInsertTag(scored.tag) }
+                            .equatable()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .background(Color(.systemGroupedBackground))
+            .overlay(alignment: .top) { Divider() }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+}
+
+// MARK: - Note bar
+
+/// Floating editor panel: an elevated card so the field reads as the focused
+/// surface rather than another row blended into the form background. Owns the
+/// note text field and its own chip ranking, keeping both off the screen's body.
+private struct CompactNoteBar: View {
+    @Bindable var viewModel: AddTransactionViewModel
+    let scoredTags: [ScoredTag]
+    @FocusState.Binding var focused: Bool
+    let onInsertTag: (String) -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        let tags = CompactTagSuggestions.chips(from: scoredTags, note: viewModel.note, isEditingNote: focused)
+
+        VStack(spacing: 10) {
+            if !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(tags) { scored in
+                            TagSuggestionChip(tag: scored.tag) { onInsertTag(scored.tag) }
+                                .equatable()
+                        }
+                    }
+                    // Matches the field row below so the panel keeps one
+                    // left margin for everything inside it.
+                    .padding(.horizontal, 12)
+                }
+            }
+
+            HStack(alignment: .bottom, spacing: 10) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "note.text")
+                        .appFont(.footnote, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 3)
+
+                    // Grows with the note so the whole thing stays readable while
+                    // typing — a single-line field only ever shows a window around
+                    // the caret, which is also the only place a long note can be
+                    // read back in full. Return inserts a newline on a vertical
+                    // field, so "Done" is the way out.
+                    TextField(L10n.Transaction.note, text: $viewModel.note, axis: .vertical)
+                        .focused($focused)
+                        .lineLimit(1...4)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(
+                    Color(.tertiarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.45), lineWidth: 1)
+                )
+
+                Button("common.done".localized, action: onDone)
+                    .appFont(.subheadline, weight: .semibold)
+                    .padding(.bottom, 10)
+            }
+            // 12 on both axes so the field's corner sits on the arc of the
+            // panel's — unequal insets can't be concentric on both edges.
+            .padding(.horizontal, 12)
+        }
+        .padding(.vertical, 12)
+        // `hero`, matching the amount card: both are the elevated focal surface
+        // of their moment. This also makes the field inside it exactly
+        // concentric — 24 minus its 12pt inset is the field's own 12.
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.hero, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .shadow(color: .black.opacity(0.16), radius: 14, y: 3)
+        )
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+        .onAppear { focused = true }
     }
 }

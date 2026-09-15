@@ -1430,8 +1430,6 @@
 "split.yourShare" = "Your Share";
 "split.friendShare" = "Friend's Share";
 "split.perPerson" = "Per Person";
-"split.updateOriginal" = "Update my transaction amount";
-"split.updateOriginal.help" = "Adjust your logged expense to your share";
 "split.shareVia" = "Share Split";
 "split.shareMessage" = "Split expense for %1$@: %2$@. Open in QuaraMoney: %3$@";
 "split.importedNote" = "%@ (Split)";
@@ -1452,7 +1450,7 @@
 "split.category" = "Category";
 "split.note" = "Note";
 "split.splitInHalf" = "Split in half";
-"split.splitInHalf.help" = "Divide bill equally";
+"split.splitInHalf.help" = "Divide the bill equally and reduce your logged expense to your share";
 "split.fullAmountInfo" = "Total Bill: %@ (Full amount)";
 "split.shareMessageFull" = "Expense for %1$@: %2$@. Open in QuaraMoney: %3$@";
 
@@ -1480,6 +1478,28 @@
 /* MARK: - Cross-app handoff (MitraTrip ↔ QuaraMoney) */
 "split.handoff.sending" = "Sending your share to QuaraMoney";
 "split.handoff.receiving" = "Receiving your share from MitraTrip";
-"split.import.shareLabel" = "YOUR SHARE";
+"split.handoff.sendingTrip" = "Sending your share of %@";
+"split.handoff.receivingTrip" = "Receiving your share of %@";
+"split.handoff.sharingPeer" = "Sending this split to another QuaraMoney user";
+"split.handoff.you" = "You";
+"split.handoff.sender" = "Sender";
+"split.handoff.recipient" = "Recipient";
 "split.import.changeCategoryHint" = "Change category";
 "split.walletEquivalentLabel" = "In Wallet Currency";
+
+/* MARK: - Handoff scope sheet */
+"split.scope.title" = "About this split";
+"split.scope.bill" = "Total bill";
+"split.scope.theyReceive" = "They receive %@";
+"split.scope.theyReceive.help" = "The link carries that amount, the category, the date and the note — nothing about your other expenses.";
+"split.scope.yourExpenseChanges" = "Your expense becomes %@";
+"split.scope.yourExpenseChanges.help" = "The %@ you logged is reduced to your own share when you share this.";
+"split.scope.yourExpenseStays" = "Your expense stays at %@";
+"split.scope.yourExpenseStays.help" = "Sharing won't change what you already logged.";
+"split.scope.received" = "About this amount";
+"split.scope.source.trip" = "From the trip \"%@\"";
+"split.scope.source.trip.help" = "The link says it came from MitraTrip. Nothing verifies that, so check the entries before you save.";
+"split.scope.source.peer" = "Shared by another QuaraMoney user";
+"split.scope.source.peer.help" = "The link carries no proof of who sent it. Check the amount before you save.";
+"split.scope.notSaved" = "Nothing is saved yet";
+"split.scope.notSaved.help" = "These entries are staged. They only reach your ledger when you tap Save.";

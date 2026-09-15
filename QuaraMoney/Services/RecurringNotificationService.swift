@@ -36,11 +36,13 @@ enum RecurringNotificationService {
         return UNNotificationCategory(identifier: categoryIdentifier, actions: [post, skip, review], intentIdentifiers: [], options: [])
     }
 
-    /// Mirror the count of currently-due rules onto the app-icon badge. No-ops
-    /// (via `try?`) when badge authorization is missing.
+    /// Mirror the count of currently-due occurrences onto the app-icon badge —
+    /// the same number as the More tab badge and the Recurring review card.
+    /// No-ops (via `try?`) when badge authorization is missing.
     @MainActor
     static func refreshBadgeCount(in context: ModelContext) async {
-        let due = RecurringRuleService.dueRules(in: context).count
+        let due = RecurringRuleService.dueRules(in: context)
+            .reduce(0) { $0 + RecurringRuleService.pendingOccurrenceCount(for: $1) }
         try? await UNUserNotificationCenter.current().setBadgeCount(due)
     }
 

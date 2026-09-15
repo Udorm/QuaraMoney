@@ -161,6 +161,52 @@ enum RecurringRuleService {
         return count
     }
 
+    /// Whether an active rule has run past its end date and will never come
+    /// due again.
+    static func hasEnded(_ rule: RecurringRule) -> Bool {
+        guard let end = rule.endDate else { return false }
+        return rule.nextDueDate > end
+    }
+
+    // MARK: - Projection (derived, never materialized)
+
+    /// Every due date the rule's schedule lands on inside `range`, walking
+    /// forward from `nextDueDate` — so already posted or skipped periods never
+    /// reappear. Honors `endDate`.
+    static func dueDates(for rule: RecurringRule, in range: Range<Date>) -> [Date] {
+        dueDates(from: rule.nextDueDate, startDate: rule.startDate, frequency: rule.frequency,
+                 interval: rule.interval, endDate: rule.endDate, in: range)
+    }
+
+    nonisolated static func dueDates(from nextDueDate: Date, startDate: Date, frequency: Frequency,
+                                     interval: Int, endDate: Date?, in range: Range<Date>) -> [Date] {
+        var dates: [Date] = []
+        var due = nextDueDate
+        var guardN = 0
+        while due < range.upperBound, guardN < 5000 {
+            if let endDate, due > endDate { break }
+            if due >= range.lowerBound { dates.append(due) }
+            guard let next = nextOccurrence(after: due, startDate: startDate, frequency: frequency, interval: interval) else { break }
+            due = next
+            guardN += 1
+        }
+        return dates
+    }
+
+    /// What a rule costs per month on average (weekly × 52 ÷ 12, yearly ÷ 12,
+    /// …), so rules on different schedules can be compared and summed. Real
+    /// months vary, so the UI always labels it as an estimate.
+    nonisolated static func monthlyEquivalent(amount: Decimal, frequency: Frequency, interval: Int = 1) -> Decimal {
+        let perMonth: Decimal
+        switch frequency {
+        case .daily: perMonth = amount * 365 / 12
+        case .weekly: perMonth = amount * 52 / 12
+        case .monthly: perMonth = amount
+        case .yearly: perMonth = amount / 12
+        }
+        return perMonth / Decimal(max(1, interval))
+    }
+
     // MARK: - Mutations (MainActor: touch CurrencyManager, balance cache, NotificationCenter)
 
     /// Post a single due occurrence: create the ledger transaction and advance

@@ -1503,3 +1503,28 @@
 "split.scope.source.peer.help" = "The link carries no proof of who sent it. Check the amount before you save.";
 "split.scope.notSaved" = "Nothing is saved yet";
 "split.scope.notSaved.help" = "These entries are staged. They only reach your ledger when you tap Save.";
+
+/* Recurring screen: Rules and Upcoming tabs */
+"recurring.screenTitle" = "Recurring";
+"recurring.tab.rules" = "Rules";
+"recurring.tab.upcoming" = "Upcoming";
+"recurring.rulesCount.one" = "1 rule";
+"recurring.rulesCount" = "%lld rules";
+"recurring.pausedCount" = "%lld paused";
+"recurring.averagePerMonth" = "Average per month";
+"recurring.perMonthApprox" = "≈ %@/mo";
+"recurring.approx" = "≈ %@";
+"recurring.nextOn" = "Next %@";
+"recurring.ended" = "Ended";
+"recurring.inactive" = "Paused and ended";
+"recurring.review.cardTitle.one" = "1 payment to review";
+"recurring.review.cardTitle" = "%lld payments to review";
+"recurring.review.action" = "Review";
+"recurring.review.namesMore" = "%1$@ +%2$lld";
+"recurring.upcoming.due" = "Due";
+"recurring.upcoming.scheduled" = "Upcoming";
+"recurring.upcoming.paid" = "Paid";
+"recurring.upcoming.noPayments" = "No recurring payments in %@.";
+"recurring.upcoming.pausedFootnote" = "Paused rules aren't included.";
+"recurring.upcoming.previousMonth" = "Previous month";
+"recurring.upcoming.nextMonth" = "Next month";

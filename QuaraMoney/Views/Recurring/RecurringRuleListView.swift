@@ -105,6 +105,7 @@ struct RecurringRuleListView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
                 .listRowBackground(Color.clear)
+                .listSectionSpacing(4) // Keep the tabs attached to the content they switch
 
                 switch tab {
                 case .rules:

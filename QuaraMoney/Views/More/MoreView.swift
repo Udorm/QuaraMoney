@@ -18,10 +18,11 @@ struct MoreView: View {
     @Query(filter: #Predicate<RecurringRule> { $0.deletedAt == nil })
     private var recurringRules: [RecurringRule]
 
-    /// Recurring occurrences due today or earlier — surfaced as a badge so the
-    /// review inbox is discoverable without drilling into the Recurring screen.
+    /// Recurring occurrences (not rules) due today or earlier — the same number
+    /// the Recurring screen's review card shows, surfaced as a badge so due
+    /// payments are discoverable without drilling in.
     private var dueRecurringCount: Int {
-        recurringRules.filter { RecurringRuleService.isDue($0) }.count
+        recurringRules.reduce(0) { $0 + RecurringRuleService.pendingOccurrenceCount(for: $1) }
     }
 
     var body: some View {
@@ -126,7 +127,9 @@ struct MoreView: View {
             }
             .navigationTitle(L10n.More.title)
             .navigationDestination(isPresented: $navigateToRecurring) {
-                RecurringRuleListView()
+                // Deep links come from due-payment notifications, so land on the
+                // tab where due payments are posted.
+                RecurringRuleListView(initialTab: .upcoming)
             }
             // Recurring deep link: consumed from the router (staged by
             // ContentView) once this tab is actually visible — same pattern as

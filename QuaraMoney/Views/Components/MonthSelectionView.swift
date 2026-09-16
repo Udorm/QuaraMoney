@@ -1,23 +1,23 @@
 import SwiftUI
 
-// MARK: - GlassPeriodSelector
+// MARK: - PeriodTabPicker
 
-/// Glass-capsule period picker: a translucent capsule track with a sliding
-/// tinted pill for the selected period.
-struct GlassPeriodSelector: View {
+/// Period tabs for transaction lists — Custom plus the three most recent
+/// months — as a native segmented control, so it matches the app's other tab
+/// bars.
+struct PeriodTabPicker: View {
     @Binding var selectedTab: TabPeriodSelection
     let months: [Date] // Expected to be precisely 3 months
 
-    @Namespace private var pillNamespace
-
     var body: some View {
-        HStack(spacing: 2) {
-            segment(label: L10n.Period.custom, tag: .custom)
+        // Animated so the custom date range row below slides in and out.
+        Picker("filter.period".localized, selection: $selectedTab.animation(.smooth(duration: 0.3))) {
+            Text(L10n.Period.custom).tag(TabPeriodSelection.custom)
             ForEach(months, id: \.self) { date in
-                segment(label: monthLabel(for: date), tag: .month(date))
+                Text(monthLabel(for: date)).tag(TabPeriodSelection.month(date))
             }
         }
-        .padding(3)
+        .pickerStyle(.segmented)
         .onAppear {
             if case .custom = selectedTab { return }
             if case .month(let date) = selectedTab, !months.contains(where: { Calendar.current.isDate($0, equalTo: date, toGranularity: .month) }) {
@@ -26,33 +26,6 @@ struct GlassPeriodSelector: View {
                 }
             }
         }
-    }
-
-    private func segment(label: String, tag: TabPeriodSelection) -> some View {
-        let isSelected = selectedTab == tag
-        return Button {
-            withAnimation(.smooth(duration: 0.3)) {
-                selectedTab = tag
-            }
-        } label: {
-            Text(label)
-                .appFont(.footnote, weight: isSelected ? .semibold : .regular)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(Color.accentColor)
-                            .matchedGeometryEffect(id: "selectedPill", in: pillNamespace)
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

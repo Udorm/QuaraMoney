@@ -284,16 +284,17 @@ final class RecurringRuleServiceTests: XCTestCase {
         XCTAssertEqual(due.count, 1, "Only the active, due rule is returned")
     }
 
-    /// Hosts the review inbox in a real window with one due rule and pumps the
-    /// runloop. If the view enters an infinite SwiftUI update loop the runloop
-    /// pump never settles and this times out — reproducing the reported freeze.
-    func testReviewInboxRendersWithoutHanging() {
+    /// Hosts the Upcoming tab (the review inbox) in a real window with one due
+    /// rule and pumps the runloop. If the view enters an infinite SwiftUI update
+    /// loop the runloop pump never settles and this times out — reproducing the
+    /// reported freeze.
+    func testUpcomingTabRendersWithoutHanging() {
         let wallet = makeWallet()
         _ = makeRule(start: date(2026, 6, 1), nextDue: date(2026, 6, 1), wallet: wallet)
         try? context.save()
 
         let host = UIHostingController(rootView:
-            NavigationStack { RecurringReviewView(allRules: []) }.modelContainer(container)
+            NavigationStack { RecurringRuleListView(initialTab: .upcoming) }.modelContainer(container)
         )
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = host
@@ -463,5 +464,101 @@ final class RecurringRuleServiceTests: XCTestCase {
         XCTAssertEqual(mutation.previousNextDueDate, due)
         RecurringRuleService.undo(mutation, in: context)
         XCTAssertEqual(rule.nextDueDate, due)
+    }
+
+    // MARK: - Monthly equivalent
+
+    private func roundedToCents(_ value: Decimal) -> Decimal {
+        var input = value
+        var result = Decimal()
+        NSDecimalRound(&result, &input, 2, .plain)
+        return result
+    }
+
+    func testMonthlyEquivalentPerFrequency() {
+        XCTAssertEqual(RecurringRuleService.monthlyEquivalent(amount: 15, frequency: .monthly), 15)
+        XCTAssertEqual(RecurringRuleService.monthlyEquivalent(amount: 240, frequency: .yearly), 20)
+        XCTAssertEqual(roundedToCents(RecurringRuleService.monthlyEquivalent(amount: 10, frequency: .weekly)),
+                       Decimal(string: "43.33")!, "Weekly × 52 ÷ 12")
+        XCTAssertEqual(roundedToCents(RecurringRuleService.monthlyEquivalent(amount: 1, frequency: .daily)),
+                       Decimal(string: "30.42")!, "Daily × 365 ÷ 12")
+    }
+
+    func testMonthlyEquivalentHonorsInterval() {
+        XCTAssertEqual(RecurringRuleService.monthlyEquivalent(amount: 30, frequency: .monthly, interval: 3), 10)
+        XCTAssertEqual(roundedToCents(RecurringRuleService.monthlyEquivalent(amount: 10, frequency: .weekly, interval: 2)),
+                       Decimal(string: "21.67")!)
+    }
+
+    // MARK: - Projection
+
+    func testDueDatesStartAtNextDueDate() {
+        let rule = makeRule(frequency: .weekly, start: date(2026, 9, 5), nextDue: date(2026, 9, 12))
+        let dates = RecurringRuleService.dueDates(for: rule, in: date(2026, 9, 1)..<date(2026, 10, 1))
+        XCTAssertEqual(dates, [date(2026, 9, 12), date(2026, 9, 19), date(2026, 9, 26)],
+                       "Periods before nextDueDate were posted or skipped and never reappear")
+    }
+
+    func testDueDatesSkipEarlierDatesAndStopAtEndDate() {
+        let rule = makeRule(frequency: .weekly, start: date(2026, 9, 5), nextDue: date(2026, 9, 12), end: date(2026, 10, 10))
+        let october = RecurringRuleService.dueDates(for: rule, in: date(2026, 10, 1)..<date(2026, 11, 1))
+        XCTAssertEqual(october, [date(2026, 10, 3), date(2026, 10, 10)])
+    }
+
+    func testHasEnded() {
+        let rule = makeRule(start: date(2026, 6, 1), nextDue: date(2026, 7, 1), end: date(2026, 6, 30))
+        XCTAssertTrue(RecurringRuleService.hasEnded(rule))
+        rule.endDate = nil
+        XCTAssertFalse(RecurringRuleService.hasEnded(rule))
+    }
+
+    // MARK: - Month summary (Upcoming tab)
+
+    /// The Upcoming tab's card must add up to its sections: expected = paid +
+    /// due + upcoming for the month.
+    func testMonthSummaryTotalsReconcileWithSections() {
+        let wallet = makeWallet()
+        let now = date(2026, 9, 15)
+        let rates = ["USD": 1.0, "KHR": 4000.0]
+
+        // Weekly: Sep 5 posted, Sep 12 overdue, Sep 19 + 26 still upcoming.
+        let gym = makeRule(amount: 10, frequency: .weekly, start: date(2026, 9, 5), nextDue: date(2026, 9, 5), wallet: wallet)
+        RecurringRuleService.post(rule: gym, in: context)
+        // A riel bill later this month, converted into USD totals.
+        _ = makeRule(amount: 180_000, currency: "KHR", start: date(2026, 9, 25), nextDue: date(2026, 9, 25), wallet: wallet)
+        _ = makeRule(amount: 1200, type: .income, start: date(2026, 9, 30), nextDue: date(2026, 9, 30), wallet: wallet)
+        let paused = makeRule(amount: 25, start: date(2026, 9, 20), nextDue: date(2026, 9, 20), wallet: wallet)
+        paused.isActive = false
+
+        let rules = (try? context.fetch(FetchDescriptor<RecurringRule>())) ?? []
+        let summary = RecurringMonthSummary.build(rules: rules, transactions: allTransactions(),
+                                                  monthStart: date(2026, 9, 1), now: now,
+                                                  rates: rates, currency: "USD")
+
+        XCTAssertTrue(summary.isCurrentMonth)
+        XCTAssertEqual(summary.due.map(\.rule.id), [gym.id])
+        XCTAssertEqual(summary.dueOccurrenceCount, 1)
+        XCTAssertEqual(summary.upcoming.map(\.date),
+                       [date(2026, 9, 19), date(2026, 9, 25), date(2026, 9, 26), date(2026, 9, 30)],
+                       "Paused rules and today-or-earlier occurrences are not upcoming")
+        XCTAssertEqual(summary.paid.count, 1)
+        XCTAssertEqual(summary.paidTotals, .init(expense: 10, income: 0))
+        XCTAssertEqual(summary.upcomingTotals, .init(expense: 65, income: 1200))
+        XCTAssertEqual(summary.expectedTotals, .init(expense: 85, income: 1200),
+                       "Paid 10 + overdue 10 + upcoming 65")
+    }
+
+    func testMonthSummaryFutureMonthHasNoDueItems() {
+        let wallet = makeWallet()
+        let gym = makeRule(amount: 10, frequency: .weekly, start: date(2026, 9, 5), nextDue: date(2026, 9, 12), wallet: wallet)
+
+        let summary = RecurringMonthSummary.build(rules: [gym], transactions: [],
+                                                  monthStart: date(2026, 10, 1), now: date(2026, 9, 15),
+                                                  rates: ["USD": 1.0], currency: "USD")
+
+        XCTAssertFalse(summary.isCurrentMonth)
+        XCTAssertTrue(summary.due.isEmpty, "Due items only belong to the current month")
+        XCTAssertEqual(summary.upcoming.count, 5, "Oct 3, 10, 17, 24 and 31")
+        XCTAssertEqual(summary.expectedTotals.expense, 50)
     }
 }

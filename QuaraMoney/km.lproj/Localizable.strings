@@ -1503,3 +1503,28 @@
 "split.scope.source.peer.help" = "តំណភ្ជាប់នេះគ្មានភស្តុតាងអំពីអ្នកផ្ញើទេ។ សូមពិនិត្យចំនួនទឹកប្រាក់មុននឹងរក្សាទុក។";
 "split.scope.notSaved" = "មិនទាន់បានរក្សាទុកនៅឡើយទេ";
 "split.scope.notSaved.help" = "ធាតុទាំងនេះកំពុងរង់ចាំ។ វានឹងចូលទៅក្នុងបញ្ជីរបស់អ្នក លុះត្រាតែអ្នកចុច រក្សាទុក។";
+
+/* Recurring screen: Rules and Upcoming tabs */
+"recurring.screenTitle" = "វិលជុំ";
+"recurring.tab.rules" = "ច្បាប់";
+"recurring.tab.upcoming" = "ខាងមុខ";
+"recurring.rulesCount.one" = "ច្បាប់ 1";
+"recurring.rulesCount" = "ច្បាប់ %lld";
+"recurring.pausedCount" = "បានផ្អាក %lld";
+"recurring.averagePerMonth" = "មធ្យមក្នុងមួយខែ";
+"recurring.perMonthApprox" = "≈ %@/ខែ";
+"recurring.approx" = "≈ %@";
+"recurring.nextOn" = "បន្ទាប់ %@";
+"recurring.ended" = "បានបញ្ចប់";
+"recurring.inactive" = "បានផ្អាក និងបានបញ្ចប់";
+"recurring.review.cardTitle.one" = "ការទូទាត់ 1 រង់ចាំការត្រួតពិនិត្យ";
+"recurring.review.cardTitle" = "ការទូទាត់ %lld រង់ចាំការត្រួតពិនិត្យ";
+"recurring.review.action" = "ពិនិត្យ";
+"recurring.review.namesMore" = "%1$@ +%2$lld";
+"recurring.upcoming.due" = "ដល់កំណត់";
+"recurring.upcoming.scheduled" = "ខាងមុខ";
+"recurring.upcoming.paid" = "បានបង់";
+"recurring.upcoming.noPayments" = "គ្មានការទូទាត់វិលជុំក្នុង %@ ទេ។";
+"recurring.upcoming.pausedFootnote" = "ច្បាប់ដែលបានផ្អាកមិនត្រូវបានរាប់បញ្ចូលទេ។";
+"recurring.upcoming.previousMonth" = "ខែមុន";
+"recurring.upcoming.nextMonth" = "ខែបន្ទាប់";

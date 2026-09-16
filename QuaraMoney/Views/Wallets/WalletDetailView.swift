@@ -57,13 +57,13 @@ struct WalletDetailView: View {
 
             // Period selector
             Section {
-                GlassPeriodSelector(
+                PeriodTabPicker(
                     selectedTab: $viewModel.selectedTab,
                     months: Array(viewModel.availableMonths.suffix(3))
                 )
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(Capsule())
-                .listRowInsets(EdgeInsets())
+                // Fills the 44pt minimum row height, so the list can't re-centre
+                // the control; the gaps match the hero card's above and below.
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
                 .listRowBackground(Color.clear)
 
                 if case .custom = viewModel.selectedTab {
@@ -85,6 +85,7 @@ struct WalletDetailView: View {
                 }
             }
             .listRowSeparator(.hidden)
+            .listSectionSpacing(4) // Keep the tabs attached to the content they switch
 
             // Transactions
             if !viewModel.hasLoadedOnce {

@@ -764,12 +764,10 @@ struct HomeContentView: View {
 
                 Section {
                     VStack(spacing: 16) {
-                        GlassPeriodSelector(
+                        PeriodTabPicker(
                             selectedTab: $viewModel.selectedTab,
                             months: Array(viewModel.availableMonths.suffix(3))
                         )
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(Capsule())
 
                         if case .custom = viewModel.selectedTab {
                             HStack {

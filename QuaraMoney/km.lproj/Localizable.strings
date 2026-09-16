@@ -46,6 +46,8 @@
 "home.empty.title" = "មិនទាន់មានប្រតិបត្តិការនៅឡើយ";
 "home.empty.message" = "បន្ថែមចំណូល ឬចំណាយដំបូងរបស់អ្នក ដើម្បីចាប់ផ្តើមតាមដានលុយរបស់អ្នក";
 "home.emptyPeriod.title" = "គ្មានប្រតិបត្តិការ";
+"home.filteredEmpty.title" = "គ្មានប្រតិបត្តិការត្រូវនឹងតម្រង";
+"home.filteredEmpty.message" = "គ្មានប្រតិបត្តិការក្នុងអំឡុងពេលនេះត្រូវនឹងតម្រងរបស់អ្នកទេ។";
 
 // Home summary hero card (កាតសង្ខេបទំព័រដើម)
 "home.summary.spent" = "ចំណាយ · %@";
@@ -1004,6 +1006,9 @@
 "filter.startDate" = "ថ្ងៃចាប់ផ្ដើម";
 "filter.endDate" = "ថ្ងៃបញ្ចប់";
 "filter.category" = "ប្រភេទ";
+"filter.allTypes" = "ប្រតិបត្តិការគ្រប់ប្រភេទ";
+"filter.clear" = "សម្អាតតម្រង";
+"filter.category.unavailable" = "ការផ្ទេរប្រាក់ និងការកែតម្រូវ មិនមានប្រភេទចំណាយ/ចំណូលទេ។";
 "analysis.pro.section.overview" = "ទិដ្ឋភាពទូទៅ";
 "analysis.pro.section.category" = "ប្រភេទ";
 "analysis.pro.customize" = "កំណត់តាមបំណង";

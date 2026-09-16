@@ -319,4 +319,203 @@ final class TransactionProcessorTests: XCTestCase {
         XCTAssertEqual(refLine[0], Decimal(0))
         XCTAssertEqual(refLine[30], Decimal(0))
     }
+
+    // MARK: - Type & category filters
+
+    private func makeCategory(_ name: String, type: TransactionType) -> QuaraMoney.Category {
+        let category = QuaraMoney.Category(name: name, icon: "tag", colorHex: "#FF5722", type: type)
+        context.insert(category)
+        return category
+    }
+
+    /// Mid-month in May 2026 so every row lands inside the fetched range.
+    private var mayRange: (start: Date, end: Date, day: Date) {
+        let calendar = Calendar.current
+        return (
+            calendar.date(from: DateComponents(year: 2026, month: 5, day: 1))!,
+            calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))!,
+            calendar.date(from: DateComponents(year: 2026, month: 5, day: 15))!
+        )
+    }
+
+    private func fetchMay(
+        types: Set<TransactionType> = [],
+        categoryIds: Set<UUID> = [],
+        walletIds: Set<UUID> = []
+    ) -> ProcessedTransactionDataID {
+        TransactionProcessor.fetchAndProcess(
+            context: context,
+            startDate: mayRange.start,
+            endDate: mayRange.end,
+            walletIds: walletIds,
+            transactionTypes: types,
+            categoryIds: categoryIds,
+            rates: rates,
+            targetCurrency: "USD"
+        )
+    }
+
+    func testFetchAndProcess_typeFilterKeepsOnlySelectedTypesAndScopesTotals() throws {
+        let wallet = makeWallet()
+        let day = mayRange.day
+        let expense = makeTransaction(amount: 40, type: .expense, date: day, wallet: wallet)
+        let income = makeTransaction(amount: 500, type: .income, date: day, wallet: wallet)
+        _ = makeTransaction(amount: 100, type: .transfer, date: day, wallet: wallet)
+        try context.save()
+
+        let expenseOnly = fetchMay(types: [.expense])
+        XCTAssertEqual(expenseOnly.sortedTransactionIds, [expense.persistentModelID])
+        XCTAssertEqual(expenseOnly.expenseTotal, Decimal(40))
+        XCTAssertEqual(expenseOnly.incomeTotal, Decimal(0))
+
+        let incomeAndExpense = fetchMay(types: [.income, .expense])
+        XCTAssertEqual(
+            Set(incomeAndExpense.sortedTransactionIds),
+            [expense.persistentModelID, income.persistentModelID]
+        )
+
+        XCTAssertEqual(fetchMay().sortedTransactionIds.count, 3, "Empty type set must not constrain")
+    }
+
+    func testFetchAndProcess_categoryFilterMatchesSelectedCategoriesAndDropsUncategorized() throws {
+        let wallet = makeWallet()
+        let day = mayRange.day
+        let food = makeCategory("Food", type: .expense)
+        let rent = makeCategory("Rent", type: .expense)
+        let salary = makeCategory("Salary", type: .income)
+
+        let lunch = makeTransaction(amount: 12, type: .expense, date: day, wallet: wallet)
+        lunch.category = food
+        let housing = makeTransaction(amount: 300, type: .expense, date: day, wallet: wallet)
+        housing.category = rent
+        let pay = makeTransaction(amount: 1000, type: .income, date: day, wallet: wallet)
+        pay.category = salary
+        _ = makeTransaction(amount: 50, type: .transfer, date: day, wallet: wallet)
+        try context.save()
+
+        let foodOnly = fetchMay(categoryIds: [food.id])
+        XCTAssertEqual(foodOnly.sortedTransactionIds, [lunch.persistentModelID])
+        XCTAssertEqual(foodOnly.expenseTotal, Decimal(12))
+
+        // Categories across types are OR-ed within the dimension.
+        let foodOrSalary = fetchMay(categoryIds: [food.id, salary.id])
+        XCTAssertEqual(Set(foodOrSalary.sortedTransactionIds), [lunch.persistentModelID, pay.persistentModelID])
+        XCTAssertEqual(foodOrSalary.incomeTotal, Decimal(1000))
+        XCTAssertEqual(foodOrSalary.expenseTotal, Decimal(12))
+    }
+
+    func testFetchAndProcess_dimensionsAreAndedTogether() throws {
+        let personal = makeWallet(name: "Personal")
+        let business = makeWallet(name: "Business")
+        let day = mayRange.day
+        let food = makeCategory("Food", type: .expense)
+        let salary = makeCategory("Salary", type: .income)
+
+        let personalLunch = makeTransaction(amount: 10, type: .expense, date: day, wallet: personal)
+        personalLunch.category = food
+        let businessLunch = makeTransaction(amount: 25, type: .expense, date: day, wallet: business)
+        businessLunch.category = food
+        let pay = makeTransaction(amount: 900, type: .income, date: day, wallet: personal)
+        pay.category = salary
+        try context.save()
+
+        let result = fetchMay(types: [.expense], categoryIds: [food.id, salary.id], walletIds: [personal.id])
+        XCTAssertEqual(result.sortedTransactionIds, [personalLunch.persistentModelID])
+
+        // A category constraint with only an uncategorized type selected matches nothing.
+        XCTAssertTrue(fetchMay(types: [.transfer], categoryIds: [food.id]).sortedTransactionIds.isEmpty)
+    }
+
+    func testFetchAndProcess_filteredDailySectionsOnlyContainMatchingRows() throws {
+        let wallet = makeWallet()
+        let day = mayRange.day
+        let food = makeCategory("Food", type: .expense)
+        let lunch = makeTransaction(amount: 8, type: .expense, date: day, wallet: wallet)
+        lunch.category = food
+        _ = makeTransaction(amount: 200, type: .income, date: day, wallet: wallet)
+        try context.save()
+
+        let result = fetchMay(categoryIds: [food.id])
+        XCTAssertEqual(result.dailySections.count, 1)
+        XCTAssertEqual(result.dailySections.first?.transactionIds, [lunch.persistentModelID])
+        XCTAssertEqual(result.dailySections.first?.dailyTotal, Decimal(-8))
+    }
+
+    func testCalculatePreviousPeriodCumulative_respectsCategoryAndTypeFilters() throws {
+        let wallet = makeWallet()
+        let calendar = Calendar.current
+        let startDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 1))!
+        let endDate = calendar.date(from: DateComponents(year: 2026, month: 5, day: 31))!
+        let april10 = calendar.date(from: DateComponents(year: 2026, month: 4, day: 10))!
+        let food = makeCategory("Food", type: .expense)
+        let rent = makeCategory("Rent", type: .expense)
+
+        let lunch = makeTransaction(amount: 20, type: .expense, date: april10, wallet: wallet)
+        lunch.category = food
+        let housing = makeTransaction(amount: 400, type: .expense, date: april10, wallet: wallet)
+        housing.category = rent
+        try context.save()
+
+        let foodLine = TransactionProcessor.calculatePreviousPeriodCumulative(
+            context: context,
+            startDate: startDate,
+            endDate: endDate,
+            walletId: wallet.id,
+            categoryIds: [food.id],
+            rates: rates,
+            targetCurrency: "USD"
+        )
+        XCTAssertEqual(foodLine.last, Decimal(20))
+
+        let incomeLine = TransactionProcessor.calculatePreviousPeriodCumulative(
+            context: context,
+            startDate: startDate,
+            endDate: endDate,
+            walletId: wallet.id,
+            transactionTypes: [.income],
+            rates: rates,
+            targetCurrency: "USD"
+        )
+        XCTAssertEqual(incomeLine.last, Decimal(0), "An income-only filter has no expense to compare against")
+    }
+
+    // MARK: - HomeTransactionFilter
+
+    func testHomeTransactionFilter_selectingEveryTypeCollapsesToAll() {
+        var filter = HomeTransactionFilter()
+        filter.setTypes(Set(HomeTransactionFilter.selectableTypes))
+        XCTAssertTrue(filter.types.isEmpty)
+        XCTAssertFalse(filter.isActive)
+
+        filter.setTypes([.expense, .transfer])
+        XCTAssertEqual(filter.types, [.expense, .transfer])
+        XCTAssertTrue(filter.isActive)
+    }
+
+    func testHomeTransactionFilter_categoryTypesFollowSelectedTypes() {
+        var filter = HomeTransactionFilter()
+        XCTAssertEqual(filter.categoryTypes, [.income, .expense])
+
+        filter.setTypes([.expense, .transfer])
+        XCTAssertEqual(filter.categoryTypes, [.expense])
+
+        filter.setTypes([.transfer, .adjustment])
+        XCTAssertTrue(filter.categoryTypes.isEmpty)
+    }
+
+    func testHomeTransactionFilter_restrictedDropsIdsThatNoLongerResolve() {
+        let keptWallet = UUID(), goneWallet = UUID()
+        let keptCategory = UUID(), goneCategory = UUID()
+        let filter = HomeTransactionFilter(
+            walletIds: [keptWallet, goneWallet],
+            types: [.expense],
+            categoryIds: [keptCategory, goneCategory]
+        )
+
+        let restricted = filter.restricted(toWalletIds: [keptWallet], categoryIds: [keptCategory])
+        XCTAssertEqual(restricted.walletIds, [keptWallet])
+        XCTAssertEqual(restricted.categoryIds, [keptCategory])
+        XCTAssertEqual(restricted.types, [.expense])
+        XCTAssertEqual(filter.restricted(toWalletIds: [keptWallet, goneWallet], categoryIds: [keptCategory, goneCategory]), filter)
+    }
 }

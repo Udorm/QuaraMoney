@@ -46,6 +46,8 @@
 "home.empty.title" = "No Transactions Yet";
 "home.empty.message" = "Add your first income or expense to start tracking your money.";
 "home.emptyPeriod.title" = "No Transactions";
+"home.filteredEmpty.title" = "No Matching Transactions";
+"home.filteredEmpty.message" = "Nothing in this period matches your filters.";
 
 // Home summary hero card
 "home.summary.spent" = "Spent · %@";
@@ -1004,6 +1006,9 @@
 "filter.startDate" = "Start Date";
 "filter.endDate" = "End Date";
 "filter.category" = "Category";
+"filter.allTypes" = "All Types";
+"filter.clear" = "Clear Filters";
+"filter.category.unavailable" = "Transfers and adjustments don't have categories.";
 "analysis.pro.section.overview" = "Overview";
 "analysis.pro.section.category" = "Categories";
 "analysis.pro.customize" = "Customize";

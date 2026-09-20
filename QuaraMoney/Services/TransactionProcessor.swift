@@ -151,6 +151,29 @@ struct TransactionProcessor {
         CurrencyManager.convert(amount: amount, from: source, to: target, rates: rates)
     }
     
+    /// Keeps transactions matching every non-empty constraint. A category
+    /// constraint therefore excludes uncategorized rows (transfers, adjustments).
+    ///
+    /// In memory on purpose: enum comparisons inside `#Predicate` are unreliable
+    /// in SwiftData, and the category test crosses a relationship — the same
+    /// reasons search is filtered in memory below.
+    nonisolated static func filter(
+        _ transactions: [Transaction],
+        types: Set<TransactionType>,
+        categoryIds: Set<UUID>
+    ) -> [Transaction] {
+        guard !types.isEmpty || !categoryIds.isEmpty else { return transactions }
+        return transactions.filter { txn in
+            // Type first: it's a stored attribute, so rows it rejects never
+            // fault in their category.
+            if !types.isEmpty, !types.contains(txn.type) { return false }
+            if !categoryIds.isEmpty {
+                guard let categoryId = txn.category?.id, categoryIds.contains(categoryId) else { return false }
+            }
+            return true
+        }
+    }
+
     /// Creates a FetchDescriptor for transactions within a date range.
     nonisolated static func makeDescriptor(
         startDate: Date,
@@ -212,12 +235,16 @@ struct TransactionProcessor {
     /// Fetches transactions and computes all derived data in a single pass.
     /// Runs on a background context and returns Sendable data.
     /// Pass `walletIds` for multi-wallet filtering; empty set means all wallets.
+    /// `transactionTypes` / `categoryIds` narrow the result the same way (empty
+    /// means unconstrained), and also scope the previous-period reference line.
     nonisolated static func fetchAndProcess(
         context: ModelContext,
         startDate: Date,
         endDate: Date,
         walletId: UUID? = nil,
         walletIds: Set<UUID> = [],
+        transactionTypes: Set<TransactionType> = [],
+        categoryIds: Set<UUID> = [],
         rates: [String: Double],
         targetCurrency: String,
         searchText: String? = nil,
@@ -256,6 +283,8 @@ struct TransactionProcessor {
                     effectiveWalletIds.contains($0.destinationWallet?.id ?? UUID())
                 }
             }
+
+            transactions = filter(transactions, types: transactionTypes, categoryIds: categoryIds)
 
             // Apply search filter in-memory. Deliberate: search must OR across
             // the note AND the category relationship's name, and this repo has
@@ -307,6 +336,8 @@ struct TransactionProcessor {
                     startDate: startDate,
                     endDate: endDate,
                     walletIds: effectiveWalletIds,
+                    transactionTypes: transactionTypes,
+                    categoryIds: categoryIds,
                     rates: rates,
                     targetCurrency: targetCurrency
                 )
@@ -339,6 +370,8 @@ struct TransactionProcessor {
         endDate: Date,
         walletId: UUID? = nil,
         walletIds: Set<UUID> = [],
+        transactionTypes: Set<TransactionType> = [],
+        categoryIds: Set<UUID> = [],
         rates: [String: Double],
         targetCurrency: String
     ) -> [Decimal] {
@@ -378,7 +411,9 @@ struct TransactionProcessor {
                     effectiveWalletIds.contains($0.destinationWallet?.id ?? UUID())
                 }
             }
-            
+
+            transactions = filter(transactions, types: transactionTypes, categoryIds: categoryIds)
+
             let expenseTransactions = transactions.filter { txn in
                 !txn.excludeFromReports && (txn.type == .expense || (txn.type == .adjustment && txn.amount < 0))
             }

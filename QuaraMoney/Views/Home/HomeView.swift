@@ -279,21 +279,33 @@ struct HomeContentView: View {
                     _ = await SyncEngine.shared.requestSyncAndWait(reason: .manualRefresh)
                 }
         }
+        // Here rather than on the navigation root, whose modifier chain is
+        // already at the type-checker's limit.
+        .onChange(of: wallets.map(\.id)) { _, _ in pruneFilterToAvailableOptions() }
+        .onChange(of: categories.map(\.id)) { _, _ in pruneFilterToAvailableOptions() }
     }
 
-    /// Wallet filtering is a normal browsing action and intentionally disappears
-    /// while transaction multi-selection is active.
+    /// Wallet, type and category filtering. The period stays on the inline
+    /// `PeriodTabPicker`, so the sheet doesn't repeat it.
     private var homeFilterButton: some View {
-        FilterSheetButton(
-            selectedPeriod: $viewModel.selectedPeriod,
-            selectedWalletIds: $viewModel.selectedWalletIds,
-            customStartDate: $viewModel.customStartDate,
-            customEndDate: $viewModel.customEndDate,
+        HomeFilterButton(
+            filter: viewModel.filter,
             wallets: wallets,
-            defaultPeriod: .thisMonth,
-            showPeriodFilter: false
+            categories: categories,
+            onApply: { viewModel.filter = $0 }
         )
-        .accessibilityLabel(L10n.Filter.title)
+    }
+
+    /// A wallet archived or category deleted after being picked would otherwise
+    /// keep filtering the list by something the sheet can no longer show.
+    private func pruneFilterToAvailableOptions() {
+        let restricted = viewModel.filter.restricted(
+            toWalletIds: Set(wallets.map(\.id)),
+            categoryIds: Set(categories.map(\.id))
+        )
+        if restricted != viewModel.filter {
+            viewModel.filter = restricted
+        }
     }
 
     /// Photos' sort affordance: a `Menu`, so iOS 26 morphs the toolbar button
@@ -337,7 +349,7 @@ struct HomeContentView: View {
     }
 
     /// Transactions currently visible in Home's custom flat/day-grouped list.
-    /// Selection is intentionally scoped to the active period, wallet filter,
+    /// Selection is intentionally scoped to the active period, filters,
     /// search, and sort result rather than every transaction in the database.
     private var displayedTransactions: [Transaction] {
         if viewModel.sortOption == .highestAmount || viewModel.sortOption == .lowestAmount {
@@ -700,29 +712,12 @@ struct HomeContentView: View {
         .padding(.vertical, 6)
     }
 
-    private var summaryHeader: some View {
-        HStack {
-            Text(walletFilterDescription)
-                .appFont(.subheadline)
-            Spacer()
-        }
-        .textCase(nil)
-    }
-
-    private var walletFilterDescription: String {
-        let ids = viewModel.selectedWalletIds
-        if ids.count == 1, let wallet = wallets.first(where: { ids.contains($0.id) }) {
-            return wallet.name
-        }
-        return "analysis.pro.filter.nSelected".localized(with: ids.count)
-    }
-
     /// Brand-new user (or fresh install): nothing recorded at all, ever.
     private var isFirstRunEmpty: Bool {
         viewModel.hasLoadedOnce && !viewModel.hasAnyTransactions && viewModel.searchText.isEmpty
     }
 
-    /// The current period/search yielded no rows (but data exists elsewhere).
+    /// The current period/filters/search yielded no rows (but data exists elsewhere).
     private var isResultEmpty: Bool {
         viewModel.hasLoadedOnce && viewModel.dailySections.isEmpty && viewModel.sortedTransactions.isEmpty
     }
@@ -800,6 +795,22 @@ struct HomeContentView: View {
                         if !viewModel.searchText.isEmpty {
                             ContentUnavailableView.search(text: viewModel.searchText)
                                 .padding(.vertical, 16)
+                        } else if viewModel.filter.isActive {
+                            // Without this the user sees "No Transactions" and has
+                            // no hint that their own filter is the cause.
+                            AppEmptyStateView(
+                                "home.filteredEmpty.title".localized,
+                                systemImage: "line.3.horizontal.decrease.circle",
+                                description: "home.filteredEmpty.message".localized
+                            ) {
+                                Button {
+                                    viewModel.filter = HomeTransactionFilter()
+                                } label: {
+                                    Text("filter.clear".localized)
+                                        .appFont(.body, weight: .semibold)
+                                }
+                                .buttonStyle(.glass)
+                            }
                         } else {
                             AppEmptyStateView(
                                 "home.emptyPeriod.title".localized,

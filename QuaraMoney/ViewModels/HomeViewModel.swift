@@ -20,8 +20,6 @@ class HomeViewModel {
     // Last 12 months
     let availableMonths: [Date]
 
-    var selectedPeriod: FilterPeriod = .thisMonth
-
     var customStartDate: Date = Date() {
         didSet {
             if selectedTab == .custom {
@@ -43,8 +41,13 @@ class HomeViewModel {
         didSet { searchSubject.send(searchText) }
     }
 
-    var selectedWalletIds: Set<UUID> = [] {
-        didSet { refreshData() }
+    /// Wallet, type and category constraints from the filter sheet. The
+    /// equality guard skips the refetch when the sheet confirms unchanged values.
+    var filter = HomeTransactionFilter() {
+        didSet {
+            guard filter != oldValue else { return }
+            refreshData()
+        }
     }
 
     var sortOption: TransactionSortOption = .newestFirst {
@@ -90,12 +93,6 @@ class HomeViewModel {
 
     var currentStartDate: Date { startDate }
     var currentEndDate: Date { endDate }
-
-    var filterDescription: String {
-        if selectedWalletIds.isEmpty { return "filter.allWallets".localized }
-        if selectedWalletIds.count == 1 { return "filter.allWallets".localized } // fallback; callers should resolve names
-        return "analysis.pro.filter.nSelected".localized(with: selectedWalletIds.count)
-    }
 
     var incomeTotal: Decimal = 0
     var expenseTotal: Decimal = 0
@@ -184,7 +181,7 @@ class HomeViewModel {
     func refreshData() {
         let start = startDate
         let end = endDate
-        let walletIds = selectedWalletIds
+        let currentFilter = filter
         let search = searchText
         let currentSortOption = sortOption
 
@@ -202,7 +199,9 @@ class HomeViewModel {
                 context: context,
                 startDate: start,
                 endDate: end,
-                walletIds: walletIds,
+                walletIds: currentFilter.walletIds,
+                transactionTypes: currentFilter.types,
+                categoryIds: currentFilter.categoryIds,
                 rates: rates,
                 targetCurrency: preferredCurrency,
                 searchText: search,
@@ -303,19 +302,5 @@ class HomeViewModel {
             print("Error restoring transaction: \(error)")
             #endif
         }
-    }
-
-    var isFilterActive: Bool {
-        if case .month(let date) = selectedTab {
-            return !Calendar.current.isDate(date, equalTo: Date(), toGranularity: .month) || !selectedWalletIds.isEmpty
-        }
-        return true // Custom is active
-    }
-
-    func resetFilters() {
-        let currentMonthStart = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: Date()))!
-        selectedTab = .month(currentMonthStart) // Back to today/this month
-        selectedWalletIds = []
-        searchText = ""
     }
 }
